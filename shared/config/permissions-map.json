@@ -1,0 +1,22 @@
+{
+  "modules": {
+    "dashboard": ["dashboard", "panel"],
+    "inmuebles": ["inmuebles", "gInmuebles", "ginmuebles", "propiedades", "gestion-inmuebles", "gestion-propietarios"],
+    "citas": ["citas", "gCitas", "gcitas", "gestion-citas", "gestioncitas"],
+    "ventas": ["ventas", "gVentas", "gventas", "gestion-ventas", "gestionVentas", "gComprador", "gcomprador"],
+    "arriendos": ["arriendos", "gArriendos", "garriendos", "gArrendatario", "garrendatario", "gestion-arriendos", "gestion-arrendatario"],
+    "reportes": ["reportes", "gReporteInmuebles", "greporteinmuebles", "reportes-inmobiliarios"],
+    "administrativos": ["administrativos", "gAdministrativos", "gadministrativos"],
+    "roles": ["roles", "gRoles", "groles"],
+    "usuarios": ["usuarios", "gUsuarios", "gusuarios"],
+    "seguridad": ["seguridad"]
+  },
+  "permissions": {
+    "crear": ["crear", "create", "add", "nuevo", "registrar"],
+    "editar": ["editar", "edit", "update", "actualizar"],
+    "eliminar": ["eliminar", "delete", "remove", "borrar"],
+    "ver": ["ver", "read", "view", "listar", "consultar"],
+    "asignar": ["asignar", "assign"],
+    "cancelar": ["cancelar", "cancel"]
+  }
+}

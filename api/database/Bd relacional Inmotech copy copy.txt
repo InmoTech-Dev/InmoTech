@@ -1,0 +1,446 @@
+﻿-- =====================================================
+-- BASE DE DATOS INMOBILIARIA INMOTECH
+-- Motor: SQL Server
+-- Versión: 2.0 - Optimizada para módulo de Citas
+-- Fecha: Octubre 2025
+-- =====================================================
+
+CREATE DATABASE InmobiliariaDB;
+GO
+
+USE InmobiliariaDB;
+GO
+
+-- =====================================================
+-- SECCIÓN 1: TABLAS DE USUARIOS Y ROLES
+-- =====================================================
+
+-- Tabla principal de Personas (unificada)
+-- Almacena tanto usuarios con cuenta como personas que solo agendaron citas
+CREATE TABLE Personas (
+    id_persona INT PRIMARY KEY IDENTITY(1,1),
+    tipo_documento VARCHAR(5) NOT NULL, -- CC, CE, NIT, Pasaporte, TI
+    numero_documento VARCHAR(20) NOT NULL,
+    primer_nombre VARCHAR(50) NOT NULL,
+    segundo_nombre VARCHAR(50) NULL,
+    primer_apellido VARCHAR(50) NOT NULL,
+    segundo_apellido VARCHAR(50) NULL,
+    correo VARCHAR(100) NULL,
+    telefono VARCHAR(15) NULL,
+    tiene_cuenta BIT NOT NULL DEFAULT 0, -- 0 = Solo agendó cita | 1 = Tiene cuenta completa
+    estado BIT NOT NULL DEFAULT 1, -- 0 = Inactivo | 1 = Activo
+    fecha_registro DATETIME NOT NULL DEFAULT GETDATE(),
+    id_codeudor INT NULL, -- FK autorreferencial
+    CONSTRAINT UQ_Persona_Documento UNIQUE (tipo_documento, numero_documento),
+    CONSTRAINT FK_Persona_Codeudor FOREIGN KEY (id_codeudor) REFERENCES Personas(id_persona)
+);
+GO
+
+-- Índices para optimizar búsquedas
+CREATE NONCLUSTERED INDEX IX_Personas_Documento 
+    ON Personas(tipo_documento, numero_documento);
+CREATE NONCLUSTERED INDEX IX_Personas_TieneCuenta 
+    ON Personas(tiene_cuenta) INCLUDE (estado);
+GO
+
+-- Tabla de Roles del sistema
+CREATE TABLE Roles (
+    id_rol INT PRIMARY KEY IDENTITY(1,1),
+    nombre_rol VARCHAR(50) NOT NULL UNIQUE,
+    estado BIT NOT NULL DEFAULT 1,
+    fecha_creacion DATE NOT NULL DEFAULT GETDATE()
+);
+GO
+
+-- Tabla intermedia: Relación Muchos a Muchos entre Personas y Roles
+CREATE TABLE Personas_rol (
+    id_persona_rol INT PRIMARY KEY IDENTITY(1,1),
+    id_persona INT NOT NULL,
+    id_rol INT NOT NULL,
+    estado BIT NOT NULL DEFAULT 1,
+    fecha_asignacion DATETIME NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT FK_PersonasRol_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona),
+    CONSTRAINT FK_PersonasRol_Rol FOREIGN KEY (id_rol) REFERENCES Roles(id_rol),
+    CONSTRAINT UQ_PersonasRol_Unico UNIQUE (id_persona, id_rol)
+);
+GO
+
+-- Tabla de Acceso (credenciales de login)
+-- Relación 1:1 con Personas que tienen cuenta
+CREATE TABLE Acceso (
+    id_acceso INT PRIMARY KEY IDENTITY(1,1),
+    id_persona INT NOT NULL UNIQUE, -- Solo personas con tiene_cuenta = 1
+    contrasena VARCHAR(255) NOT NULL, -- Debe almacenarse hasheada (bcrypt, argon2)
+    fecha_creacion DATETIME NOT NULL DEFAULT GETDATE(),
+    ultimo_acceso DATETIME NULL,
+    CONSTRAINT FK_Acceso_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona)
+);
+GO
+
+-- =====================================================
+-- SECCIÓN 2: TABLAS DE PERMISOS Y CONFIGURACIÓN
+-- =====================================================
+
+CREATE TABLE Privilegios (
+    id_privilegio INT PRIMARY KEY IDENTITY(1,1),
+    nombre_privilegio VARCHAR(50) NOT NULL UNIQUE,
+    descripcion VARCHAR(200) NULL
+);
+GO
+
+CREATE TABLE Permisos (
+    id_permiso INT PRIMARY KEY IDENTITY(1,1),
+    nombre_permiso VARCHAR(50) NOT NULL UNIQUE,
+    descripcion VARCHAR(200) NULL
+);
+GO
+
+-- Tabla intermedia: Configuración de permisos por rol
+-- Relación ternaria: Rol - Permiso - Privilegio
+CREATE TABLE Configuracion_rol (
+    id_rol INT NOT NULL,
+    id_permiso INT NOT NULL,
+    id_privilegio INT NOT NULL,
+    PRIMARY KEY (id_rol, id_permiso, id_privilegio),
+    CONSTRAINT FK_ConfigRol_Rol FOREIGN KEY (id_rol) REFERENCES Roles(id_rol),
+    CONSTRAINT FK_ConfigRol_Permiso FOREIGN KEY (id_permiso) REFERENCES Permisos(id_permiso),
+    CONSTRAINT FK_ConfigRol_Privilegio FOREIGN KEY (id_privilegio) REFERENCES Privilegios(id_privilegio)
+);
+GO
+
+-- =====================================================
+-- SECCIÓN 3: TABLAS DE INMUEBLES
+-- =====================================================
+
+CREATE TABLE Inmuebles (
+    id_inmueble INT PRIMARY KEY IDENTITY(1,1),
+    registro_inmobiliario VARCHAR(50) NOT NULL UNIQUE,
+    pais VARCHAR(50) NOT NULL,
+    departamento VARCHAR(50) NOT NULL,
+    ciudad VARCHAR(50) NOT NULL,
+    barrio VARCHAR(50) NULL,
+    direccion VARCHAR(100) NOT NULL,
+    categoria VARCHAR(50) NULL, -- Casa, Apartamento, Local, Lote, etc.
+    estado BIT NOT NULL DEFAULT 1
+);
+GO
+
+CREATE TABLE Ficha_Tecnica_Inmueble (
+    id_fichatecnica INT PRIMARY KEY IDENTITY(1,1),
+    id_inmueble INT NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NULL,
+    numero_version INT NOT NULL DEFAULT 1,
+    estado VARCHAR(50) NOT NULL DEFAULT 'Vigente', -- Vigente, Obsoleta
+    CONSTRAINT FK_FichaTecnica_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble)
+);
+GO
+
+CREATE TABLE Caracteristicas (
+    id_caracteristica INT PRIMARY KEY IDENTITY(1,1),
+    partes_inmuebles VARCHAR(50) NOT NULL -- Baños, Habitaciones, Garaje, etc.
+);
+GO
+
+-- Tabla intermedia: Relación Muchos a Muchos entre Ficha Técnica y Características
+CREATE TABLE Caracteristicas_inmueble (
+    id_caracteristica INT NOT NULL,
+    id_fichatecnica INT NOT NULL,
+    tipo_caracteristica VARCHAR(50) NULL, -- Tipo específico (ej: Baño completo, medio baño)
+    cantidad INT NOT NULL DEFAULT 1,
+    estado VARCHAR(50) NOT NULL DEFAULT 'Activo',
+    PRIMARY KEY (id_caracteristica, id_fichatecnica),
+    CONSTRAINT FK_CaractInmueble_Caracteristica FOREIGN KEY (id_caracteristica) REFERENCES Caracteristicas(id_caracteristica),
+    CONSTRAINT FK_CaractInmueble_Ficha FOREIGN KEY (id_fichatecnica) REFERENCES Ficha_Tecnica_Inmueble(id_fichatecnica)
+);
+GO
+
+-- Tabla de Propiedad (historial de propietarios)
+CREATE TABLE Propiedad_inmueble (
+    id_propietario INT PRIMARY KEY IDENTITY(1,1),
+    id_inmueble INT NOT NULL,
+    id_persona INT NOT NULL, -- FK a Personas (propietario)
+    fecha_inicio DATE NOT NULL,
+    fecha_final DATE NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'Activo', -- Activo, Finalizado
+    CONSTRAINT FK_Propiedad_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble),
+    CONSTRAINT FK_Propiedad_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona)
+);
+GO
+
+-- =====================================================
+-- SECCIÓN 4: TABLAS DE VENTA Y ARRENDAMIENTO
+-- =====================================================
+
+CREATE TABLE Venta (
+    id_venta INT PRIMARY KEY IDENTITY(1,1),
+    id_persona INT NOT NULL, -- FK a Personas (comprador)
+    id_inmueble INT NOT NULL,
+    fecha_venta DATE NOT NULL,
+    valor_venta DECIMAL(15,2) NOT NULL,
+    medio_pago VARCHAR(50) NOT NULL, -- Efectivo, Transferencia, Crédito, etc.
+    CONSTRAINT FK_Venta_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona),
+    CONSTRAINT FK_Venta_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble)
+);
+GO
+
+CREATE TABLE Arrendamiento (
+    id_arrendamiento INT PRIMARY KEY IDENTITY(1,1),
+    id_cliente INT NOT NULL, -- FK a Personas (arrendatario)
+    id_inmueble INT NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_finalizacion DATE NOT NULL,
+    valor_mensual DECIMAL(15,2) NOT NULL,
+    estado VARCHAR(50) NOT NULL DEFAULT 'Activo', -- Activo, Finalizado, Suspendido
+    CONSTRAINT FK_Arrendamiento_Cliente FOREIGN KEY (id_cliente) REFERENCES Personas(id_persona),
+    CONSTRAINT FK_Arrendamiento_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble)
+);
+GO
+
+-- =====================================================
+-- SECCIÓN 5: MÓDULO DE CITAS (OPTIMIZADO)
+-- =====================================================
+
+-- Catálogo de servicios disponibles para citas
+CREATE TABLE Servicios_cita (
+    id_servicio INT PRIMARY KEY IDENTITY(1,1),
+    nombre_servicio VARCHAR(100) NOT NULL UNIQUE, -- Avalúos, Gestión de Alquileres, Asesoría Legal, Visita a Propiedad
+    descripcion TEXT NULL,
+    duracion_estimada INT NOT NULL DEFAULT 45, -- Duración en minutos
+    estado BIT NOT NULL DEFAULT 1
+);
+GO
+
+-- Estados específicos para el flujo de citas
+CREATE TABLE Estados_cita (
+    id_estado_cita INT PRIMARY KEY IDENTITY(1,1),
+    nombre_estado VARCHAR(50) NOT NULL UNIQUE, -- Solicitada, Confirmada, Programada, Completada, Reagendada, Cancelada
+    orden INT NOT NULL, -- Orden del flujo
+    descripcion VARCHAR(200) NULL,
+    es_estado_final BIT NOT NULL DEFAULT 0, -- 1 si es Completada o Cancelada
+    estado BIT NOT NULL DEFAULT 1
+);
+GO
+
+-- Tabla principal de Citas
+CREATE TABLE Citas (
+    id_cita INT PRIMARY KEY IDENTITY(1,1),
+    
+    -- Relación con Persona (puede tener cuenta o no)
+    id_persona INT NOT NULL, -- FK a Personas (unificada)
+    
+    -- Relación con Inmueble y Servicio
+    id_inmueble INT NOT NULL, -- FK a Inmuebles (inmueble que desea ver/consultar)
+    id_servicio INT NOT NULL, -- FK a Servicios_cita
+    
+    -- Fecha y hora de la cita
+    fecha_cita DATE NOT NULL,
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    
+    -- Estado de la cita
+    id_estado_cita INT NOT NULL, -- FK a Estados_cita
+    
+    -- Agente asignado (quien confirmó/atendió la cita)
+    id_agente_asignado INT NULL, -- FK a Personas (debe tener rol de agente)
+    
+    -- Observaciones y detalles
+    observaciones TEXT NULL,
+    motivo_cancelacion VARCHAR(500) NULL, -- Se llena solo si estado = Cancelada
+    
+    -- Control de reagendamiento
+    es_reagendada BIT NOT NULL DEFAULT 0, -- 1 si fue reagendada
+    id_cita_original INT NULL, -- FK autorreferencial para trazabilidad
+    
+    -- Auditoría
+    fecha_creacion DATETIME NOT NULL DEFAULT GETDATE(),
+    fecha_confirmacion DATETIME NULL, -- Cuando el agente la confirma
+    fecha_cancelacion DATETIME NULL, -- Cuando se cancela
+    fecha_completada DATETIME NULL, -- Cuando se marca como completada
+    
+    -- Constraints
+    CONSTRAINT FK_Citas_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona),
+    CONSTRAINT FK_Citas_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble),
+    CONSTRAINT FK_Citas_Servicio FOREIGN KEY (id_servicio) REFERENCES Servicios_cita(id_servicio),
+    CONSTRAINT FK_Citas_Estado FOREIGN KEY (id_estado_cita) REFERENCES Estados_cita(id_estado_cita),
+    CONSTRAINT FK_Citas_Agente FOREIGN KEY (id_agente_asignado) REFERENCES Personas(id_persona),
+    CONSTRAINT FK_Citas_CitaOriginal FOREIGN KEY (id_cita_original) REFERENCES Citas(id_cita),
+    
+    -- Validación: hora_fin debe ser mayor que hora_inicio
+    CONSTRAINT CHK_Citas_HoraValida CHECK (hora_fin > hora_inicio)
+);
+GO
+
+-- Índices para optimizar consultas del módulo de citas
+CREATE NONCLUSTERED INDEX IX_Citas_Estado 
+    ON Citas(id_estado_cita) INCLUDE (fecha_cita, hora_inicio);
+CREATE NONCLUSTERED INDEX IX_Citas_Agente 
+    ON Citas(id_agente_asignado) WHERE id_agente_asignado IS NOT NULL;
+CREATE NONCLUSTERED INDEX IX_Citas_Fecha 
+    ON Citas(fecha_cita, hora_inicio);
+CREATE NONCLUSTERED INDEX IX_Citas_Persona 
+    ON Citas(id_persona);
+GO
+
+-- Tabla de Notificaciones (para campana de agentes)
+CREATE TABLE Notificaciones (
+    id_notificacion INT PRIMARY KEY IDENTITY(1,1),
+    
+    -- Tipo y contenido
+    tipo_notificacion VARCHAR(50) NOT NULL, -- CITA_SOLICITADA, CITA_CANCELADA, CITA_REAGENDADA
+    titulo VARCHAR(200) NOT NULL,
+    mensaje TEXT NOT NULL,
+    
+    -- Relación con la entidad (en este caso Citas)
+    id_cita INT NULL, -- FK a Citas
+    
+    -- Destinatario
+    id_rol_destino INT NULL, -- FK a Roles (si es para todos los agentes)
+    id_persona_destino INT NULL, -- FK a Personas (si es para un usuario específico)
+    
+    -- Estado
+    leida BIT NOT NULL DEFAULT 0,
+    fecha_leida DATETIME NULL,
+    
+    -- Auditoría
+    fecha_creacion DATETIME NOT NULL DEFAULT GETDATE(),
+    
+    CONSTRAINT FK_Notificaciones_Cita FOREIGN KEY (id_cita) REFERENCES Citas(id_cita),
+    CONSTRAINT FK_Notificaciones_Rol FOREIGN KEY (id_rol_destino) REFERENCES Roles(id_rol),
+    CONSTRAINT FK_Notificaciones_Persona FOREIGN KEY (id_persona_destino) REFERENCES Personas(id_persona),
+    
+    -- Al menos uno debe estar definido
+    CONSTRAINT CHK_Notificaciones_Destino CHECK (
+        id_rol_destino IS NOT NULL OR id_persona_destino IS NOT NULL
+    )
+);
+GO
+
+-- Índices para optimizar consultas de notificaciones
+CREATE NONCLUSTERED INDEX IX_Notificaciones_NoLeidas 
+    ON Notificaciones(leida, fecha_creacion DESC) 
+    WHERE leida = 0;
+CREATE NONCLUSTERED INDEX IX_Notificaciones_Rol 
+    ON Notificaciones(id_rol_destino) WHERE id_rol_destino IS NOT NULL;
+GO
+
+-- =====================================================
+-- SECCIÓN 6: SEGUIMIENTO, ESTADOS Y MANTENIMIENTO
+-- =====================================================
+
+-- Tabla de Estados genéricos (para Ventas, Mantenimiento, etc.)
+CREATE TABLE Estados (
+    id_estado INT PRIMARY KEY IDENTITY(1,1),
+    proceso VARCHAR(50) NOT NULL, -- VENTA, MANTENIMIENTO, etc.
+    orden INT NOT NULL,
+    estado VARCHAR(50) NOT NULL,
+    descripcion VARCHAR(100) NULL,
+    consecuente INT NULL, -- id_estado del siguiente estado en el flujo
+    CONSTRAINT FK_Estados_Consecuente FOREIGN KEY (consecuente) REFERENCES Estados(id_estado)
+);
+GO
+
+CREATE TABLE Seguimiento_venta (
+    id_seguimiento_venta INT PRIMARY KEY IDENTITY(1,1),
+    id_venta INT NOT NULL,
+    id_estado INT NOT NULL,
+    fecha DATE NOT NULL,
+    descripcion DECIMAL(15,2) NULL, -- Monto relacionado con el seguimiento
+    id_usuario INT NOT NULL, -- FK a Personas (responsable del seguimiento)
+    CONSTRAINT FK_SeguimientoVenta_Venta FOREIGN KEY (id_venta) REFERENCES Venta(id_venta),
+    CONSTRAINT FK_SeguimientoVenta_Estado FOREIGN KEY (id_estado) REFERENCES Estados(id_estado),
+    CONSTRAINT FK_SeguimientoVenta_Usuario FOREIGN KEY (id_usuario) REFERENCES Personas(id_persona)
+);
+GO
+
+CREATE TABLE Contratistas (
+    id_contratista INT PRIMARY KEY IDENTITY(1,1),
+    nombre VARCHAR(100) NOT NULL,
+    telefono VARCHAR(15) NULL,
+    correo VARCHAR(100) NULL,
+    persona_contacto VARCHAR(100) NULL,
+    estado BIT NOT NULL DEFAULT 1
+);
+GO
+
+CREATE TABLE Mantenimiento_inmueble (
+    id_mantenimiento INT PRIMARY KEY IDENTITY(1,1),
+    id_reporte INT UNIQUE NOT NULL, -- Identificador único del reporte
+    id_inmueble INT NOT NULL, -- FK a Inmuebles
+    valor_mantenimiento DECIMAL(15,2) NOT NULL,
+    valor_pagado DECIMAL(15,2) NOT NULL DEFAULT 0,
+    fecha_estado DATE NOT NULL,
+    id_contratista INT NULL,
+    id_estado VARCHAR(50) NOT NULL, -- Pendiente, En Proceso, Completado
+    descripcion TEXT NULL,
+    CONSTRAINT FK_Mantenimiento_Contratista FOREIGN KEY (id_contratista) REFERENCES Contratistas(id_contratista),
+    CONSTRAINT FK_Mantenimiento_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble)
+);
+GO
+
+CREATE TABLE Cobro (
+    id_cobro INT PRIMARY KEY IDENTITY(1,1),
+    id_arrendamiento INT NOT NULL,
+    fecha_cobro DATE NOT NULL,
+    fecha_limite DATE NOT NULL,
+    valor_pago DECIMAL(15,2) NOT NULL,
+    fecha_estado DATE NULL,
+    estado BIT NOT NULL DEFAULT 0, -- 0 = Pendiente | 1 = Pagado
+    CONSTRAINT FK_Cobro_Arrendamiento FOREIGN KEY (id_arrendamiento) REFERENCES Arrendamiento(id_arrendamiento)
+);
+GO
+
+CREATE TABLE Comprobante_pago (
+    id_comprobante INT PRIMARY KEY IDENTITY(1,1),
+    id_cobro INT NULL, -- FK a Cobro
+    id_mantenimiento INT NULL, -- FK a Mantenimiento_inmueble
+    url VARCHAR(255) NULL, -- URL del comprobante (archivo)
+    entidad_bancaria VARCHAR(50) NULL,
+    ref_bancaria VARCHAR(50) NULL, -- Referencia bancaria
+    monto_pagado DECIMAL(15,2) NOT NULL,
+    fecha_pago DATE NOT NULL,
+    fecha_estado DATE NULL,
+    estado VARCHAR(50) NOT NULL DEFAULT 'Pendiente', -- Pendiente, Aprobado, Rechazado
+    CONSTRAINT FK_Comprobante_Cobro FOREIGN KEY (id_cobro) REFERENCES Cobro(id_cobro),
+    CONSTRAINT FK_Comprobante_Mantenimiento FOREIGN KEY (id_mantenimiento) REFERENCES Mantenimiento_inmueble(id_mantenimiento),
+    
+    -- Al menos uno debe estar definido
+    CONSTRAINT CHK_Comprobante_Relacion CHECK (
+        id_cobro IS NOT NULL OR id_mantenimiento IS NOT NULL
+    )
+);
+GO
+
+-- =====================================================
+-- SECCIÓN 7: DATOS INICIALES (CATÁLOGOS)
+-- =====================================================
+
+-- Insertar servicios de citas
+INSERT INTO Servicios_cita (nombre_servicio, descripcion, duracion_estimada) VALUES
+('Visita a Propiedad', 'Visita presencial para conocer el inmueble', 45),
+('Avalúos', 'Servicio de avalúo y tasación de inmuebles', 60),
+('Gestión de Alquileres', 'Asesoría sobre gestión y administración de alquileres', 30),
+('Asesoría Legal', 'Consulta legal relacionada con inmuebles', 45);
+GO
+
+-- Insertar estados de citas
+INSERT INTO Estados_cita (nombre_estado, orden, descripcion, es_estado_final) VALUES
+('Solicitada', 1, 'Cita solicitada por el cliente, pendiente de confirmación', 0),
+('Confirmada', 2, 'Cita confirmada por un agente', 0),
+('Programada', 3, 'Cita programada y lista para realizarse', 0),
+('Reagendada', 4, 'Cita reagendada a nueva fecha/hora', 0),
+('Completada', 5, 'Cita completada exitosamente', 1),
+('Cancelada', 6, 'Cita cancelada', 1);
+GO
+
+-- Insertar roles básicos
+INSERT INTO Roles (nombre_rol) VALUES
+('Administrador'),
+('Agente Inmobiliario'),
+('Cliente'),
+('Propietario');
+GO
+
+-- =====================================================
+-- FIN DEL SCRIPT
+-- =====================================================

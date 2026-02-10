@@ -1,0 +1,634 @@
+const { Persona, Administrativo, Acceso, PersonasRol, Rol } = require('../models');
+const { sequelize } = require('../config/database');
+const bcryptUtils = require('../utils/bcrypt');
+const logger = require('../utils/logger');
+const sseService = require('./sse.service');
+const invitacionService = require('./invitacion.service');
+
+class AdministrativoService {
+  /**
+   * Registra un nuevo administrativo
+   * @param {Object} adminData - Datos del administrativo
+   * @returns {Promise<Object>} Administrativo creado con tokens
+   */
+  async registrarAdministrativo(adminData) {
+    let adminId; // Declarar variable para acceder fuera de la transacción
+
+    const result = await sequelize.transaction(async (t) => {
+      try {
+        const {
+          email,
+          nombre_completo,
+          apellido_completo,
+          telefono,
+          tipo_documento,
+          numero_documento,
+          fecha_ingreso,
+          id_rol,
+          creado_por
+        } = adminData;
+
+        // Verificar si el email ya existe
+        const personaExistente = await Persona.findOne({
+          where: { correo: email },
+          transaction: t
+        });
+
+        if (personaExistente) {
+          throw new Error('El correo electrónico ya está registrado');
+        }
+
+        // Verificar si el documento ya existe
+        const documentoExistente = await Persona.findOne({
+          where: { tipo_documento, numero_documento },
+          transaction: t
+        });
+
+        if (documentoExistente) {
+          throw new Error('El documento ya está registrado');
+        }
+
+
+
+        // Crear persona
+        const nuevaPersona = await Persona.create({
+          tipo_documento,
+          numero_documento,
+          nombre_completo,
+          apellido_completo,
+          correo: email,
+          telefono,
+          tiene_cuenta: false,
+          correo_verificado: false,
+          estado: true
+        }, { transaction: t });
+
+        // Crear registro administrativo inicialmente con código temporal
+        const nuevoAdministrativo = await Administrativo.create({
+          id_persona: nuevaPersona.id_persona,
+          codigo_empleado: 'TEMP', // Código temporal, será actualizado después
+          fecha_ingreso,
+          estado_laboral: 'Activo'
+        }, { transaction: t });
+
+        // Crear código de empleado basado en el rol
+        let rolAsignado;
+        if (id_rol) {
+          // Verificar que el rol existe y es administrativo
+          const rolSeleccionado = await Rol.findOne({
+            where: {
+              id_rol: id_rol,
+              es_rol_administrativo: true,
+              estado: true
+            },
+            transaction: t
+          });
+
+          if (!rolSeleccionado) {
+            throw new Error('El rol seleccionado no es válido o no es administrativo');
+          }
+
+          rolAsignado = rolSeleccionado;
+          await PersonasRol.create({
+            id_persona: nuevaPersona.id_persona,
+            id_rol: id_rol
+          }, { transaction: t });
+        } else {
+          // Asignar rol por defecto (Empleado)
+          const rolDefault = await Rol.findOne({
+            where: {
+              nombre_rol: 'Empleado',
+              es_rol_administrativo: true,
+              estado: true
+            },
+            transaction: t
+          });
+
+          if (rolDefault) {
+            rolAsignado = rolDefault;
+            await PersonasRol.create({
+              id_persona: nuevaPersona.id_persona,
+              id_rol: rolDefault.id_rol
+            }, { transaction: t });
+          }
+        }
+
+        // Generar código de empleado automáticamente
+        const prefijo = rolAsignado ? this.getPrefijoPorRol(rolAsignado.nombre_rol) : 'EMPLEADO';
+        const siguienteNumero = await this.getSiguienteNumeroEmpleado(prefijo, t);
+        const codigoGenerado = `${prefijo}-${siguienteNumero.toString().padStart(3, '0')}`;
+
+        // Actualizar el administrativo con el código generado
+        await nuevoAdministrativo.update({
+          codigo_empleado: codigoGenerado
+        }, { transaction: t });
+
+        // Guardar referencia para la consulta posterior
+        adminId = nuevoAdministrativo.id_administrativo;
+
+        logger.info(`Administrativo registrado: ${email} (Código generado: ${codigoGenerado})`);
+
+      } catch (error) {
+        logger.error('Error en registro de administrativo:', error);
+        throw error;
+      }
+    });
+
+    // Obtener el administrativo completo con todos sus joins para el frontend
+    try {
+      const administrativoCompleto = await Administrativo.findOne({
+        where: { id_administrativo: adminId },
+        include: [
+          {
+            model: Persona,
+            as: 'persona',
+            attributes: ['id_persona', 'tipo_documento', 'numero_documento', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'fecha_registro'],
+            include: [
+              {
+                model: Rol,
+                as: 'roles',
+                through: { attributes: ['estado', 'fecha_asignacion'] },
+                where: { estado: true },
+                required: false
+              }
+            ]
+          }
+        ]
+      });
+
+      // Enviar invitacion para que defina su contrasena y active el acceso
+      try {
+        const rolNombre = administrativoCompleto?.persona?.roles?.[0]?.nombre_rol || 'Administrativo';
+        const invitacion = await invitacionService.crearInvitacion({
+          id_persona: administrativoCompleto?.persona?.id_persona,
+          creado_por: adminData?.creado_por || null,
+          tipo: 'admin_invite',
+          rol_asignado: rolNombre,
+          es_administrativo: true
+        });
+
+        const invitacionInfo = {
+          expira_en: invitacion?.expira_en || null,
+          total_enviados: (invitacion?.reenvios || 0) + 1
+        };
+
+        if (administrativoCompleto && administrativoCompleto.dataValues) {
+          administrativoCompleto.dataValues.invitacion = invitacionInfo;
+        }
+
+        logger.info(`Invitacion administrativa enviada a ${administrativoCompleto?.persona?.correo || email}`);
+      } catch (inviteError) {
+        logger.warn('No se pudo enviar la invitacion administrativa:', inviteError.message);
+      }
+
+      return administrativoCompleto;
+    } catch (queryError) {
+      logger.warn('Error obteniendo administrativo completo para respuesta, pero el registro fue exitoso:', queryError);
+      throw new Error('Administrativo registrado pero hubo un error obteniendo los datos completos');
+    }
+  }
+
+  /**
+   * Obtiene administrativos con paginación (optimizado)
+   * @param {Object} options - Opciones de consulta
+   * @returns {Promise<Object>} Lista de administrativos
+   */
+  async obtenerAdministrativos({ page = 1, limit = 10, estado }) {
+    try {
+      const offset = (page - 1) * limit;
+
+      const whereClause = {};
+      if (estado) {
+        whereClause.estado_laboral = estado;
+      }
+
+      // ✅ OPTIMIZACIÓN: Usar consulta RAW o encontrar/crear índice para mejorar rendimiento
+      const { count, rows } = await Administrativo.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: Persona,
+            as: 'persona',
+            attributes: ['id_persona', 'tipo_documento', 'numero_documento', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'fecha_registro'],
+            include: [
+              {
+                model: Rol,
+                as: 'roles',
+                through: {
+                  attributes: ['estado', 'fecha_asignacion'],
+                  where: { estado: true }
+                },
+                where: { estado: true },
+                required: false
+              }
+            ]
+          }
+        ],
+        limit,
+        offset,
+        order: [['fecha_ingreso', 'DESC']],
+        logging: false, // ✅ Deshabilitar logging SQL para mejor rendimiento
+        distinct: true // ✅ Evitar duplicados en conteo de paginación
+      });
+
+      return {
+        administrativos: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          pages: Math.ceil(count / limit)
+        }
+      };
+
+    } catch (error) {
+      logger.error('Error obteniendo administrativos:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene un administrativo por ID
+   * @param {number} id - ID del administrativo
+   * @returns {Promise<Object>} Datos del administrativo
+   */
+  async obtenerAdministrativoPorId(id) {
+    try {
+      const administrativo = await Administrativo.findOne({
+        where: { id_administrativo: id },
+        include: [
+          {
+            model: Persona,
+            as: 'persona',
+            attributes: ['id_persona', 'tipo_documento', 'numero_documento', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'fecha_registro'],
+            include: [
+              {
+                model: Rol,
+                as: 'roles',
+                through: { attributes: ['estado', 'fecha_asignacion'] },
+                where: { estado: true },
+                required: false
+              }
+            ]
+          }
+        ]
+      });
+
+      if (!administrativo) {
+        throw new Error('Administrativo no encontrado');
+      }
+
+      return administrativo;
+
+    } catch (error) {
+      logger.error('Error obteniendo administrativo por ID:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualiza un administrativo
+   * @param {number} id - ID del administrativo
+   * @param {Object} updateData - Datos a actualizar
+   * @returns {Promise<Object>} Administrativo actualizado
+   */
+  async actualizarAdministrativo(id, updateData) {
+    const result = await sequelize.transaction(async (t) => {
+      try {
+        const administrativo = await Administrativo.findOne({
+          where: { id_administrativo: id },
+          include: [
+            {
+              model: Persona,
+              as: 'persona',
+              include: [
+                {
+                  model: Rol,
+                  as: 'roles',
+                  through: { attributes: ['estado', 'fecha_asignacion'] },
+                  where: { estado: true },
+                  required: false
+                }
+              ]
+            }
+          ],
+          transaction: t
+        });
+
+        if (!administrativo) {
+          throw new Error('Administrativo no encontrado');
+        }
+
+        // Verificar si el administrativo es Super Administrador o Administrador
+        const isSuperAdminOrAdmin = administrativo.persona.roles?.some(rol =>
+          rol.nombre_rol === 'Super Administrador' || rol.nombre_rol === 'Administrador'
+        );
+
+        if (isSuperAdminOrAdmin) {
+          throw new Error('No se puede editar a un Super Administrador o Administrador');
+        }
+
+        const { personaData, administrativoData, rolId } = updateData;
+
+        // Actualizar datos de persona si se proporcionan
+        if (personaData) {
+          await administrativo.persona.update(personaData, { transaction: t });
+        }
+
+        // Actualizar datos administrativos
+        if (administrativoData) {
+          await administrativo.update(administrativoData, { transaction: t });
+        }
+
+        // Actualizar rol si se proporciona
+        if (rolId) {
+          const personaId = administrativo.persona.id_persona;
+          const rolActual = await PersonasRol.findOne({
+            where: { id_persona: personaId },
+            transaction: t
+          });
+
+          if (rolActual) {
+            if (rolActual.id_rol !== rolId) {
+              await rolActual.update({ id_rol: rolId }, { transaction: t });
+            }
+          } else {
+            await PersonasRol.create({
+              id_persona: personaId,
+              id_rol: rolId
+            }, { transaction: t });
+          }
+        }
+
+        logger.info(`Administrativo actualizado: ID ${id}`);
+
+        return administrativo;
+
+      } catch (error) {
+        logger.error('Error actualizando administrativo:', error);
+        throw error;
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Cambia el estado laboral de un administrativo
+   * @param {number} id - ID del administrativo
+   * @param {string} estadoLaboral - Nuevo estado laboral
+   * @param {string} fechaRetiro - Fecha de retiro (opcional)
+   * @returns {Promise<Object>} Administrativo actualizado
+   */
+  async cambiarEstadoLaboral(id, estadoLaboral, fechaRetiro = null) {
+    try {
+      const administrativo = await Administrativo.findOne({
+        where: { id_administrativo: id },
+        include: [
+          {
+            model: Persona,
+            as: 'persona',
+            include: [
+              {
+                model: Rol,
+                as: 'roles',
+                through: { attributes: ['estado', 'fecha_asignacion'] },
+                where: { estado: true },
+                required: false
+              }
+            ]
+          }
+        ]
+      });
+
+      if (!administrativo) {
+        throw new Error('Administrativo no encontrado');
+      }
+
+      // Verificar si el administrativo es Super Administrador o Administrador
+      const isSuperAdminOrAdmin = administrativo.persona.roles?.some(rol =>
+        rol.nombre_rol === 'Super Administrador' || rol.nombre_rol === 'Administrador'
+      );
+
+      if (isSuperAdminOrAdmin) {
+        throw new Error('No se puede cambiar el estado de un Super Administrador o Administrador');
+      }
+
+      const updateData = { estado_laboral: estadoLaboral };
+
+      if (estadoLaboral === 'Retirado' && fechaRetiro) {
+        updateData.fecha_retiro = fechaRetiro;
+      }
+
+      await administrativo.update(updateData);
+
+      // ✅ SSE: Notificar al usuario que su acceso administrativo ha sido revocado
+      if (estadoLaboral === 'Retirado' || estadoLaboral === 'Inactivo') {
+        sseService.notifyAdminAccessRevoked(administrativo.persona.id_persona);
+        logger.info(`📡 SSE: Notificación enviada - Acceso administrativo revocado para usuario ${administrativo.persona.id_persona}`);
+      }
+
+      logger.info(`Estado laboral actualizado para administrativo ID ${id}: ${estadoLaboral}`);
+
+      return administrativo;
+
+    } catch (error) {
+      logger.error('Error cambiando estado laboral:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina un administrativo (desactivación lógica)
+   * @param {number} id - ID del administrativo
+   * @returns {Promise<void>}
+   */
+  async eliminarAdministrativo(id) {
+    const result = await sequelize.transaction(async (t) => {
+      try {
+        const administrativo = await Administrativo.findOne({
+          where: { id_administrativo: id },
+          include: [
+            {
+              model: Persona,
+              as: 'persona',
+              include: [
+                {
+                  model: Rol,
+                  as: 'roles',
+                  through: { attributes: ['estado', 'fecha_asignacion'] },
+                  where: { estado: true },
+                  required: false
+                }
+              ]
+            }
+          ],
+          transaction: t
+        });
+
+        if (!administrativo) {
+          throw new Error('Administrativo no encontrado');
+        }
+
+        // Verificar si el administrativo es Super Administrador o Administrador
+        const isSuperAdminOrAdmin = administrativo.persona.roles?.some(rol =>
+          rol.nombre_rol === 'Super Administrador' || rol.nombre_rol === 'Administrador'
+        );
+
+        if (isSuperAdminOrAdmin) {
+          throw new Error('No se puede eliminar a un Super Administrador o Administrador');
+        }
+
+        // Cambiar estado laboral a 'Retirado'
+        await administrativo.update({
+          estado_laboral: 'Retirado',
+          fecha_retiro: new Date()
+        }, { transaction: t });
+
+        // Desactivar persona
+        await administrativo.persona.update({
+          estado: false
+        }, { transaction: t });
+
+        // ✅ SSE: Notificar al usuario que su cuenta ha sido deshabilitada
+        sseService.notifyUserDisabled(administrativo.persona.id_persona);
+        logger.info(`📡 SSE: Notificación enviada - Usuario deshabilitado ${administrativo.persona.id_persona}`);
+
+        logger.info(`Administrativo eliminado: ID ${id}`);
+
+      } catch (error) {
+        logger.error('Error eliminando administrativo:', error);
+        throw error;
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Cambia la contraseña de un administrativo (solo para administradores)
+   * @param {number} id - ID del administrativo
+   * @param {string} nuevaPassword - Nueva contraseña
+   * @returns {Promise<boolean>} True si se cambió exitosamente
+   */
+  async cambiarContrasenaAdministrativo(id, nuevaPassword) {
+    try {
+      const administrativo = await Administrativo.findOne({
+        where: { id_administrativo: id },
+        include: [
+          {
+            model: Persona,
+            as: 'persona',
+            include: [
+              {
+                model: Rol,
+                as: 'roles',
+                through: { attributes: ['estado', 'fecha_asignacion'] },
+                where: { estado: true },
+                required: false
+              }
+            ]
+          }
+        ]
+      });
+
+      if (!administrativo) {
+        throw new Error('Administrativo no encontrado');
+      }
+
+      // Verificar si el administrativo es Super Administrador o Administrador
+      const isSuperAdminOrAdmin = administrativo.persona.roles?.some(rol =>
+        rol.nombre_rol === 'Super Administrador' || rol.nombre_rol === 'Administrador'
+      );
+
+      if (isSuperAdminOrAdmin) {
+        throw new Error('No se puede cambiar la contraseña de un Super Administrador o Administrador');
+      }
+
+      // Hashear nueva contraseña y actualizar
+      const hashedPassword = await bcryptUtils.hashPassword(nuevaPassword);
+      await Acceso.update({
+        contrasena: hashedPassword,
+        ultimo_cambio_password: new Date()
+      }, {
+        where: { id_persona: administrativo.persona.id_persona }
+      });
+
+      // ✅ SSE: Notificar al usuario que su contraseña ha sido cambiada
+      sseService.notifyPasswordChanged(administrativo.persona.id_persona);
+      logger.info(`📡 SSE: Notificación enviada - Contraseña cambiada para usuario ${administrativo.persona.id_persona}`);
+
+      logger.info(`Contraseña cambiada para administrativo ID: ${id}`);
+
+      return true;
+
+    } catch (error) {
+      logger.error('Error cambiando contraseña de administrativo:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene el prefijo para generar códigos basado en el rol
+   * @param {string} nombreRol - Nombre del rol
+   * @returns {string} Prefijo para el código
+   */
+  getPrefijoPorRol(nombreRol) {
+    const mapaPrefijos = {
+      'Super Administrador': 'SUPERADMIN',
+      'Administrador': 'ADMINISTRADOR',
+      'Empleado': 'EMPLEADO',
+      'Gerente': 'GERENTE',
+      'Supervisor': 'SUPERVISOR',
+      'Analista': 'ANALISTA',
+      'Asistente': 'ASISTENTE'
+    };
+
+    return mapaPrefijos[nombreRol] || 'EMPLEADO';
+  }
+
+  /**
+   * Obtiene el siguiente número secuencial para un prefijo de código
+   * @param {string} prefijo - Prefijo del código
+   * @param {Object} transaction - Transacción de Sequelize
+   * @returns {number} Siguiente número
+   */
+  async getSiguienteNumeroEmpleado(prefijo, transaction = null) {
+    try {
+      // Buscar códigos que empiecen con el prefijo
+      const administrativosExistentes = await Administrativo.findAll({
+        where: {
+          codigo_empleado: {
+            [sequelize.Sequelize.Op.like]: `${prefijo}-%`
+          }
+        },
+        attributes: ['codigo_empleado'],
+        transaction,
+        order: [['codigo_empleado', 'DESC']],
+        limit: 1
+      });
+
+      if (administrativosExistentes.length === 0) {
+        return 1;
+      }
+
+      // Extraer el número del código más alto encontrado
+      const ultimoCodigo = administrativosExistentes[0].codigo_empleado;
+      const numeroStr = ultimoCodigo.split('-')[1];
+      const numero = parseInt(numeroStr, 10);
+
+      if (isNaN(numero)) {
+        logger.warn(`Código de empleado inválido encontrado: ${ultimoCodigo}, iniciando desde 1`);
+        return 1;
+      }
+
+      return numero + 1;
+    } catch (error) {
+      logger.error('Error obteniendo siguiente número de empleado:', error);
+      // En caso de error, usar un valor por defecto único basado en timestamp
+      return Math.floor(Date.now() / 1000) % 1000 + 1;
+    }
+  }
+}
+
+module.exports = new AdministrativoService();

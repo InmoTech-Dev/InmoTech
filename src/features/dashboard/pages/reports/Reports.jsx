@@ -13,6 +13,7 @@ import { useToast } from '../../../../shared/hooks/use-toast'
 import { uploadToCloudinary } from '../../../../shared/services/cloudinary'
 import { Grid3X3, List } from 'lucide-react'
 import * as XLSX from "xlsx";
+import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog'
 
 
 const ReportsContent = () => {
@@ -25,6 +26,8 @@ const ReportsContent = () => {
   const [showCancelled, setShowCancelled] = useState(false)
   const [statusFilter, setStatusFilter] = useState('Todos los estados')
   const [todayOnly, setTodayOnly] = useState(false)
+  const [isStatusChangeConfirmOpen, setIsStatusChangeConfirmOpen] = useState(false)
+  const [pendingStatusChange, setPendingStatusChange] = useState(null)
   const { createReport, updateReport, deleteReport } = useReports()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -109,8 +112,18 @@ const ReportsContent = () => {
     return full || r?.correo || r?.email || '';
   }
 
-  // NUEVO: cambiar estado desde Kanban y persistir en backend
-  const handleChangeEstado = async (report, nuevoEstado) => {
+  // NUEVO: solicitar confirmación antes de cambiar estado
+  const handleChangeEstadoRequest = (report, nuevoEstado) => {
+    setPendingStatusChange({ report, nuevoEstado })
+    setIsStatusChangeConfirmOpen(true)
+  }
+
+  // NUEVO: cambiar estado desde Kanban y persistir en backend (después de confirmación)
+  const handleChangeEstadoConfirm = async () => {
+    if (!pendingStatusChange) return
+
+    const { report, nuevoEstado } = pendingStatusChange
+
     try {
       const backendId =
         getBackendId(report) ||
@@ -139,7 +152,15 @@ const ReportsContent = () => {
         description: err?.message || 'No se pudo actualizar el estado.',
         variant: 'error',
       })
+    } finally {
+      setIsStatusChangeConfirmOpen(false)
+      setPendingStatusChange(null)
     }
+  }
+
+  const handleChangeEstadoCancel = () => {
+    setIsStatusChangeConfirmOpen(false)
+    setPendingStatusChange(null)
   }
 
   const handleNewReport = () => {
@@ -375,39 +396,39 @@ const ReportsContent = () => {
     const backendId =
       getBackendId(reportData) ||
       getBackendId(selectedReport)
-  
+
     if (!backendId) {
       throw new Error('No se pudo determinar el ID del reporte para actualizar.')
     }
-  
+
     // 1) Actualizar campos del reporte (sin borrar nada)
     const patchPayload = {
       estado: normalizeEstado(reportData.estado),
       descripcion: (reportData.descripcion || '').trim(),
       seguimiento_general: (reportData.seguimientoGeneral || '').trim()
     }
-  
+
     await reportesInmobiliariosService.actualizarReporte(
       backendId,
       patchPayload,
       patchPayload.seguimiento_general
     )
-  
+
     // 2) Upsert de rubros y sus seguimientos
     const rubrosToProcess = (reportData.rubros || [])
-  
+
     for (const r of rubrosToProcess) {
       const activos = (r.seguimientos || []).filter(s => s.activo !== false)
       const completados = activos.filter(s => normalizeEstado(s.estado) === 'Completado').length
       const progreso = activos.length > 0 ? Math.round((completados / activos.length) * 100) : 0
-  
+
       const rubroPayload = {
         nombre: (r.nombre || '').trim() || 'Rubro sin nombre',
         descripcion: (r.descripcion || '').trim(),
         estado: normalizeEstado(r.activo === false ? 'Cancelado' : (r.estado || 'Pendiente')),
         progreso
       }
-  
+
       // Crear o actualizar rubro según tenga backendId
       let rubroBackendId = Number(r.backendId ?? 0)
       if (rubroBackendId > 0) {
@@ -416,7 +437,7 @@ const ReportsContent = () => {
         const created = await reportesInmobiliariosService.crearRubro(backendId, rubroPayload)
         rubroBackendId = Number(created?.id_rubro ?? created?.id)
       }
-  
+
       // Upsert de seguimientos del rubro
       const segsToProcess = (r.seguimientos || [])
       for (const s of segsToProcess) {
@@ -424,7 +445,7 @@ const ReportsContent = () => {
           descripcion: (s.descripcion || '').trim(),
           estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente'))
         }
-  
+
         const segBackendId = Number(s.backendId ?? 0)
         if (segBackendId > 0) {
           await reportesInmobiliariosService.actualizarSeguimientoRubro(
@@ -442,7 +463,7 @@ const ReportsContent = () => {
         }
       }
     }
-  
+
     // Subir nuevas imágenes añadidas en edición (solo si traen File)
     const imagenes = Array.isArray(reportData.imagenes) ? reportData.imagenes : []
     for (const img of imagenes) {
@@ -456,7 +477,7 @@ const ReportsContent = () => {
         })
       }
     }
-  
+
     // Subir nuevos archivos añadidos en edición (solo si traen File)
     const archivos = Array.isArray(reportData.archivos) ? reportData.archivos : []
     for (const f of archivos) {
@@ -471,7 +492,7 @@ const ReportsContent = () => {
         })
       }
     }
-  
+
     setIsEditModalOpen(false)
     setSelectedReport(null)
     await fetchReports()
@@ -922,10 +943,10 @@ const ReportsContent = () => {
     printWindow.document.close();
 
     // Esperar a que se cargue el contenido y luego abrir el diálogo de impresión
-    printWindow.onload = function() {
+    printWindow.onload = function () {
       printWindow.focus();
       printWindow.print();
-      
+
       // Cerrar la ventana después de un breve delay
       setTimeout(() => {
         printWindow.close();
@@ -1025,11 +1046,10 @@ const ReportsContent = () => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setViewMode(viewMode === 'table' ? 'board' : 'table')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-            viewMode === 'board'
-              ? 'bg-green-600 text-white shadow-lg'
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-green-300'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${viewMode === 'board'
+            ? 'bg-green-600 text-white shadow-lg'
+            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-green-300'
+            }`}
         >
           {viewMode === 'table' ? <Grid3X3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
           {viewMode === 'table' ? 'Vista Kanban' : 'Vista Tabla'}
@@ -1042,7 +1062,7 @@ const ReportsContent = () => {
           onView={handleViewReport}
           onEdit={handleEditReport}
           onCreate={handleNewReport}
-          onChangeEstado={handleChangeEstado}
+          onChangeEstado={handleChangeEstadoRequest}
           showCancelled={showCancelled}
         />
       ) : (
@@ -1053,6 +1073,18 @@ const ReportsContent = () => {
           onDownloadPDF={handleDownloadReportPDF}
         />
       )}
+
+      {/* Confirmation Dialog for Status Change */}
+      <ConfirmationDialog
+        isOpen={isStatusChangeConfirmOpen}
+        onClose={handleChangeEstadoCancel}
+        onConfirm={handleChangeEstadoConfirm}
+        title="Confirmar cambio de estado"
+        message={pendingStatusChange ? `¿Estás seguro de que deseas cambiar el estado del reporte #${pendingStatusChange.report.id} a "${pendingStatusChange.nuevoEstado}"?` : ''}
+        confirmText="Sí, cambiar estado"
+        cancelText="Cancelar"
+        variant="info"
+      />
 
       <CreateReportModal
         isOpen={isCreateModalOpen}

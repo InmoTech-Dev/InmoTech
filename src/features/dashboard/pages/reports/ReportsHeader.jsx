@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
-import { DownloadIcon, FileTextIcon, ChevronDownIcon, FileSpreadsheet } from 'lucide-react'
+import { DownloadIcon, FileTextIcon, ChevronDownIcon, FileSpreadsheet, PlusIcon, SearchIcon } from 'lucide-react'
 
 export function ReportsHeader({
   searchTerm,
@@ -48,140 +49,157 @@ export function ReportsHeader({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-      <h1 className="text-2xl font-bold text-gray-800">Reportes</h1>
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      {/* Title */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Reportes</h1>
+        <p className="text-xs text-slate-500 mt-0.5">Gestiona tus reportes</p>
+      </div>
 
+      {/* Actions */}
       <div className="flex w-full sm:w-auto gap-2 flex-wrap items-center">
-        {/* Buscador */}
+        {/* Search Bar */}
         <div className="relative w-full sm:w-64">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             type="text"
             placeholder="Buscar reportes..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            className="pl-9 pr-3 py-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
           />
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
         </div>
 
-        {/* Filtro por estado (si se provee onStatusChange) */}
+        {/* Status Filter */}
         {onStatusChange && (
           <div className="relative" ref={statusRef}>
-            <Button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               type="button"
-              variant="outline"
               onClick={() => setIsStatusOpen(!isStatusOpen)}
-              className="px-3 py-2 text-sm border-slate-200 text-slate-700 bg-white hover:bg-slate-50 rounded-lg flex items-center gap-2"
+              className="px-3 py-2 text-sm border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 rounded-lg flex items-center gap-2 transition-colors"
             >
               Todos los estados
               <ChevronDownIcon className={`h-4 w-4 transition-transform ${isStatusOpen ? 'rotate-180' : ''}`} />
-            </Button>
+            </motion.button>
             {isStatusOpen && (
-              <div className="absolute z-50 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-md">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute z-50 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden"
+              >
                 {['Todos los estados', 'Pendiente', 'En Proceso', 'Completado', 'Cancelado'].map(opt => (
                   <button
                     key={opt}
                     onClick={() => { onStatusChange(opt); setIsStatusOpen(false) }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${statusFilter === opt ? 'font-semibold text-slate-900' : 'text-slate-700'}`}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${statusFilter === opt ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700'
+                      }`}
                   >
                     {opt}
                   </button>
                 ))}
-              </div>
+              </motion.div>
             )}
           </div>
         )}
 
-        {/* Filtro "De hoy" (si se provee onToggleToday) */}
+        {/* Today Filter */}
         {onToggleToday && (
-          <Button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             type="button"
-            variant="outline"
             onClick={onToggleToday}
-            className={`px-3 py-2 text-sm rounded-lg border-slate-200 ${todayOnly ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 hover:bg-slate-50'}`}
+            className={`px-3 py-2 text-sm rounded-lg border transition-all ${todayOnly
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+              }`}
           >
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 0 0 2-2V8H3v11a2 2 0 0 0 2 2z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 0 0 2-2V8H3v11a2 2 0 0 0 2 2z" />
               </svg>
               De hoy
             </span>
-          </Button>
+          </motion.button>
         )}
 
-        {/* Ver cancelados (usa tu showCancelled) */}
+        {/* Show Cancelled */}
         {onToggleShowCancelled && (
-          <Button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             type="button"
-            variant="outline"
             onClick={onToggleShowCancelled}
-            className={`px-3 py-2 text-sm rounded-lg border-slate-200 ${showCancelled ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 hover:bg-slate-50'}`}
+            className={`px-3 py-2 text-sm rounded-lg border transition-all ${showCancelled
+                ? 'bg-slate-800 text-white border-slate-800'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+              }`}
           >
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z" />
               </svg>
               Ver cancelados
             </span>
-          </Button>
+          </motion.button>
         )}
 
-        {/* Botón de descarga con dropdown */}
+        {/* Download Dropdown */}
         <div className="relative" ref={dropdownRef}>
-          <Button 
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            variant="outline"
-            className="border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 px-4 py-2 rounded-lg flex items-center gap-2"
+            className="border border-blue-600 text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white"
           >
             <DownloadIcon className="h-4 w-4" />
-            <span>Descargar Reporte</span>
+            <span>Descargar</span>
             <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-          </Button>
-          
-          {/* Menú desplegable */}
+          </motion.button>
+
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-              <div className="py-1">
-                <button
-                  onClick={() => handleDownloadOption('pdf')}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
-                >
-                  <FileTextIcon className="h-4 w-4 text-red-500" />
-                  <div>
-                    <div className="font-medium">Descargar PDF</div>
-                    <div className="text-xs text-gray-500">Formato de documento portable</div>
-                  </div>
-                </button>
-                <button
-                  onClick={() => handleDownloadOption('excel')}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
-                >
-                  <FileSpreadsheet className="h-4 w-4 text-green-500" />
-                  <div>
-                    <div className="font-medium">Descargar Excel</div>
-                    <div className="text-xs text-gray-500">Hoja de cálculo de Excel</div>
-                  </div>
-                </button>
-              </div>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden"
+            >
+              <button
+                onClick={() => handleDownloadOption('pdf')}
+                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-red-50 flex items-center gap-2 transition-colors"
+              >
+                <FileTextIcon className="h-4 w-4 text-red-500" />
+                <div>
+                  <div className="font-medium text-slate-900">PDF</div>
+                  <div className="text-xs text-slate-500">Formato portable</div>
+                </div>
+              </button>
+              <button
+                onClick={() => handleDownloadOption('excel')}
+                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-green-50 flex items-center gap-2 transition-colors"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-green-500" />
+                <div>
+                  <div className="font-medium text-slate-900">Excel</div>
+                  <div className="text-xs text-slate-500">Hoja de cálculo</div>
+                </div>
+              </button>
+            </motion.div>
           )}
         </div>
 
-        {/* Nuevo reporte */}
-        <Button 
+        {/* New Report Button */}
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={onNewReport}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm hover:shadow transition-all"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <PlusIcon className="h-4 w-4" />
           Nuevo reporte
-        </Button>
+        </motion.button>
       </div>
     </div>
   )

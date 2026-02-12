@@ -57,7 +57,7 @@ export default function ReportsKanban({ reports = [], onView, onEdit, onCreate, 
         <h2 className="text-xl font-semibold text-slate-900">Reportes Kanban Board</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${showCancelled ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
         {Object.entries(grouped).map(([estado, items]) => {
           const meta = estadoMeta[estado]
           return (

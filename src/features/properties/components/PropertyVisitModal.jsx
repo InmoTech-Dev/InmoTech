@@ -17,7 +17,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Save,
-  Clock as ClockIcon
+  Clock as ClockIcon,
+  Bed,
+  Bath
 } from 'lucide-react';
 import { formatPhoneNumber } from '../../../shared/utils/phoneFormatter';
 import { useToast } from '../../../shared/hooks/use-toast';
@@ -200,7 +202,10 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
   };
 
   const formatDateForInput = (date) => {
-    return date.toISOString().split("T")[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // Función para validar nombre completo (igual que dashboard)
@@ -298,7 +303,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
   // Función para validar fecha (igual que dashboard)
   const validateFecha = (fecha) => {
     if (!fecha) return "La fecha es requerida";
-    const fechaSeleccionada = new Date(fecha);
+    const fechaSeleccionada = new Date(`${fecha}T00:00:00`);
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
@@ -367,9 +372,9 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
     const [hours, minutes] = time.split(":");
     let hour24 = parseInt(hours);
 
-    if (period === "am" && hour24 !== 12) {
+    if (period === "pm" && hour24 !== 12) {
       hour24 += 12;
-    } else if (period === "pm" && hour24 === 12) {
+    } else if (period === "am" && hour24 === 12) {
       hour24 = 0;
     }
 
@@ -380,7 +385,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-  
+
     if (!validateForm()) {
       toast({
         title: "Por favor, corrige los errores",
@@ -388,10 +393,10 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
       });
       return;
     }
-  
+
     if (isSubmitting) return;
     setIsSubmitting(true);
-  
+
     try {
       // ✅ DATOS CORRECTOS con los nombres que espera el backend
       const citaData = {
@@ -408,22 +413,22 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
         id_servicio: 1,                               // ✅ CAMBIO (con guión bajo)
         observaciones: formData.mensaje || null
       };
-  
+
       console.log('📤 Datos de cita a enviar:', citaData);
-  
+
       // Crear la cita
       const nuevaCita = await citaApiService.crearCita(citaData);
-  
+
       // Agregar al contexto
       addExistingAppointment(nuevaCita);
-  
+
       toast({
         title: "¡Visita agendada exitosamente!",
         variant: "default",
       });
 
       handleClose();
-  
+
     } catch (error) {
       console.error('❌ Error al crear cita:', error);
       toast({
@@ -435,8 +440,8 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
       setIsSubmitting(false);
     }
   };
-    
-  
+
+
   // ✅ Función auxiliar para calcular hora fin (30 minutos después)
   const calcularHoraFin = (horaInicio) => {
     const [horaStr, minutosStr] = horaInicio.split(':');
@@ -455,7 +460,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
     // Asegurar formato HH:MM
     return `${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
   };
-  
+
   const handleClose = () => {
     // Limpiar datos al cerrar modal
     setFormData({
@@ -556,111 +561,106 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
     }));
   };
 
-// ⭐ CORRECCIÓN: Función para buscar persona automáticamente
-const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
-  // Validaciones previas
-  if (!tipoDocumento || !numeroDocumento || numeroDocumento.length < 5) {
-    return;
-  }
-
-  const errorDocumento = validateNumeroDocumento(numeroDocumento, tipoDocumento);
-  if (errorDocumento) {
-    return;
-  }
-
-  setIsSearchingPerson(true);
-
-  try {
-    console.log('🔍 Buscando persona:', {
-      tipo: tipoDocumentoMap[tipoDocumento] || tipoDocumento,
-      numero: numeroDocumento.replace(/[\s\-\.]/g, '')
-    });
-
-    const tipoDocMap = tipoDocumentoMap[tipoDocumento] || tipoDocumento;
-    const response = await apiClient.get('/citas/buscar-persona', {
-      params: {
-        tipo_documento: tipoDocMap,
-        numero_documento: numeroDocumento.replace(/[\s\-\.]/g, '')
-      }
-    });
-
-    console.log('✅ Respuesta del servidor:', response);
-
-    const persona = response.data || response;
-
-    if (persona && (persona.primer_nombre || persona.correo || persona.telefono)) {
-      // Construir nombres completos
-      const nombresCompletos = [persona.primer_nombre, persona.segundo_nombre]
-        .filter(Boolean)
-        .join(' ');
-
-      const apellidosCompletos = [persona.primer_apellido, persona.segundo_apellido]
-        .filter(Boolean)
-        .join(' ');
-
-      // ⭐ CORRECCIÓN: Formatear el teléfono usando tu función formatPhoneNumber
-      let telefonoFormateado = persona.telefono || '';
-      if (telefonoFormateado) {
-        telefonoFormateado = formatPhoneNumber(telefonoFormateado, '', false);
-      }
-
-      console.log('📝 Datos a rellenar:', {
-        nombres: nombresCompletos,
-        apellidos: apellidosCompletos,
-        telefono: telefonoFormateado,
-        correo: persona.correo
-      });
-
-      // ✨ ORGANIZACIÓN DEL AUTOCOMPLETADO: Actualizar formulario usando el hook personalizado
-      const nuevosDatos = {};
-
-      if (nombresCompletos.trim()) {
-        nuevosDatos.nombres = nombresCompletos.trim();
-      }
-
-      if (apellidosCompletos.trim()) {
-        nuevosDatos.apellidos = apellidosCompletos.trim();
-      }
-
-      if (telefonoFormateado) {
-        nuevosDatos.telefono = telefonoFormateado;
-        // ⭐ También actualizar prevPhone para que funcione el formateo manual
-        setPrevPhone(telefonoFormateado);
-      }
-
-      if (persona.correo) {
-        nuevosDatos.email = persona.correo.trim();
-      }
-
-      // Actualizar todo el formulario a la vez
-      if (Object.keys(nuevosDatos).length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          ...nuevosDatos
-        }));
-      }
-
-      toast({
-        title: "✅ Datos encontrados",
-        description: "Se han completado los campos con la información existente.",
-        variant: "default"
-      });
+  // ⭐ CORRECCIÓN: Función para buscar persona automáticamente
+  const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
+    // Validaciones previas
+    if (!tipoDocumento || !numeroDocumento || numeroDocumento.length < 5) {
+      return;
     }
-  } catch (error) {
-    if (error.response?.status !== 404) {
-      console.error('❌ Error al buscar persona:', error);
-      toast({
-        title: "Error al buscar información",
-        description: "No se pudo verificar si el documento existe. Continúa ingresando los datos manualmente.",
-        variant: "destructive"
-      });
-    } else {
-      console.log('ℹ️ Persona no encontrada, continuar con registro nuevo');
+
+    const errorDocumento = validateNumeroDocumento(numeroDocumento, tipoDocumento);
+    if (errorDocumento) {
+      return;
     }
-  } finally {
-    setIsSearchingPerson(false);
-  }
-};
+
+    setIsSearchingPerson(true);
+
+    try {
+      console.log('🔍 Buscando persona:', {
+        tipo: tipoDocumentoMap[tipoDocumento] || tipoDocumento,
+        numero: numeroDocumento.replace(/[\s\-\.]/g, '')
+      });
+
+      const tipoDocMap = tipoDocumentoMap[tipoDocumento] || tipoDocumento;
+      const response = await apiClient.get('/citas/buscar-persona', {
+        params: {
+          tipo_documento: tipoDocMap,
+          numero_documento: numeroDocumento.replace(/[\s\-\.]/g, '')
+        }
+      });
+
+      console.log('✅ Respuesta del servidor:', response);
+
+      const persona = response.data || response;
+
+      if (persona && (persona.primer_nombre || persona.correo || persona.telefono)) {
+        // Construir nombres completos
+        const nombresCompletos = [persona.primer_nombre, persona.segundo_nombre]
+          .filter(Boolean)
+          .join(' ');
+
+        const apellidosCompletos = [persona.primer_apellido, persona.segundo_apellido]
+          .filter(Boolean)
+          .join(' ');
+
+        // ⭐ CORRECCIÓN: Formatear el teléfono usando tu función formatPhoneNumber
+        let telefonoFormateado = persona.telefono || '';
+        if (telefonoFormateado) {
+          telefonoFormateado = formatPhoneNumber(telefonoFormateado, '', false);
+        }
+
+        console.log('📝 Datos a rellenar:', {
+          nombres: nombresCompletos,
+          apellidos: apellidosCompletos,
+          telefono: telefonoFormateado,
+          correo: persona.correo
+        });
+
+        // ✨ ORGANIZACIÓN DEL AUTOCOMPLETADO: Actualizar formulario usando el hook personalizado
+        const nuevosDatos = {};
+
+        if (nombresCompletos.trim()) {
+          nuevosDatos.nombres = nombresCompletos.trim();
+        }
+
+        if (apellidosCompletos.trim()) {
+          nuevosDatos.apellidos = apellidosCompletos.trim();
+        }
+
+        if (telefonoFormateado) {
+          nuevosDatos.telefono = telefonoFormateado;
+          // ⭐ También actualizar prevPhone para que funcione el formateo manual
+          setPrevPhone(telefonoFormateado);
+        }
+
+        if (persona.correo) {
+          nuevosDatos.email = persona.correo.trim();
+        }
+
+        // Actualizar todo el formulario a la vez
+        if (Object.keys(nuevosDatos).length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            ...nuevosDatos
+          }));
+        }
+
+        toast({
+          title: "✅ Datos encontrados",
+          description: "Se han completado los campos con la información existente.",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        console.error('❌ Error al buscar persona:', error);
+      } else {
+        console.log('ℹ️ Persona no encontrada, continuar con registro nuevo');
+      }
+    } finally {
+      setIsSearchingPerson(false);
+    }
+  };
 
   // Función para manejar el cambio del teléfono con formateo automático
   const handlePhoneChange = (e) => {
@@ -684,11 +684,51 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
     }
   };
 
+  // ✅ Filtrar horas disponibles (Margen de 2 horas si es hoy)
+  const filteredAvailableHours = React.useMemo(() => {
+    if (!formData.fecha) return [];
+
+    // Crear fecha seleccionada (ajustando zona horaria local o simplemente comparando strings si se usa formatDateForInput)
+    // Como formData.fecha viene de formatDateForInput (YYYY-MM-DD), lo comparamos con el de hoy
+    const today = new Date();
+    const todayStr = formatDateForInput(today);
+
+    // Si no es hoy, mostrar todas
+    if (formData.fecha !== todayStr) {
+      return availableHours;
+    }
+
+    // Si es hoy, filtrar
+    const now = new Date();
+    // Margen de 2 horas
+    const marginTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+    return availableHours.filter((timeStr) => {
+      // Usamos la función parseTime existente que ya devuelve un Date con fecha de hoy
+      const slotTime = parseTime(timeStr);
+      return slotTime >= marginTime;
+    });
+  }, [formData.fecha]);
+
   const handleDateSelect = (day) => {
     if (day.isDisabled) return;
 
     const dateString = formatDateForInput(day.date);
-    updateFormData("fecha", dateString);
+
+    // Actualizar estado atómicamente para evitar condiciones de carrera
+    setFormData(prev => ({
+      ...prev,
+      fecha: dateString,
+      hora: "" // Limpiar hora al cambiar fecha
+    }));
+
+    // Validar fecha inmediatamente
+    const error = validateField("fecha", dateString);
+    setErrors(prev => ({
+      ...prev,
+      fecha: error,
+      hora: "" // Limpiar error de hora
+    }));
   };
 
   const navigateMonth = (direction) => {
@@ -754,49 +794,62 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
 
           {/* Content */}
           <div className="flex flex-col lg:flex-row overflow-hidden flex-1 min-h-0">
-            {/* Property Info Sidebar */}
-            <div className="lg:w-1/3 bg-gradient-to-b from-slate-50 to-slate-100 p-6 border-r border-slate-200 flex-shrink-0">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-blue-600 font-medium">
-                  <Home className="w-5 h-5" />
-                  <span>Propiedad seleccionada</span>
+            {/* Property Info Sidebar - Rediseñado */}
+            <div className="lg:w-1/3 bg-slate-50 border-r border-slate-200 flex-shrink-0 flex flex-col p-4">
+              {/* Imagen Principal */}
+              <div className="relative h-48 lg:h-56 w-full flex-shrink-0 rounded-2xl overflow-hidden shadow-md">
+                <img
+                  src={property.mainImage || "/placeholder.svg"}
+                  alt={property.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+
+                {/* Precio sobre la imagen */}
+                <div className="absolute bottom-4 left-4 right-4 text-white">
+                  <p className="text-xs font-medium opacity-90 mb-0.5 uppercase tracking-wider">Precio</p>
+                  <p className="text-2xl font-bold">{property.price}</p>
                 </div>
+              </div>
 
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-lg text-slate-800 mb-2">
-                    {property.title}
-                  </h3>
-
-                  <div className="flex items-center gap-2 text-slate-600 mb-3">
-                    <MapPin className="w-4 h-4" />
-                    <span className="text-sm">{property.location}</span>
+              {/* Información Detallada */}
+              <div className="py-6 px-2 flex-1 overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Título y Ubicación */}
+                  <div>
+                    <h3 className="font-bold text-xl text-slate-800 leading-tight mb-2">
+                      {property.title}
+                    </h3>
+                    <div className="flex items-start gap-2 text-slate-600">
+                      <MapPin className="w-4 h-4 mt-1 flex-shrink-0 text-blue-600" />
+                      <span className="text-sm">{property.location}</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 mb-4">
-                    <DollarSign className="w-5 h-5 text-green-600" />
-                    <span className="text-xl font-bold text-green-600">
-                      {property.price}
-                    </span>
-                  </div>
+                  {/* Grid de Características */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col items-center text-center hover:border-blue-100 transition-colors">
+                      <div className="p-2 bg-blue-50 rounded-full mb-2">
+                        <Home className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Área</span>
+                      <span className="font-bold text-slate-800 text-sm mt-1">{property.area}</span>
+                    </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div className="text-center bg-slate-50 rounded-lg p-2">
-                      <div className="font-semibold text-slate-800">
-                        {property.area}
+                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col items-center text-center hover:border-blue-100 transition-colors">
+                      <div className="p-2 bg-blue-50 rounded-full mb-2">
+                        <Bed className="w-4 h-4 text-blue-600" />
                       </div>
-                      <div className="text-slate-500">Área</div>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Hab.</span>
+                      <span className="font-bold text-slate-800 text-sm mt-1">{property.bedrooms}</span>
                     </div>
-                    <div className="text-center bg-slate-50 rounded-lg p-2">
-                      <div className="font-semibold text-slate-800">
-                        {property.bedrooms}
+
+                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col items-center text-center hover:border-blue-100 transition-colors">
+                      <div className="p-2 bg-blue-50 rounded-full mb-2">
+                        <Bath className="w-4 h-4 text-blue-600" />
                       </div>
-                      <div className="text-slate-500">Hab.</div>
-                    </div>
-                    <div className="text-center bg-slate-50 rounded-lg p-2">
-                      <div className="font-semibold text-slate-800">
-                        {property.bathrooms}
-                      </div>
-                      <div className="text-slate-500">Baños</div>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Baños</span>
+                      <span className="font-bold text-slate-800 text-sm mt-1">{property.bathrooms}</span>
                     </div>
                   </div>
                 </div>
@@ -890,15 +943,8 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                               e.preventDefault();
                             }
                           }}
-                          onBlur={() => {
-                            // Buscar inmediatamente al salir del campo
-                            if (formData.tipoDocumento && formData.numeroDocumento.trim().length >= 5) {
-                              buscarPersonaAutomaticamente(formData.tipoDocumento, formData.numeroDocumento);
-                            }
-                          }}
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                            errors.numeroDocumento ? 'border-red-500' : 'border-slate-300'
-                          } ${isSearchingPerson ? 'bg-blue-50' : ''}`}
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.numeroDocumento ? 'border-red-500' : 'border-slate-300'
+                            } ${isSearchingPerson ? 'bg-blue-50' : ''}`}
                           placeholder="Número de documento"
                           disabled={!formData.tipoDocumento}
                         />
@@ -925,9 +971,8 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                           onChange={(e) =>
                             updateFormData("nombres", e.target.value)
                           }
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                            errors.nombres ? "border-red-500" : "border-slate-300"
-                          }`}
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.nombres ? "border-red-500" : "border-slate-300"
+                            }`}
                           placeholder="Ej: Juan Carlos"
                         />
                         {errors.nombres && (
@@ -947,11 +992,10 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                           onChange={(e) =>
                             updateFormData("apellidos", e.target.value)
                           }
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                            errors.apellidos
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.apellidos
                               ? "border-red-500"
                               : "border-slate-300"
-                          }`}
+                            }`}
                           placeholder="Ej: Pérez González"
                         />
                         {errors.apellidos && (
@@ -970,11 +1014,10 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                           value={formData.telefono}
                           onChange={handlePhoneChange}
                           onKeyDown={handlePhoneKeyDown}
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                            errors.telefono
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.telefono
                               ? "border-red-500"
                               : "border-slate-300"
-                          }`}
+                            }`}
                           placeholder="+57 300 123 4567"
                         />
                         {errors.telefono && (
@@ -993,9 +1036,8 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                         type="email"
                         value={formData.email}
                         onChange={(e) => updateFormData("email", e.target.value)}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                          errors.email ? "border-red-500" : "border-slate-300"
-                        }`}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.email ? "border-red-500" : "border-slate-300"
+                          }`}
                         placeholder="tu@email.com"
                       />
                       {errors.email && (
@@ -1121,22 +1163,19 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                             disabled={day.isDisabled}
                             className={`
                               h-10 w-10 rounded-lg text-sm font-medium transition-all duration-200
-                              ${
-                                day.isDisabled
-                                  ? "text-slate-300 cursor-not-allowed"
-                                  : "text-slate-700 hover:bg-blue-50"
+                              ${day.isDisabled
+                                ? "text-slate-300 cursor-not-allowed"
+                                : "text-slate-700 hover:bg-blue-50"
                               }
                               ${!day.isCurrentMonth ? "text-slate-400" : ""}
-                              ${
-                                day.isToday
-                                  ? "bg-blue-100 text-blue-600 font-bold"
-                                  : ""
+                              ${day.isToday
+                                ? "bg-blue-100 text-blue-600 font-bold"
+                                : ""
                               }
                               ${isSelected ? "bg-blue-600 text-white" : ""}
-                              ${
-                                day.isSunday && day.isCurrentMonth
-                                  ? "bg-red-50 text-red-400"
-                                  : ""
+                              ${day.isSunday && day.isCurrentMonth
+                                ? "bg-red-50 text-red-400"
+                                : ""
                               }
                             `}
                           >
@@ -1182,7 +1221,7 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                       </div>
 
                       <div className="grid grid-cols-4 gap-3">
-                        {availableHours.map((hour) => (
+                        {filteredAvailableHours.map((hour) => (
                           <motion.button
                             key={hour}
                             type="button"
@@ -1191,10 +1230,9 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                             onClick={() => updateFormData("hora", hour)}
                             className={`
                               py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
-                              ${
-                                formData.hora === hour
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-200"
+                              ${formData.hora === hour
+                                ? "bg-blue-600 text-white"
+                                : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-200"
                               }
                             `}
                           >
@@ -1239,7 +1277,10 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                           confirmar
                         </li>
                         <li>• Duración aproximada: 30-45 minutos</li>
-                        <li>• Puedes reagendar con 24 horas de anticipación</li>
+                        <li>
+                          • Agradecemos tu puntualidad y asistencia. Tu
+                          compromiso es fundamental para nosotros.
+                        </li>
                         <li>
                           • Para visitas presenciales, lleva identificación
                         </li>

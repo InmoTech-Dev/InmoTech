@@ -22,7 +22,7 @@ export const AppointmentProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, hasPermission } = useAuth();
 
   /**
    * Carga las citas desde la API
@@ -45,12 +45,13 @@ export const AppointmentProvider = ({ children }) => {
 
   // Cargar citas solo si hay autenticación y es un administrativo
   useEffect(() => {
-    if (isAuthenticated && user?.es_administrativo) {
+    if (isAuthenticated && user?.es_administrativo && hasPermission('citas', 'ver')) {
       loadAppointments();
     } else {
+      setAppointments([]);
       setLoading(false);
     }
-  }, [loadAppointments, isAuthenticated, user?.es_administrativo]);
+  }, [loadAppointments, isAuthenticated, user?.es_administrativo, hasPermission]);
 
   /**
    * Crea una nueva cita en el backend y la agrega al estado
@@ -75,16 +76,16 @@ export const AppointmentProvider = ({ children }) => {
   const addExistingAppointment = (appointment) => {
     // ✅ Aceptar tanto 'id' como 'id_cita'
     const appointmentId = appointment.id || appointment.id_cita;
-    
+
     if (!appointmentId) {
       console.error("❌ Error: Se intentó agregar una cita sin ID");
       throw new Error("La cita debe tener un ID para ser agregada al estado");
     }
 
-    const yaExiste = appointments.some((apt) => 
+    const yaExiste = appointments.some((apt) =>
       (apt.id === appointmentId) || (apt.id_cita === appointmentId)
     );
-    
+
     if (yaExiste) {
       console.warn("⚠️ La cita con ID", appointmentId, "ya existe en el estado");
       return appointment;
@@ -156,10 +157,10 @@ export const AppointmentProvider = ({ children }) => {
   const updateAppointmentStatus = async (idCita, idEstadoCita) => {
     try {
       console.log(`🔄 Iniciando cambio de estado - Cita: ${idCita}, Nuevo estado: ${idEstadoCita}`);
-      
+
       // Llamar al backend para actualizar el estado
       const citaActualizada = await actualizarEstadoCita(idCita, idEstadoCita);
-      
+
       console.log("📥 Cita actualizada recibida del backend:", citaActualizada);
 
       // Verificar que la respuesta sea válida
@@ -176,23 +177,23 @@ export const AppointmentProvider = ({ children }) => {
         const updated = prev.map(app => {
           const appId = app.id || app.id_cita;
           const citaId = citaActualizada.id || citaActualizada.id_cita;
-          
+
           if (appId === citaId) {
             console.log("🔄 Actualizando cita en el estado local:", {
               antes: app.estado,
               despues: nuevoEstado
             });
-            
-            return { 
-              ...app, 
-              estado: nuevoEstado, 
+
+            return {
+              ...app,
+              estado: nuevoEstado,
               id_estado_cita: idEstadoCita,
               fecha_actualizacion: citaActualizada.fecha_actualizacion
             };
-            }
+          }
           return app;
         });
-        
+
         return updated;
       });
 
@@ -209,7 +210,7 @@ export const AppointmentProvider = ({ children }) => {
    */
   const getAppointmentById = useCallback(
     (id) => {
-      return appointments.find((apt) => 
+      return appointments.find((apt) =>
         (apt.id === id) || (apt.id_cita === id)
       );
     },
@@ -263,3 +264,4 @@ export const useAppointments = () => {
 };
 
 export default AppointmentContext;
+

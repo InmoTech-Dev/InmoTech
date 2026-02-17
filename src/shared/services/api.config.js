@@ -1,6 +1,7 @@
 /**
- * Cliente API simplificado usando fetch con cookies httpOnly.
- */
+* Cliente API usando fetch + cookies httpOnly.
+* Incluye refresh single-flight, retry unico en 401 y envio de CSRF para mutaciones.
+*/
 
 const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1',
@@ -10,24 +11,81 @@ const API_CONFIG = {
   HEADERS: {
     'Content-Type': 'application/json',
   },
+  CSRF_COOKIE_NAME: import.meta.env.VITE_CSRF_COOKIE_NAME || 'csrfToken',
+  CSRF_HEADER_NAME: import.meta.env.VITE_CSRF_HEADER_NAME || 'X-CSRF-Token',
 };
 
 const ACCESS_TOKEN_KEY = 'inmotech_access_token';
 const REFRESH_TOKEN_KEY = 'inmotech_refresh_token';
 
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const REFRESH_ENDPOINT = '/auth/refresh';
+const LOGOUT_ENDPOINT = '/auth/logout';
+const PUBLIC_AUTH_ENDPOINTS = new Set([
+  '/auth/login',
+  '/auth/register',
+  '/auth/verify-code',
+  '/auth/resend-code',
+  '/auth/verify-email',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+]);
+
 class ApiClient {
   constructor() {
-    this.maxRetries = 2;
+    this.maxRetries = API_CONFIG.RETRY_ATTEMPTS;
     this.accessToken = null;
     this.refreshToken = null;
+    this.onUnauthorized = null;
+    this.refreshPromise = null;
+    this.isHandlingUnauthorized = false;
     this.loadTokensFromStorage();
   }
 
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  registerUnauthorizedCallback(callback) {
+    this.onUnauthorized = callback;
   }
 
-  // Manejo simple de tokens para adjuntar Authorization en cada request
+  delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  normalizeEndpoint(endpoint) {
+    if (!endpoint) return '/';
+    return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  }
+
+  shouldIncludeAuth(options = {}) {
+    return options.skipAuth !== true;
+  }
+
+  isMutatingMethod(method = 'GET') {
+    return MUTATING_METHODS.has(String(method).toUpperCase());
+  }
+
+  isRefreshEndpoint(endpoint = '') {
+    return endpoint.startsWith(REFRESH_ENDPOINT);
+  }
+
+  isLogoutEndpoint(endpoint = '') {
+    return endpoint.startsWith(LOGOUT_ENDPOINT);
+  }
+
+  isPublicAuthEndpoint(endpoint = '') {
+    return PUBLIC_AUTH_ENDPOINTS.has(endpoint);
+  }
+
+  getCookieValue(name) {
+    if (typeof document === 'undefined' || !document.cookie) return null;
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  getCsrfToken() {
+    return this.getCookieValue(API_CONFIG.CSRF_COOKIE_NAME);
+  }
+
   setTokens(accessToken, refreshToken) {
     this.accessToken = accessToken || null;
     this.refreshToken = refreshToken || null;
@@ -45,7 +103,7 @@ class ApiClient {
         localStorage.removeItem(REFRESH_TOKEN_KEY);
       }
     } catch {
-      // En entornos sin localStorage (SSR/tests), ignorar
+      // noop
     }
   }
 
@@ -92,9 +150,96 @@ class ApiClient {
     }
   }
 
-  async request(endpoint, options = {}, retryCount = 0) {
-    const url = new URL(`${API_CONFIG.BASE_URL}${endpoint}`);
+  async parseResponsePayload(response) {
+    return response.json().catch(() => null);
+  }
 
+  buildError(status, payload, fallbackMessage) {
+    const error = new Error(payload?.message || fallbackMessage || `Error ${status}`);
+    error.status = status;
+    error.data = payload || null;
+    return error;
+  }
+
+  async triggerUnauthorized(reason = 'unauthorized') {
+    if (!this.onUnauthorized || this.isHandlingUnauthorized) return;
+
+    this.isHandlingUnauthorized = true;
+    try {
+      await Promise.resolve(this.onUnauthorized(reason));
+    } finally {
+      this.isHandlingUnauthorized = false;
+    }
+  }
+
+  async performRefresh() {
+    const refreshToken = this.getRefreshToken();
+    const body = refreshToken ? JSON.stringify({ refreshToken }) : '{}';
+
+    const response = await fetch(`${API_CONFIG.BASE_URL}${REFRESH_ENDPOINT}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...API_CONFIG.HEADERS,
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = await this.parseResponsePayload(response);
+    if (payload?.success && payload?.data?.accessToken) {
+      this.setTokens(payload.data.accessToken, payload.data.refreshToken);
+      return true;
+    }
+
+    return false;
+  }
+
+  async refreshSessionSingleFlight() {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this.performRefresh().finally(() => {
+      this.refreshPromise = null;
+    });
+
+    return this.refreshPromise;
+  }
+
+  buildRequestHeaders(endpoint, options = {}) {
+    const headers = {
+      ...API_CONFIG.HEADERS,
+      ...(options.headers || {}),
+    };
+
+    if (this.shouldIncludeAuth(options)) {
+      const accessToken = this.getAccessToken();
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+    }
+
+    const method = options.method || 'GET';
+    if (this.isMutatingMethod(method)) {
+      const csrfToken = this.getCsrfToken();
+      if (csrfToken && !headers[API_CONFIG.CSRF_HEADER_NAME]) {
+        headers[API_CONFIG.CSRF_HEADER_NAME] = csrfToken;
+      }
+    }
+
+    return headers;
+  }
+
+  async request(endpoint, options = {}, retryCount = 0) {
+    const normalizedEndpoint = this.normalizeEndpoint(endpoint);
+    const isRetryAfterRefresh = options.__isRetryAfterRefresh === true;
+    const skipAuthRefresh = options.skipAuthRefresh === true || options.skipAuth === true;
+
+    const url = new URL(`${API_CONFIG.BASE_URL}${normalizedEndpoint}`);
     if (options.params && Object.keys(options.params).length > 0) {
       Object.entries(options.params).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
@@ -108,43 +253,59 @@ class ApiClient {
 
     const config = {
       ...options,
-      headers: {
-        ...API_CONFIG.HEADERS,
-        ...(options.headers || {}),
-        ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
-      },
+      headers: this.buildRequestHeaders(normalizedEndpoint, options),
       credentials: 'include',
       signal: controller.signal,
     };
 
-    // No reenviar params en fetch
     delete config.params;
+    delete config.__isRetryAfterRefresh;
+    delete config.skipAuthRefresh;
+    delete config.skipAuth;
 
     try {
       const response = await fetch(url.toString(), config);
       clearTimeout(timeoutId);
 
+      if (response.status === 401) {
+        const isAuthEndpoint =
+          this.isRefreshEndpoint(normalizedEndpoint) || this.isLogoutEndpoint(normalizedEndpoint);
+        const isPublicAuthEndpoint = this.isPublicAuthEndpoint(normalizedEndpoint);
+
+        if (!isAuthEndpoint && !isPublicAuthEndpoint && !isRetryAfterRefresh && !skipAuthRefresh) {
+          const refreshed = await this.refreshSessionSingleFlight();
+          if (refreshed) {
+            return this.request(
+              normalizedEndpoint,
+              { ...options, __isRetryAfterRefresh: true },
+              retryCount
+            );
+          }
+        }
+
+        if (!isAuthEndpoint && !isPublicAuthEndpoint && !skipAuthRefresh) {
+          await this.triggerUnauthorized('unauthorized');
+        }
+
+        const payload = await this.parseResponsePayload(response);
+        throw this.buildError(response.status, payload, 'Sesion no autorizada');
+      }
+
       if (response.status === 429) {
         if (retryCount < API_CONFIG.RETRY_ATTEMPTS + 2) {
           const waitTime = API_CONFIG.RETRY_DELAY * (retryCount + 1);
           await this.delay(waitTime);
-          return this.request(endpoint, options, retryCount + 1);
+          return this.request(normalizedEndpoint, options, retryCount + 1);
         }
         throw new Error('Demasiadas peticiones. Por favor, espera e intenta nuevamente.');
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          message: response.statusText,
-        }));
-        const error = new Error(errorData.message || `Error ${response.status}`);
-        error.status = response.status;
-        error.data = errorData;
-        throw error;
+        const errorPayload = await this.parseResponsePayload(response);
+        throw this.buildError(response.status, errorPayload, response.statusText);
       }
 
-      const data = await response.json();
-
+      const data = await this.parseResponsePayload(response);
       if (data?.success && data?.data?.accessToken) {
         this.setTokens(data.data.accessToken, data.data.refreshToken);
       }
@@ -154,7 +315,7 @@ class ApiClient {
       if (error.name === 'AbortError') {
         if (retryCount < API_CONFIG.RETRY_ATTEMPTS) {
           await this.delay(API_CONFIG.RETRY_DELAY);
-          return this.request(endpoint, options, retryCount + 1);
+          return this.request(normalizedEndpoint, options, retryCount + 1);
         }
         const timeoutError = new Error('La peticion tardo demasiado tiempo.');
         timeoutError.code = 'TIMEOUT';
@@ -172,7 +333,6 @@ class ApiClient {
   }
 
   async get(endpoint, paramsOrOptions = {}) {
-    // Allow passing either a plain params object or a full options object (with params, headers, etc.)
     const isOptionsObject =
       paramsOrOptions &&
       typeof paramsOrOptions === 'object' &&
@@ -181,7 +341,9 @@ class ApiClient {
         Object.prototype.hasOwnProperty.call(paramsOrOptions, 'method') ||
         Object.prototype.hasOwnProperty.call(paramsOrOptions, 'body') ||
         Object.prototype.hasOwnProperty.call(paramsOrOptions, 'cache') ||
-        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'credentials'));
+        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'credentials') ||
+        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'skipAuth') ||
+        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'skipAuthRefresh'));
 
     if (isOptionsObject) {
       const { params = {}, ...rest } = paramsOrOptions;

@@ -112,8 +112,8 @@ export function ReportsHeader({
             type="button"
             onClick={onToggleToday}
             className={`px-3 py-2 text-sm rounded-lg border transition-all ${todayOnly
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
               }`}
           >
             <span className="inline-flex items-center gap-1.5">
@@ -133,8 +133,8 @@ export function ReportsHeader({
             type="button"
             onClick={onToggleShowCancelled}
             className={`px-3 py-2 text-sm rounded-lg border transition-all ${showCancelled
-                ? 'bg-slate-800 text-white border-slate-800'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+              ? 'bg-slate-800 text-white border-slate-800'
+              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
               }`}
           >
             <span className="inline-flex items-center gap-1.5">

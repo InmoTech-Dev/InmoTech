@@ -60,12 +60,12 @@ const AppointmentCard = ({
     };
     return colors[status?.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
-  
+
   const formatTime = (timeString) => {
     if (!timeString) return '';
     return formatTimeTo12Hour(timeString) || timeString;
   };
-  
+
   // Extraer datos de objetos anidados
   const cliente = appointment.cliente || {};
   const servicio = appointment.servicio || {};
@@ -90,7 +90,7 @@ const AppointmentCard = ({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 10 }}
       className={`
-        p-2 rounded-lg border text-xs ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
+        p-1 rounded border text-[10px] ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
         transition-all duration-200 hover:shadow-sm select-none
         ${getStatusColor(appointment.estado)}
         ${isDndDragging ? 'opacity-50' : ''}
@@ -109,20 +109,20 @@ const AppointmentCard = ({
       {...props}
     >
       {/* ✅ CORREGIDO: Usar variable hora */}
-      <div className="flex items-center gap-1 mb-1">
-        <Clock className="w-3 h-3 flex-shrink-0" />
+      <div className="flex items-center gap-0.5 mb-0.5">
+        <Clock className="w-2.5 h-2.5 flex-shrink-0" />
         <span className="font-medium truncate">{hora}</span>
       </div>
-      
+
       {/* ✅ CORREGIDO: Usar variable clienteNombre */}
-      <div className="flex items-center gap-1 mb-1">
-        <User className="w-3 h-3 flex-shrink-0" />
+      <div className="flex items-center gap-0.5 mb-0.5">
+        <User className="w-2.5 h-2.5 flex-shrink-0" />
         <span className="truncate">{clienteNombre}</span>
       </div>
-      
+
       {/* ✅ CORREGIDO: Usar variable servicioNombre */}
-      <div className="flex items-center gap-1">
-        <MapPin className="w-3 h-3 flex-shrink-0" />
+      <div className="flex items-center gap-0.5">
+        <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
         <span className="truncate">{servicioNombre}</span>
       </div>
     </motion.div>

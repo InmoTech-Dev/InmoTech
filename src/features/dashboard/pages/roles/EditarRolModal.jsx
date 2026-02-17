@@ -71,6 +71,30 @@ const permissionConfig = {
   "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
+const VIEW_PERMISSION = "Ver";
+
+const getNextPermissionsSelection = (currentPermissions = [], permiso) => {
+  const selected = new Set(currentPermissions);
+  const isSelected = selected.has(permiso);
+
+  if (permiso === VIEW_PERMISSION) {
+    if (isSelected) {
+      return [];
+    }
+    selected.add(VIEW_PERMISSION);
+    return Array.from(selected);
+  }
+
+  if (isSelected) {
+    selected.delete(permiso);
+    return Array.from(selected);
+  }
+
+  selected.add(permiso);
+  selected.add(VIEW_PERMISSION);
+  return Array.from(selected);
+};
+
 export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
   const [nombre, setNombre] = useState("");
   const [modules, setModules] = useState([]);
@@ -82,21 +106,21 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
   useEffect(() => {
     if (rol) {
       setNombre(rol.nombre);
-      
+
       // Initialize modules with rol data
       const initialModules = modulesData.map((mod) => {
         const rolPermisos = rol.permisos?.[mod.key] || {};
-        const permisosSeleccionados = mod.permisos.filter(permiso => 
+        const permisosSeleccionados = mod.permisos.filter(permiso =>
           rolPermisos[permiso.toLowerCase()] === true
         );
-        
+
         return {
           ...mod,
           enabled: permisosSeleccionados.length > 0,
           permisosSeleccionados
         };
       });
-      
+
       setModules(initialModules);
     }
   }, [rol]);
@@ -110,17 +134,17 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!nombre.trim()) {
       newErrors.nombre = "El nombre del rol es obligatorio";
     } else if (nombre.trim().length < 3) {
       newErrors.nombre = "El nombre debe tener al menos 3 caracteres";
     }
 
-    const hasAnyPermission = modules.some(mod => 
+    const hasAnyPermission = modules.some(mod =>
       mod.enabled && mod.permisosSeleccionados.length > 0
     );
-    
+
     if (!hasAnyPermission) {
       newErrors.permisos = "Debe seleccionar al menos un permiso";
     }
@@ -134,10 +158,10 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       prev.map((mod, i) =>
         i === index
           ? {
-              ...mod,
-              enabled: !mod.enabled,
-              permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
-            }
+            ...mod,
+            enabled: !mod.enabled,
+            permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
+          }
           : mod
       )
     );
@@ -149,11 +173,9 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       prev.map((mod, i) =>
         i === index
           ? {
-              ...mod,
-              permisosSeleccionados: mod.permisosSeleccionados.includes(permiso)
-                ? mod.permisosSeleccionados.filter((p) => p !== permiso)
-                : [...mod.permisosSeleccionados, permiso],
-            }
+            ...mod,
+            permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
+          }
           : mod
       )
     );
@@ -193,7 +215,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
         nombre_rol: nombre.trim(),   // โ�� Ahora se envรญa para el API
         permisos
       };
-      
+
       await onSave(rolEditado);
       onClose();
     } catch (error) {
@@ -209,7 +231,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
   };
 
   const activeModulesCount = modules.filter(mod => mod.enabled).length;
-  const totalPermissionsCount = modules.reduce((acc, mod) => 
+  const totalPermissionsCount = modules.reduce((acc, mod) =>
     acc + (mod.enabled ? mod.permisosSeleccionados.length : 0), 0
   );
 
@@ -278,9 +300,8 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                     setErrors(prev => ({ ...prev, nombre: undefined }));
                   }}
                   placeholder="Ej: Agente Comercial Senior"
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 transition-colors ${
-                    errors.nombre ? 'border-red-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 transition-colors ${errors.nombre ? 'border-red-500' : 'border-slate-300'
+                    }`}
                 />
                 {errors.nombre && (
                   <p className="text-red-500 text-sm mt-1">{errors.nombre}</p>
@@ -302,43 +323,39 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                 <h3 className="text-lg font-semibold text-slate-800 mb-4">
                   Configuraciรณn de Permisos por Mรณdulo
                 </h3>
-                
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                   {modules.map((module, index) => {
                     const IconComponent = module.icon;
-                    
+
                     return (
                       <motion.div
                         key={module.name}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.03 }}
-                        className={`border-2 rounded-lg transition-all duration-200 ${
-                          module.enabled 
-                            ? `${module.color} shadow-sm` 
+                        className={`border-2 rounded-lg transition-all duration-200 ${module.enabled
+                            ? `${module.color} shadow-sm`
                             : 'bg-gray-50 border-gray-200'
-                        }`}
+                          }`}
                       >
                         {/* Header del mรณdulo */}
                         <div className="p-4 border-b border-gray-200">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-3 flex-1">
-                              <div className={`p-2 rounded-lg ${
-                                module.enabled ? 'bg-white shadow-sm' : 'bg-gray-100'
-                              }`}>
-                                <IconComponent 
+                              <div className={`p-2 rounded-lg ${module.enabled ? 'bg-white shadow-sm' : 'bg-gray-100'
+                                }`}>
+                                <IconComponent
                                   className={`w-4 h-4 ${module.enabled ? 'text-gray-700' : 'text-gray-400'}`}
                                 />
                               </div>
                               <div className="flex-1">
-                                <h4 className={`font-semibold text-sm ${
-                                  module.enabled ? 'text-gray-800' : 'text-gray-500'
-                                }`}>
+                                <h4 className={`font-semibold text-sm ${module.enabled ? 'text-gray-800' : 'text-gray-500'
+                                  }`}>
                                   {module.name}
                                 </h4>
-                                <p className={`text-xs mt-1 ${
-                                  module.enabled ? 'text-gray-600' : 'text-gray-400'
-                                }`}>
+                                <p className={`text-xs mt-1 ${module.enabled ? 'text-gray-600' : 'text-gray-400'
+                                  }`}>
                                   {module.description}
                                 </p>
                               </div>
@@ -363,17 +380,16 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                                 const config = permissionConfig[permiso];
                                 const IconPermiso = config.icon;
                                 const isSelected = module.permisosSeleccionados.includes(permiso);
-                                
+
                                 return (
                                   <button
                                     key={permiso}
                                     type="button"
                                     onClick={() => togglePermiso(index, permiso)}
-                                    className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all text-xs font-medium ${
-                                      isSelected
+                                    className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all text-xs font-medium ${isSelected
                                         ? `${config.bg} ${config.color} border-current shadow-sm`
                                         : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                                    }`}
+                                      }`}
                                   >
                                     <IconPermiso className="w-3 h-3" />
                                     <span>{permiso}</span>
@@ -406,11 +422,10 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               whileTap={{ scale: 0.98 }}
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-                isSubmitting
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isSubmitting
                   ? 'bg-slate-400 cursor-not-allowed'
                   : 'bg-slate-600 hover:bg-slate-700'
-              } text-white`}
+                } text-white`}
             >
               <Save className="w-4 h-4" />
               {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}

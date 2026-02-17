@@ -5,6 +5,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import authService from '../services/authService';
 import { apiClient } from '../services/api.config';
+import { canonicalizePermissions, normalizeModuleKey, normalizePermissionKey } from '../utils/permissions';
 
 const AuthContext = createContext(undefined);
 
@@ -24,55 +25,18 @@ const ALL_MODULES = [
 const normalizeKey = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
 const extractPermissionsByModule = (user) => {
-  const permissions = {};
-  if (!user) return permissions;
+  if (!user) return {};
 
-  const addPermission = (moduleName, permissionKey) => {
-    const mod = normalizeKey(moduleName);
-    const perm = normalizeKey(permissionKey);
-    if (!mod) return;
-    if (!permissions[mod]) permissions[mod] = {};
-    permissions[mod][perm || 'ver'] = true;
-  };
-
-  if (user.permisos && typeof user.permisos === 'object' && !Array.isArray(user.permisos)) {
-    Object.entries(user.permisos).forEach(([moduleName, modulePerms]) => {
-      if (Array.isArray(modulePerms)) {
-        modulePerms.forEach((perm) => addPermission(moduleName, perm));
-      } else if (modulePerms && typeof modulePerms === 'object') {
-        Object.entries(modulePerms).forEach(([perm, enabled]) => {
-          if (enabled) addPermission(moduleName, perm);
-        });
-      } else if (modulePerms) {
-        addPermission(moduleName, 'ver');
-      }
-    });
+  const rawPermissions = user.permisos || user.permisosPorModulo || {};
+  if (Array.isArray(rawPermissions)) {
+    return canonicalizePermissions(rawPermissions);
   }
 
-  if (Array.isArray(user.permisos)) {
-    user.permisos.forEach((perm) => {
-      addPermission(
-        perm?.modulo || perm?.module || perm?.key,
-        perm?.permiso || perm?.permission || perm?.action || 'ver'
-      );
-    });
+  if (rawPermissions && typeof rawPermissions === 'object') {
+    return canonicalizePermissions(rawPermissions);
   }
 
-  if (Array.isArray(user.permisosPorModulo)) {
-    user.permisosPorModulo.forEach((item) => {
-      const mod = item?.modulo || item?.module || item?.key;
-      const perms = item?.permisos || item?.permissions;
-      if (perms && typeof perms === 'object') {
-        Object.entries(perms).forEach(([perm, enabled]) => {
-          if (enabled) addPermission(mod, perm);
-        });
-      } else {
-        addPermission(mod, 'ver');
-      }
-    });
-  }
-
-  return permissions;
+  return {};
 };
 
 export const AuthProvider = ({ children }) => {
@@ -107,9 +71,14 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (parsedUser) {
-        setUser(parsedUser);
-        setIsAuthenticated(true);
-        return;
+        const hasPermissionsPayload =
+          parsedUser?.permisos && typeof parsedUser.permisos === 'object' && Object.keys(parsedUser.permisos).length > 0;
+
+        if (hasPermissionsPayload || !refreshToken) {
+          setUser(parsedUser);
+          setIsAuthenticated(true);
+          return;
+        }
       }
 
       // Hay tokens pero no usuario guardado: intentar reconstruir con /auth/me
@@ -243,15 +212,22 @@ export const AuthProvider = ({ children }) => {
   const refreshToken = async () => {
     try {
       const storedRefreshToken = apiClient.getRefreshToken();
-      if (!storedRefreshToken) {
-        throw new Error('No hay token de refresco disponible');
-      }
-
       const response = await authService.refreshToken(storedRefreshToken);
 
       if (response.success && response.data) {
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
+        const { accessToken, refreshToken: newRefreshToken, user: refreshedUser } = response.data;
         apiClient.setTokens(accessToken, newRefreshToken);
+
+        if (refreshedUser) {
+          setUser(refreshedUser);
+          const userDataString = JSON.stringify(refreshedUser);
+          if (localStorage.getItem(USER_KEY)) {
+            localStorage.setItem(USER_KEY, userDataString);
+          } else {
+            sessionStorage.setItem(USER_KEY, userDataString);
+          }
+        }
+
         return true;
       }
       throw new Error('Error al refrescar token');
@@ -366,18 +342,18 @@ export const AuthProvider = ({ children }) => {
       return Array.from(modules);
     }
 
-    if (user?.es_administrativo) {
-      modules.add('administrativos');
-    }
-
-    Object.keys(permissionsByModule).forEach((mod) => modules.add(mod));
+    Object.entries(permissionsByModule).forEach(([mod, perms]) => {
+      if (perms?.ver === true) {
+        modules.add(mod);
+      }
+    });
 
     return Array.from(modules);
   }, [user, permissionsByModule]);
 
   const hasPermission = useCallback((moduleName, action = 'ver') => {
-    const mod = normalizeKey(moduleName);
-    const permKey = normalizeKey(action) || 'ver';
+    const mod = normalizeModuleKey(moduleName) || normalizeKey(moduleName);
+    const permKey = normalizePermissionKey(action) || normalizeKey(action) || 'ver';
     if (!mod) return false;
 
     const roles = user?.roles || [];
@@ -392,16 +368,17 @@ export const AuthProvider = ({ children }) => {
 
     if (modulePerms[permKey]) return true;
 
-    if (['ver', 'listar', 'read'].includes(permKey)) {
-      return getAvailableModules().includes(mod);
-    }
-
     return false;
   }, [user, permissionsByModule, getAvailableModules]);
 
   useEffect(() => {
     loadAuthFromStorage();
-  }, [loadAuthFromStorage]);
+    // Cierre local de sesion solo cuando el refresh ya fallo.
+    apiClient.registerUnauthorizedCallback(() => {
+      console.log('⚠️ Sesion expirada (401), limpiando autenticacion local...');
+      clearAuthData();
+    });
+  }, [loadAuthFromStorage, clearAuthData]);
 
   const value = {
     user,

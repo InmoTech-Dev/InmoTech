@@ -1,13 +1,13 @@
-import React from 'react';
-import FooterLogo from './Footer/FooterLogo';
-import FooterSocial from './Footer/FooterSocial';
-import FooterLinks from './Footer/FooterLinks';
-import FooterContact from './Footer/FooterContact';
-import FooterBottom from './Footer/FooterBottom';
+import React from "react";
+import FooterLogo from "./Footer/FooterLogo";
+import FooterSocial from "./Footer/FooterSocial";
+import FooterLinks from "./Footer/FooterLinks";
+import FooterContact from "./Footer/FooterContact";
+import FooterBottom from "./Footer/FooterBottom";
 
 const Footer = () => {
   return (
-    <footer className="bg-[#00457B] text-white">
+    <footer id="main-footer" className="bg-[#00457B] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-4 ">
         {/* Mobile Layout - Compact and organized */}
         <div className="block md:hidden space-y-6">
@@ -15,7 +15,8 @@ const Footer = () => {
           <div className="text-center space-y-0">
             <FooterLogo />
             <p className="text-white text-base leading-6 max-w-md mx-auto mt-0 mb-6 relative -top-6">
-              Somos una inmobiliaria comprometida con brindar el mejor servicio y asesoramiento en la compra, venta y alquiler de propiedades.
+              Somos una inmobiliaria comprometida con brindar el mejor servicio
+              y asesoramiento en la compra, venta y alquiler de propiedades.
             </p>
             <FooterSocial />
           </div>
@@ -34,7 +35,8 @@ const Footer = () => {
               <FooterLogo />
             </div>
             <p className="text-white text-base leading-6 max-w-xs -mt-10 mb-10">
-              Somos una inmobiliaria comprometida con brindar el mejor servicio y asesoramiento en la compra, venta y alquiler de propiedades.
+              Somos una inmobiliaria comprometida con brindar el mejor servicio
+              y asesoramiento en la compra, venta y alquiler de propiedades.
             </p>
             <div className="mt-4">
               <FooterSocial />

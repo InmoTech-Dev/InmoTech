@@ -29,18 +29,18 @@ export default function LoginPage() {
     try {
       const userData = await login(email, password, rememberMe)
 
-      // Roles administrativos que deben ir al dashboard
-      const rolesAdministrativos = ['Super Administrador', 'Administrador', 'Empleado']
+      const hasAdministrativeAccess =
+        userData?.es_administrativo === true ||
+        userData?.roles?.includes('Super Administrador') ||
+        userData?.roles?.includes('Administrador')
 
       let redirectPath = "/"
-      if (userData?.roles?.some((rol) => rolesAdministrativos.includes(rol))) {
+      if (hasAdministrativeAccess) {
         redirectPath = "/dashboard"
       }
 
-      // Si viene de una ruta protegida y tiene permisos, redirigir ahí
       if (from !== "/" && from.startsWith("/dashboard")) {
-        const hasDashboardAccess = userData?.roles?.some((rol) => rolesAdministrativos.includes(rol))
-        if (hasDashboardAccess) {
+        if (hasAdministrativeAccess) {
           redirectPath = from
         }
       }
@@ -149,12 +149,7 @@ export default function LoginPage() {
           )}
 
           {/* Mensaje de error */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center space-x-3">
-              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-              <p className="text-red-700 text-sm">{error}</p>
-            </div>
-          )}
+
 
           {/* Formulario */}
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -169,15 +164,15 @@ export default function LoginPage() {
                     id="email"
                     type="email"
                     placeholder="tu@email.com"
-                  className="h-12 pl-12 rounded-xl border-2 border-gray-200 focus:border-[#00457B] focus:ring-[#00457B] transition-all duration-200 w-full"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value)
-                    setPendingVerificationEmail(null)
-                  }}
-                  required
-                  disabled={isLoading}
-                />
+                    className="h-12 pl-12 rounded-xl border-2 border-gray-200 focus:border-[#00457B] focus:ring-[#00457B] transition-all duration-200 w-full"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      setPendingVerificationEmail(null)
+                    }}
+                    required
+                    disabled={isLoading}
+                  />
                   <Mail className="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
               </div>
@@ -201,12 +196,12 @@ export default function LoginPage() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="********"
-                  className="h-12 pl-12 pr-12 rounded-xl border-2 border-gray-200 focus:border-[#00457B] focus:ring-[#00457B] transition-all duration-200 w-full"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={isLoading}
-                />
+                    className="h-12 pl-12 pr-12 rounded-xl border-2 border-gray-200 focus:border-[#00457B] focus:ring-[#00457B] transition-all duration-200 w-full"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
                   <Lock className="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
                   <button
                     type="button"

@@ -70,11 +70,10 @@ const RangeSelector = ({ value, onChange, onRefresh, loading, className = '' }) 
         key={option.value}
         disabled={loading}
         onClick={() => onChange(option.value)}
-        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
-          option.value === value
+        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${option.value === value
             ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
             : 'text-slate-600 border-slate-200 hover:border-blue-400'
-        }`}
+          }`}
       >
         {option.label}
       </button>
@@ -251,8 +250,16 @@ const DashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const canReadReports = hasPermission('reportes', 'ver');
 
   const loadStats = useCallback(async () => {
+    if (!canReadReports) {
+      setLoading(false);
+      setError(null);
+      setStats(DEFAULT_STATS);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -267,7 +274,7 @@ const DashboardPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [canReadReports, range]);
 
   useEffect(() => {
     loadStats();
@@ -277,12 +284,12 @@ const DashboardPage = () => {
     if (stats?.modulesAccess) {
       return stats.modulesAccess;
     }
-      return {
-        citas: hasPermission('citas'),
-        usuarios: hasPermission('usuarios'),
-        administrativos: hasPermission('administrativos'),
-        roles: hasPermission('roles')
-      };
+    return {
+      citas: hasPermission('citas'),
+      usuarios: hasPermission('usuarios'),
+      administrativos: hasPermission('administrativos'),
+      roles: hasPermission('roles')
+    };
   }, [stats, hasPermission]);
 
   const highlights = stats?.highlights || [];

@@ -1,0 +1,111 @@
+aqui te explicare el flujo de mi aplicacion con los nombres de todo, ten en cuenta que mi modulo es el de citas por eso indagare mas en el y es que debes elaborar:
+
+desde la vista de una persona que encuentra la pagina web:
+
+el usuario entra a la pagina web, se interesa por un inmueble, entra a los detalles de este inmueble y alli, presiona el boton de agendar cita, pero esta persona no esta registrada en el sistema, osea, no ha creado su cuenta ni ha iniciado sesion, inmediatamente se le despliega un modal para que agende su cita para ver ese inmueble, en el modal, aparece el inmueble del cual va a solicitar la cita, luego los campos a llenar son:
+
+Información Personal:  
+
+- Tipo de Documento: este es obligatorio y es un selector con los tipos de documento CC, CE, NIT, Pasaporte, TI.
+
+- Número de Documento: aqui va el numero del documento
+
+- Nombre Completo 
+
+- Teléfono
+
+- Correo Electrónico
+
+Selecciona fecha y hora:
+
+aqui selecciona la fecha en un calendario y la hora segun la disponibilidad que le marque el sistema para este inmueble
+
+
+abajo del modal le aparece esta informacion:
+
+Información importante
+• Te contactaremos en las próximas 2 horas para confirmar
+• Duración aproximada: 30-45 minutos
+• Puedes reagendar con 24 horas de anticipación
+• Para visitas presenciales, lleva identificación
+
+y esta cita pasa con el estado de Solicitada.
+
+ahora este es el caso de una persona que tiene cuenta:
+
+el usuario entra a la pagina web, inicia sesion, se interesa por un inmueble, entra a los detalles de este inmueble y alli, presiona el boton de agendar cita, pero esta persona esta  registrada en el sistema y ya inicio sesion, inmediatamente se le despliega un modal para que agende su cita para ver ese inmueble, en el modal, aparece el inmueble del cual va a solicitar la cita, luego los campos a llenar son:
+
+Información Personal:  
+
+- Tipo de Documento: este es obligatorio y es un selector con los tipos de documento CC, CE, NIT, Pasaporte, TI.
+
+- Número de Documento: aqui va el numero del documento
+
+- Nombre Completo 
+
+- Teléfono
+
+- Correo Electrónico
+
+ESOS SON LOS CAMPOS, PERO COMO LA PERSONA YA ESTA EN EL SISTEMA PORQUE AL INCIAR SESION COLOCO SU INFORMACION, PUES APENAS COLQUE EL TIPO Y EL NUMERO DEL DOCUMENTO SE AUTOCOMPLETARAN LOS OTROS CAMPOS A EXCEPCION LOS DATOS DE FECHA Y HORA.
+
+Selecciona fecha y hora:
+
+aqui selecciona la fecha en un calendario y la hora segun la disponibilidad que le marque el sistema para este inmueble
+
+
+abajo del modal le aparece esta informacion:
+
+Información importante
+• Te contactaremos en las próximas 2 horas para confirmar
+• Duración aproximada: 30-45 minutos
+• Puedes reagendar con 24 horas de anticipación
+• Para visitas presenciales, lleva identificación
+
+y esta cita pasa con el estado de Solicitada.
+
+Ahora para el agente inmobiliario o empleado:
+
+Este entra a la pagina, inicia sesion con sus credenciales ya creadas y entra al dashboard, alli en la parte superior aparece una campana la cual tiene un numero indicando que hay notificaciones para los agentes, el presiona el boton de la campana y se despliega una lista con las citas solicitadas de las personas, estas citas le aparecen a todos los dagentes y al administrador ya que cualquiera de ellos la puede tomar, el desde alli puede presionar un boton de un chulo, una x o un ojo para aceptarla, cancelarla o visualizar la informacion de las personas de las citas y ya en decide si la acepta desde ahi por practicidad, en dado caso que la acepte, la cita ya no aparecera con el estado de solicitada si no con el estado de confirmada, aparecera a nombre de el agente que la acepto y ya no le aparecera a los otros agentes.
+
+o si el quiere entra al modulo de citas el cual le muestra la informacion en una tabla cuyos campos indices son 
+
+Cliente, Servicio, Fecha & Hora, Estado, Contacto, Documento, Acciones
+
+la imagen que vez es la tabla.
+
+en estado hay estados de programada, confirmada, completada, solicitada, re agendada y cancelada.
+
+
+el agente tambien puede crear una cita desde esa parte, los campos para el son:
+
+- Tipo de Documento: este es obligatorio y es un selector con los tipos de documento CC, CE, NIT, Pasaporte, TI.
+
+- Número de Documento: aqui va el numero del documento
+
+- Nombre Completo 
+
+- Teléfono
+
+- Correo Electrónico
+
+AQUI TAMBIEN APLICA EL PRE LLENADO, SI LA PERSONA ESTA REGISTRADO EN EL APLICATIVO, CON SOLO PONER EL TIPO Y NUMERO DE DOCUMENTO LOS OTROS CAMPOS SE PRE LLENARAN.
+
+Fecha y Hora
+Selecciona cuándo será la cita
+
+aqui selecciona la fecha y la hora
+
+
+Detalles de la Cita
+Información adicional sobre la cita
+
+Servicio: este es un selector el cual le permite seleccionar alguno de estos servicios:
+
+avaluos, gestion de alquileres, asesoria legal, visita a propiedad.
+
+y el ultimo campo es
+
+Estado de la Cita : cuenta con estos tres estados: programada, confirmada o solicitada, pero Por defecto se crea como "Programada".
+
+DEBES TENER ALGO EN CUENTA. CUANDO UNA PERSONA QUE NO TIENE CUENTA DESEA AGENDAR UNA CITA Y LLENA LOS CAMPOS POR PRIMERA VEZ QUEDA GUARDADO, Y SI POR EJEMPLO MAS ADELANTE QUIERE AGENDAR OTRA CITA ESTE CON SOLO VOLVER A PONER SU TIPO DE DOCUMENTO Y SU CEDULA SE LE AUTOCOMPLETAN LOS CAMPOS YA QUE LLENO LA INFORMACION UNA VEZ, AL IGUAL EL AGENTE, ESTE PUEDE CREAR UNA CITA CON LA CEDULA DE UNA PERSONA QUE NO TIENE UNA CUENTA Y SI APARECE EN EL SISTEMA ESA CEDULA SE LE AUTO COMPLETARAN LOS CAMPOS CON LA INFORMACIO QUE POR PRIMERA VEZ HABIA LLENADO LA PERSONA.

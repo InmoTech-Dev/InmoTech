@@ -4,14 +4,23 @@ const logger = require("../utils/logger");
 class EmailService {
   constructor() {
     const port = Number(process.env.EMAIL_PORT) || 587;
+    const configuredHost = (process.env.EMAIL_HOST || "").trim();
+    const normalizedHost =
+      configuredHost.toLowerCase() === "smtp-relay.brevo.com"
+        ? "smtp-relay.sendinblue.com"
+        : configuredHost;
+    const tlsServername = (process.env.EMAIL_TLS_SERVERNAME || normalizedHost).trim();
 
     this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
+      host: normalizedHost,
       port,
       secure: port === 465,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        servername: tlsServername,
       },
     });
   }
@@ -886,6 +895,5 @@ class EmailService {
 }
 
 module.exports = new EmailService();
-
 
 

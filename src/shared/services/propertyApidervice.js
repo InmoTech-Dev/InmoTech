@@ -285,6 +285,10 @@ const mapInmuebleToApi = (payload = {}) => {
     body.propietario_id = payload.propietarioId;
   }
 
+  if (payload.desasignar_propietario === true) {
+    body.desasignar_propietario = true;
+  }
+
   if (payload.propietario) {
     body.propietario = payload.propietario;
   }
@@ -309,7 +313,7 @@ export const inmueblesAPI = {
         ...filters
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : [];
@@ -334,7 +338,7 @@ export const inmueblesAPI = {
         _t: Date.now()
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : [];
@@ -372,7 +376,7 @@ export const inmueblesAPI = {
         limit: 5,
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : Array.isArray(payload.data)

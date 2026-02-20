@@ -93,8 +93,17 @@ const InmuebleDashboardPage = () => {
   const handleToggleFeatured = async (inmueble) => {
     try {
       const currentValue = inmueble.destacado ?? inmueble.featured ?? false;
+      if (!currentValue) {
+        const destacadosCount = inmuebles.filter((item) => (item.destacado ?? item.featured ?? false)).length;
+        if (destacadosCount >= 6) {
+          window.alert('Solo se pueden destacar 6 inmuebles. Quita uno antes de destacar otro.');
+          return;
+        }
+      }
       await actualizarInmueble(inmueble.id, { destacado: !currentValue });
     } catch (err) {
+      const message = err?.message || 'Error actualizando destacado del inmueble.';
+      window.alert(message);
       console.error('Error actualizando destacado del inmueble:', err);
     }
   };

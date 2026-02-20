@@ -27,12 +27,15 @@ class InvitacionService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  async crearInvitacion({ id_persona, creado_por, tipo = INVITE_TYPES.ADMIN, reenvios = 0, rol_asignado = null, es_administrativo = false }) {
+  async crearInvitacion({ id_persona, creado_por, tipo = INVITE_TYPES.ADMIN, reenvios = 0, rol_asignado = null, es_administrativo }) {
     const persona = await Persona.findByPk(id_persona);
     if (!persona) throw new Error('Persona no encontrada');
 
     const inviteType = tipo || INVITE_TYPES.ADMIN;
-    const esAdminInvite = es_administrativo || inviteType === INVITE_TYPES.ADMIN;
+    const esAdminInvite =
+      typeof es_administrativo === 'boolean'
+        ? es_administrativo
+        : inviteType === INVITE_TYPES.ADMIN;
 
     const token = this.generarToken();
     const token_hash = this.hashToken(token);

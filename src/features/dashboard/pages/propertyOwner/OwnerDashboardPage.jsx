@@ -3,6 +3,7 @@ import { Eye, Edit, X, Building2, User } from 'lucide-react';
 import OwnerForm from './components/ownerForm';
 import ownersApiService, { normalizeOwnerResponse } from '../../../../shared/services/ownersApiService';
 import { useInmuebles } from '../Inmuebles/hooks/useInmuebles';
+import { inmueblesAPI } from '../../../../shared/services/propertyApidervice';
 
 const formatCurrency = (value) => {
   const number = Number(value);
@@ -22,7 +23,8 @@ const PropertyOwnersManagement = () => {
     inmuebles: catalogoInmuebles,
     loading: inmueblesLoading,
     error: inmueblesError,
-    crearInmueble
+    crearInmueble,
+    cargarInmuebles
   } = useInmuebles();
 
   const [rawOwners, setRawOwners] = useState([]);
@@ -194,19 +196,81 @@ const PropertyOwnersManagement = () => {
     }
     setOwnerSubmitting(true);
     try {
+      const selectedIds = Array.from(
+        new Set((selectedInmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
+      );
+
+      const syncOwnerAssignments = async (ownerId, previousIds = []) => {
+        const prevSet = new Set((previousIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
+        const selectedSet = new Set(selectedIds);
+
+        const toAssign = selectedIds.filter((id) => !prevSet.has(id));
+        const toKeepAssigned = selectedIds.filter((id) => prevSet.has(id));
+        const toUnassign = [...prevSet].filter((id) => !selectedSet.has(id));
+
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        const withDeadlockRetry = async (fn, maxAttempts = 3) => {
+          let attempt = 0;
+          while (attempt < maxAttempts) {
+            try {
+              return await fn();
+            } catch (error) {
+              attempt += 1;
+              const rawMessage = (error?.message || error?.data?.message || '').toLowerCase();
+              const isDeadlock =
+                rawMessage.includes('deadlock') ||
+                rawMessage.includes('was deadlocked on lock resources');
+
+              if (!isDeadlock || attempt >= maxAttempts) {
+                throw error;
+              }
+
+              await wait(200 * attempt);
+            }
+          }
+        };
+
+        // Ejecutar secuencialmente para evitar deadlocks por locks cruzados en SQL Server.
+        for (const inmuebleId of toAssign) {
+          await withDeadlockRetry(() =>
+            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
+          );
+        }
+
+        for (const inmuebleId of toKeepAssigned) {
+          await withDeadlockRetry(() =>
+            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
+          );
+        }
+
+        for (const inmuebleId of toUnassign) {
+          await withDeadlockRetry(() =>
+            inmueblesAPI.updateInmueble(inmuebleId, { desasignar_propietario: true })
+          );
+        }
+      };
+
       if (modalMode === 'create') {
         const created = await ownersApiService.createOwner(formData);
         const normalized = normalizeOwnerResponse(created);
+        await syncOwnerAssignments(normalized.id, []);
         const enriched = mergeSelectedProperties(normalized, selectedInmuebles);
         setRawOwners((prev) => [...prev, enriched]);
         showAlert('success', `Propietario "${normalized.nombreCompleto}" creado exitosamente`);
       } else if (modalMode === 'edit' && selectedOwner) {
+        const previousIds = Array.from(
+          new Set((selectedOwner?.inmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
+        );
         const updated = await ownersApiService.updateOwner(selectedOwner.id, formData);
         const normalized = normalizeOwnerResponse(updated);
+        await syncOwnerAssignments(normalized.id, previousIds);
         const enriched = mergeSelectedProperties(normalized, selectedInmuebles);
         setRawOwners((prev) => prev.map((owner) => (owner.id === normalized.id ? enriched : owner)));
         showAlert('success', `Propietario "${normalized.nombreCompleto}" actualizado correctamente`);
       }
+      await cargarInmuebles();
+      await fetchOwners();
       closeModal();
     } catch (error) {
       console.error('Error guardando propietario:', error);

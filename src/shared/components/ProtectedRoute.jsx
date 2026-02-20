@@ -127,7 +127,8 @@ export const DashboardRoute = ({ children, ...props }) => {
   const hasAdministrativeAccess =
     user?.es_administrativo === true ||
     user?.roles?.includes('Super Administrador') ||
-    user?.roles?.includes('Administrador');
+    user?.roles?.includes('Administrador') ||
+    user?.roles?.includes('Propietario');
 
   if (!hasAdministrativeAccess) {
     console.log('🚫 Acceso denegado al dashboard: Usuario no tiene permisos administrativos', {

@@ -184,14 +184,27 @@ export default function HomePage() {
   };
 
   const featuredCards = useMemo(() => {
+    const buildPriceLabel = (property) => {
+      const hasVenta = property.precio_venta !== null && property.precio_venta !== undefined;
+      const hasArriendo = property.precio_arriendo !== null && property.precio_arriendo !== undefined;
+
+      if (hasVenta && hasArriendo) {
+        return `Venta: ${formatPrice(property.precio_venta)} | Arriendo: ${formatPrice(property.precio_arriendo)}/mes`;
+      }
+      if (hasVenta) return formatPrice(property.precio_venta);
+      if (hasArriendo) return `${formatPrice(property.precio_arriendo)}/mes`;
+      return property.priceLabel || "Consultar";
+    };
+
     return featuredProperties.map((property) => {
       const operation = normalizeOperation(property.operacion || property.operationTag || property.estado);
-      const priceValue = property.precio_venta ?? property.precio_arriendo ?? property.precio;
       return {
         id: property.id,
-        title: property.titulo || property.title,
-        price: property.priceLabel || formatPrice(priceValue),
-        location: property.locationLabel || [property.ciudad, property.departamento].filter(Boolean).join(", "),
+        title: property.titulo || property.title || `Inmueble ${property.registro || ""}`.trim(),
+        price: buildPriceLabel(property),
+        location:
+          property.locationLabel ||
+          [property.barrio, property.ciudad, property.departamento].filter(Boolean).join(", "),
         area: property.area_construida ? `${property.area_construida} m²` : "N/D",
         bedrooms: findAmenityAmount(property, ["habitaciones", "cuartos", "dormitorios"]),
         bathrooms: findAmenityAmount(property, ["banos", "baños", "bano", "baño"]),

@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { dashboardRoutes } from './routes/index'
 import Navbar from './shared/components/Navbar'
 import Footer from './shared/components/Footer'
@@ -18,6 +18,7 @@ import ServicesPage from './features/services/pages/ServicesPage'
 import LoginPage from './features/auth/pages/LoginPage'
 import RegisterPage from './features/auth/pages/RegisterPage'
 import UserAppointmentsPage from './features/appointments/pages/UserAppointmentsPage'
+import MyPropertiesPage from './features/properties/pages/MyPropertiesPage'
 import ActivateAccountPage from './features/auth/pages/ActivateAccountPage'
 import VerifyEmailPage from './features/auth/pages/VerifyEmailPage'
 
@@ -35,6 +36,19 @@ import OwnerDashboardPage from './features/dashboard/pages/propertyOwner/OwnerDa
 import AdministrativosPage from './features/dashboard/pages/administrativos/AdministrativosPage'
 import UsersPage from './features/dashboard/pages/users/UsersPage'
 import ProfilePage from './features/dashboard/pages/Profile/ProfilePage'
+import OwnerPortfolioPage from './features/dashboard/pages/propertyOwner/OwnerPortfolioPage'
+import { useAuth } from './shared/contexts/AuthContext'
+
+function DashboardLanding() {
+  const { user } = useAuth();
+  const isOwner = user?.roles?.includes('Propietario');
+
+  if (isOwner) {
+    return <Navigate to={dashboardRoutes.ownerMyProperties} replace />;
+  }
+
+  return <DashboardPage />;
+}
 
 function App() {
   return (
@@ -146,6 +160,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/mis-inmuebles"
+          element={
+            <ProtectedRoute>
+              <Navbar />
+              <MyPropertiesPage />
+              <Footer />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Dashboard routes with sidebar layout */}
         <Route
@@ -153,7 +177,27 @@ function App() {
           element={
             <DashboardRoute>
               <DashboardLayout>
-                <DashboardPage />
+                <DashboardLanding />
+              </DashboardLayout>
+            </DashboardRoute>
+          }
+        />
+        <Route
+          path={dashboardRoutes.ownerMyProperties}
+          element={
+            <DashboardRoute>
+              <DashboardLayout>
+                <OwnerPortfolioPage />
+              </DashboardLayout>
+            </DashboardRoute>
+          }
+        />
+        <Route
+          path={dashboardRoutes.ownerMyLeases}
+          element={
+            <DashboardRoute>
+              <DashboardLayout>
+                <Navigate to={dashboardRoutes.ownerMyProperties} replace />
               </DashboardLayout>
             </DashboardRoute>
           }

@@ -11,6 +11,8 @@ const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 
+const MAX_DESTACADOS = 6;
+
 const VALID_ORDER_COLUMNS = [
   'id_inmueble',
   'registro_inmobiliario',
@@ -244,6 +246,47 @@ const syncImagenes = async (inmuebleId, imagenes = [], transaction) => {
   }
 };
 
+const isTruthyBoolean = (value) => {
+  if (value === true) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+  return value === 1;
+};
+
+const validateDestacadosLimit = async ({ transaction, excludeInmuebleId = null }) => {
+  const where = { destacado: true };
+  if (excludeInmuebleId) {
+    where.id_inmueble = { [Op.ne]: excludeInmuebleId };
+  }
+
+  const totalDestacados = await Inmueble.count({
+    where,
+    transaction
+  });
+
+  if (totalDestacados >= MAX_DESTACADOS) {
+    const error = new Error(`Solo se pueden destacar ${MAX_DESTACADOS} inmuebles.`);
+    error.status = 400;
+    throw error;
+  }
+};
+
+const clearPropietarioActual = async (inmuebleId, transaction) => {
+  await PropiedadInmueble.update(
+    {
+      estado: 'Inactivo',
+      es_propietario_actual: false,
+      fecha_final: new Date()
+    },
+    {
+      where: { id_inmueble: inmuebleId, es_propietario_actual: true },
+      transaction
+    }
+  );
+};
+
 class InmueblesService {
   /**
    * Crear un nuevo inmueble
@@ -267,6 +310,10 @@ class InmueblesService {
           propietario_id,
           propietarioId
         });
+
+        if (isTruthyBoolean(payload.destacado)) {
+          await validateDestacadosLimit({ transaction: t });
+        }
 
         // Crear inmueble
         const inmueble = await Inmueble.create({
@@ -557,46 +604,72 @@ class InmueblesService {
    * @returns {Promise<Object>} Inmueble actualizado
    */
   async actualizarInmueble(inmuebleId, updateData) {
-    const result = await sequelize.transaction(async (t) => {
+    const maxAttempts = 3;
+    let attempt = 0;
+
+    while (attempt < maxAttempts) {
       try {
-        const {
-          comodidades,
-          propietario,
-          propietario_id,
-          propietarioId,
-          imagenes,
-          ...payload
-        } = updateData;
-        const ownerId = resolveOwnerIdFromPayload({
-          propietario,
-          propietario_id,
-          propietarioId
+        const result = await sequelize.transaction(async (t) => {
+          const {
+            comodidades,
+            propietario,
+            propietario_id,
+            propietarioId,
+            desasignar_propietario,
+            imagenes,
+            ...payload
+          } = updateData;
+          const ownerId = resolveOwnerIdFromPayload({
+            propietario,
+            propietario_id,
+            propietarioId
+          });
+
+          const inmueble = await Inmueble.findOne({
+            where: { id_inmueble: inmuebleId },
+            transaction: t
+          });
+
+          if (!inmueble) {
+            throw new Error('Inmueble no encontrado');
+          }
+
+          const quiereDestacar = isTruthyBoolean(payload.destacado);
+          const estabaDestacado = isTruthyBoolean(inmueble.destacado);
+          if (quiereDestacar && !estabaDestacado) {
+            await validateDestacadosLimit({
+              transaction: t,
+              excludeInmuebleId: inmuebleId
+            });
+          }
+
+          await inmueble.update(payload, { transaction: t });
+          if (ownerId) {
+            await syncPropietario(inmuebleId, ownerId, t);
+          } else if (desasignar_propietario === true) {
+            await clearPropietarioActual(inmuebleId, t);
+          }
+          await syncComodidades(inmuebleId, comodidades, t);
+          await syncImagenes(inmuebleId, imagenes, t);
+
+          logger.info(`Inmueble actualizado: ${inmuebleId}`);
+          return await this.obtenerPorId(inmuebleId, t);
         });
 
-        const inmueble = await Inmueble.findOne({
-          where: { id_inmueble: inmuebleId },
-          transaction: t
-        });
+        return result;
+      } catch (error) {
+        attempt += 1;
+        const rawMessage = String(error?.message || '').toLowerCase();
+        const isDeadlock = rawMessage.includes('deadlock');
 
-        if (!inmueble) {
-          throw new Error('Inmueble no encontrado');
+        if (!isDeadlock || attempt >= maxAttempts) {
+          logger.error('Error actualizando inmueble:', error);
+          throw error;
         }
 
-        await inmueble.update(payload, { transaction: t });
-        await syncPropietario(inmuebleId, ownerId, t);
-        await syncComodidades(inmuebleId, comodidades, t);
-        await syncImagenes(inmuebleId, imagenes, t);
-
-        logger.info(`Inmueble actualizado: ${inmuebleId}`);
-
-        return await this.obtenerPorId(inmuebleId, t);
-      } catch (error) {
-        logger.error('Error actualizando inmueble:', error);
-        throw error;
+        logger.warn(`Deadlock al actualizar inmueble ${inmuebleId}. Reintento ${attempt}/${maxAttempts}`);
       }
-    });
-
-    return result;
+    }
   }
 
   /**

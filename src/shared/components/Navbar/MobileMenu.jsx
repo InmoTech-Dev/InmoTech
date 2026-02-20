@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { User, UserPlus, LogOut, LayoutDashboard } from 'lucide-react';
+import { User, UserPlus, LogOut, LayoutDashboard, Calendar, Building2 } from 'lucide-react';
 import { routes } from '@/routes';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -58,6 +58,11 @@ const MobileMenu = ({ isOpen, onClose }) => {
     return hasAdministrativeAccess;
   };
 
+  const roleNames = (user?.roles || []).map((role) =>
+    typeof role === 'object' ? role.nombre_rol : role
+  );
+  const isOwner = roleNames.includes('Propietario');
+
   return (
     <div className="bg-[#00457B] border-t border-white/20 mt-4">
       <div className="px-4 py-4 space-y-4">
@@ -110,6 +115,27 @@ const MobileMenu = ({ isOpen, onClose }) => {
                     <LayoutDashboard className="h-5 w-5" />
                     <span className="font-medium">Dashboard</span>
                   </Link>
+                )}
+
+                {isOwner && (
+                  <>
+                    <Link
+                      to="/mis-citas"
+                      className="flex items-center space-x-3 w-full px-4 py-3 bg-white/10 border border-white/20 text-white rounded-lg hover:bg-white/20 transition-all duration-300 backdrop-blur-sm"
+                      onClick={onClose}
+                    >
+                      <Calendar className="h-5 w-5" />
+                      <span className="font-medium">Mis Citas</span>
+                    </Link>
+                    <Link
+                      to="/mis-inmuebles"
+                      className="flex items-center space-x-3 w-full px-4 py-3 bg-white/10 border border-white/20 text-white rounded-lg hover:bg-white/20 transition-all duration-300 backdrop-blur-sm"
+                      onClick={onClose}
+                    >
+                      <Building2 className="h-5 w-5" />
+                      <span className="font-medium">Mis Inmuebles</span>
+                    </Link>
+                  </>
                 )}
 
                 {/* Logout Button - Always visible for authenticated users */}

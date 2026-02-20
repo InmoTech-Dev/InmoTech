@@ -11,21 +11,21 @@ const ESTADOS_DISPONIBLES = [
   'En proceso de arrendamiento'
 ];
 
-export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange }) => {
+export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange, onToggleFeatured }) => {
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Imagen</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">ID</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Registro</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Dirección</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Operación</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Imagen</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">ID</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Registro</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Dirección</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Operación</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -46,7 +46,7 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
 
                 return (
                   <tr key={property.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-2">
                       {coverImage ? (
                         <img
                           src={coverImage}
@@ -59,20 +59,20 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-900">#{property.id}</td>
-                    <td className="px-6 py-4 text-sm text-slate-900 font-mono">{property.registro}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700 truncate max-w-[220px]">{property.direccion}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700">
+                    <td className="px-3 py-2 text-sm font-semibold text-slate-900">#{property.id}</td>
+                    <td className="px-3 py-2 text-sm text-slate-900 font-mono">{property.registro}</td>
+                    <td className="px-3 py-2 text-sm text-slate-700 truncate max-w-[200px]">{property.direccion}</td>
+                    <td className="px-3 py-2 text-sm text-slate-700">
                       <span className="inline-flex items-center gap-1">
                         <Building2 className="w-3.5 h-3.5 text-slate-400" />
                         {property.tipo}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{property.operacion}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-2 text-sm text-slate-600">{property.operacion}</td>
+                    <td className="px-3 py-2">
                       {onStatusChange ? (
                         <select
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7`}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7 w-28`}
                           value={property.estado || 'Disponible'}
                           onChange={(e) => onStatusChange(property, e.target.value)}
                         >
@@ -89,11 +89,13 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-2">
                       <ActionButtons
                         onView={() => onView(property)}
                         onEdit={() => onEdit(property)}
                         onDocument={() => onDocument(property)}
+                        onToggleFeatured={onToggleFeatured ? () => onToggleFeatured(property) : undefined}
+                        isFeatured={property.destacado || property.featured}
                       />
                     </td>
                   </tr>

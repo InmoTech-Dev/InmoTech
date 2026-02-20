@@ -1,22 +1,11 @@
-import "react";
-import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/shared/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/shared/components/ui/card";
-import { Badge } from "@/shared/components/ui/badge";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/shared/components/ui/carousel";
+import "react"
+import { useState, useEffect, useRef, useMemo } from "react"
+import { Link } from "react-router-dom"
+import { Button } from "@/shared/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/shared/components/ui/card"
+import { Badge } from "@/shared/components/ui/badge"
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/shared/components/ui/carousel"
+import { useProperties } from "../hooks/useProperties"
 import {
   Building2,
   Key,
@@ -35,6 +24,7 @@ import {
 } from "lucide-react";
 
 export default function HomePage() {
+  const { featuredProperties, loading: featuredLoading, error: featuredError } = useProperties();
   const [isVisible, setIsVisible] = useState(false);
   const [categoriesVisible, setCategoriesVisible] = useState(false);
   const [servicesVisible, setServicesVisible] = useState(false);
@@ -150,6 +140,67 @@ export default function HomePage() {
       }
     };
   }, []);
+
+  const formatPrice = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "Consultar";
+    const formatted = new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      currencyDisplay: "code",
+      maximumFractionDigits: 0,
+    }).format(n);
+    return formatted.replace(/COP\\s*\\$/i, "COP ").trim();
+  };
+
+  const normalizeOperation = (operacion = "") => {
+    const op = (operacion || "").toLowerCase();
+    const hasVenta = op.includes("venta");
+    const hasArriendo = op.includes("arriendo") || op.includes("alquiler");
+
+    if (hasVenta && hasArriendo) {
+      return { label: "Venta y Arriendo" };
+    }
+    if (hasVenta) {
+      return { label: "Venta" };
+    }
+    if (hasArriendo) {
+      return { label: "Alquiler" };
+    }
+    return { label: operacion || "Disponible" };
+  };
+
+  const findAmenityAmount = (property, targets = []) => {
+    const normalize = (text = "") =>
+      text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+
+    const targetSet = targets.map(normalize);
+    const match = property.comodidades?.find?.((c) => targetSet.includes(normalize(c.nombre || "")));
+    return match?.cantidad ?? "N/D";
+  };
+
+  const featuredCards = useMemo(() => {
+    return featuredProperties.map((property) => {
+      const operation = normalizeOperation(property.operacion || property.operationTag || property.estado);
+      const priceValue = property.precio_venta ?? property.precio_arriendo ?? property.precio;
+      return {
+        id: property.id,
+        title: property.titulo || property.title,
+        price: property.priceLabel || formatPrice(priceValue),
+        location: property.locationLabel || [property.ciudad, property.departamento].filter(Boolean).join(", "),
+        area: property.area_construida ? `${property.area_construida} m²` : "N/D",
+        bedrooms: findAmenityAmount(property, ["habitaciones", "cuartos", "dormitorios"]),
+        bathrooms: findAmenityAmount(property, ["banos", "baños", "bano", "baño"]),
+        image: property.mainImage || property.image || property.imagenes?.[0] || "/images/hero-inmuebles.jpg",
+        status: operation.label,
+        featured: property.featured || property.destacado
+      };
+    });
+  }, [featuredProperties]);
 
   return (
     <main className="flex min-h-screen flex-col bg-transparent">
@@ -425,9 +476,18 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {properties.map((property, index) => (
+            {featuredLoading && (
+              <p className="text-gray-500">Cargando inmuebles destacados...</p>
+            )}
+            {!featuredLoading && featuredError && (
+              <p className="text-red-500">No se pudieron cargar los inmuebles destacados.</p>
+            )}
+            {!featuredLoading && !featuredError && featuredCards.length === 0 && (
+              <p className="text-gray-500">No hay inmuebles destacados por ahora.</p>
+            )}
+            {featuredCards.map((property, index) => (
               <Card
-                key={index}
+                key={property.id ?? index}
                 className="overflow-hidden border-none shadow-xl hover:shadow-2xl transition-all duration-300 group rounded-xl"
               >
                 <div className="relative h-72 overflow-hidden">
@@ -639,82 +699,7 @@ const services = [
       "Valoración profesional de inmuebles para conocer el precio real de mercado de tu propiedad.",
     icon: <Home className="h-7 w-7 text-[#00457B]" />,
   },
-];
-
-const properties = [
-  {
-    id: 1,
-    title: "Casa Moderna en El Poblado",
-    price: "$850,000",
-    location: "El Poblado, Medellín",
-    area: "280 m²",
-    bedrooms: 4,
-    bathrooms: 3,
-    image: "/images/property/propiedad-1.jpg",
-    status: "Venta",
-    featured: true,
-  },
-  {
-    id: 2,
-    title: "Apartamento de Lujo",
-    price: "$450,000",
-    location: "Laureles, Medellín",
-    area: "150 m²",
-    bedrooms: 3,
-    bathrooms: 2,
-    image: "/images/property/propiedad-2.jpg",
-    status: "Venta",
-    featured: false,
-  },
-  {
-    id: 3,
-    title: "Penthouse con Vista Panorámica",
-    price: "$1,200,000",
-    location: "Envigado, Antioquia",
-    area: "320 m²",
-    bedrooms: 4,
-    bathrooms: 4,
-    image: "/images/property/propiedad-3.jpg",
-    status: "Venta",
-    featured: true,
-  },
-  {
-    id: 4,
-    title: "Casa Campestre",
-    price: "$750,000",
-    location: "Llanogrande, Rionegro",
-    area: "450 m²",
-    bedrooms: 5,
-    bathrooms: 4,
-    image: "/images/property/propiedad-4.jpg",
-    status: "Venta",
-    featured: false,
-  },
-  {
-    id: 5,
-    title: "Apartamento Amoblado",
-    price: "$2,500/mes",
-    location: "Belén, Medellín",
-    area: "95 m²",
-    bedrooms: 2,
-    bathrooms: 2,
-    image: "/images/property/propiedad-5.jpg",
-    status: "Alquiler",
-    featured: true,
-  },
-  {
-    id: 6,
-    title: "Local Comercial",
-    price: "$350,000",
-    location: "Centro, Medellín",
-    area: "120 m²",
-    bedrooms: 0,
-    bathrooms: 1,
-    image: "/images/property/propiedad-6.jpg",
-    status: "Venta",
-    featured: false,
-  },
-];
+]
 
 const whyChooseUs = [
   {
@@ -759,4 +744,5 @@ const testimonials = [
     text: "He trabajado con muchas inmobiliarias, pero ninguna como Matriz. Su conocimiento del mercado y su capacidad para encontrar oportunidades de inversión es excepcional.",
     rating: 4,
   },
-];
+]
+

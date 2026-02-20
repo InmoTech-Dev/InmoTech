@@ -184,6 +184,9 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       inmueble.imagen_destacada
     ]);
   }
+  const destacadoRaw =
+    inmueble.destacado ?? inmueble.es_destacado ?? inmueble.destacada ?? inmueble.featured ?? false;
+  const destacado = normalizeEstadoValue(destacadoRaw);
 
   let operacion = inmueble.operacion || 'Sin definir';
   if (operacion === 'Sin definir') {
@@ -225,6 +228,8 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       toNumber(inmueble.area_construida ?? inmueble.areaConstruida ?? inmueble.area) ?? null,
     area_privada: toNumber(inmueble.area_privada ?? inmueble.areaPrivada) ?? null,
     estado_frontend: estadoTexto,
+    destacado: destacado ?? false,
+    featured: destacado ?? false,
     metadata: {
       raw: inmueble
     }
@@ -243,6 +248,9 @@ const mapInmuebleToApi = (payload = {}) => {
   const isArriendo = payload.operacion === 'Arriendo' || payload.operacion === 'Venta y Arriendo';
   const normalizedEstadoBool = normalizeEstadoValue(
     payload.estado ?? payload.estado_bool ?? payload.estadoBool ?? payload.estado_frontend
+  );
+  const normalizedDestacadoBool = normalizeEstadoValue(
+    payload.destacado ?? payload.featured ?? payload.es_destacado
   );
   const estadoFrontendTexto =
     typeof payload.estado === 'string'
@@ -269,7 +277,8 @@ const mapInmuebleToApi = (payload = {}) => {
     area_privada: toNumber(payload.area_privada ?? payload.areaPrivada),
     descripcion: payload.descripcion ?? payload.descripcion_detallada ?? '',
     comodidades: payload.comodidades || [],
-    imagenes: sanitizedImages
+    imagenes: sanitizedImages,
+    destacado: normalizedDestacadoBool
   };
 
   if (payload.propietarioId) {

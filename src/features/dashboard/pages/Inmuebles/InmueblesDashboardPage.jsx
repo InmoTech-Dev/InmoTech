@@ -90,6 +90,15 @@ const InmuebleDashboardPage = () => {
     }
   };
 
+  const handleToggleFeatured = async (inmueble) => {
+    try {
+      const currentValue = inmueble.destacado ?? inmueble.featured ?? false;
+      await actualizarInmueble(inmueble.id, { destacado: !currentValue });
+    } catch (err) {
+      console.error('Error actualizando destacado del inmueble:', err);
+    }
+  };
+
   // Filtrado y paginación
   const filteredProperties = inmuebles.filter(property => {
     const matchesSearch = 
@@ -170,6 +179,7 @@ const InmuebleDashboardPage = () => {
         onEdit={handleEditar}
         onDocument={handleVerFichas}
         onStatusChange={handleEstadoChange}
+        onToggleFeatured={handleToggleFeatured}
       />
 
       {totalPages > 1 && (

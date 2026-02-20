@@ -212,7 +212,11 @@ const crearInmuebleSchema = Joi.object({
 
   estado: Joi.boolean()
     .optional()
-    .default(true)
+    .default(true),
+
+  destacado: Joi.boolean()
+    .optional()
+    .default(false)
 }).unknown(true);
 
 // Validación para actualizar inmueble
@@ -390,6 +394,9 @@ const actualizarInmuebleSchema = Joi.object({
   propietario: propietarioSchema.optional(),
 
   estado: Joi.boolean()
+    .optional(),
+
+  destacado: Joi.boolean()
     .optional()
 })
   .min(1)

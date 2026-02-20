@@ -53,10 +53,19 @@ const authenticateToken = (req, res, next) => {
   });
 
   try {
-    const accessToken = req.cookies.accessToken;
+    const cookieToken = req.cookies.accessToken;
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const headerToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length).trim()
+      : null;
+    const accessToken = cookieToken || headerToken;
 
     if (!accessToken) {
-      logger.warn('[AUTH] No access token in cookies for URL:', { method: req.method, url: req.url });
+      logger.warn('[AUTH] No access token for URL:', {
+        method: req.method,
+        url: req.url,
+        hasAuthHeader: !!authHeader
+      });
       return res.status(401).json({
         success: false,
         message: 'Token de acceso requerido'

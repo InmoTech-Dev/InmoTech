@@ -82,8 +82,8 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
         if (currentTime.includes('T')) {
           try {
             const date = new Date(currentTime);
-            const hours = date.getUTCHours();
-            const minutes = date.getUTCMinutes();
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
             const isPM = hours >= 12;
             const hours12 = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
             currentTimeDisplay = `${hours12}:${String(minutes).padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
@@ -106,8 +106,8 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
         if (currentTime.includes('T')) {
           try {
             const date = new Date(currentTime);
-            const hours = date.getUTCHours().toString().padStart(2, '0');
-            const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
             timeFormatted = `${hours}:${minutes}`;
           } catch (error) {
             console.error('Error parsing tiempo ISO:', error);
@@ -184,7 +184,10 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
     if (!formData.fecha_cita) {
       newErrors.fecha_cita = 'La fecha es obligatoria';
     } else {
-      const selectedDate = new Date(formData.fecha_cita);
+      const [y, m, d] = formData.fecha_cita.split('-').map(Number);
+      const selectedDate = new Date(y, m - 1, d);
+      selectedDate.setHours(0, 0, 0, 0);
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -211,6 +214,10 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
 
     if (!validateForm()) {
       return;
@@ -288,6 +295,14 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
     }
   };
 
+  const handleRequestClose = () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    onClose();
+  };
+
   if (!isOpen || !cita) return null;
 
   return ReactDOM.createPortal(
@@ -299,7 +314,7 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleRequestClose}
         />
 
         {/* Modal */}
@@ -318,15 +333,19 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={onClose}
-              className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+              onClick={handleRequestClose}
+              className="p-2 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <form
+            onSubmit={handleSubmit}
+            className={`p-6 space-y-4 ${isSubmitting ? 'pointer-events-none' : ''}`}
+          >
             {/* Fecha */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -340,7 +359,8 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                   value={formData.fecha_cita}
                   onChange={handleInputChange}
                   className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${errors.fecha_cita ? 'border-red-300' : 'border-slate-300'}`}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`}
+                  disabled={isSubmitting}
                 />
               </div>
               {errors.fecha_cita && (
@@ -378,8 +398,18 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                       <div className="flex flex-wrap gap-2">
                         {availableTimes
                           .filter(time => {
-                            const hour = parseInt(time.split(':')[0]);
-                            return hour >= 8 && hour < 12;
+                            const [h, m] = time.split(':').map(Number);
+
+                            // Filtro de hoy (2 horas)
+                            const today = new Date();
+                            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                            if (formData.fecha_cita === todayStr) {
+                              const currentTotalMinutes = today.getHours() * 60 + today.getMinutes();
+                              const appointmentTotalMinutes = h * 60 + m;
+                              if ((appointmentTotalMinutes - currentTotalMinutes) < 120) return false;
+                            }
+
+                            return h >= 8 && h < 12;
                           })
                           .map(time => {
                             const isSelected = formData.hora_inicio === time;
@@ -403,11 +433,11 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                                 }}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                                  isSelected
-                                    ? 'bg-orange-600 text-white shadow-md'
-                                    : 'bg-white text-slate-700 border border-slate-300 hover:border-orange-400 hover:bg-orange-50'
-                                }`}
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
+                                  ? 'bg-orange-600 text-white shadow-md'
+                                  : 'bg-white text-slate-700 border border-slate-300 hover:border-orange-400 hover:bg-orange-50'
+                                  }`}
+                                disabled={isSubmitting}
                               >
                                 {displayTime}
                               </motion.button>
@@ -422,8 +452,18 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                       <div className="flex flex-wrap gap-2">
                         {availableTimes
                           .filter(time => {
-                            const hour = parseInt(time.split(':')[0]);
-                            return hour >= 12 && hour <= 17;
+                            const [h, m] = time.split(':').map(Number);
+
+                            // Filtro de hoy (2 horas)
+                            const today = new Date();
+                            const todayStr = today.toISOString().split('T')[0];
+                            if (formData.fecha_cita === todayStr) {
+                              const currentTotalMinutes = today.getHours() * 60 + today.getMinutes();
+                              const appointmentTotalMinutes = h * 60 + m;
+                              if ((appointmentTotalMinutes - currentTotalMinutes) < 120) return false;
+                            }
+
+                            return h >= 12 && h <= 17;
                           })
                           .map(time => {
                             const isSelected = formData.hora_inicio === time;
@@ -447,11 +487,11 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                                 }}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                                  isSelected
-                                    ? 'bg-orange-600 text-white shadow-md'
-                                    : 'bg-white text-slate-700 border border-slate-300 hover:border-orange-400 hover:bg-orange-50'
-                                }`}
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
+                                  ? 'bg-orange-600 text-white shadow-md'
+                                  : 'bg-white text-slate-700 border border-slate-300 hover:border-orange-400 hover:bg-orange-50'
+                                  }`}
+                                disabled={isSubmitting}
                               >
                                 {displayTime}
                               </motion.button>
@@ -546,8 +586,8 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                 type="button"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={onClose}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                onClick={handleRequestClose}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isSubmitting}
               >
                 Cancelar

@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const bcryptUtils = require('../utils/bcrypt');
 const logger = require('../utils/logger');
 const sseService = require('./sse.service');
+const realtimeAudienceService = require('./realtimeAudience.service');
 const invitacionService = require('./invitacion.service');
 
 const splitFullName = (value = '') => {
@@ -704,8 +705,16 @@ class PersonaService {
 
       if (!estado) {
         sseService.notifyUserDisabled(personaId);
-        logger.info(`SSE: Notificación enviada - Usuario deshabilitado ${personaId}`);
+        logger.info(`SSE: Notificacion enviada - Usuario deshabilitado ${personaId}`);
       }
+
+      const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+      sseService.emitUserChanged({
+        action: estado ? 'enabled' : 'disabled',
+        userId: personaId,
+        affectedUserIds: [personaId],
+        audienceUserIds: adminIds
+      });
 
       logger.info(`Estado de persona actualizado: ID ${personaId}, estado: ${estado}`);
       return persona;
@@ -714,7 +723,6 @@ class PersonaService {
       throw error;
     }
   }
-
   /**
    * Cambia la contraseña de una persona (solo para administradores)
    */
@@ -765,3 +773,4 @@ class PersonaService {
 }
 
 module.exports = new PersonaService();
+

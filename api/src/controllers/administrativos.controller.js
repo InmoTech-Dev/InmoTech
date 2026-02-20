@@ -8,7 +8,7 @@ class AdministrativosController {
   async registrarAdministrativo(req, res, next) {
     try {
       const adminData = req.body;  // ✅ Cambiar de req.validatedData
-      const result = await administrativoService.registrarAdministrativo(adminData);
+      const result = await administrativoService.registrarAdministrativo({ ...adminData, creado_por: req.user?.id || null });
 
       return res.status(201).json({
         success: true,
@@ -40,6 +40,54 @@ class AdministrativosController {
       });
     } catch (error) {
       logger.error('Error obteniendo administrativos:', error);
+      next(error);
+    }
+  }
+
+  async verificarCorreoExistente(req, res, next) {
+    try {
+      const { email } = req.params;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Correo electronico es requerido'
+        });
+      }
+
+      const existe = await administrativoService.verificarCorreoAdministrativoExistente(email);
+
+      return res.status(200).json({
+        success: true,
+        message: existe ? 'Correo ya existe en administrativos' : 'Correo disponible en administrativos',
+        data: { existe }
+      });
+    } catch (error) {
+      logger.error('Error verificando correo de administrativo:', error);
+      next(error);
+    }
+  }
+
+  async verificarDocumentoExistente(req, res, next) {
+    try {
+      const { tipo, numero } = req.params;
+
+      if (!tipo || !numero) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tipo y numero de documento son requeridos'
+        });
+      }
+
+      const existe = await administrativoService.verificarDocumentoAdministrativoExistente(tipo, numero);
+
+      return res.status(200).json({
+        success: true,
+        message: existe ? 'Documento ya existe en administrativos' : 'Documento disponible en administrativos',
+        data: { existe }
+      });
+    } catch (error) {
+      logger.error('Error verificando documento de administrativo:', error);
       next(error);
     }
   }
@@ -149,3 +197,4 @@ class AdministrativosController {
 }
 
 module.exports = new AdministrativosController();
+

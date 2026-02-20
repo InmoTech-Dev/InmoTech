@@ -5,7 +5,14 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Input } from '../../../../../shared/components/ui/input';
 import propertiesApiService from '../../../../../shared/services/propertiesApiService';
 
-const DetailsStep = ({ formData, errors, updateFormData, onFieldComplete }) => {
+const DetailsStep = ({
+  formData,
+  errors,
+  updateFormData,
+  onFieldComplete,
+  showHeader = true,
+  showNotes = true
+}) => {
   const servicios = [
     'Avalúos',
     'Gestión de Alquileres',
@@ -151,10 +158,12 @@ const DetailsStep = ({ formData, errors, updateFormData, onFieldComplete }) => {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      <div className="text-center mb-6">
-        <h3 className="text-xl font-semibold text-slate-800 mb-2">Servicio</h3>
-        <p className="text-slate-600">Selecciona el servicio y, si aplica, el inmueble</p>
-      </div>
+      {showHeader && (
+        <div className="text-center mb-6">
+          <h3 className="text-xl font-semibold text-slate-800 mb-2">Servicio</h3>
+          <p className="text-slate-600">Selecciona el servicio y, si aplica, el inmueble</p>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Servicio */}
@@ -369,30 +378,33 @@ const DetailsStep = ({ formData, errors, updateFormData, onFieldComplete }) => {
           </div>
         )}
 
-        {/* Notas */}
-        <div ref={notasRef}>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            <FileText className="w-4 h-4 inline mr-2" />
-            Notas Adicionales
-          </label>
-          <textarea
-            value={formData.notas}
-            onChange={(e) => updateFormData('notas', e.target.value)}
-            placeholder="Información adicional sobre la cita, preferencias del cliente, etc."
-            rows={4}
-            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none"
-          />
-          <p className="text-slate-500 text-sm mt-1">
-            Opcional: Agrega cualquier información relevante para la cita
-          </p>
-        </div>
+        {showNotes && (
+          <div ref={notasRef}>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              <FileText className="w-4 h-4 inline mr-2" />
+              Notas Adicionales
+            </label>
+            <textarea
+              value={formData.notas}
+              onChange={(e) => updateFormData('notas', e.target.value)}
+              placeholder="Información adicional sobre la cita, preferencias del cliente, etc."
+              rows={4}
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none"
+            />
+            <p className="text-slate-500 text-sm mt-1">
+              Opcional: Agrega cualquier información relevante para la cita
+            </p>
+          </div>
+        )}
       </div>
 
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <p className="text-yellow-800 text-sm">
-          <strong>Recordatorio:</strong> Los horarios ocupados se bloquean automáticamente para evitar traslapes.
-        </p>
-      </div>
+      {showNotes && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-yellow-800 text-sm">
+            <strong>Recordatorio:</strong> Los horarios ocupados se bloquean automáticamente para evitar traslapes.
+          </p>
+        </div>
+      )}
     </motion.div>
   );
 };

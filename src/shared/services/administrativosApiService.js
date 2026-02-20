@@ -47,6 +47,27 @@ class AdministrativosApiService {
     }
   }
 
+  async verificarCorreoAdministrativoExistente(email) {
+    try {
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      return await apiClient.get(`/administrativos/verificar-correo/${encodeURIComponent(normalizedEmail)}`);
+    } catch (error) {
+      console.error('Error verificando correo de administrativo:', error);
+      throw error;
+    }
+  }
+
+  async verificarDocumentoAdministrativoExistente(tipo, numero) {
+    try {
+      const normalizedTipo = String(tipo || '').trim().toUpperCase();
+      const normalizedNumero = String(numero || '').replace(/[\s\-\.]/g, '').trim();
+      return await apiClient.get(`/administrativos/verificar-documento/${encodeURIComponent(normalizedTipo)}/${encodeURIComponent(normalizedNumero)}`);
+    } catch (error) {
+      console.error('Error verificando documento de administrativo:', error);
+      throw error;
+    }
+  }
+
   /**
    * Actualizar un administrativo
    * @param {number} id - ID del administrativo
@@ -145,3 +166,4 @@ class AdministrativosApiService {
 }
 
 export default new AdministrativosApiService();
+

@@ -171,7 +171,12 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
   // Función para validar fecha
   const validateFecha = (fecha) => {
     if (!fecha) return 'La fecha es requerida';
-    const fechaSeleccionada = new Date(fecha);
+
+    // Parsear manualmente para evitar problemas de zona horaria (UTC vs Local)
+    const [y, m, d] = fecha.split('-').map(Number);
+    const fechaSeleccionada = new Date(y, m - 1, d);
+    fechaSeleccionada.setHours(0, 0, 0, 0);
+
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
@@ -230,12 +235,12 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
       return 'El servicio es requerido';
     }
 
-  const servicios = [
-    'Avalúos',
-    'Gestión de Alquileres',
-    'Asesoría Legal',
-    'Visita a Propiedad'
-  ];
+    const servicios = [
+      'Avalúos',
+      'Gestión de Alquileres',
+      'Asesoría Legal',
+      'Visita a Propiedad'
+    ];
 
     // Verificar que el servicio seleccionado existe en la lista
     if (!servicios.includes(servicio)) {
@@ -253,95 +258,95 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
     return '';
   };
 
-// ⭐ Función para buscar persona automáticamente basada en documento
-const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
-  // Validaciones previas
-  if (!tipoDocumento || !numeroDocumento || numeroDocumento.length < 5) {
-    return;
-  }
-
-  const errorDocumento = validateNumeroDocumento(numeroDocumento, tipoDocumento);
-  if (errorDocumento) {
-    return;
-  }
-
-  setIsSearchingPerson(true);
-
-  try {
-    console.log('🔍 Buscando persona en dashboard:', {
-      tipo: tipoDocumento,
-      numero: numeroDocumento.replace(/[\s\-\.]/g, '')
-    });
-
-    const response = await apiClient.get('/citas/buscar-persona', {
-      params: {
-        tipo_documento: tipoDocumento,
-        numero_documento: numeroDocumento.replace(/[\s\-\.]/g, '')
-      },
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-
-    console.log('✅ Respuesta del servidor:', response);
-
-    // La respuesta viene envuelta en { success: true, data: {...} }
-    const persona = response.data?.data || response.data || response;
-
-    if (persona && (persona.nombre_completo || persona.correo || persona.telefono)) {
-      // Formatear el teléfono usando formatPhoneNumber
-      let telefonoFormateado = persona.telefono || '';
-      if (telefonoFormateado) {
-        telefonoFormateado = formatPhoneNumber(telefonoFormateado, '', false);
-      }
-
-      // Reconstruir nombres y apellidos desde los campos separados si vienen
-      const primerNombre = persona.primer_nombre || '';
-      const segundoNombre = persona.segundo_nombre || '';
-      const primerApellido = persona.primer_apellido || '';
-      const segundoApellido = persona.segundo_apellido || '';
-
-      const nombreCompletoReconstruido = [primerNombre, segundoNombre].filter(Boolean).join(' ').trim();
-      const apellidoCompletoReconstruido = [primerApellido, segundoApellido].filter(Boolean).join(' ').trim();
-
-      console.log('📝 Datos encontrados:', {
-        nombre: nombreCompletoReconstruido || persona.nombre_completo,
-        apellido: apellidoCompletoReconstruido || persona.apellido_completo,
-        telefono: telefonoFormateado,
-        email: persona.correo
-      });
-
-      // Actualizar formulario automáticamente
-      setFormData(prev => ({
-        ...prev,
-        nombre: nombreCompletoReconstruido || persona.nombre_completo || prev.nombre,
-        apellido: apellidoCompletoReconstruido || persona.apellido_completo || prev.apellido,
-        telefono: telefonoFormateado,
-        email: persona.correo || prev.email
-      }));
-
-      toast({
-        title: "✅ Datos encontrados",
-        description: "Se han completado los campos con la información existente.",
-        variant: "default"
-      });
+  // ⭐ Función para buscar persona automáticamente basada en documento
+  const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
+    // Validaciones previas
+    if (!tipoDocumento || !numeroDocumento || numeroDocumento.length < 5) {
+      return;
     }
-  } catch (error) {
-    if (error.response?.status !== 404) {
-      console.error('❌ Error al buscar persona:', error);
-      toast({
-        title: "Error al buscar información",
-        description: "No se pudo verificar si el documento existe. Continúa ingresando los datos manualmente.",
-        variant: "destructive"
-      });
-    } else {
-      console.log('ℹ️ Persona no encontrada, continuar con registro nuevo');
+
+    const errorDocumento = validateNumeroDocumento(numeroDocumento, tipoDocumento);
+    if (errorDocumento) {
+      return;
     }
-  } finally {
-    setIsSearchingPerson(false);
-  }
-};
+
+    setIsSearchingPerson(true);
+
+    try {
+      console.log('🔍 Buscando persona en dashboard:', {
+        tipo: tipoDocumento,
+        numero: numeroDocumento.replace(/[\s\-\.]/g, '')
+      });
+
+      const response = await apiClient.get('/citas/buscar-persona', {
+        params: {
+          tipo_documento: tipoDocumento,
+          numero_documento: numeroDocumento.replace(/[\s\-\.]/g, '')
+        },
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      console.log('✅ Respuesta del servidor:', response);
+
+      // La respuesta viene envuelta en { success: true, data: {...} }
+      const persona = response.data?.data || response.data || response;
+
+      if (persona && (persona.nombre_completo || persona.correo || persona.telefono)) {
+        // Formatear el teléfono usando formatPhoneNumber
+        let telefonoFormateado = persona.telefono || '';
+        if (telefonoFormateado) {
+          telefonoFormateado = formatPhoneNumber(telefonoFormateado, '', false);
+        }
+
+        // Reconstruir nombres y apellidos desde los campos separados si vienen
+        const primerNombre = persona.primer_nombre || '';
+        const segundoNombre = persona.segundo_nombre || '';
+        const primerApellido = persona.primer_apellido || '';
+        const segundoApellido = persona.segundo_apellido || '';
+
+        const nombreCompletoReconstruido = [primerNombre, segundoNombre].filter(Boolean).join(' ').trim();
+        const apellidoCompletoReconstruido = [primerApellido, segundoApellido].filter(Boolean).join(' ').trim();
+
+        console.log('📝 Datos encontrados:', {
+          nombre: nombreCompletoReconstruido || persona.nombre_completo,
+          apellido: apellidoCompletoReconstruido || persona.apellido_completo,
+          telefono: telefonoFormateado,
+          email: persona.correo
+        });
+
+        // Actualizar formulario automáticamente
+        setFormData(prev => ({
+          ...prev,
+          nombre: nombreCompletoReconstruido || persona.nombre_completo || prev.nombre,
+          apellido: apellidoCompletoReconstruido || persona.apellido_completo || prev.apellido,
+          telefono: telefonoFormateado,
+          email: persona.correo || prev.email
+        }));
+
+        toast({
+          title: "✅ Datos encontrados",
+          description: "Se han completado los campos con la información existente.",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        console.error('❌ Error al buscar persona:', error);
+        toast({
+          title: "Error al buscar información",
+          description: "No se pudo verificar si el documento existe. Continúa ingresando los datos manualmente.",
+          variant: "destructive"
+        });
+      } else {
+        console.log('ℹ️ Persona no encontrada, continuar con registro nuevo');
+      }
+    } finally {
+      setIsSearchingPerson(false);
+    }
+  };
 
   const validateStep = (step) => {
     let newErrors = {};
@@ -382,12 +387,12 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
           numeroDocumento: validateNumeroDocumento(formData.numeroDocumento, formData.tipoDocumento)
         };
         return formData.nombre.trim() &&
-               formData.apellido.trim() &&
-               formData.telefono.trim() &&
-               formData.email.trim() &&
-               formData.tipoDocumento &&
-               formData.numeroDocumento.trim() &&
-               Object.keys(step1Errors).every(key => !step1Errors[key]);
+          formData.apellido.trim() &&
+          formData.telefono.trim() &&
+          formData.email.trim() &&
+          formData.tipoDocumento &&
+          formData.numeroDocumento.trim() &&
+          Object.keys(step1Errors).every(key => !step1Errors[key]);
       case 2:
         // Para el paso 2, verificar servicio e inmueble (si aplica)
         const step2Errors = {
@@ -395,7 +400,7 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
           id_inmueble: validateInmueble(formData.id_inmueble, formData.servicio)
         };
         return formData.servicio &&
-               Object.keys(step2Errors).every(key => !step2Errors[key]);
+          Object.keys(step2Errors).every(key => !step2Errors[key]);
       case 3:
         // Para el paso 3, verificar fecha y hora
         const step3Errors = {
@@ -403,14 +408,15 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
           hora: validateHora(formData.hora)
         };
         return formData.fecha &&
-               formData.hora &&
-               Object.keys(step3Errors).every(key => !step3Errors[key]);
+          formData.hora &&
+          Object.keys(step3Errors).every(key => !step3Errors[key]);
       default:
         return false;
     }
   };
 
   const handleNext = () => {
+    if (isCreatingAppointment) return;
     if (canProceedToNextStep(currentStep)) {
       setCurrentStep(prev => Math.min(prev + 1, 4));
     } else {
@@ -425,6 +431,7 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
   };
 
   const handlePrev = () => {
+    if (isCreatingAppointment) return;
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
@@ -475,6 +482,7 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
 
   // ✅ MODIFICADO: Crear la cita directamente sin modal de confirmación
   const handleSubmit = () => {
+    if (isCreatingAppointment) return;
     if (validateAllSteps()) {
       handleConfirmAppointment();
     } else {
@@ -489,6 +497,7 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
   // ✅ MODIFICADO: Función que realmente crea la cita después de la confirmación
   // CON VALIDACIÓN FINAL DE HORARIO DISPONIBLE
   const handleConfirmAppointment = async () => {
+    if (isCreatingAppointment) return;
     setIsCreatingAppointment(true);
 
     try {
@@ -588,6 +597,7 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
   };
 
   const handleClose = () => {
+    if (isCreatingAppointment) return;
     setCurrentStep(1);
     setFormData({
       nombre: '',
@@ -810,7 +820,8 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleClose}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              disabled={isCreatingAppointment}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -842,7 +853,7 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handlePrev}
-              disabled={currentStep === 1}
+              disabled={currentStep === 1 || isCreatingAppointment}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -854,7 +865,8 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleClose}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                disabled={isCreatingAppointment}
+                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancelar
               </motion.button>
@@ -864,7 +876,8 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={isCreatingAppointment}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Siguiente
                   <ChevronRight className="w-4 h-4" />
@@ -874,10 +887,11 @@ const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  disabled={isCreatingAppointment}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  Crear Cita
+                  {isCreatingAppointment ? 'Creando...' : 'Crear Cita'}
                 </motion.button>
               )}
             </div>

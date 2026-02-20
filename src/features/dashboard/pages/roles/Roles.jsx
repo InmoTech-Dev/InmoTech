@@ -41,6 +41,8 @@ const RolesContent = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] = useState(false);
   const [rolSeleccionado, setRolSeleccionado] = useState(null);
+  const [isDeletingRol, setIsDeletingRol] = useState(false);
+  const [isChangingRolStatus, setIsChangingRolStatus] = useState(false);
 
 
 
@@ -184,11 +186,12 @@ const RolesContent = () => {
   };
 
   const handleConfirmStatusChange = async () => {
-    if (!rolSeleccionado) return;
+    if (isChangingRolStatus || !rolSeleccionado) return;
 
     const rolActual = rolSeleccionado;
     const nuevoEstado = !rolActual.estado;
 
+    setIsChangingRolStatus(true);
     try {
       await rolesApiService.actualizarRol(rolActual.id, { estado: nuevoEstado });
       await cargarRoles();
@@ -204,6 +207,7 @@ const RolesContent = () => {
         variant: "destructive",
       });
     } finally {
+      setIsChangingRolStatus(false);
       setIsStatusChangeDialogOpen(false);
       setRolSeleccionado(null);
     }
@@ -233,8 +237,9 @@ const RolesContent = () => {
   };
 
   const handleConfirmEliminar = async () => {
-    if (!rolSeleccionado) return;
+    if (isDeletingRol || !rolSeleccionado) return;
 
+    setIsDeletingRol(true);
     try {
       await rolesApiService.eliminarRol(rolSeleccionado.id);
       setRoles((prev) => prev.filter((rol) => rol.id !== rolSeleccionado.id));
@@ -250,9 +255,22 @@ const RolesContent = () => {
         variant: "destructive",
       });
     } finally {
+      setIsDeletingRol(false);
       setIsDeleteModalOpen(false);
       setRolSeleccionado(null);
     }
+  };
+
+  const handleCloseDeleteModal = () => {
+    if (isDeletingRol) return;
+    setIsDeleteModalOpen(false);
+    setRolSeleccionado(null);
+  };
+
+  const handleCloseStatusDialog = () => {
+    if (isChangingRolStatus) return;
+    setIsStatusChangeDialogOpen(false);
+    setRolSeleccionado(null);
   };
 
   const renderContent = () => {
@@ -521,21 +539,17 @@ const RolesContent = () => {
 
 <DeleteConfirmModal
   isOpen={isDeleteModalOpen}
-  onClose={() => {
-    setIsDeleteModalOpen(false);
-    setRolSeleccionado(null);
-  }}
+  onClose={handleCloseDeleteModal}
   onConfirm={handleConfirmEliminar}
+  isLoading={isDeletingRol}
   itemName={rolSeleccionado?.nombre || "este rol"}
 />
 
 <ConfirmationDialog
   isOpen={isStatusChangeDialogOpen}
-  onClose={() => {
-    setIsStatusChangeDialogOpen(false);
-    setRolSeleccionado(null);
-  }}
+  onClose={handleCloseStatusDialog}
   onConfirm={handleConfirmStatusChange}
+  isLoading={isChangingRolStatus}
   title={`${rolSeleccionado?.estado ? 'Desactivar' : 'Activar'} rol`}
   message={`¿Estás seguro de que deseas ${rolSeleccionado?.estado ? 'desactivar' : 'activar'} el rol "${rolSeleccionado?.nombre}"?`}
 />

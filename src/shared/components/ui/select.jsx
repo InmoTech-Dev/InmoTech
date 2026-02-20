@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from "react"
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react"
 import { ChevronDown, Check } from "lucide-react"
 import { cn } from "@/shared/utils/cn"
 
@@ -88,12 +88,58 @@ const SelectValue = ({ placeholder, ...props }) => {
   )
 }
 
-const SelectContent = React.forwardRef(({ className, children, ...props }, ref) => {
+const SelectContent = React.forwardRef(({
+  className,
+  children,
+  autoScrollOnOpen = true,
+  constrainToBoundary = false,
+  boundarySelector = null,
+  bottomOffset = 12,
+  minListHeight = 120,
+  maxListHeight = 240,
+  ...props
+}, ref) => {
   const { isOpen } = useContext(SelectContext)
   const contentRef = useRef(null)
+  const listRef = useRef(null)
+  const [calculatedListMaxHeight, setCalculatedListMaxHeight] = useState(null)
+
+  const calculateBoundedListHeight = useCallback(() => {
+    if (!constrainToBoundary || !isOpen || !contentRef.current || !listRef.current) {
+      setCalculatedListMaxHeight(null)
+      return
+    }
+
+    const dropdown = contentRef.current
+    const selectContainer = dropdown.parentElement
+    const trigger = selectContainer?.querySelector('button[type="button"]')
+    const boundary = boundarySelector ? document.querySelector(boundarySelector) : null
+
+    if (!trigger || !boundary) {
+      setCalculatedListMaxHeight(null)
+      return
+    }
+
+    const triggerRect = trigger.getBoundingClientRect()
+    const boundaryRect = boundary.getBoundingClientRect()
+    const marginBelowTrigger = 8 // mt-2
+    const panelSafetySpace = 20 // Border + breathing room
+    const availableSpace = boundaryRect.bottom - triggerRect.bottom - bottomOffset - marginBelowTrigger
+    const rawHeight = Math.floor(availableSpace - panelSafetySpace)
+
+    // Keep the dropdown inside boundary even on short viewports.
+    const safeHeight = Math.max(72, Math.min(maxListHeight, rawHeight))
+    const finalHeight = rawHeight >= minListHeight ? Math.max(minListHeight, safeHeight) : safeHeight
+
+    setCalculatedListMaxHeight(finalHeight)
+  }, [constrainToBoundary, isOpen, boundarySelector, bottomOffset, minListHeight, maxListHeight])
 
   // Auto-scroll functionality when dropdown opens
   useEffect(() => {
+    if (!autoScrollOnOpen || !isOpen || !contentRef.current) {
+      return undefined
+    }
+
     if (isOpen && contentRef.current) {
       // Small delay to ensure the dropdown is rendered and positioned
       const timeoutId = setTimeout(() => {
@@ -144,7 +190,25 @@ const SelectContent = React.forwardRef(({ className, children, ...props }, ref) 
 
       return () => clearTimeout(timeoutId)
     }
-  }, [isOpen])
+  }, [isOpen, autoScrollOnOpen])
+
+  useEffect(() => {
+    if (!isOpen || !constrainToBoundary) {
+      setCalculatedListMaxHeight(null)
+      return undefined
+    }
+
+    const timeoutId = setTimeout(() => {
+      calculateBoundedListHeight()
+    }, 0)
+
+    window.addEventListener('resize', calculateBoundedListHeight)
+
+    return () => {
+      clearTimeout(timeoutId)
+      window.removeEventListener('resize', calculateBoundedListHeight)
+    }
+  }, [isOpen, constrainToBoundary, calculateBoundedListHeight])
 
   return (
     <div
@@ -165,7 +229,11 @@ const SelectContent = React.forwardRef(({ className, children, ...props }, ref) 
       }}
       {...props}
     >
-      <div className="p-2 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+      <div
+        ref={listRef}
+        className="p-2 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+        style={calculatedListMaxHeight ? { maxHeight: `${calculatedListMaxHeight}px` } : undefined}
+      >
         {children}
       </div>
     </div>

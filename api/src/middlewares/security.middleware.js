@@ -56,6 +56,50 @@ const invitationLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: {
+    success: false,
+    message: 'Demasiadas solicitudes de recuperacion. Intenta nuevamente mas tarde.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const identityLookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  message: {
+    success: false,
+    message: 'Demasiadas consultas de documento. Intenta nuevamente en unos minutos.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: {
+    success: false,
+    message: 'Demasiadas cargas de archivos. Intenta nuevamente mas tarde.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const setupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Limite de solicitudes de setup excedido. Intenta nuevamente mas tarde.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 const sanitizeInput = (req, res, next) => {
   // Permitir saltar sanitización si está marcada
   if (req.skipSanitize) {
@@ -93,5 +137,9 @@ module.exports = {
   createLimiter,
   loginLimiter,
   invitationLimiter,
+  forgotPasswordLimiter,
+  identityLookupLimiter,
+  uploadLimiter,
+  setupLimiter,
   sanitizeInput
 };

@@ -31,7 +31,7 @@ export default function ViewRenant({ renant, onClose }) {
     renant.codeudorRaw ||
     renant.codeudorPersona ||
     renant.codeudor?.persona ||
-    renant.codeudor ||
+    (renant.codeudor && renant.codeudor.id_persona ? renant.codeudor : {}) ||
     {};
   const codeudorNombre = codeudorPersona.nombre_completo || "";
   const [primerNombreCod, ...restCod] = codeudorNombre.split(" ").filter(Boolean);

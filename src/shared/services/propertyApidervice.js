@@ -79,6 +79,14 @@ const normalizeAmenities = (amenities = []) =>
     .map((amenity, index) => normalizeAmenity(amenity, index))
     .filter(Boolean);
 
+const findAmenityCount = (amenities = [], aliases = []) => {
+  const normalizedAliases = aliases.map((a) => a.toLowerCase());
+  const match = amenities.find((a) =>
+    normalizedAliases.includes((a.nombre || '').toLowerCase())
+  );
+  return match?.cantidad ?? null;
+};
+
 const extractImageSource = (item) => {
   if (!item) return '';
   if (typeof item === 'string') {
@@ -224,6 +232,14 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
     area_construida:
       toNumber(inmueble.area_construida ?? inmueble.areaConstruida ?? inmueble.area) ?? null,
     area_privada: toNumber(inmueble.area_privada ?? inmueble.areaPrivada) ?? null,
+    habitaciones:
+      toNumber(inmueble.habitaciones ?? inmueble.num_habitaciones ?? inmueble.dormitorios) ??
+      findAmenityCount(comodidades, ['habitaciones', 'cuartos', 'dormitorios']) ??
+      null,
+    banos:
+      toNumber(inmueble.banos ?? inmueble.baños ?? inmueble.num_banos ?? inmueble.wc) ??
+      findAmenityCount(comodidades, ['baños', 'banos', 'baño']) ??
+      null,
     estado_frontend: estadoTexto,
     metadata: {
       raw: inmueble

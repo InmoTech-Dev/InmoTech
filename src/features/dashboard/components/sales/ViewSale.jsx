@@ -154,10 +154,6 @@ export default function ViewSaleModal({ sale, onClose }) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <div>
-                <p className="font-semibold text-gray-700">ID:</p>
-                <p className="text-gray-900">{show(sale.id)}</p>
-              </div>
-              <div>
                 <p className="font-semibold text-gray-700">Registro:</p>
                 <p className="text-gray-900">{show(sale.registro || snapshot.inmuebleRegistro)}</p>
               </div>
@@ -173,6 +169,25 @@ export default function ViewSaleModal({ sale, onClose }) {
                 <p className="font-semibold text-gray-700">Valor:</p>
                 <p className="text-gray-900 font-bold text-green-600">{show(sale.valor, "$ 0")}</p>
               </div>
+              <div>
+                <p className="font-semibold text-gray-700">Medio de pago:</p>
+                <p className="text-gray-900">{show(sale.medioPago || raw.medio_pago || snapshot.medioPago)}</p>
+              </div>
+              {(sale.medioPago || raw.medio_pago || snapshot.medioPago || "").toLowerCase() === "mixto" && (
+                <div className="md:col-span-2 lg:col-span-3">
+                  <p className="font-semibold text-gray-700">Descripción pago mixto:</p>
+                  <p className="text-gray-900 whitespace-pre-line">
+                    {show(
+                      raw.descripcion_pago ||
+                        raw.medio_pago_descripcion ||
+                        sale.medioPagoDescripcion ||
+                        snapshot.medioPagoDescripcion ||
+                        sale.descripcionPagoMixto,
+                      "Sin descripción"
+                    )}
+                  </p>
+                </div>
+              )}
               
               {/* Estado movido hacia abajo con margen adicional */}
               <div className="mt-2">
@@ -180,14 +195,15 @@ export default function ViewSaleModal({ sale, onClose }) {
                 <p className="text-gray-900 text-sm font-semibold">{show(sale.estado)}</p>
               </div>
               
-              <div className="md:col-span-2 lg:col-span-3 mt-2">
-                <p className="font-semibold text-gray-700">Seguimiento:</p>
-                <p className="text-gray-900">{show(sale.estadoSeguimiento || snapshot.estadoSeguimiento, "Sin seguimiento")}</p>
-              </div>
               <div className="md:col-span-2 lg:col-span-3">
                 <p className="font-semibold text-gray-700">Descripción de seguimiento:</p>
                 <p className="text-gray-900 whitespace-pre-line">
-                  {show(sale.descripcionSeguimiento, "Sin descripción")}
+                  {show(
+                    sale.descripcionSeguimiento ||
+                      sale.descripcion_seguimiento ||
+                      snapshot.descripcionSeguimiento,
+                    "Sin descripción"
+                  )}
                 </p>
               </div>
             </div>
@@ -303,11 +319,14 @@ export default function ViewSaleModal({ sale, onClose }) {
               </div>
               <div>
                 <p className="font-semibold text-gray-700">Precio:</p>
-                <p className="text-gray-900 font-bold text-green-600">{show(sale.inmueblePrecio || snapshot.inmueblePrecio, "$ 0")} $</p>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-700">Estado:</p>
-                <p className="text-gray-900">{show(sale.inmuebleEstado)}</p>
+                <p className="text-gray-900 font-bold text-green-600">
+                  {show(
+                    sale.valor ||
+                      sale.inmueblePrecio ||
+                      snapshot.inmueblePrecio,
+                    "$ 0"
+                  )}
+                </p>
               </div>
             </div>
           </div>

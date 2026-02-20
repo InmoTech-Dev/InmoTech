@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import ReactDOM from 'react-dom';
-import { FaUserPlus, FaEye, FaEdit, FaSearch, FaTrash, FaTimes } from "react-icons/fa";
+import { FaUserPlus, FaSearch, FaTimes } from "react-icons/fa";
+import { Eye, Edit, Trash2 } from "lucide-react";
 import "../../../../../shared/styles/globals.css";
 import BuyerForm from "../components/BuyerForm";
 import BuyerViewModal from "../components/BuyerView";
@@ -277,25 +278,25 @@ export function BuyersManagementPage() {
                                             <td className="px-3 py-3 text-center border-0">{c.telefono}</td>
                                             <td className="px-3 py-3 text-center flex gap-2 justify-center border-0">
                                                 <button
-                                                    aria-label="Editar comprador"
-                                                    className="text-green-600 hover:text-green-800 transition-colors"
-                                                    onClick={() => handleEditClick(c)}
-                                                >
-                                                    <FaEdit />
-                                                </button>
-                                                <button
                                                     aria-label="Ver comprador"
-                                                    className="text-sky-600 hover:text-sky-800 transition-colors"
+                                                    className="p-2 rounded-lg transition-colors text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                                                     onClick={() => handleViewClick(c)}
                                                 >
-                                                    <FaEye />
+                                                    <Eye className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    aria-label="Editar comprador"
+                                                    className="p-2 rounded-lg transition-colors text-green-600 hover:text-green-800 hover:bg-green-50"
+                                                    onClick={() => handleEditClick(c)}
+                                                >
+                                                    <Edit className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     aria-label="Eliminar comprador"
-                                                    className="text-red-600 hover:text-red-800 transition-colors"
+                                                    className="p-2 rounded-lg transition-colors text-red-600 hover:text-red-800 hover:bg-red-50"
                                                     onClick={() => handleDeleteRequest(c)}
                                                 >
-                                                    <FaTrash />
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </td>
                                         </tr>

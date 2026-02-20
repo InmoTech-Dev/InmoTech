@@ -7,6 +7,7 @@ const { createLimiter, strictLimiter } = require('../middlewares/security.middle
 const {
   createLeaseSchema,
   updateLeaseSchema,
+  updateLeaseStatusSchema,
   createPaymentSchema,
   updatePaymentSchema,
   createReceiptSchema
@@ -42,6 +43,14 @@ router.patch(
   strictLimiter,
   validate(updateLeaseSchema),
   leasesController.updateLease
+);
+
+// PATCH /api/v1/leases/:id/estado - Actualizar estado del arrendamiento
+router.patch(
+  '/:id/estado',
+  strictLimiter,
+  validate(updateLeaseStatusSchema),
+  leasesController.updateLeaseStatus
 );
 
 // PATCH /api/v1/leases/:id/cancel - Cancelar arrendamiento

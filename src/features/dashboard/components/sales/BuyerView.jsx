@@ -13,17 +13,30 @@ export default function BuyerView({ buyer, onClose }) {
     .filter(Boolean)
     .join(" ");
 
-  const inmueble = buyer.inmueble || null;
-  const hasOperacion = Boolean(
-    buyer.fechaCompra ||
-      buyer.valorCompra ||
-      buyer.entidadFinanciera ||
-      buyer.numeroCredito ||
-      buyer.montoFinanciado ||
-      buyer.observaciones ||
-      (buyer.tipoCompra &&
-        `${buyer.tipoCompra}`.trim().toLowerCase() !== "directa")
-  );
+  // Venta asociada (normalizada desde distintas posibles claves)
+  const operacion =
+    buyer?.ultimaVenta ||
+    buyer?.compra ||
+    buyer?.venta ||
+    buyer?.sale ||
+    buyer?.raw?.venta ||
+    null;
+
+  const inmueble = buyer.inmueble || operacion?.inmueble || null;
+
+  const registroInmobiliario =
+    inmueble?.registro ||
+    inmueble?.registro_inmobiliario ||
+    inmueble?.registroInmobiliario ||
+    "-";
+
+  const imagenInmueble =
+    inmueble?.image ||
+    inmueble?.imagen_principal ||
+    inmueble?.imagen_portada ||
+    inmueble?.portada ||
+    (Array.isArray(inmueble?.imagenes) ? inmueble.imagenes[0] : "") ||
+    "";
 
   return (
     <div
@@ -84,14 +97,6 @@ export default function BuyerView({ buyer, onClose }) {
                 <p className="font-semibold text-gray-700">Telefono:</p>
                 <p className="text-gray-900">{buyer.telefono || "-"}</p>
               </div>
-              <div>
-                <p className="font-semibold text-gray-700">Ciudad de residencia:</p>
-                <p className="text-gray-900">{buyer.ciudadResidencia || "-"}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-700">Direccion anterior:</p>
-                <p className="text-gray-900">{buyer.direccionAnterior || "-"}</p>
-              </div>
             </div>
           </section>
 
@@ -101,58 +106,74 @@ export default function BuyerView({ buyer, onClose }) {
               Datos de la operacion
             </h3>
 
-            {hasOperacion ? (
+            {operacion ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                   <div>
                     <p className="font-semibold text-gray-700">Fecha de compra:</p>
                     <p className="text-gray-900">
-                      {buyer.fechaCompra ? new Date(buyer.fechaCompra).toLocaleDateString() : "-"}
+                      {operacion.fecha_venta || operacion.fechaCompra
+                        ? new Date(operacion.fecha_venta || operacion.fechaCompra).toLocaleDateString()
+                        : "-"}
                     </p>
                   </div>
                   <div>
                     <p className="font-semibold text-gray-700">Tipo de compra:</p>
-                    <p className="text-gray-900">{buyer.tipoCompra || "-"}</p>
+                    <p className="text-gray-900">{operacion.tipo_compra || operacion.tipoCompra || "-"}</p>
                   </div>
                   <div>
                     <p className="font-semibold text-gray-700">Valor de compra:</p>
                     <p className="text-gray-900 font-semibold">
-                      {buyer.valorCompra ? Intl.NumberFormat("es-CO", {
-                        style: "currency",
-                        currency: "COP",
-                        maximumFractionDigits: 0
-                      }).format(Number(buyer.valorCompra)) : "-"}
+                      {operacion.valor_venta || operacion.valorCompra
+                        ? Intl.NumberFormat("es-CO", {
+                            style: "currency",
+                            currency: "COP",
+                            maximumFractionDigits: 0
+                          }).format(Number(operacion.valor_venta || operacion.valorCompra))
+                        : "-"}
                     </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mt-4">
                   <div>
+                    <p className="font-semibold text-gray-700">Medio de pago:</p>
+                    <p className="text-gray-900">{operacion.medio_pago || "-"}</p>
+                  </div>
+                  <div>
                     <p className="font-semibold text-gray-700">Entidad financiera:</p>
-                    <p className="text-gray-900">{buyer.entidadFinanciera || "-"}</p>
+                    <p className="text-gray-900">
+                      {operacion.entidad_financiera || buyer.entidadFinanciera || "-"}
+                    </p>
                   </div>
                   <div>
                     <p className="font-semibold text-gray-700">Numero de credito:</p>
-                    <p className="text-gray-900">{buyer.numeroCredito || "-"}</p>
+                    <p className="text-gray-900">{operacion.numero_credito || buyer.numeroCredito || "-"}</p>
                   </div>
                   <div>
                     <p className="font-semibold text-gray-700">Monto financiado:</p>
                     <p className="text-gray-900">
-                      {buyer.montoFinanciado
+                      {operacion.monto_financiado || buyer.montoFinanciado
                         ? Intl.NumberFormat("es-CO", {
                             style: "currency",
                             currency: "COP",
                             maximumFractionDigits: 0
-                          }).format(Number(buyer.montoFinanciado))
+                          }).format(Number(operacion.monto_financiado || buyer.montoFinanciado))
                         : "-"}
                     </p>
                   </div>
+                  <div>
+                    <p className="font-semibold text-gray-700">Estado de la venta:</p>
+                    <p className="text-gray-900">{operacion.estado || operacion.estado_venta || "-"}</p>
+                  </div>
                 </div>
 
-                {buyer.observaciones && (
+                {(operacion.observaciones || buyer.observaciones) && (
                   <div className="mt-4 text-sm">
                     <p className="font-semibold text-gray-700 mb-1">Observaciones:</p>
-                    <p className="text-gray-900 bg-white rounded-lg p-3 border border-gray-200">{buyer.observaciones}</p>
+                    <p className="text-gray-900 bg-white rounded-lg p-3 border border-gray-200">
+                      {operacion.observaciones || buyer.observaciones}
+                    </p>
                   </div>
                 )}
               </>
@@ -172,13 +193,21 @@ export default function BuyerView({ buyer, onClose }) {
 
             {inmueble ? (
               <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-shrink-0 w-full md:w-40 h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200">
-                  <FaImage size={32} />
+                <div className="flex-shrink-0 w-full md:w-40 h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200 overflow-hidden">
+                  {imagenInmueble ? (
+                    <img
+                      src={imagenInmueble}
+                      alt="Inmueble"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <FaImage size={32} />
+                  )}
                 </div>
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="font-semibold text-gray-700">Registro inmobiliario:</p>
-                    <p className="text-gray-900">{inmueble.registro || "-"}</p>
+                    <p className="text-gray-900">{registroInmobiliario}</p>
                   </div>
                   <div>
                     <p className="font-semibold text-gray-700">Categoria:</p>
@@ -188,24 +217,12 @@ export default function BuyerView({ buyer, onClose }) {
                     <p className="font-semibold text-gray-700">Direccion:</p>
                     <p className="text-gray-900">{inmueble.direccion || "-"}</p>
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-700">Ubicacion:</p>
-                    <p className="text-gray-900">
-                      {[inmueble.ciudad, inmueble.departamento].filter(Boolean).join(", ") || "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-700">Estado:</p>
-                    <span
-                      className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${
-                        inmueble.estado === "Activo"
-                          ? "bg-green-100 text-green-700 border-green-400"
-                          : "bg-yellow-100 text-yellow-700 border-yellow-400"
-                      }`}
-                    >
-                      {inmueble.estado}
-                    </span>
-                  </div>
+                <div>
+                  <p className="font-semibold text-gray-700">Ubicacion:</p>
+                  <p className="text-gray-900">
+                    {[inmueble.ciudad, inmueble.departamento].filter(Boolean).join(", ") || "-"}
+                  </p>
+                </div>
                 </div>
               </div>
             ) : (

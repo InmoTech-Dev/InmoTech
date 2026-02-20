@@ -1,4 +1,4 @@
--- =====================================================================================================================
+﻿-- =====================================================================================================================
 -- BASE DE DATOS INMOBILIARIA INMOTECH
 -- =====================================================================================================================
 -- Motor:           Microsoft SQL Server 2016+
@@ -38,11 +38,11 @@
 IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'InmobiliariaDB')
 BEGIN
     CREATE DATABASE InmobiliariaDB;
-    PRINT '✅ Base de datos InmobiliariaDB creada exitosamente';
+    PRINT 'âœ… Base de datos InmobiliariaDB creada exitosamente';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Base de datos InmobiliariaDB ya existe - usando existente';
+    PRINT 'âš ï¸  Base de datos InmobiliariaDB ya existe - usando existente';
 END
 GO
 
@@ -107,11 +107,11 @@ BEGIN
         CONSTRAINT CHK_Personas_Email CHECK (correo LIKE '%_@__%.__%'),             -- Formato email válido
         CONSTRAINT CHK_Personas_TipoDoc CHECK (tipo_documento IN ('CC', 'CE', 'NIT', 'Pasaporte', 'TI'))
     );
-    PRINT '✅ Tabla Personas creada';
+    PRINT 'âœ… Tabla Personas creada';
 END
 GO
 
--- Índices para optimizar búsquedas frecuentes --- Índices para Personas
+-- Ãndices para optimizar búsquedas frecuentes --- Ãndices para Personas
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Personas_Documento' AND object_id = OBJECT_ID('Personas'))
     CREATE NONCLUSTERED INDEX IX_Personas_Documento ON Personas(tipo_documento, numero_documento);
 
@@ -140,7 +140,7 @@ BEGIN
 
         CONSTRAINT FK_Acceso_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona) ON DELETE CASCADE
     );
-    PRINT '✅ Tabla Acceso creada';
+    PRINT 'âœ… Tabla Acceso creada';
 END
 GO
 
@@ -234,11 +234,11 @@ BEGIN
         id_rol INT PRIMARY KEY IDENTITY(1,1),
         nombre_rol VARCHAR(50) NOT NULL UNIQUE,
         descripcion VARCHAR(200) NULL,
-        es_rol_administrativo BIT NOT NULL DEFAULT 0,     -- ✨ CLAVE: 1 = Personal interno, 0 = Cliente externo
+        es_rol_administrativo BIT NOT NULL DEFAULT 0,     -- âœ¨ CLAVE: 1 = Personal interno, 0 = Cliente externo
         estado BIT NOT NULL DEFAULT 1,
         fecha_creacion DATETIME2(3) NOT NULL DEFAULT GETDATE()
     );
-    PRINT '✅ Tabla Roles creada';
+    PRINT 'âœ… Tabla Roles creada';
 END
 GO
 
@@ -260,7 +260,7 @@ BEGIN
         CONSTRAINT FK_PersonasRol_Rol FOREIGN KEY (id_rol) REFERENCES Roles(id_rol) ON DELETE CASCADE,
         CONSTRAINT UQ_PersonasRol_Unico UNIQUE (id_persona, id_rol)  -- No duplicar asignaciones
     );
-    PRINT '✅ Tabla Personas_rol creada';
+    PRINT 'âœ… Tabla Personas_rol creada';
 END
 GO
 
@@ -282,16 +282,16 @@ BEGIN
         CONSTRAINT FK_Permisos_Rol FOREIGN KEY (id_rol) REFERENCES Roles(id_rol) ON DELETE CASCADE,
         CONSTRAINT UQ_Permiso_Unico UNIQUE (id_rol, modulo, permiso)
     );
-    PRINT '✅ Tabla Permisos creada';
+    PRINT 'âœ… Tabla Permisos creada';
 END
 GO
 
--- Índice para búsquedas por rol
+-- Ãndice para búsquedas por rol
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_PersonasRol_Persona' AND object_id = OBJECT_ID('Personas_rol'))
     CREATE NONCLUSTERED INDEX IX_PersonasRol_Persona ON Personas_rol(id_persona);  -- Obtener roles de una persona
 GO
 
--- Índices para consultas de roles
+-- Ãndices para consultas de roles
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_PersonasRol_Rol' AND object_id = OBJECT_ID('Personas_rol'))
     CREATE NONCLUSTERED INDEX IX_PersonasRol_Rol ON Personas_rol(id_rol);          -- Obtener personas con un rol
 GO
@@ -339,11 +339,11 @@ BEGIN
         CONSTRAINT FK_Administrativos_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona) ON DELETE CASCADE,
         CONSTRAINT CHK_Administrativos_FechaRetiro CHECK (fecha_retiro IS NULL OR fecha_retiro >= fecha_ingreso)
     );
-    PRINT '✅ Tabla Administrativos creada - NUEVA ARQUITECTURA';
+    PRINT 'âœ… Tabla Administrativos creada - NUEVA ARQUITECTURA';
 END
 GO
 
--- Índices para consultas de personal
+-- Ãndices para consultas de personal
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Administrativos_CodigoEmpleado' AND object_id = OBJECT_ID('Administrativos'))
 
 CREATE NONCLUSTERED INDEX IX_Administrativos_CodigoEmpleado ON Administrativos(codigo_empleado);
@@ -641,7 +641,7 @@ BEGIN
 END
 GO
 
--- Índices para Fichas_Tecnicas
+-- Ãndices para Fichas_Tecnicas
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_FichasTecnicas_Inmueble' AND object_id = OBJECT_ID('Fichas_Tecnicas'))
     CREATE NONCLUSTERED INDEX IX_FichasTecnicas_Inmueble ON Fichas_Tecnicas(id_inmueble);
 
@@ -721,15 +721,15 @@ BEGIN
 
         CONSTRAINT CHK_ServicioCita_Duracion CHECK (duracion_estimada > 0 AND duracion_estimada <= 480)
     );
-    PRINT '✅ Tabla Servicios_cita creada';
+    PRINT 'âœ… Tabla Servicios_cita creada';
 END
 GO
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Tabla: Estados_cita
 -- Descripción: Ciclo de vida de una cita
--- Flujo típico: Solicitada → Confirmada → Programada → Completada
---               (o en cualquier momento → Cancelada / Reagendada)
+-- Flujo típico: Solicitada â†’ Confirmada â†’ Programada â†’ Completada
+--               (o en cualquier momento â†’ Cancelada / Reagendada)
 -- ---------------------------------------------------------------------------------------------------------------------
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Estados_cita]') AND type = 'U')
 BEGIN
@@ -741,7 +741,7 @@ BEGIN
         es_estado_final BIT NOT NULL DEFAULT 0,             -- 1: Estado terminal (Completada, Cancelada)
         estado BIT NOT NULL DEFAULT 1
     );
-    PRINT '✅ Tabla Estados_cita creada';
+    PRINT 'âœ… Tabla Estados_cita creada';
 END
 GO
 
@@ -807,7 +807,7 @@ BEGIN
         CONSTRAINT CHK_Citas_HoraValida CHECK (hora_fin > hora_inicio),
         CONSTRAINT CHK_Citas_FechaFuturo CHECK (fecha_cita >= CAST(GETDATE() AS DATE))
     );
-    PRINT '✅ Tabla Citas creada';
+    PRINT 'âœ… Tabla Citas creada';
 END
 GO
 
@@ -815,7 +815,7 @@ GO
 IF COL_LENGTH('Citas', 'motivo_reagendamiento') IS NULL
 BEGIN
     ALTER TABLE Citas ADD motivo_reagendamiento NVARCHAR(500) NULL;
-    PRINT '✅ Campo motivo_reagendamiento agregado a la tabla Citas';
+    PRINT 'âœ… Campo motivo_reagendamiento agregado a la tabla Citas';
 END
 ELSE
 BEGIN
@@ -823,31 +823,31 @@ BEGIN
     IF COL_LENGTH('Citas', 'motivo_reagendamiento') = -1 OR COL_LENGTH('Citas', 'motivo_reagendamiento') > 1000
     BEGIN
         ALTER TABLE Citas ALTER COLUMN motivo_reagendamiento NVARCHAR(500) NULL;
-        PRINT '✅ Campo motivo_reagendamiento ajustado a NVARCHAR(500)';
+        PRINT 'âœ… Campo motivo_reagendamiento ajustado a NVARCHAR(500)';
     END
     ELSE
     BEGIN
-        PRINT '⚠️  Campo motivo_reagendamiento ya existe en la tabla Citas';
+        PRINT 'âš ï¸  Campo motivo_reagendamiento ya existe en la tabla Citas';
     END
 END
 GO
 
--- Índice opcional sobre motivo_reagendamiento (longitud 500, indexable)
+-- Ãndice opcional sobre motivo_reagendamiento (longitud 500, indexable)
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Citas') AND name = 'IX_Citas_MotivoReagendamiento')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Citas_MotivoReagendamiento
     ON Citas(motivo_reagendamiento)
     WHERE motivo_reagendamiento IS NOT NULL;
 
-    PRINT '✅ Índice IX_Citas_MotivoReagendamiento creado';
+    PRINT 'âœ… Ãndice IX_Citas_MotivoReagendamiento creado';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  El índice IX_Citas_MotivoReagendamiento ya existe';
+    PRINT 'âš ï¸  El índice IX_Citas_MotivoReagendamiento ya existe';
 END
 GO
 
--- Índices optimizados para consultas frecuentes
+-- Ãndices optimizados para consultas frecuentes
 CREATE NONCLUSTERED INDEX IX_Citas_Estado ON Citas(id_estado_cita, fecha_cita, hora_inicio);  -- Dashboard de citas
 CREATE NONCLUSTERED INDEX IX_Citas_Agente ON Citas(id_agente_asignado) WHERE id_agente_asignado IS NOT NULL;  -- Citas de un agente
 CREATE NONCLUSTERED INDEX IX_Citas_Fecha ON Citas(fecha_cita, hora_inicio);                   -- Búsqueda por fecha
@@ -856,17 +856,17 @@ CREATE NONCLUSTERED INDEX IX_Citas_ConflictoHorario ON Citas(id_inmueble, fecha_
 CREATE NONCLUSTERED INDEX IX_Citas_Creador ON Citas(id_usuario_creador);                      -- Quién creó las citas
 GO
 
--- Índices adicionales para dashboards y disponibilidad
+-- Ãndices adicionales para dashboards y disponibilidad
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Citas') AND name = 'IX_Citas_AgenteEstado')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Citas_AgenteEstado
     ON Citas(id_agente_asignado, id_estado_cita)
     INCLUDE (fecha_cita, hora_inicio, hora_fin, motivo_reagendamiento, motivo_cancelacion);
-    PRINT '✅ Índice agregado: IX_Citas_AgenteEstado';
+    PRINT 'âœ… Ãndice agregado: IX_Citas_AgenteEstado';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Citas_AgenteEstado ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Citas_AgenteEstado ya existe';
 END
 GO
 
@@ -875,11 +875,11 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_Citas_FechaServicio
     ON Citas(fecha_cita, id_servicio)
     INCLUDE (hora_inicio, hora_fin, id_estado_cita, id_agente_asignado);
-    PRINT '✅ Índice agregado: IX_Citas_FechaServicio';
+    PRINT 'âœ… Ãndice agregado: IX_Citas_FechaServicio';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Citas_FechaServicio ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Citas_FechaServicio ya existe';
 END
 GO
 
@@ -888,11 +888,11 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_Citas_EstadoSolo
     ON Citas(id_estado_cita)
     INCLUDE (fecha_cita, hora_inicio, id_agente_asignado);
-    PRINT '✅ Índice agregado: IX_Citas_EstadoSolo';
+    PRINT 'âœ… Ãndice agregado: IX_Citas_EstadoSolo';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Citas_EstadoSolo ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Citas_EstadoSolo ya existe';
 END
 GO
 
@@ -932,17 +932,17 @@ BEGIN
         CONSTRAINT FK_HistorialAsignacion_UsuarioRealizo FOREIGN KEY (id_usuario_realizo) REFERENCES Personas(id_persona),
         CONSTRAINT CHK_HistorialAsignacion_Estado CHECK (estado_asignacion IN ('Activa', 'Reasignada', 'Cancelada'))
     );
-    PRINT '✅ Tabla HistorialAsignacionAgentes creada - NUEVA FUNCIONALIDAD';
+    PRINT 'âœ… Tabla HistorialAsignacionAgentes creada - NUEVA FUNCIONALIDAD';
 END
 GO
 
--- Índices para búsquedas frecuentes
+-- Ãndices para búsquedas frecuentes
 CREATE NONCLUSTERED INDEX IX_Historial_Cita ON HistorialAsignacionAgentes(id_cita, fecha_asignacion DESC);
 CREATE NONCLUSTERED INDEX IX_Historial_AgenteNuevo ON HistorialAsignacionAgentes(id_agente_nuevo);
 CREATE NONCLUSTERED INDEX IX_Historial_UsuarioRealizo ON HistorialAsignacionAgentes(id_usuario_realizo);
 GO
 
--- Índice de cobertura para historial (acelera /historial-asignaciones)
+-- Ãndice de cobertura para historial (acelera /historial-asignaciones)
 IF EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('HistorialAsignacionAgentes') AND name = 'IX_Historial_Cita_Cover')
 BEGIN
     DROP INDEX IX_Historial_Cita_Cover ON HistorialAsignacionAgentes;
@@ -954,11 +954,11 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_Historial_Cita_Cover
     ON HistorialAsignacionAgentes (id_cita, fecha_asignacion DESC)
     INCLUDE (id_agente_nuevo, id_agente_anterior, estado_asignacion, id_usuario_realizo);
-    PRINT '✅ Índice agregado: IX_Historial_Cita_Cover';
+    PRINT 'âœ… Ãndice agregado: IX_Historial_Cita_Cover';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Historial_Cita_Cover ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Historial_Cita_Cover ya existe';
 END
 GO
 
@@ -1011,11 +1011,11 @@ BEGIN
         -- Al menos uno debe estar presente
         CONSTRAINT CHK_Notificaciones_Destino CHECK (id_rol_destino IS NOT NULL OR id_persona_destino IS NOT NULL)
     );
-    PRINT '✅ Tabla Notificaciones creada';
+    PRINT 'âœ… Tabla Notificaciones creada';
 END
 GO
 
--- Índices para consultas de notificaciones
+-- Ãndices para consultas de notificaciones
 CREATE NONCLUSTERED INDEX IX_Notificaciones_NoLeidas ON Notificaciones(leida, fecha_creacion DESC) WHERE leida = 0;  -- Campana de notificaciones
 CREATE NONCLUSTERED INDEX IX_Notificaciones_Rol ON Notificaciones(id_rol_destino) WHERE id_rol_destino IS NOT NULL;
 CREATE NONCLUSTERED INDEX IX_Notificaciones_Persona ON Notificaciones(id_persona_destino) WHERE id_persona_destino IS NOT NULL;
@@ -1090,7 +1090,7 @@ BEGIN
 END
 GO
 
--- Índices optimizados para Compradores
+-- Ãndices optimizados para Compradores
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Compradores_Persona' AND object_id = OBJECT_ID('Compradores'))
     CREATE NONCLUSTERED INDEX IX_Compradores_Persona ON Compradores(id_persona);
 
@@ -1103,7 +1103,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Compradores_Registro' 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Compradores_TipoComprador' AND object_id = OBJECT_ID('Compradores'))
     CREATE NONCLUSTERED INDEX IX_Compradores_TipoComprador ON Compradores(tipo_comprador);
 
-PRINT '? Índices para Compradores creados';
+PRINT '? Ãndices para Compradores creados';
 GO
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -1174,7 +1174,7 @@ BEGIN
 END
 GO
 
--- Índices para Arrendatarios
+-- Ãndices para Arrendatarios
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Arrendatarios_Persona' AND object_id = OBJECT_ID('Arrendatarios'))
     CREATE NONCLUSTERED INDEX IX_Arrendatarios_Persona ON Arrendatarios(id_persona);
 
@@ -1184,7 +1184,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Arrendatarios_Estado' 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Arrendatarios_Registro' AND object_id = OBJECT_ID('Arrendatarios'))
     CREATE UNIQUE NONCLUSTERED INDEX IX_Arrendatarios_Registro ON Arrendatarios(registro_arrendatario);
 
-PRINT '? Índices para Arrendatarios creados';
+PRINT '? Ãndices para Arrendatarios creados';
 GO
 
 -- =====================================================================================================================
@@ -1199,19 +1199,30 @@ BEGIN
     CREATE TABLE Ventas (
         id_venta INT PRIMARY KEY IDENTITY(1,1),
         id_comprador INT NOT NULL,
+        id_vendedor INT NULL,
+        id_estado_venta INT NULL,
+        estado_seguimiento VARCHAR(50) NULL,
         id_inmueble INT NOT NULL,
         fecha_venta DATE NOT NULL,
         valor_venta DECIMAL(15,2) NOT NULL,
-        medio_pago VARCHAR(50) NOT NULL CHECK (medio_pago IN ('efectivo', 'transferencia', 'credito', 'mixto')),
+        medio_pago VARCHAR(50) NOT NULL CHECK (medio_pago IN ('efectivo', 'transferencia', 'mixto')),
+        medio_pago_descripcion VARCHAR(500) NULL,
         tipo_compra VARCHAR(50) NOT NULL CONSTRAINT DF_Ventas_TipoCompra DEFAULT 'Directa'
             CHECK (tipo_compra IN ('Directa', 'Financiada', 'Mixta')),
         entidad_financiera VARCHAR(100) NULL,
         numero_credito VARCHAR(50) NULL,
         monto_financiado DECIMAL(15,2) NULL,
+        -- Datos "congelados" del vendedor al momento de la venta
+        tipo_doc_vendedor VARCHAR(20) NULL,
+        numero_doc_vendedor VARCHAR(50) NULL,
+        nombre_vendedor VARCHAR(200) NULL,
+        correo_vendedor VARCHAR(150) NULL,
+        telefono_vendedor VARCHAR(50) NULL,
         estado VARCHAR(50) NOT NULL DEFAULT 'Activa' CHECK (estado IN ('Activa', 'Cancelada', 'Finalizada')),
         fecha_creacion DATETIME2(3) NOT NULL DEFAULT GETDATE(),
         
         CONSTRAINT FK_Ventas_Comprador FOREIGN KEY (id_comprador) REFERENCES Compradores(id_comprador),
+        CONSTRAINT FK_Ventas_Vendedor FOREIGN KEY (id_vendedor) REFERENCES Personas(id_persona),
         CONSTRAINT FK_Ventas_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble),
         CONSTRAINT CHK_Ventas_Valor CHECK (valor_venta > 0),
         CONSTRAINT CHK_Ventas_Fecha CHECK (fecha_venta <= CAST(GETDATE() AS DATE))
@@ -1233,6 +1244,27 @@ BEGIN
         PRINT '? Columna id_comprador agregada a Ventas';
     END
 
+    -- Agregar id_vendedor si no existe
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'id_vendedor')
+    BEGIN
+        ALTER TABLE Ventas ADD id_vendedor INT NULL;
+        PRINT '? Columna id_vendedor agregada a Ventas';
+    END
+
+    -- Agregar id_estado_venta si no existe
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'id_estado_venta')
+    BEGIN
+        ALTER TABLE Ventas ADD id_estado_venta INT NULL;
+        PRINT '? Columna id_estado_venta agregada a Ventas';
+    END
+
+    -- Agregar estado_seguimiento si no existe
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'estado_seguimiento')
+    BEGIN
+        ALTER TABLE Ventas ADD estado_seguimiento VARCHAR(50) NULL;
+        PRINT '? Columna estado_seguimiento agregada a Ventas';
+    END
+
     -- Agregar campos de financiación si no existen
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'tipo_compra')
     BEGIN
@@ -1250,6 +1282,21 @@ BEGIN
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'monto_financiado')
         ALTER TABLE Ventas ADD monto_financiado DECIMAL(15,2) NULL;
 
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'medio_pago_descripcion')
+        ALTER TABLE Ventas ADD medio_pago_descripcion VARCHAR(500) NULL;
+
+    -- Agregar campos congelados del vendedor si no existen
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'tipo_doc_vendedor')
+        ALTER TABLE Ventas ADD tipo_doc_vendedor VARCHAR(20) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'numero_doc_vendedor')
+        ALTER TABLE Ventas ADD numero_doc_vendedor VARCHAR(50) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'nombre_vendedor')
+        ALTER TABLE Ventas ADD nombre_vendedor VARCHAR(200) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'correo_vendedor')
+        ALTER TABLE Ventas ADD correo_vendedor VARCHAR(150) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'telefono_vendedor')
+        ALTER TABLE Ventas ADD telefono_vendedor VARCHAR(50) NULL;
+
     -- Agregar FK si no existe
     IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_Ventas_Comprador')
     BEGIN
@@ -1258,11 +1305,88 @@ BEGIN
         REFERENCES Compradores(id_comprador);
     END
 
+    IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_Ventas_Vendedor')
+    BEGIN
+        ALTER TABLE Ventas WITH CHECK
+        ADD CONSTRAINT FK_Ventas_Vendedor FOREIGN KEY (id_vendedor) REFERENCES Personas(id_persona);
+    END
+
     PRINT '? Estructura de Ventas actualizada';
 END
 GO
 
--- Índices para Ventas
+-- Evitar reutilizar inmuebles vendidos y bloquear venta duplicada finalizada
+IF OBJECT_ID('dbo.TR_Ventas_BlockSoldInmueble', 'TR') IS NOT NULL
+    DROP TRIGGER dbo.TR_Ventas_BlockSoldInmueble;
+GO
+
+CREATE TRIGGER TR_Ventas_BlockSoldInmueble
+ON Ventas
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1) Bloquear si el inmueble ya está marcado como vendido
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN Inmuebles inm ON inm.id_inmueble = i.id_inmueble
+        WHERE inm.estado = 'Vendido' OR inm.estado_frontend = 'Vendido'
+    )
+    BEGIN
+        RAISERROR('El inmueble ya está marcado como Vendido y no puede asociarse a otra venta.',16,1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+
+    -- 2) Bloquear si ya existe una venta finalizada/completada para el mismo inmueble
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN Ventas v
+          ON v.id_inmueble = i.id_inmueble
+         AND v.id_venta <> i.id_venta
+        LEFT JOIN Estados_venta ev ON ev.id_estado_venta = v.id_estado_venta
+        WHERE v.estado IN ('Finalizada','Completada')
+           OR ev.es_estado_final = 1
+    )
+    BEGIN
+        RAISERROR('No se puede asociar este inmueble a otra venta porque ya está vendido (venta finalizada).',16,1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+END;
+GO
+
+-- Bloquear cambios de estado de un inmueble ya vendido
+IF OBJECT_ID('dbo.TR_Inmuebles_LockSoldState', 'TR') IS NOT NULL
+    DROP TRIGGER dbo.TR_Inmuebles_LockSoldState;
+GO
+
+CREATE TRIGGER TR_Inmuebles_LockSoldState
+ON Inmuebles
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN deleted d ON i.id_inmueble = d.id_inmueble
+        WHERE d.estado = 'Vendido' AND i.estado <> d.estado
+           OR d.estado_frontend = 'Vendido' AND i.estado_frontend <> d.estado_frontend
+    )
+    BEGIN
+        RAISERROR('El estado del inmueble no puede cambiar porque ya está Vendido.',16,1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+END;
+GO
+
+-- Ãndices para Ventas
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_Comprador' AND object_id = OBJECT_ID('Ventas'))
     CREATE NONCLUSTERED INDEX IX_Ventas_Comprador ON Ventas(id_comprador);
 
@@ -1272,7 +1396,13 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_Inmueble' AND o
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_Fecha' AND object_id = OBJECT_ID('Ventas'))
     CREATE NONCLUSTERED INDEX IX_Ventas_Fecha ON Ventas(fecha_venta DESC);
 
-PRINT '? Índices para Ventas creados';
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_Vendedor' AND object_id = OBJECT_ID('Ventas'))
+    CREATE NONCLUSTERED INDEX IX_Ventas_Vendedor ON Ventas(id_vendedor);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_EstadoSeguimiento' AND object_id = OBJECT_ID('Ventas'))
+    CREATE NONCLUSTERED INDEX IX_Ventas_EstadoSeguimiento ON Ventas(estado_seguimiento);
+
+PRINT '? Ãndices para Ventas creados';
 GO
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -1355,7 +1485,7 @@ BEGIN
 END
 GO
 
--- Índices para Arrendamientos
+-- Ãndices para Arrendamientos
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Arrendamientos_Arrendatario' AND object_id = OBJECT_ID('Arrendamientos'))
     CREATE NONCLUSTERED INDEX IX_Arrendamientos_Arrendatario ON Arrendamientos(id_arrendatario);
 
@@ -1371,7 +1501,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Arrendamientos_Fechas'
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Arrendamientos_Codeudor' AND object_id = OBJECT_ID('Arrendamientos'))
     CREATE NONCLUSTERED INDEX IX_Arrendamientos_Codeudor ON Arrendamientos(id_codeudor);
 
-PRINT '? Índices para Arrendamientos creados';
+PRINT '? Ãndices para Arrendamientos creados';
 GO
 
 -- =====================================================================================================================
@@ -1580,19 +1710,19 @@ FOREIGN KEY (id_persona) REFERENCES Personas(id_persona);
 GO
 
 -- =====================================================================================================================
--- PASO 9: ÍNDICES ADICIONALES PARA OPTIMIZACIÓN
+-- PASO 9: ÃNDICES ADICIONALES PARA OPTIMIZACIÓN
 -- =====================================================================================================================
 
 PRINT '?? Creando índices adicionales para optimización...';
 
--- Índices para Seguimiento_venta
+-- Ãndices para Seguimiento_venta
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_SeguimientoVenta_Venta' AND object_id = OBJECT_ID('Seguimiento_venta'))
     CREATE NONCLUSTERED INDEX IX_SeguimientoVenta_Venta ON Seguimiento_venta(id_venta);
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_SeguimientoVenta_Fecha' AND object_id = OBJECT_ID('Seguimiento_venta'))
     CREATE NONCLUSTERED INDEX IX_SeguimientoVenta_Fecha ON Seguimiento_venta(fecha_estado_seguimiento DESC);
 
--- Índices para Cobros
+-- Ãndices para Cobros
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Cobros_Arrendamiento' AND object_id = OBJECT_ID('Cobros'))
     CREATE NONCLUSTERED INDEX IX_Cobros_Arrendamiento ON Cobros(id_arrendamiento);
 
@@ -1602,7 +1732,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Cobros_Estado' AND obj
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Cobros_Fechas' AND object_id = OBJECT_ID('Cobros'))
     CREATE NONCLUSTERED INDEX IX_Cobros_Fechas ON Cobros(fecha_cobro, fecha_limite);
 
--- Índices para Comprobantes_pago
+-- Ãndices para Comprobantes_pago
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Comprobantes_Cobro' AND object_id = OBJECT_ID('Comprobantes_pago'))
     CREATE NONCLUSTERED INDEX IX_Comprobantes_Cobro ON Comprobantes_pago(id_cobro);
 
@@ -1612,7 +1742,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Comprobantes_Estado' A
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Comprobantes_Referencia' AND object_id = OBJECT_ID('Comprobantes_pago'))
     CREATE NONCLUSTERED INDEX IX_Comprobantes_Referencia ON Comprobantes_pago(referencia_bancaria, entidad_bancaria);
 
--- Índices para Citas
+-- Ãndices para Citas
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Citas_Estado' AND object_id = OBJECT_ID('Citas'))
     CREATE NONCLUSTERED INDEX IX_Citas_Estado ON Citas(id_estado_cita, fecha_cita, hora_inicio);
 
@@ -1628,7 +1758,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Citas_Persona' AND obj
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Citas_ConflictoHorario' AND object_id = OBJECT_ID('Citas'))
     CREATE NONCLUSTERED INDEX IX_Citas_ConflictoHorario ON Citas(id_inmueble, fecha_cita, hora_inicio, hora_fin) INCLUDE (id_estado_cita);
 
--- Índices para Notificaciones
+-- Ãndices para Notificaciones
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Notificaciones_NoLeidas' AND object_id = OBJECT_ID('Notificaciones'))
     CREATE NONCLUSTERED INDEX IX_Notificaciones_NoLeidas ON Notificaciones(leida, fecha_creacion DESC) WHERE leida = 0;
 
@@ -1638,7 +1768,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Notificaciones_Rol' AN
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Notificaciones_Persona' AND object_id = OBJECT_ID('Notificaciones'))
     CREATE NONCLUSTERED INDEX IX_Notificaciones_Persona ON Notificaciones(id_persona_destino) WHERE id_persona_destino IS NOT NULL;
 
--- Índices para Reportes
+-- Ãndices para Reportes
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Reportes_Estado' AND object_id = OBJECT_ID('Reportes'))
     CREATE NONCLUSTERED INDEX IX_Reportes_Estado ON Reportes(estado, fecha_creacion DESC);
 
@@ -1648,7 +1778,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Reportes_Inmueble' AND
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Reportes_Prioridad' AND object_id = OBJECT_ID('Reportes'))
     CREATE NONCLUSTERED INDEX IX_Reportes_Prioridad ON Reportes(prioridad) WHERE estado != 'Cerrado';
 
-PRINT '? Índices adicionales creados exitosamente';
+PRINT '? Ãndices adicionales creados exitosamente';
 GO
 
 -- =====================================================================================================================
@@ -1724,6 +1854,7 @@ SELECT
     v.valor_venta,
     v.tipo_compra,
     v.medio_pago,
+    v.medio_pago_descripcion,
     v.entidad_financiera,
     v.numero_credito,
     v.monto_financiado,
@@ -1982,7 +2113,7 @@ BEGIN
     RETURN @resultado;
 END
 GO
-PRINT '✅ Función fn_EsAdministrativo creada';
+PRINT 'âœ… Función fn_EsAdministrativo creada';
 GO
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -2032,7 +2163,7 @@ GROUP BY
     p.nombre_completo, p.apellido_completo,
     acc.ultimo_acceso;
 GO
-PRINT '✅ Vista vw_PersonalAdministrativo creada';
+PRINT 'âœ… Vista vw_PersonalAdministrativo creada';
 GO
 
 -- Función: fn_EsCompradorActivo
@@ -2160,6 +2291,7 @@ CREATE PROCEDURE sp_CrearVentaCompleta
     @fecha_venta DATE,
     @valor_venta DECIMAL(15,2),
     @medio_pago VARCHAR(50) = 'efectivo',
+    @medio_pago_descripcion VARCHAR(500) = NULL,
     @tipo_compra VARCHAR(50) = 'Directa',
     @entidad_financiera VARCHAR(100) = NULL,
     @numero_credito VARCHAR(50) = NULL,
@@ -2200,16 +2332,29 @@ BEGIN
             RAISERROR('El tipo de compra especificado no es válido', 16, 1);
             RETURN;
         END
+
+        IF LOWER(@medio_pago) NOT IN ('efectivo','transferencia','mixto')
+        BEGIN
+            RAISERROR('El medio de pago no es válido', 16, 1);
+            RETURN;
+        END
+
+        IF LOWER(@medio_pago) = 'mixto'
+           AND (NULLIF(LTRIM(RTRIM(@medio_pago_descripcion)), '') IS NULL)
+        BEGIN
+            RAISERROR('Debe ingresar una descripción para justificar el pago mixto', 16, 1);
+            RETURN;
+        END
         
         -- Insertar venta
         INSERT INTO Ventas (
             id_comprador, id_inmueble, fecha_venta, valor_venta,
-            medio_pago, tipo_compra, entidad_financiera,
+            medio_pago, medio_pago_descripcion, tipo_compra, entidad_financiera,
             numero_credito, monto_financiado, estado
         )
         VALUES (
             @id_comprador, @id_inmueble, @fecha_venta, @valor_venta,
-            @medio_pago, @tipo_compra, @entidad_financiera,
+            @medio_pago, @medio_pago_descripcion, @tipo_compra, @entidad_financiera,
             @numero_credito, @monto_financiado, 'Activa'
         );
         
@@ -2449,7 +2594,7 @@ BEGIN
     ('Usuario', 'Rol por defecto al registrarse en el sistema', 0),
     ('Propietario', 'Usuarios que tienen inmuebles registrados a su nombre', 0);
 
-    PRINT '✅ Roles insertados:';
+    PRINT 'âœ… Roles insertados:';
     PRINT '   - Super Administrador (Administrativo)';
     PRINT '   - Administrador (Administrativo)';
     PRINT '   - Empleado (Administrativo)';
@@ -2458,7 +2603,7 @@ BEGIN
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Roles ya existen en la base de datos';
+    PRINT 'âš ï¸  Roles ya existen en la base de datos';
 END
 GO
 
@@ -2475,11 +2620,11 @@ BEGIN
     ('Completada', 5, 'Cita completada exitosamente', 1),
     ('Cancelada', 6, 'Cita cancelada por alguna de las partes', 1);
 
-    PRINT '✅ Estados de cita insertados (6 estados)';
+    PRINT 'âœ… Estados de cita insertados (6 estados)';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Estados de cita ya existen';
+    PRINT 'âš ï¸  Estados de cita ya existen';
 END
 GO
 
@@ -2494,11 +2639,11 @@ BEGIN
     ('Gestión de Alquileres', 'Asesoría sobre gestión y administración de alquileres', 30),
     ('Asesoría Legal', 'Consulta legal relacionada con transacciones inmobiliarias', 45);
 
-    PRINT '✅ Servicios de cita insertados (4 servicios)';
+    PRINT 'âœ… Servicios de cita insertados (4 servicios)';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Servicios de cita ya existen';
+    PRINT 'âš ï¸  Servicios de cita ya existen';
 END
 GO
 
@@ -2511,18 +2656,107 @@ GO
 
 
 -- Estados de Venta
-IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'Iniciada')
+IF EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Estados_venta]') AND type = 'U')
 BEGIN
-    INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final) VALUES
-    ('Iniciada', 'Proceso de venta iniciado', 1, 0),
-    ('En negociación', 'En proceso de negociación con el cliente', 2, 0),
-    ('Reservada', 'Inmueble reservado con seña', 3, 0),
-    ('Contrato firmado', 'Contrato de compraventa firmado', 4, 0),
-    ('Finalizada', 'Venta completada exitosamente', 5, 1),
-    ('Cancelada', 'Venta cancelada', 6, 1);
-    
-    PRINT '? Estados de venta insertados (6 estados)';
+    -- Insertar los 6 estados sólo si faltan
+    IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'Pagado')
+        INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final)
+        VALUES ('Pagado', 'Pago completado', 1, 1);
+
+    IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'Debe')
+        INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final)
+        VALUES ('Debe', 'Pago pendiente', 2, 0);
+
+    IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'En espera')
+        INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final)
+        VALUES ('En espera', 'Esperando confirmación/pago', 3, 0);
+
+    IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'Cancelado')
+        INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final)
+        VALUES ('Cancelado', 'Proceso cancelado', 4, 1);
+
+    IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'En negociación')
+        INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final)
+        VALUES ('En negociación', 'En negociación con el cliente', 5, 0);
+
+    IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'Completada')
+        INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final)
+        VALUES ('Completada', 'Venta completada exitosamente', 6, 1);
+
+    -- Normalizar orden y bandera de estado final por si existían con otros valores
+    UPDATE Estados_venta SET orden = 1, es_estado_final = 1 WHERE nombre_estado = 'Pagado';
+    UPDATE Estados_venta SET orden = 2, es_estado_final = 0 WHERE nombre_estado = 'Debe';
+    UPDATE Estados_venta SET orden = 3, es_estado_final = 0 WHERE nombre_estado = 'En espera';
+    UPDATE Estados_venta SET orden = 4, es_estado_final = 1 WHERE nombre_estado = 'Cancelado';
+    UPDATE Estados_venta SET orden = 5, es_estado_final = 0 WHERE nombre_estado = 'En negociación';
+    UPDATE Estados_venta SET orden = 6, es_estado_final = 1 WHERE nombre_estado = 'Completada';
+
+    PRINT 'âœ… Estados de venta sincronizados (6 estados)';
 END
+GO
+
+-- Sincronizar estados de ventas existentes con tabla Estados_venta
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'id_estado_venta')
+   AND EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID('Estados_venta') AND type = 'U')
+BEGIN
+    ;WITH EstadoMap AS (
+        SELECT id_estado_venta, nombre_estado
+        FROM Estados_venta
+    )
+    UPDATE V
+    SET V.id_estado_venta = EM.id_estado_venta
+    FROM Ventas V
+    CROSS APPLY (
+        SELECT TOP 1 em.id_estado_venta
+        FROM EstadoMap em
+        WHERE
+            (V.estado = 'Finalizada'  AND em.nombre_estado IN ('Pagado','Completada'))
+            OR (V.estado = 'Cancelada' AND em.nombre_estado = 'Cancelado')
+            OR (V.estado = 'Activa'    AND em.nombre_estado IN ('En espera','En negociación'))
+        ORDER BY em.id_estado_venta
+    ) EM
+    WHERE V.id_estado_venta IS NULL;
+END
+GO
+
+-- Sincronizar estado_seguimiento con el último seguimiento registrado
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'estado_seguimiento')
+   AND EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID('Seguimiento_venta') AND type = 'U')
+BEGIN
+    ;WITH UltimoSeg AS (
+        SELECT
+            v.id_venta,
+            ev.nombre_estado AS estado_texto,
+            ROW_NUMBER() OVER (PARTITION BY v.id_venta ORDER BY s.fecha_estado_seguimiento DESC, s.id_seguimiento_venta DESC) AS rn
+        FROM Ventas v
+        LEFT JOIN Seguimiento_venta s ON s.id_venta = v.id_venta
+        LEFT JOIN Estados_venta ev ON ev.id_estado_venta = s.id_estado_venta
+    )
+    UPDATE V
+    SET estado_seguimiento = COALESCE(U.estado_texto, V.estado_seguimiento, V.estado)
+    FROM Ventas V
+    LEFT JOIN UltimoSeg U ON V.id_venta = U.id_venta AND U.rn = 1
+    WHERE V.estado_seguimiento IS NULL;
+END
+GO
+
+-- Agregar FK para estado de venta si no existe
+IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_Ventas_EstadoVenta')
+BEGIN
+    ALTER TABLE Ventas
+    ADD CONSTRAINT FK_Ventas_EstadoVenta
+        FOREIGN KEY (id_estado_venta) REFERENCES Estados_venta(id_estado_venta);
+    PRINT 'FK_Ventas_EstadoVenta creada';
+END
+GO
+
+-- Ãndice para consultas por estado de venta
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_EstadoVenta' AND object_id = OBJECT_ID('Ventas'))
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_Ventas_EstadoVenta ON Ventas(id_estado_venta);
+    PRINT 'Ãndice IX_Ventas_EstadoVenta creado';
+END
+GO
 
 -- Comodidades
 IF NOT EXISTS (SELECT 1 FROM Comodidades WHERE nombre = 'Habitaciones')
@@ -2706,7 +2940,7 @@ BEGIN
 END
 
 -- =====================================================================================================================
--- PASO 9.5: OPTIMIZACIÓN DE ÍNDICES PARA ENDPOINTS LENTOS
+-- PASO 9.5: OPTIMIZACIÓN DE ÃNDICES PARA ENDPOINTS LENTOS
 -- =====================================================================================================================
 -- Este script agrega índices faltantes en columnas FK para mejorar rendimiento de JOINs
 -- Especialmente optimizado para /api/v1/citas, /api/v1/personas, /api/v1/administrativos
@@ -2715,85 +2949,85 @@ END
 
 PRINT '';
 PRINT '=====================================================================================================================';
-PRINT 'OPTIMIZACIÓN DE ÍNDICES PARA MEJORAR RENDIMIENTO DE CONSULTAS';
+PRINT 'OPTIMIZACIÓN DE ÃNDICES PARA MEJORAR RENDIMIENTO DE CONSULTAS';
 PRINT '=====================================================================================================================';
 PRINT '';
 
--- Índices para tabla Citas (FKs más consultadas en endpoints de citas)
+-- Ãndices para tabla Citas (FKs más consultadas en endpoints de citas)
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Citas') AND name = 'IX_Citas_Inmueble')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Citas_Inmueble ON Citas(id_inmueble);
-    PRINT '✅ Índice agregado: IX_Citas_Inmueble';
+    PRINT 'âœ… Ãndice agregado: IX_Citas_Inmueble';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Citas_Inmueble ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Citas_Inmueble ya existe';
 END
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Citas') AND name = 'IX_Citas_Servicio')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Citas_Servicio ON Citas(id_servicio);
-    PRINT '✅ Índice agregado: IX_Citas_Servicio';
+    PRINT 'âœ… Ãndice agregado: IX_Citas_Servicio';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Citas_Servicio ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Citas_Servicio ya existe';
 END
 
--- Índices para tabla Administrativos (optimización de consultas de personal)
+-- Ãndices para tabla Administrativos (optimización de consultas de personal)
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Administrativos') AND name = 'IX_Administrativos_Persona')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Administrativos_Persona ON Administrativos(id_persona);
-    PRINT '✅ Índice agregado: IX_Administrativos_Persona';
+    PRINT 'âœ… Ãndice agregado: IX_Administrativos_Persona';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Administrativos_Persona ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Administrativos_Persona ya existe';
 END
 
--- Índices para tabla Personas_rol (optimización de filtros por roles y estado)
+-- Ãndices para tabla Personas_rol (optimización de filtros por roles y estado)
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Personas_rol') AND name = 'IX_PersonasRol_Estado')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_PersonasRol_Estado ON Personas_rol(id_persona, estado) WHERE estado = 1;
-    PRINT '✅ Índice agregado: IX_PersonasRol_Estado (filtrado para activos)';
+    PRINT 'âœ… Ãndice agregado: IX_PersonasRol_Estado (filtrado para activos)';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_PersonasRol_Estado ya existe';
+    PRINT 'âš ï¸  Ãndice IX_PersonasRol_Estado ya existe';
 END
 
--- Índice compuesto para optimización de consultas con joins complejos rol-persona
+-- Ãndice compuesto para optimización de consultas con joins complejos rol-persona
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Personas_rol') AND name = 'IX_PersonasRol_RolEstado')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_PersonasRol_RolEstado ON Personas_rol(id_rol, estado) INCLUDE (id_persona) WHERE estado = 1;
-    PRINT '✅ Índice agregado: IX_PersonasRol_RolEstado (con columna incluida)';
+    PRINT 'âœ… Ãndice agregado: IX_PersonasRol_RolEstado (con columna incluida)';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_PersonasRol_RolEstado ya existe';
+    PRINT 'âš ï¸  Ãndice IX_PersonasRol_RolEstado ya existe';
 END
 
--- Índice para consultas de personas con cuenta activa (login y autenticación)
+-- Ãndice para consultas de personas con cuenta activa (login y autenticación)
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('Personas') AND name = 'IX_Personas_EstadoCuenta')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Personas_EstadoCuenta ON Personas(estado, tiene_cuenta) WHERE estado = 1;
-    PRINT '✅ Índice agregado: IX_Personas_EstadoCuenta (filtrado para activos)';
+    PRINT 'âœ… Ãndice agregado: IX_Personas_EstadoCuenta (filtrado para activos)';
 END
 ELSE
 BEGIN
-    PRINT '⚠️  Índice IX_Personas_EstadoCuenta ya existe';
+    PRINT 'âš ï¸  Ãndice IX_Personas_EstadoCuenta ya existe';
 END
 
 PRINT '';
-PRINT '🎯 OPTIMIZACIÓN DE ÍNDICES COMPLETADA';
+PRINT 'ðŸŽ¯ OPTIMIZACIÓN DE ÃNDICES COMPLETADA';
 PRINT '';
-PRINT '📊 Estos índices mejorarán significativamente el rendimiento de:';
-PRINT '   ✓ GET /api/v1/citas         - Joins con persona, inmueble, servicio';
-PRINT '   ✓ GET /api/v1/personas      - Filtrado por rol Usuario y estado activo';
-PRINT '   ✓ GET /api/v1/administrativos - Joins con persona y roles';
-PRINT '   ✓ POST /api/v1/auth/login   - Búsqueda de usuarios con cuenta activa';
+PRINT 'ðŸ“Š Estos índices mejorarán significativamente el rendimiento de:';
+PRINT '   âœ“ GET /api/v1/citas         - Joins con persona, inmueble, servicio';
+PRINT '   âœ“ GET /api/v1/personas      - Filtrado por rol Usuario y estado activo';
+PRINT '   âœ“ GET /api/v1/administrativos - Joins con persona y roles';
+PRINT '   âœ“ POST /api/v1/auth/login   - Búsqueda de usuarios con cuenta activa';
 PRINT '';
-PRINT '💡 RECOMENDACIONES:';
+PRINT 'ðŸ’¡ RECOMENDACIONES:';
 PRINT '   - Monitorear tiempo de respuesta de los endpoints después de aplicar';
 PRINT '   - Usar SET STATISTICS TIME ON para medir mejoras';
 PRINT '   - Considerar actualizar estadísticas: UPDATE STATISTICS [tabla]';
@@ -2807,7 +3041,7 @@ GO
 
 PRINT '';
 PRINT '=====================================================================================================================';
-PRINT '                           ✅ BASE DE DATOS INMOTECH v6.0 CREADA EXITOSAMENTE';
+PRINT '                           âœ… BASE DE DATOS INMOTECH v6.0 CREADA EXITOSAMENTE';
 PRINT '=====================================================================================================================';
 PRINT '';
 
@@ -2817,12 +3051,12 @@ SELECT @TotalTablas = COUNT(*)
 FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = 'InmobiliariaDB';
 
-PRINT '📊 RESUMEN DE LA BASE DE DATOS:';
+PRINT 'ðŸ“Š RESUMEN DE LA BASE DE DATOS:';
 PRINT '   - Total de tablas: ' + CAST(@TotalTablas AS VARCHAR(10));
 PRINT '';
 
 -- Verificar tablas críticas
-PRINT '✅ TABLAS PRINCIPALES VERIFICADAS:';
+PRINT 'âœ… TABLAS PRINCIPALES VERIFICADAS:';
 DECLARE @Tablas TABLE (nombre VARCHAR(100));
 INSERT INTO @Tablas VALUES 
 ('Personas'), ('Acceso'), ('Roles'), ('Personas_rol'), ('Administrativos'), ('Propietarios'),
@@ -2848,23 +3082,23 @@ DEALLOCATE tabla_cursor;
 PRINT '';
 
 -- Verificar tablas críticas
-PRINT '✅ TABLAS PRINCIPALES VERIFICADAS:';
+PRINT 'âœ… TABLAS PRINCIPALES VERIFICADAS:';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Personas')
-    PRINT '   ✓ Personas';
+    PRINT '   âœ“ Personas';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Acceso')
-    PRINT '   ✓ Acceso';
+    PRINT '   âœ“ Acceso';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Roles')
-    PRINT '   ✓ Roles';
+    PRINT '   âœ“ Roles';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Administrativos')
-    PRINT '   ✓ Administrativos (NUEVA)';
+    PRINT '   âœ“ Administrativos (NUEVA)';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Inmuebles')
-    PRINT '   ✓ Inmuebles';
+    PRINT '   âœ“ Inmuebles';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Citas')
-    PRINT '   ✓ Citas';
+    PRINT '   âœ“ Citas';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Notificaciones')
-    PRINT '   ✓ Notificaciones';
+    PRINT '   âœ“ Notificaciones';
 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Reportes')
-    PRINT '   ✓ Reportes';
+    PRINT '   âœ“ Reportes';
 PRINT '';
 
 -- Verificar datos iniciales
@@ -2878,7 +3112,7 @@ SELECT @TotalComodidades = COUNT(*) FROM Comodidades;
 SELECT @TotalPropietarios = COUNT(*) FROM Propietarios;
 SELECT @TotalCompradores = COUNT(*) FROM Compradores;
 
-PRINT '📋 DATOS INICIALES:';
+PRINT 'ðŸ“‹ DATOS INICIALES:';
 PRINT '   - Roles:             ' + CAST(@TotalRoles AS VARCHAR(10));
 PRINT '   - Estados de cita:   ' + CAST(@TotalEstados AS VARCHAR(10));
 PRINT '   - Servicios de cita: ' + CAST(@TotalServicios AS VARCHAR(10));
@@ -2889,28 +3123,28 @@ PRINT '   - Compradores:       ' + CAST(@TotalCompradores AS VARCHAR(10));
 PRINT '   - Administrativos:   ' + CAST(@TotalAdmins AS VARCHAR(10));
 PRINT '';
 
-PRINT '🎯 ARQUITECTURA IMPLEMENTADA:';
-PRINT '   ┌─────────────────────────────────────────────────────┐';
-PRINT '   │  ADMINISTRATIVOS (Personal Interno)                 │';
-PRINT '   │  - Super Administrador, Administrador, Empleado     │';
-PRINT '   │  - Tabla: Administrativos + Personas                │';
-PRINT '   │  - Acceso a: Dashboard admin, gestión completa      │';
-PRINT '   └─────────────────────────────────────────────────────┘';
-PRINT '   ┌─────────────────────────────────────────────────────┐';
-PRINT '   │  USUARIOS/PROPIETARIOS (Clientes)                   │';
-PRINT '   │  - Usuario, Propietario                             │';
-PRINT '   │  - Tabla: Solo Personas (NO Administrativos)        │';
-PRINT '   │  - Acceso a: Ver inmuebles, agendar citas           │';
-PRINT '   └─────────────────────────────────────────────────────┘';
+PRINT 'ðŸŽ¯ ARQUITECTURA IMPLEMENTADA:';
+PRINT '   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”';
+PRINT '   â”‚  ADMINISTRATIVOS (Personal Interno)                 â”‚';
+PRINT '   â”‚  - Super Administrador, Administrador, Empleado     â”‚';
+PRINT '   â”‚  - Tabla: Administrativos + Personas                â”‚';
+PRINT '   â”‚  - Acceso a: Dashboard admin, gestión completa      â”‚';
+PRINT '   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜';
+PRINT '   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”';
+PRINT '   â”‚  USUARIOS/PROPIETARIOS (Clientes)                   â”‚';
+PRINT '   â”‚  - Usuario, Propietario                             â”‚';
+PRINT '   â”‚  - Tabla: Solo Personas (NO Administrativos)        â”‚';
+PRINT '   â”‚  - Acceso a: Ver inmuebles, agendar citas           â”‚';
+PRINT '   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜';
 PRINT '';
 
-PRINT '🔑 CREDENCIALES SUPER ADMINISTRADOR:';
+PRINT 'ðŸ”‘ CREDENCIALES SUPER ADMINISTRADOR:';
 PRINT '   Email:    admin@inmotech.com';
 PRINT '   Password: Admin123!';
-PRINT '   ⚠️  Cambiar en producción';
+PRINT '   âš ï¸  Cambiar en producción';
 PRINT '';
 
-PRINT '📚 PRÓXIMOS PASOS:';
+PRINT 'ðŸ“š PRÓXIMOS PASOS:';
 PRINT '   1. Configurar .env en la API con credenciales de esta BD';
 PRINT '   2. Iniciar servidor API: npm run dev';
 PRINT '   3. Probar endpoint de login: POST /api/v1/auth/login';
@@ -2918,7 +3152,7 @@ PRINT '   4. Crear empleados desde panel admin';
 PRINT '   5. Probar flujo de citas desde frontend';
 PRINT '';
 
-PRINT '📖 DOCUMENTACIÓN:';
+PRINT 'ðŸ“– DOCUMENTACIÓN:';
 PRINT '   - Consultar vista: SELECT * FROM vw_PersonalAdministrativo';
 PRINT '   - Verificar admin: SELECT dbo.fn_EsAdministrativo(1)';
 PRINT '   - API Docs: http://localhost:5000/api-docs';
@@ -2926,70 +3160,8 @@ PRINT '   - Health Check: http://localhost:5000/api/v1/health';
 PRINT '';
 
 PRINT '=====================================================================================================================';
-PRINT '                                    🎉 BASE DE DATOS LISTA PARA USAR 🎉';
+PRINT '                                    ðŸŽ‰ BASE DE DATOS LISTA PARA USAR ðŸŽ‰';
 PRINT '=====================================================================================================================';
 GO
 
 
--- Añadir la FK al vendedor (tabla Personas)
-IF NOT EXISTS (
-    SELECT 1 FROM sys.columns WHERE Name = N'id_vendedor' AND Object_ID = Object_ID(N'Ventas')
-)
-BEGIN
-    ALTER TABLE Ventas ADD id_vendedor INT NULL;
-END
-GO
-
-IF NOT EXISTS (
-    SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Ventas_Vendedor' AND parent_object_id = OBJECT_ID(N'Ventas')
-)
-BEGIN
-    ALTER TABLE Ventas WITH CHECK
-    ADD CONSTRAINT FK_Ventas_Vendedor
-        FOREIGN KEY (id_vendedor) REFERENCES Personas(id_persona);
-END
-GO
-
-IF NOT EXISTS (
-    SELECT 1 FROM sys.indexes WHERE name = N'IX_Ventas_Vendedor' AND object_id = OBJECT_ID(N'Ventas')
-)
-BEGIN
-    CREATE NONCLUSTERED INDEX IX_Ventas_Vendedor ON Ventas(id_vendedor);
-END
-GO
-
--- Campos “congelados” del vendedor al momento de la venta (opcional, pero útiles para mostrar detalle)
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'tipo_doc_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD tipo_doc_vendedor VARCHAR(20) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'numero_doc_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD numero_doc_vendedor VARCHAR(50) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'nombre_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD nombre_vendedor VARCHAR(200) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'correo_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD correo_vendedor VARCHAR(150) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'telefono_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD telefono_vendedor VARCHAR(50) NULL;
-GO
-
---Estos son los nuevos estados de ventas 
-
-BEGIN TRAN;
-
--- Limpia la tabla
-DELETE FROM Estados_venta;
-DBCC CHECKIDENT('Estados_venta', RESEED, 0);
-GO
-
--- Inserta los estados solicitados
-INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final, estado)
-VALUES
-  ('Pagado',         'Pago completado',                  1, 1, 1),
-  ('Debe',           'Pago pendiente',                   2, 0, 1),
-  ('En espera',      'Esperando confirmación/pago',      3, 0, 1),
-  ('Cancelado',      'Proceso cancelado',                4, 1, 1),
-  ('Iniciada',       'Proceso de venta iniciado',        5, 0, 1),
-  ('En negociación', 'En negociación con el cliente',    6, 0, 1),
-  ('Completada',     'Venta completada exitosamente',    7, 1, 1)
-
-COMMIT;
-GO

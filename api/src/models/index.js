@@ -143,7 +143,15 @@ Lease.belongsTo(Inmueble, {
   as: 'inmueble'
 });
 
-// Codeudor no existe como columna en la tabla actual, omitimos asociación
+// Codeudor (Persona)
+Lease.belongsTo(Persona, {
+  foreignKey: 'id_codeudor',
+  as: 'codeudor'
+});
+Persona.hasMany(Lease, {
+  foreignKey: 'id_codeudor',
+  as: 'leasesComoCodeudor'
+});
 
 // Nota: en el modelo Lease el atributo se llama id_cliente pero la columna es id_arrendatario
 // por eso usamos el nombre del atributo como foreignKey para que Sequelize lo resuelva al campo.

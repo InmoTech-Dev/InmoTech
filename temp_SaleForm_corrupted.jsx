@@ -20,8 +20,8 @@ const VENDEDOR_DOC = "vendedorDocumento";
 const COMPRADOR_DOC = "compradorDocumento";
 
 const DOCUMENT_OPTIONS = [
-    { value: "CC", label: "Cédula de Ciudadanía (CC)" },
-    { value: "CE", label: "Cédula de Extranjería (CE)" },
+    { value: "CC", label: "C�dula de Ciudadan�a (CC)" },
+    { value: "CE", label: "C�dula de Extranjer�a (CE)" },
     { value: "NIT", label: "NIT" },
     { value: "PASAPORTE", label: "Pasaporte" },
     { value: "TI", label: "Tarjeta de Identidad (TI)" },
@@ -30,6 +30,7 @@ const DOCUMENT_OPTIONS = [
 const PAYMENT_OPTIONS = [
     { value: "efectivo", label: "Efectivo" },
     { value: "transferencia", label: "Transferencia" },
+    { value: "credito", label: "Cr�dito" },
     { value: "mixto", label: "Mixto" },
 ];
 
@@ -97,7 +98,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         error: null,
     });
 
-    // Campos estrictamente numéricos (solo dígitos)
+    // Campos estrictamente num�ricos (solo d�gitos)
     const strictNumericFields = [];
 
     const currencyFields = ["inmueblePrecio"];
@@ -110,7 +111,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     const phoneFields = ["vendedorTelefono", "compradorTelefono"];
     const emailFields = ["vendedorCorreo", "compradorCorreo"];
 
-    // Campos agrupados por paso para la validación
+    // Campos agrupados por paso para la validaci�n
     const stepFields = {
         1: [
             "vendedorTipoDocumento", VENDEDOR_DOC, "vendedorNombreCompleto", 
@@ -145,60 +146,59 @@ export default function SalesForm({ onClose, onSubmit }) {
         const labels = {
             // Vendedor
             vendedorTipoDocumento: "Tipo Doc. Vendedor", 
-            vendedorDocumento: "Número Doc. Vendedor",
+            vendedorDocumento: "N�mero Doc. Vendedor",
             vendedorNombreCompleto: "Nombre Completo Vendedor", 
             vendedorCorreo: "Correo Vendedor",
-            vendedorTelefono: "Teléfono Vendedor",
+            vendedorTelefono: "Tel�fono Vendedor",
 
             // Comprador
             compradorTipoDocumento: "Tipo Doc. Comprador", 
-            compradorDocumento: "Número Doc. Comprador",
+            compradorDocumento: "N�mero Doc. Comprador",
             compradorNombreCompleto: "Nombre Completo Comprador", 
             compradorCorreo: "Correo Comprador",
-            compradorTelefono: "Teléfono Comprador",
+            compradorTelefono: "Tel�fono Comprador",
 
             // Inmueble
             inmuebleTipo: "Tipo de Inmueble", 
             inmuebleRegistro: "No. Registro Catastral",
-            inmuebleNombre: "Nombre/Título Comercial", 
-            inmueblePais: "País", 
+            inmuebleNombre: "Nombre/T�tulo Comercial", 
+            inmueblePais: "Pa�s", 
             inmuebleDepartamento: "Departamento/Estado",
             inmuebleCiudad: "Ciudad", 
             inmuebleBarrio: "Barrio/Zona",
-            inmuebleDireccion: "Dirección Completa",
+            inmuebleDireccion: "Direcci�n Completa",
             inmueblePrecio: "Precio de Venta (COP)", 
-            inmuebleGaraje: "¿Tiene Garaje?",
+            inmuebleGaraje: "�Tiene Garaje?",
 
             // Venta
             fechaVenta: "Fecha de Venta",
             medioPago: "Medio de Pago",
-            medioPagoDescripcion: "Descripción del pago mixto",
         };
         return labels[name] ?? name;
     };
 
     // === VALIDACIONES MEJORADAS PARA DOCUMENTOS ===
 
-    // Función para validar documentos según el tipo
+    // Funci�n para validar documentos seg�n el tipo
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
         
         switch (tipoDocumento) {
-            case 'CC': // Cédula de Ciudadanía
+            case 'CC': // C�dula de Ciudadan�a
                 if (!/^[0-9]{8,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
+                    return 'La c�dula de ciudadan�a debe tener entre 8 y 10 d�gitos';
                 }
                 break;
                 
-            case 'CE': // Cédula de Extranjería
+            case 'CE': // C�dula de Extranjer�a
                 if (!/^[0-9]{6,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
+                    return 'La c�dula de extranjer�a debe tener entre 6 y 10 d�gitos';
                 }
                 break;
                 
             case 'NIT': // NIT
                 if (!/^[0-9]{9,10}$/.test(numeroLimpio)) {
-                    return 'El NIT debe tener 9 o 10 dígitos';
+                    return 'El NIT debe tener 9 o 10 d�gitos';
                 }
                 break;
                 
@@ -207,24 +207,24 @@ export default function SalesForm({ onClose, onSubmit }) {
                     return 'El pasaporte debe tener entre 6 y 20 caracteres';
                 }
                 if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) {
-                    return 'El pasaporte solo puede contener letras y números';
+                    return 'El pasaporte solo puede contener letras y n�meros';
                 }
                 break;
                 
             case 'TI': // Tarjeta de Identidad
                 if (!/^[0-9]{10,11}$/.test(numeroLimpio)) {
-                    return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
+                    return 'La tarjeta de identidad debe tener 10 u 11 d�gitos';
                 }
                 break;
                 
             default:
-                return 'Tipo de documento no válido';
+                return 'Tipo de documento no v�lido';
         }
         
         return '';
     };
 
-    // Función para obtener la clase de estilo (incluyendo el resaltado de error)
+    // Funci�n para obtener la clase de estilo (incluyendo el resaltado de error)
     const getFieldClass = useCallback((fieldName) => {
         const errorClass = errors[fieldName] 
             ? 'border-red-500 ring-2 ring-red-500' 
@@ -232,7 +232,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         return `w-full p-3 border rounded-lg focus:outline-none transition duration-150 ${errorClass}`;
     }, [errors]);
 
-    // Formateador de números con separadores de miles
+    // Formateador de n�meros con separadores de miles
     const formatNumberWithThousandsSeparator = (value) => {
         if (!value) return "";
         const cleanValue = value.replace(/[^0-9]/g, '');
@@ -246,7 +246,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         return formatter.format(cleanValue);
     };
 
-    // Configuración de referencias de elementos
+    // Configuraci�n de referencias de elementos
     const setElRef = (name) => (el) => {
         if (!el) return;
         elRefs.current[name] = el;
@@ -255,7 +255,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             valuesRef.current[name] = initial[name] ?? "";
         }
         
-        // Inicializar valor de visualización para campos de moneda
+        // Inicializar valor de visualizaci�n para campos de moneda
         if (currencyFields.includes(name) && valuesRef.current[name]) {
             displayValuesRef.current[name] = formatNumberWithThousandsSeparator(valuesRef.current[name].toString());
         } else {
@@ -292,7 +292,16 @@ export default function SalesForm({ onClose, onSubmit }) {
             
             valuesRef.current[name] = cleanValue;
 
-            // Reset de selección de comprador si cambian documentos
+            // Si cambia el medio de pago y ya no es mixto, limpiar la descripci�n
+            if (name === "medioPago" && cleanValue.toLowerCase() !== "mixto") {
+                setFieldValue("medioPagoDescripcion", "");
+            }
+
+            if (name === "medioPago") {
+                setStep((s) => s); // forzar re-render para campos condicionales
+            }
+
+            // Reset de selecci�n de comprador si cambian documentos
             if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
                 selectedBuyerRef.current = null;
                 manuallyEditedBuyerFieldsRef.current.clear();
@@ -310,23 +319,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                 const newErrors = { ...prev };
                 delete newErrors[name];
                 return newErrors;
-            });
-        }
-
-        // Si cambia el medio de pago a algo distinto de mixto, limpiar la descripción
-        if (name === "medioPago" && cleanValue.toLowerCase() !== "mixto") {
-            valuesRef.current.medioPagoDescripcion = "";
-            displayValuesRef.current.medioPagoDescripcion = "";
-
-            const descEl = elRefs.current.medioPagoDescripcion;
-            if (descEl) {
-                try { descEl.value = ""; } catch (_err) { /* ignore */ }
-            }
-
-            setErrors(prev => {
-                const next = { ...prev };
-                delete next.medioPagoDescripcion;
-                return next;
             });
         }
     };
@@ -396,7 +388,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 autofillInmueble(inmueble, { skipEstado: true });
                 setInmuebleLookupState({
                     loading: false,
-                    message: "Datos del inmueble completados automáticamente.",
+                    message: "Datos del inmueble completados autom�ticamente.",
                     error: null,
                 });
             } else {
@@ -415,18 +407,20 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
     }, []);
 
-    // Funciones de validación de formato
-    const isValidName = (value) => /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]*$/.test(value);
+    // Funciones de validaci�n de formato
+    const isValidName = (value) => /^[a-zA-Z������??�????�??�??\s]*$/.test(value);
     const isValidNumeric = (value) => /^\d*$/.test(value);
     const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
 
-    // Manejador de blur para validación MEJORADO
+    // Manejador de blur para validaci�n MEJORADO
     const handleInputBlur = async (e) => {
         const { name } = e.target;
         const value = valuesRef.current[name] || ""; 
         
         let errorMessage = null;
-        const isRequired = requiredFields.includes(name);
+        const isRequired =
+            (name === "medioPagoDescripcion" && (valuesRef.current.medioPago || "").toLowerCase() === "mixto") ||
+            requiredFields.includes(name);
 
         setErrors(prev => {
             const newErrors = { ...prev };
@@ -441,7 +435,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 if (nameFields.includes(name) && !isValidName(value)) {
                     errorMessage = `Solo se permiten letras.`;
                 } 
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
+                // VALIDACI??N MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(name)) {
                     let tipoDocumento = "";
                     
@@ -451,23 +445,23 @@ export default function SalesForm({ onClose, onSubmit }) {
                         tipoDocumento = valuesRef.current.compradorTipoDocumento || "CC";
                     }
                     
-                    // Validar formato básico primero
+                    // Validar formato b�sico primero
                     if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
-                        errorMessage = `Solo se permiten letras, números, espacios, puntos y guiones`;
+                        errorMessage = `Solo se permiten letras, n�meros, espacios, puntos y guiones`;
                     } else {
-                        // Validación específica por tipo de documento
+                        // Validaci�n espec�fica por tipo de documento
                         errorMessage = validateDocument(tipoDocumento, value);
                     }
                 } 
                 else if (phoneFields.includes(name)) {
                     if (!isValidNumeric(value)) {
-                        errorMessage = `Solo se permiten números.`;
+                        errorMessage = `Solo se permiten n�meros.`;
                     } else if (value.length < 10) {
-                        errorMessage = `El teléfono debe tener al menos 10 dígitos`;
+                        errorMessage = `El tel�fono debe tener al menos 10 d�gitos`;
                     }
                 } 
                 else if (emailFields.includes(name) && !isValidEmail(value)) {
-                    errorMessage = `El correo electrónico debe ser válido.`;
+                    errorMessage = `El correo electr�nico debe ser v�lido.`;
                 } 
             }
 
@@ -485,7 +479,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         if (name === "inmuebleRegistro" && !errorMessage && value.trim().length > 0) {
             await handleInmuebleLookup(value);
         }
-        // Lógica de búsqueda de comprador
+        // L�gica de b�squeda de comprador
         if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
             const currentTipo = valuesRef.current.compradorTipoDocumento || "";
             const normalizedDocumento = valuesRef.current.compradorDocumento || "";
@@ -505,19 +499,19 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
     };
 
-    // === FUNCIONES DE NORMALIZACIÓN ===
+    // === FUNCIONES DE NORMALIZACI??N ===
     const normalizeValueForStorage = (fieldName, value) => {
         if (typeof value === "boolean") return value;
         if (value === null || value === undefined) return "";
         if (value === 0) return "0";
         if (value === "") return "";
 
-        // Para campos numéricos estrictos, solo mantener dígitos
+        // Para campos num�ricos estrictos, solo mantener d�gitos
         if (strictNumericFields.includes(fieldName)) {
             return value.toString().replace(/[^0-9]/g, '');
         }
 
-        // Para campos de moneda, solo mantener dígitos (sin formato)
+        // Para campos de moneda, solo mantener d�gitos (sin formato)
         if (currencyFields.includes(fieldName)) {
             return value.toString().replace(/[^0-9]/g, '');
         }
@@ -604,7 +598,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             displayValuesRef.current.compradorTelefono = buyer.telefono || buyer.raw?.persona?.telefono || "";
         }
 
-        // Forzar actualización de los inputs
+        // Forzar actualizaci�n de los inputs
         const nombreEl = elRefs.current.compradorNombreCompleto;
         const correoEl = elRefs.current.compradorCorreo;
         const telefonoEl = elRefs.current.compradorTelefono;
@@ -670,7 +664,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             };
         }
 
-        // 4 o más palabras: dos últimos como apellidos, resto para nombres
+        // 4 o m�s palabras: dos �ltimos como apellidos, resto para nombres
         const primerApellido = parts[parts.length - 2];
         const segundoApellido = parts[parts.length - 1];
         const nombres = parts.slice(0, parts.length - 2);
@@ -734,13 +728,13 @@ export default function SalesForm({ onClose, onSubmit }) {
             return;
         }
 
-        // Validar el documento antes de hacer la búsqueda
+        // Validar el documento antes de hacer la b�squeda
         const documentError = validateDocument(tipoDocumento, numeroDocumento);
         if (documentError) {
             setBuyerLookupState({
                 loading: false,
                 message: "",
-                error: "Documento inválido. Corrija el formato antes de buscar.",
+                error: "Documento inv�lido. Corrija el formato antes de buscar.",
             });
             return;
         }
@@ -768,7 +762,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 applyBuyerData(buyer);
                 setBuyerLookupState({
                     loading: false,
-                    message: "Datos del comprador completados automáticamente.",
+                    message: "Datos del comprador completados autom�ticamente.",
                     error: null,
                 });
             } else {
@@ -805,39 +799,38 @@ export default function SalesForm({ onClose, onSubmit }) {
         [fetchBuyerByDocument]
     );
 
-    // Validación centralizada MEJORADA
+    // Validaci�n centralizada MEJORADA
     const runValidation = (fieldsToCheck) => {
         let currentErrors = { ...errors };
         let hasError = false;
         let firstErrorField = null;
         
-        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
-
         for (const fieldName of fieldsToCheck) {
             const value = valuesRef.current[fieldName] || "";
             let error = null;
 
-            const isPaymentDescription = fieldName === "medioPagoDescripcion";
-            const isRequired = requiredFields.includes(fieldName) || (isPaymentDescription && medioPagoActual === "mixto");
+            const isRequired =
+                (fieldName === "medioPagoDescripcion" && (valuesRef.current.medioPago || "").toLowerCase() === "mixto") ||
+                requiredFields.includes(fieldName);
             
-            // Validación de obligatoriedad
+            // Validaci�n de obligatoriedad
             if (isRequired && !value.toString().trim() && fieldName !== 'inmuebleGaraje') { 
                 error = "Este campo es obligatorio.";
             } 
             
-            // Validación de números estrictos
+            // Validaci�n de n�meros estrictos
             if (isRequired && strictNumericFields.includes(fieldName)) {
                  if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                      error = "Este campo es obligatorio y debe ser mayor a 0";
                  }
             }
 
-            // Validación de formato MEJORADA
+            // Validaci�n de formato MEJORADA
             if (!error && value.toString().trim()) {
                 if (nameFields.includes(fieldName) && !isValidName(value)) {
                     error = `Solo se permiten letras, espacios y acentos.`;
                 } 
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
+                // VALIDACI??N MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(fieldName)) {
                     let tipoDocumento = "";
                     
@@ -851,21 +844,16 @@ export default function SalesForm({ onClose, onSubmit }) {
                 } 
                 else if (phoneFields.includes(fieldName)) {
                     if (!isValidNumeric(value)) {
-                        error = `Solo se permiten dígitos.`;
+                        error = `Solo se permiten d�gitos.`;
                     } else if (value.length < 10) {
-                        error = `El teléfono debe tener al menos 10 dígitos`;
+                        error = `El tel�fono debe tener al menos 10 d�gitos`;
                     }
                 } 
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
-                    error = `Debe ser un correo electrónico válido.`;
+                    error = `Debe ser un correo electr�nico v�lido.`;
                 } 
                 else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) { 
-                    error = `Solo se permiten números enteros.`;
-                }
-                else if (isPaymentDescription && medioPagoActual === "mixto") {
-                    if (value.trim().length < 8) {
-                        error = "Describe brevemente cómo se distribuye el pago mixto (mínimo 8 caracteres).";
-                    }
+                    error = `Solo se permiten n�meros enteros.`;
                 }
             }
             
@@ -884,7 +872,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         return { currentErrors, hasError, firstErrorField };
     };
 
-    // Navegación entre pasos
+    // Navegaci�n entre pasos
     const handleNextStep = () => {
         let fieldsToValidate = stepFields[step].filter(f => f !== 'inmuebleGaraje' || requiredFields.includes('inmuebleGaraje'));
         
@@ -906,7 +894,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
-    // Envío del formulario
+    // Env�o del formulario
     const handleSubmit = async (e) => {
         e.preventDefault();
         
@@ -961,9 +949,9 @@ export default function SalesForm({ onClose, onSubmit }) {
     const Field = ({ name, as = "input", options = [], placeholder, type = "text" }) => {
         const label = getLabel(name);
         const errorMessage = errors[name];
-        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
-        const isPaymentDescription = name === "medioPagoDescripcion";
-        const isRequired = requiredFields.includes(name) || (isPaymentDescription && medioPagoActual === "mixto");
+        const isRequired =
+            (name === "medioPagoDescripcion" && (valuesRef.current.medioPago || "").toLowerCase() === "mixto") ||
+            requiredFields.includes(name);
 
         const isDocField = docFields.includes(name);
         const isPhoneField = phoneFields.includes(name);
@@ -987,7 +975,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         // Placeholders mejorados para documentos
         let fieldPlaceholder = placeholder;
         if (isDocField) {
-            fieldPlaceholder = "Ej: 1234567890 (8-10 dígitos según el tipo)";
+            fieldPlaceholder = "Ej: 1234567890 (8-10 d�gitos seg�n el tipo)";
         }
 
         if (type === "checkbox") {
@@ -1104,7 +1092,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Nueva venta</h2>
-                    <p className="text-gray-600 text-sm">Complete la información requerida para registrar una nueva venta</p>
+                    <p className="text-gray-600 text-sm">Complete la informaci�n requerida para registrar una nueva venta</p>
                 </div>
 
                 <div className="mb-6">
@@ -1128,17 +1116,17 @@ export default function SalesForm({ onClose, onSubmit }) {
                     {/* PASO 1: Datos del Vendedor */}
                     {step === 1 && (
                         <div>
-                            <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">1. Información del Vendedor</h3>
+                            <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">1. Informaci�n del Vendedor</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                                 <Field
                                     name="vendedorTipoDocumento"
                                     as="select"
                                     options={DOCUMENT_OPTIONS}
                                 />
-                                <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 d�gitos seg�n el tipo)" />
                                 <Field name="vendedorNombreCompleto" placeholder="Solo letras y espacios." />
                                 <Field name="vendedorCorreo" placeholder="correo@dominio.com" type="email" />
-                                <Field name="vendedorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
+                                <Field name="vendedorTelefono" placeholder="Solo n�meros. M�nimo 10 d�gitos." />
                             </div>
                         </div>
                     )}
@@ -1146,17 +1134,17 @@ export default function SalesForm({ onClose, onSubmit }) {
                     {/* PASO 2: Datos del Comprador */}
                     {step === 2 && (
                         <div>
-                            <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">2. Información del Comprador</h3>
+                            <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">2. Informaci�n del Comprador</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                                 <Field
                                     name="compradorTipoDocumento"
                                     as="select"
                                     options={DOCUMENT_OPTIONS}
                                 />
-                                <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 d�gitos seg�n el tipo)" />
                                 <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
                                 <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
-                                <Field name="compradorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
+                                <Field name="compradorTelefono" placeholder="Solo n�meros. M�nimo 10 d�gitos." />
                                 {(buyerLookupState.loading || buyerLookupState.error || buyerLookupState.message) && (
                                     <div className="md:col-span-2">
                                         <p
@@ -1168,7 +1156,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                                         : "text-green-700"
                                             }`}
                                         >
-                                            {buyerLookupState.loading && "Buscando compradorâ€¦"}
+                                            {buyerLookupState.loading && "Buscando comprador???"}
                                             {!buyerLookupState.loading && buyerLookupState.error && buyerLookupState.error}
                                             {!buyerLookupState.loading && !buyerLookupState.error && buyerLookupState.message}
                                         </p>
@@ -1181,7 +1169,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                     {/* PASO 3: Detalles de la Propiedad */}
                     {step === 3 && (
                         <div>
-                            <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">3. Detalles y Ubicación del Inmueble</h3>
+                            <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">3. Detalles y Ubicaci�n del Inmueble</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                                 <Field
                                     name="inmuebleTipo"
@@ -1193,7 +1181,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         { value: "Lote", label: "Lote/Terreno" },
                                     ]}
                                 />
-                                <Field name="inmuebleRegistro" placeholder="No. de matrícula inmobiliaria" />
+                                <Field name="inmuebleRegistro" placeholder="No. de matr�cula inmobiliaria" />
                                 {(inmuebleLookupState.loading || inmuebleLookupState.error || inmuebleLookupState.message) && (
                                     <div className="md:col-span-2">
                                         <p
@@ -1214,12 +1202,12 @@ export default function SalesForm({ onClose, onSubmit }) {
                                 <div className="md:col-span-2">
                                     <Field name="inmuebleNombre" placeholder="Ej: Apartamento 501, Edificio La Torre" />
                                 </div>
-                                <Field name="inmueblePais" placeholder="País" />
+                                <Field name="inmueblePais" placeholder="Pa�s" />
                                 <Field name="inmuebleDepartamento" placeholder="Departamento o Estado" />
                                 <Field name="inmuebleCiudad" placeholder="Ciudad" />
                                 <Field name="inmuebleBarrio" placeholder="Barrio o Zona" />
                                 <div className="md:col-span-2">
-                                    <Field name="inmuebleDireccion" as="textarea" placeholder="Dirección completa, ej: Carrera 10 # 25-50" />
+                                    <Field name="inmuebleDireccion" as="textarea" placeholder="Direcci�n completa, ej: Carrera 10 # 25-50" />
                                 </div>
 
                                 <Field name="inmuebleGaraje" type="checkbox" />
@@ -1228,7 +1216,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                     )}
 
                     {/* PASO 4: Precio de Venta */}
-                    {step === 4 && (
+                                        {step === 4 && (
                         <div>
                             <h3 className="text-lg font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200">4. Precio de Venta</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-6 max-w-xl mx-auto">
@@ -1238,16 +1226,16 @@ export default function SalesForm({ onClose, onSubmit }) {
                                     as="select"
                                     options={PAYMENT_OPTIONS}
                                 />
+                                <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo n?meros enteros mayores a 0)." />
                                 {(valuesRef.current.medioPago || "").toLowerCase() === "mixto" && (
                                     <div className="md:col-span-2">
                                         <Field
                                             name="medioPagoDescripcion"
                                             as="textarea"
-                                            placeholder="Describe cómo se distribuirá el pago mixto (por ejemplo, 50% transferencia y 50% crédito)."
+                                            placeholder="Describe c?mo se distribuye el pago mixto (ej: 50% cr?dito, 50% transferencia)."
                                         />
                                     </div>
                                 )}
-                                <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
                             </div>
 
                             <div className="p-4 bg-blue-50 border border-blue-300 rounded-xl shadow-inner text-gray-800 max-w-xl mx-auto">
@@ -1258,7 +1246,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         <p className="text-right font-medium text-gray-900">{valuesRef.current.inmuebleTipo || "N/A"} - {valuesRef.current.inmuebleNombre || "N/A"}</p>
                                     </div>
                                     <div className="flex justify-between">
-                                        <p className="font-medium text-gray-700">Ubicación:</p>
+                                        <p className="font-medium text-gray-700">Ubicaci?n:</p>
                                         <p className="text-right font-medium text-gray-900">{valuesRef.current.inmuebleCiudad || "N/A"}</p>
                                     </div>
                                     <div className="border-t border-blue-400 pt-2 flex justify-between items-center font-extrabold text-lg mt-2">
@@ -1268,7 +1256,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                 </div>
                             </div>
                         </div>
-                    )}
+                    )}        )}
 
                     <div className="pt-4 border-t mt-6 flex justify-between">
                         {step > 1 && (
@@ -1277,7 +1265,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                 onClick={prevStep}
                                 className="px-5 py-2 text-sm bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-150"
                             >
-                                Atrás
+                                Atr�s
                             </button>
                         )}
                         {step === 1 && <div />}
@@ -1306,4 +1294,13 @@ export default function SalesForm({ onClose, onSubmit }) {
         </div>
     );
 }
+
+
+
+
+
+
+
+
+
 

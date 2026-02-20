@@ -104,6 +104,25 @@ class SalesController {
     }
   }
 
+  async changeStatus(req, res, next) {
+    try {
+      const { id } = req.params;
+      const result = await saleService.changeStatus(
+        parseInt(id),
+        req.validatedData || req.body,
+        req.user || {}
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Estado de venta actualizado exitosamente',
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async finalizeSale(req, res, next) {
     try {
       const { id } = req.params;
@@ -145,6 +164,19 @@ class SalesController {
         message: 'Seguimientos obtenidos exitosamente',
         data: tracking,
         total: tracking.length
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getStatusCatalog(req, res, next) {
+    try {
+      const estados = await saleService.getStatusCatalog();
+      return res.status(200).json({
+        success: true,
+        message: 'Estados de venta obtenidos exitosamente',
+        data: estados
       });
     } catch (error) {
       next(error);

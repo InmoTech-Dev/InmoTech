@@ -42,10 +42,6 @@ export default function ViewSaleModal({ sale, onClose }) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <div>
-                <p className="font-semibold text-gray-700">ID:</p>
-                <p className="text-gray-900">{sale.id}</p>
-              </div>
-              <div>
                 <p className="font-semibold text-gray-700">Registro:</p>
                 <p className="text-gray-900">{sale.registro}</p>
               </div>
@@ -197,7 +193,7 @@ export default function ViewSaleModal({ sale, onClose }) {
               </div>
               <div>
                 <p className="font-semibold text-gray-700">Precio:</p>
-                <p className="text-gray-900 font-bold text-green-600">{sale.inmueblePrecio} $</p>
+                <p className="text-gray-900 font-bold text-green-600">{sale.inmueblePrecio}</p>
               </div>
               <div>
                 <p className="font-semibold text-gray-700">Estado:</p>

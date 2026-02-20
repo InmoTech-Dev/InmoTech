@@ -103,6 +103,9 @@ class ApiClient {
       });
     }
 
+    // Asegurar que tomamos el token más reciente almacenado
+    const token = this.getAccessToken();
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
@@ -111,7 +114,7 @@ class ApiClient {
       headers: {
         ...API_CONFIG.HEADERS,
         ...(options.headers || {}),
-        ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: 'include',
       signal: controller.signal,

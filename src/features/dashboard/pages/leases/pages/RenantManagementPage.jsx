@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import ReactDOM from 'react-dom';
-import { FaUserPlus, FaEye, FaEdit, FaTrash, FaSearch } from "react-icons/fa";
+import { FaUserPlus, FaSearch } from "react-icons/fa";
+import { Eye, Edit, Trash2 } from "lucide-react";
 import RenantForm from "../components/RenantForm";
 import EditRenantForm from "../components/EditRenantForm";
 import ViewRenant from "../components/ViewRenant"; 
@@ -303,25 +304,25 @@ export function RenantManagementPage() {
                       </td>
                       <td className="px-3 py-3 text-center flex gap-2 justify-center border-0">
                         <button
-                          aria-label="Editar arrendatario"
-                          className="text-green-600 hover:text-green-800 transition-colors"
-                          onClick={() => handleEditClick(r)}
-                        >
-                          <FaEdit />
-                        </button>
-                        <button
                           aria-label="Ver arrendatario"
-                          className="text-sky-600 hover:text-sky-800 transition-colors"
+                          className="p-2 rounded-lg transition-colors text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                           onClick={() => setViewingRent(r)}
                         >
-                          <FaEye />
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          aria-label="Editar arrendatario"
+                          className="p-2 rounded-lg transition-colors text-green-600 hover:text-green-800 hover:bg-green-50"
+                          onClick={() => handleEditClick(r)}
+                        >
+                          <Edit className="w-4 h-4" />
                         </button>
                         <button
                           aria-label="Eliminar arrendatario"
-                          className="text-red-600 hover:text-red-800 transition-colors"
+                          className="p-2 rounded-lg transition-colors text-red-600 hover:text-red-800 hover:bg-red-50"
                           onClick={() => handleDelete(r.id)}
                         >
-                          <FaTrash />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
                     </tr>

@@ -78,75 +78,75 @@ export default function BuyerView({ buyer, onClose }) {
             </div>
           </div>
 
-          {/* --- Sección de Inmuebles Comprados --- */}
+          {/* --- Datos de la operación --- */}
           <div className="bg-green-50 rounded-lg p-4 border border-green-200">
             <h3 className="text-lg font-bold text-green-800 mb-3 pb-2 border-b border-green-200">
-              Inmuebles Comprados ({buyer.inmueblesComprados?.length || 0})
+              Datos de la operación
             </h3>
-            
-            {buyer.inmueblesComprados && buyer.inmueblesComprados.length > 0 ? (
-              <div className="space-y-4">
-                {buyer.inmueblesComprados.map((inmueble, index) => (
-                  <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-                    
-                    {/* Header del inmueble */}
-                    <div className="flex items-start gap-4 mb-3">
-                      {/* Placeholder de Imagen */}
-                      <div className="flex-shrink-0 w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 border border-gray-300">
-                        <FaImage size={24} /> 
-                      </div>
-                      
-                      {/* Información principal */}
-                      <div className="flex-grow">
-                        <h4 className="font-bold text-gray-800 text-base mb-2">{inmueble.nombre}</h4>
-                        <div className="flex gap-4 text-sm text-gray-600">
-                          <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md font-medium">
-                            {inmueble.m2} m²
-                          </span>
-                          <span className="bg-green-100 text-green-700 px-2 py-1 rounded-md font-medium">
-                            {inmueble.hab} hab.
-                          </span>
-                          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-md font-medium">
-                            {inmueble.baños} baños
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Detalles del inmueble */}
-                    <div className="space-y-2 text-sm border-t border-gray-100 pt-3">
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-gray-700">Registro:</span>
-                        <span className="text-gray-900">{inmueble.registro}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-gray-700">Tipo:</span>
-                        <span className="text-gray-900">{inmueble.tipo}</span>
-                      </div>
-                      <div>
-                        <span className="font-semibold text-gray-700">Dirección:</span>
-                        <p className="text-gray-900 mt-1">{inmueble.direccion}</p>
-                      </div>
-                      <div className="flex justify-between items-center pt-2">
-                        <span className="font-semibold text-gray-700">Estado:</span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          inmueble.estado === 'Activo' 
-                            ? 'bg-green-100 text-green-800 border border-green-300' 
-                            : 'bg-yellow-100 text-yellow-800 border border-yellow-300'
-                        }`}>
-                          {inmueble.estado}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            {buyer.ultimaVenta ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-800">
+                <div>
+                  <p className="font-semibold text-gray-700">Fecha de compra:</p>
+                  <p>{buyer.ultimaVenta.fecha_venta ? new Date(buyer.ultimaVenta.fecha_venta).toLocaleDateString() : '-'}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-700">Valor de compra:</p>
+                  <p>${Number(buyer.ultimaVenta.valor_venta || 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-700">Estado:</p>
+                  <p>{buyer.ultimaVenta.estado || 'N/D'}</p>
+                </div>
               </div>
             ) : (
-              <div className="text-center py-6">
-                <div className="text-gray-400 mb-2">
-                  <FaImage size={48} className="mx-auto" />
+              <div className="text-center py-6 text-gray-500 text-sm italic">
+                Aún no se ha registrado una operación de compra para este comprador.
+              </div>
+            )}
+          </div>
+
+          {/* --- Inmueble adquirido --- */}
+          <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 mb-3 pb-2 border-b border-slate-200">
+              Inmueble adquirido
+            </h3>
+            {buyer.inmueble ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-800">
+                <div className="col-span-1">
+                  <div className="flex items-center gap-3">
+                    <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200">
+                      <FaImage size={28} />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-gray-700">Registro inmobiliario:</p>
+                      <p>{buyer.inmueble.registro_inmobiliario || '-'}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-gray-500 text-sm italic">No hay inmuebles registrados para este comprador.</p>
+                <div>
+                  <p className="font-semibold text-gray-700">Categoría:</p>
+                  <p>{buyer.inmueble.categoria || buyer.inmueble.tipo || 'N/D'}</p>
+                </div>
+                <div className="md:col-span-2">
+                  <p className="font-semibold text-gray-700">Dirección:</p>
+                  <p>{buyer.inmueble.direccion || 'N/D'}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-700">Ubicación:</p>
+                  <p>
+                    {buyer.inmueble.ciudad || 'N/D'}, {buyer.inmueble.departamento || 'N/D'}
+                  </p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-700">Estado:</p>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200">
+                    {buyer.inmueble.estado_frontend || buyer.inmueble.estado || 'N/D'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-500 text-sm italic">
+                Sin inmuebles asignados
               </div>
             )}
           </div>

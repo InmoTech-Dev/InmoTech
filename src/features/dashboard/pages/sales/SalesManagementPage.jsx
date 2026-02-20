@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 
 import { FaUsers, FaPlus, FaEye, FaChartBar, FaSearch, FaDollarSign, FaCalendarCheck, FaClipboardList } from "react-icons/fa";
 
-import { Plus, Search, Filter, Eye, BarChart3, DollarSign, Calendar, Users, Home } from 'lucide-react';
+import { Plus, Search, Filter, Eye, ListChecks, DollarSign, Calendar, Users, Home, Mail } from 'lucide-react';
 
 import "../../../../shared/styles/globals.css";
 
@@ -23,6 +23,49 @@ import ventaApiService from "../../../../shared/services/ventaApiService";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
+
+
+const STATUS_NORMALIZE = (value = "") =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const DEFAULT_STATUS_CATALOG = [
+  { id_estado_venta: 1, nombre_estado: "Pagado", orden: 1, es_estado_final: 1 },
+  { id_estado_venta: 2, nombre_estado: "Debe", orden: 2, es_estado_final: 0 },
+  { id_estado_venta: 3, nombre_estado: "En espera", orden: 3, es_estado_final: 0 },
+  { id_estado_venta: 4, nombre_estado: "Cancelado", orden: 4, es_estado_final: 1 },
+  { id_estado_venta: 5, nombre_estado: "En negociación", orden: 5, es_estado_final: 0 },
+  { id_estado_venta: 6, nombre_estado: "Completada", orden: 6, es_estado_final: 1 },
+];
+
+const mergeStatusCatalog = (apiStatuses = []) => {
+  const merged = new Map();
+
+  [...DEFAULT_STATUS_CATALOG, ...(Array.isArray(apiStatuses) ? apiStatuses : [])].forEach(
+    (status, idx) => {
+      if (!status || !status.nombre_estado) return;
+      const key = STATUS_NORMALIZE(status.nombre_estado);
+      const fallback = DEFAULT_STATUS_CATALOG.find(
+        (s) => STATUS_NORMALIZE(s.nombre_estado) === key
+      );
+      const id = status.id_estado_venta ?? fallback?.id_estado_venta ?? idx + 1;
+      const orden = status.orden ?? fallback?.orden ?? idx + 1;
+
+      merged.set(key, {
+        ...fallback,
+        ...status,
+        id_estado_venta: id,
+        orden,
+      });
+    }
+  );
+
+  return Array.from(merged.values()).sort(
+    (a, b) => (a.orden ?? 99) - (b.orden ?? 99)
+  );
+};
 
 
 
@@ -184,54 +227,19 @@ const buildBuyerFullName = (buyer = {}, fallback = "") => {
 
 
 
-const mapSeguimientoEstadoToId = (estado = "") => {
-  const normalized = estado
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-
-  const map = {
-    pagado: 1,
-    pagada: 1,
-    debe: 2,
-    "en espera": 3,
-    iniciada: 5,
-    "en negociacion": 6,
-    "en proceso": 6,
-    proceso: 6,
-    "en progreso": 6,
-    completada: 7,
-    finalizada: 7,
-  };
-
-  return map[normalized] || null;
-};
-
-
-
-const mapSeguimientoIdToEstado = {
-  1: "Pagado",
-  2: "Debe",
-  3: "En espera",
-  5: "Iniciada",
-  6: "En negociacion",
-  7: "Completada",
-};
-
 const mapEstadoUiToVentaEstado = (estado = "") => {
-  const normalized = estado
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  const normalized = STATUS_NORMALIZE(estado);
 
   // Permitir estados de UI y retornarlos con mayúscula inicial
   const map = {
     pagado: "Pagado",
     pagada: "Pagado",
     completada: "Completada",
-    finalizada: "Finalizada",
+    finalizada: "Completada",
     debe: "Debe",
     "en espera": "En espera",
+    "en negociacion": "En negociación",
+    "en negociación": "En negociación",
     pendiente: "Pendiente",
     activa: "Activa"
   };
@@ -248,9 +256,21 @@ const mapEstadoUiToVentaEstado = (estado = "") => {
 
 
 
-const buildTrackingPayload = (updatedSale = {}) => {
-  const estadoSeguimiento = updatedSale.estadoSeguimiento || updatedSale.estado || "Iniciada";
-  let estadoId = mapSeguimientoEstadoToId(estadoSeguimiento);
+const buildTrackingPayload = (updatedSale = {}, statusCatalog = []) => {
+  const estadoSeguimiento =
+    updatedSale.estadoSeguimiento ||
+    updatedSale.estado ||
+    statusCatalog[0]?.nombre_estado ||
+    DEFAULT_STATUS_CATALOG[0].nombre_estado;
+
+  let estadoId =
+    updatedSale.id_estado_venta ||
+    updatedSale.estadoSeguimientoId ||
+    (statusCatalog.find(
+      (s) => STATUS_NORMALIZE(s.nombre_estado) === STATUS_NORMALIZE(estadoSeguimiento)
+    ) || {})
+      .id_estado_venta ||
+    null;
 
   const compradorId =
     updatedSale.id_comprador ??
@@ -271,7 +291,14 @@ const buildTrackingPayload = (updatedSale = {}) => {
 
   if (!estadoId) {
     // Si el estado no está en el mapa, usar un id neutro (En espera) y preservar el texto en la descripción
-    estadoId = 3;
+    const fallback =
+      statusCatalog.find(
+        (s) => STATUS_NORMALIZE(s.nombre_estado) === STATUS_NORMALIZE("En espera")
+      ) ||
+      DEFAULT_STATUS_CATALOG.find(
+        (s) => STATUS_NORMALIZE(s.nombre_estado) === STATUS_NORMALIZE("En espera")
+      );
+    estadoId = fallback?.id_estado_venta ?? 3;
     updatedSale.descripcionSeguimiento = `[Estado personalizado: ${estadoSeguimiento}] ${updatedSale.descripcionSeguimiento || ""}`.trim();
   }
 
@@ -293,6 +320,16 @@ const buildTrackingPayload = (updatedSale = {}) => {
 
 };
 
+const mapSeguimientoIdToEstado = {
+  1: "Pagado",
+  2: "Debe",
+  3: "En espera",
+  4: "Cancelado",
+  5: "En negociación",
+  6: "Completada",
+  7: "Completada", // compatibilidad con datos antiguos
+};
+
 
 
 const normalizeSaleRecord = (sale = {}, fallback = {}) => {
@@ -302,6 +339,14 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
   const comprador = sale.comprador || sale.buyer || {};
 
   const vendedor = sale.vendedor || sale.seller || {};
+
+  const amenidades =
+    inmueble.comodidades ||
+    inmueble.caracteristicas ||
+    inmueble.amenities ||
+    inmueble.amenities_json ||
+    inmueble.metadata?.raw?.comodidades ||
+    [];
 
   const fallbackPrice = fallback.inmueblePrecio ?? fallback.valor;
 
@@ -315,18 +360,34 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
   const vendedorNombre = buildPersonName(vendedor);
 
+  const findAmenityCount = (aliases = []) => {
+    const normalized = aliases.map((a) => a.toLowerCase());
+    if (!Array.isArray(amenidades)) return null;
+    const found = amenidades.find((a) =>
+      normalized.includes((a.nombre || a.label || "").toLowerCase())
+    );
+    if (!found) return null;
+    // Sequelize include returns cantidad/seleccionada dentro de la tabla pivote
+    const through = found.Inmueble_Comodidades || found.inmueble_comodidades || {};
+    const selected = through.seleccionada ?? through.selected ?? true;
+    if (selected === false) return null;
+    return found.cantidad ?? through.cantidad ?? null;
+  };
+
 
 
   const trackingList =
     sale.tracking ||
     sale.tracking_history ||
     sale.seguimientos ||
-    sale.estado_seguimiento ||
     [];
 
   let trackingEstado = null;
+  let trackingEstadoId = null;
+  let trackingDescripcion = null;
   if (Array.isArray(trackingList) && trackingList.length) {
-    const latest = trackingList[trackingList.length - 1] || {};
+    // Tomar el más reciente asumiendo que la API devuelve orden DESC
+    const latest = trackingList[0] || {};
     const estadoId =
       latest.id_estado_venta ||
       latest.id_estado ||
@@ -339,10 +400,27 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
       latest.nombre_estado ||
       latest.estado_venta ||
       null;
+    trackingDescripcion =
+      latest.descripcion ||
+      latest.descripcion_seguimiento ||
+      latest.detalle ||
+      null;
     trackingEstado = estadoTexto || (estadoId ? mapSeguimientoIdToEstado[estadoId] : null);
+    trackingEstadoId = estadoId;
+  } else if (!Array.isArray(trackingList) && sale.estado_seguimiento) {
+    trackingEstado = sale.estado_seguimiento;
+    trackingEstadoId = sale.id_estado_venta || null;
+    trackingDescripcion =
+      sale.descripcion_seguimiento ||
+      sale.descripcionSeguimiento ||
+      fallback.descripcionSeguimiento ||
+      null;
   }
 
   return {
+
+    // Guardamos el objeto crudo para que el modal pueda priorizarlo
+    raw: sale,
 
     ...fallback,
 
@@ -370,11 +448,18 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
       sale.registro ??
 
+      sale.registro_inmobiliario ??
+
       inmueble.registro_inmobiliario ??
 
       "Sin registro",
 
-    tipo: fallback.inmuebleTipo ?? sale.tipo ?? inmueble.categoria ?? "Sin tipo",
+    tipo:
+      fallback.inmuebleTipo ??
+      sale.tipo ??
+      sale.categoria ??
+      inmueble.categoria ??
+      "Sin tipo",
 
     comprador:
 
@@ -388,6 +473,21 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     valor: formatCurrencyValue(numericPrice || fallbackPrice),
 
+    medioPago:
+      sale.medio_pago ??
+      sale.medioPago ??
+      fallback.medioPago ??
+      fallback.medio_pago ??
+      null,
+
+    medioPagoDescripcion:
+      sale.medio_pago_descripcion ??
+      sale.descripcion_pago ??
+      sale.medioPagoDescripcion ??
+      fallback.medioPagoDescripcion ??
+      fallback.descripcion_pago ??
+      null,
+
     estado: trackingEstado || sale.estado || fallback.estado || "Pendiente",
 
     estadoSeguimiento:
@@ -395,11 +495,19 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
       fallback.estadoSeguimiento ??
       sale.estadoSeguimiento ??
       sale.estado_seguimiento ??
+      sale.estado_seguimiento ??
       sale.ultimo_estado_seguimiento ??
       sale.estado_tracking ??
       sale.estado_tracing ??
       sale.estado_venta ??
       "Sin seguimiento",
+
+    descripcionSeguimiento:
+      trackingDescripcion ??
+      sale.descripcionSeguimiento ??
+      sale.descripcion_seguimiento ??
+      fallback.descripcionSeguimiento ??
+      "Sin descripción",
 
     compradorTipoDocumento:
 
@@ -417,7 +525,40 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     compradorTelefono:
 
-      comprador.telefono ?? fallback.compradorTelefono ?? "Sin tel�fono",
+      comprador.telefono ?? fallback.compradorTelefono ?? "Sin teléfono",
+
+    vendedor: vendedor && Object.keys(vendedor).length
+      ? vendedor
+      : {
+          tipo_documento:
+            sale.tipo_doc_vendedor ||
+            sale.tipo_documento_vendedor ||
+            sale.vendedor_tipo_documento ||
+            fallback.vendedorTipoDocumento ||
+            null,
+          numero_documento:
+            sale.numero_doc_vendedor ||
+            sale.vendedor_numero_documento ||
+            sale.documento_vendedor ||
+            fallback.vendedorDocumento ||
+            null,
+          nombre_completo:
+            sale.nombre_vendedor ||
+            sale.vendedor_nombre ||
+            sale.vendedor_nombre_completo ||
+            fallback.vendedorNombreCompleto ||
+            null,
+          correo:
+            sale.correo_vendedor ||
+            sale.vendedor_correo ||
+            fallback.vendedorCorreo ||
+            null,
+          telefono:
+            sale.telefono_vendedor ||
+            sale.vendedor_telefono ||
+            fallback.vendedorTelefono ||
+            null
+        },
 
     vendedorTipoDocumento:
 
@@ -491,6 +632,10 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
       inmueble.registro_inmobiliario ??
 
+      sale.registro_inmobiliario ??
+
+      sale.registro ??
+
       "Sin registro",
 
     inmuebleNombre:
@@ -499,7 +644,15 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
       inmueble.nombre ??
 
+      inmueble.titulo ??
+
+      sale.titulo ??
+
+      sale.nombre_inmueble ??
+
       inmueble.direccion ??
+
+      sale.direccion ??
 
       fallback.tipo ??
 
@@ -509,17 +662,32 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     inmuebleHabitaciones:
 
-      fallback.inmuebleHabitaciones ?? inmueble.habitaciones ?? "N/D",
+      fallback.inmuebleHabitaciones ??
+      inmueble.habitaciones ??
+      sale.habitaciones ??
+      inmueble.num_habitaciones ??
+      inmueble.dormitorios ??
+      findAmenityCount(["habitaciones", "cuartos", "dormitorios"]) ??
+      "N/D",
 
-    inmuebleBanos: fallback.inmuebleBanos ?? inmueble.banos ?? "N/D",
+    inmuebleBanos:
+      fallback.inmuebleBanos ??
+      inmueble.banos ??
+      inmueble.baños ??
+      sale.banos ??
+      sale.baños ??
+      inmueble.num_banos ??
+      inmueble.wc ??
+      findAmenityCount(["baños", "banos", "baño"]) ??
+      "N/D",
 
-    inmueblePais: fallback.inmueblePais ?? inmueble.pais ?? "N/D",
+    inmueblePais: fallback.inmueblePais ?? inmueble.pais ?? sale.pais ?? "N/D",
 
     inmuebleDepartamento:
 
-      fallback.inmuebleDepartamento ?? inmueble.departamento ?? "N/D",
+      fallback.inmuebleDepartamento ?? inmueble.departamento ?? sale.departamento ?? "N/D",
 
-    inmuebleCiudad: fallback.inmuebleCiudad ?? inmueble.ciudad ?? "N/D",
+    inmuebleCiudad: fallback.inmuebleCiudad ?? inmueble.ciudad ?? sale.ciudad ?? "N/D",
 
     inmuebleBarrio: fallback.inmuebleBarrio ?? inmueble.barrio ?? "N/D",
 
@@ -527,15 +695,30 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     inmuebleDireccion:
 
-      fallback.inmuebleDireccion ?? inmueble.direccion ?? "Sin dirección",
+      fallback.inmuebleDireccion ??
+      inmueble.direccion ??
+      sale.direccion ??
+      sale.inmueble_direccion ??
+      "Sin dirección",
 
-    inmueblePrecio: formatPlainNumber(fallback.inmueblePrecio ?? numericPrice),
+    inmueblePrecio: formatCurrencyValue(
+      toNumericValue(
+        fallback.inmueblePrecio ??
+        inmueble.precio_venta ??
+        inmueble.precio_arriendo ??
+        numericPrice
+      )
+    ),
 
     inmuebleGaraje: fallback.inmuebleGaraje ?? Boolean(inmueble.garaje),
 
     inmuebleEstado:
 
       fallback.inmuebleEstado ?? inmueble.estado ?? sale.estado ?? "Pendiente",
+
+    // Estado de seguimiento e ID de catálogo (para modal)
+    estadoSeguimientoId: trackingEstadoId || sale.id_estado_venta || fallback.estadoSeguimientoId || null,
+    id_estado_venta: trackingEstadoId || sale.id_estado_venta || fallback.id_estado_venta || null,
 
   };
 
@@ -622,8 +805,19 @@ const buildSalePayload = (saleData = {}, buyerInfo, propertyInfo) => {
     valor_venta: numericPrice,
 
     medio_pago: medioPago,
+    medio_pago_descripcion:
+      medioPago === "mixto"
+        ? saleData.medioPagoDescripcion || saleData.descripcionPagoMixto || null
+        : null,
 
     estado: saleData.estado || "Activa",
+
+    // Datos "congelados" del vendedor al momento de la venta
+    tipo_doc_vendedor: saleData.vendedorTipoDocumento || saleData.tipo_documento_vendedor || null,
+    numero_doc_vendedor: saleData.vendedorDocumento || saleData.numero_doc_vendedor || null,
+    nombre_vendedor: saleData.vendedorNombreCompleto || saleData.nombre_vendedor || null,
+    correo_vendedor: saleData.vendedorCorreo || saleData.correo_vendedor || null,
+    telefono_vendedor: saleData.vendedorTelefono || saleData.telefono_vendedor || null,
 
     comprador: {
 
@@ -686,29 +880,31 @@ const EstadoBadge = ({ estado }) => {
 
 
   switch (estado) {
-
     case "Pagado":
-
       colorClass = "bg-green-100 text-green-800 border border-green-400";
-
       break;
-
+    case "Completada":
+    case "Finalizada":
+      colorClass = "bg-blue-100 text-blue-800 border border-blue-400";
+      break;
     case "Pendiente":
-
+    case "Activa":
       colorClass = "bg-yellow-100 text-yellow-800 border border-yellow-400";
-
       break;
-
     case "Debe":
-
       colorClass = "bg-red-100 text-red-800 border border-red-400";
-
       break;
-
+    case "En negociación":
+      colorClass = "bg-indigo-100 text-indigo-800 border border-indigo-400";
+      break;
+    case "En espera":
+      colorClass = "bg-amber-100 text-amber-800 border border-amber-400";
+      break;
+    case "Cancelado":
+      colorClass = "bg-rose-100 text-rose-800 border border-rose-400";
+      break;
     default:
-
       colorClass = "bg-gray-200 text-gray-700";
-
   }
 
 
@@ -756,6 +952,10 @@ export function SalesManagementPage() {
   const [loadingProperties, setLoadingProperties] = useState(false);
 
   const [propertiesError, setPropertiesError] = useState(null);
+
+  const [statusCatalog, setStatusCatalog] = useState([]);
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
+  const [statusesError, setStatusesError] = useState(null);
 
 
 
@@ -855,6 +1055,25 @@ export function SalesManagementPage() {
 
   }, []);
 
+  const loadStatusCatalog = useCallback(async () => {
+    setLoadingStatuses(true);
+    setStatusesError(null);
+    try {
+      const response = await ventaApiService.obtenerCatalogoEstados();
+      const data = response?.data?.data || response?.data || [];
+      const merged = mergeStatusCatalog(data);
+      setStatusCatalog(merged);
+    } catch (error) {
+      setStatusesError(
+        error?.message ||
+        "No fue posible cargar el catálogo de estados de venta."
+      );
+      setStatusCatalog(DEFAULT_STATUS_CATALOG);
+    } finally {
+      setLoadingStatuses(false);
+    }
+  }, []);
+
 
 
   const fetchVentas = useCallback(async () => {
@@ -935,23 +1154,79 @@ export function SalesManagementPage() {
 
   }, [loadProperties]);
 
+  useEffect(() => {
+    loadStatusCatalog();
+  }, [loadStatusCatalog]);
 
 
-  const handleViewClick = (sale) => {
 
-    setViewingSale(sale);
+  const handleViewClick = async (sale) => {
+    if (!sale?.id && !sale?.id_venta) {
+      setViewingSale(sale || null);
+      return;
+    }
 
+    try {
+      setStatusMessage({ type: "info", text: "Cargando detalle de la venta..." });
+      const resp = await ventaApiService.obtenerVenta(sale.id || sale.id_venta);
+      const apiSale = resp?.data?.data || resp?.data || resp;
+      const normalized = normalizeSaleRecord(apiSale, sale);
+
+      // Forzar que los campos de vendedor queden seteados directamente (por si el fallback normalizado quedó con "N/D")
+      const vendedorOverrides = {
+        vendedorTipoDocumento:
+          apiSale?.tipo_doc_vendedor ||
+          apiSale?.tipo_documento_vendedor ||
+          apiSale?.vendedor_tipo_documento ||
+          normalized.vendedorTipoDocumento,
+        vendedorDocumento:
+          apiSale?.numero_doc_vendedor ||
+          apiSale?.vendedor_numero_documento ||
+          apiSale?.documento_vendedor ||
+          normalized.vendedorDocumento,
+        vendedorNombreCompleto:
+          apiSale?.nombre_vendedor ||
+          apiSale?.vendedor_nombre ||
+          apiSale?.vendedor_nombre_completo ||
+          normalized.vendedorNombreCompleto,
+        vendedorCorreo:
+          apiSale?.correo_vendedor ||
+          apiSale?.vendedor_correo ||
+          normalized.vendedorCorreo,
+        vendedorTelefono:
+          apiSale?.telefono_vendedor ||
+          apiSale?.vendedor_telefono ||
+          normalized.vendedorTelefono,
+        vendedor:
+          apiSale?.vendedor ||
+          apiSale?.seller ||
+          normalized.vendedor || {
+            tipo_documento: apiSale?.tipo_doc_vendedor,
+            numero_documento: apiSale?.numero_doc_vendedor,
+            nombre_completo: apiSale?.nombre_vendedor,
+            correo: apiSale?.correo_vendedor,
+            telefono: apiSale?.telefono_vendedor,
+          },
+      };
+
+      setViewingSale({ ...normalized, ...vendedorOverrides, raw: apiSale });
+      setStatusMessage(null);
+    } catch (error) {
+      console.error("Error obteniendo venta por id:", error);
+      setStatusMessage({
+        type: "error",
+        text: "No se pudo cargar el detalle actualizado de la venta.",
+      });
+      // Como fallback, mostrar la venta que ya teníamos
+      setViewingSale(sale);
+    }
   };
 
 
 
-  const handleTrackingClick = (sale) => {
-
+  const handleEditClick = (sale) => {
     setTrackingSale(sale);
-
   };
-
-
 
   const handleCloseForm = () => {
 
@@ -1297,23 +1572,9 @@ export function SalesManagementPage() {
 
 
 
-      // Actualizar estado en Ventas respetando constraint
+      // Registrar seguimiento + cambio de estado con catÃ¡logo
 
-      const estadoVentaDb = mapEstadoUiToVentaEstado(mergedPayload.estado);
-
-      await ventaApiService.actualizarVenta(saleId, {
-
-        estado: estadoVentaDb,
-
-        estado_seguimiento: mergedPayload.estadoSeguimiento,
-
-      });
-
-
-
-      // Registrar seguimiento con id_comprador
-
-      const trackingPayload = buildTrackingPayload(mergedPayload);
+      const trackingPayload = buildTrackingPayload(mergedPayload, statusCatalog);
 
       if (!trackingPayload) {
 
@@ -1328,9 +1589,11 @@ export function SalesManagementPage() {
         return;
 
       }
-      console.log("empezo el camibio");
-      await ventaApiService.agregarTracking(saleId, trackingPayload);
-      console.log("termino cambio");
+
+      await ventaApiService.cambiarEstado(saleId, {
+        ...trackingPayload,
+        descripcion: mergedPayload.descripcionSeguimiento || trackingPayload.descripcion,
+      });
 
 
       // Refrescar desde API
@@ -1402,29 +1665,27 @@ export function SalesManagementPage() {
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const filteredVentas = ventas.filter((v) => {
-
     if (!normalizedSearch) return true;
 
-
-
     const registro = v.registro ? v.registro.toLowerCase() : "";
-
     const comprador = v.comprador ? v.comprador.toLowerCase() : "";
-
+    const compradorCorreo = v.compradorCorreo ? v.compradorCorreo.toLowerCase() : "";
+    const compradorDocumento = v.compradorDocumento ? String(v.compradorDocumento).toLowerCase() : "";
     const tipo = v.tipo ? v.tipo.toLowerCase() : "";
-
-
+    const estado = v.estado ? v.estado.toLowerCase() : "";
+    const fecha = v.fecha ? String(v.fecha).toLowerCase() : "";
+    const valor = v.valor ? String(v.valor).toLowerCase() : "";
 
     return (
-
       registro.includes(normalizedSearch) ||
-
       comprador.includes(normalizedSearch) ||
-
-      tipo.includes(normalizedSearch)
-
+      compradorCorreo.includes(normalizedSearch) ||
+      compradorDocumento.includes(normalizedSearch) ||
+      tipo.includes(normalizedSearch) ||
+      estado.includes(normalizedSearch) ||
+      fecha.includes(normalizedSearch) ||
+      valor.includes(normalizedSearch)
     );
-
   });
 
 
@@ -1543,15 +1804,17 @@ export function SalesManagementPage() {
 
     const modalContent = (
 
-      <PurchaseTrackingModal
+        <PurchaseTrackingModal
 
-        venta={trackingSale}
+          venta={trackingSale}
 
-        onClose={() => setTrackingSale(null)}
+          statusOptions={statusCatalog.length ? statusCatalog : DEFAULT_STATUS_CATALOG}
 
-        onUpdate={handleUpdateTracking}
+          onClose={() => setTrackingSale(null)}
 
-      />
+          onUpdate={handleUpdateTracking}
+
+        />
 
     );
 
@@ -1764,29 +2027,6 @@ export function SalesManagementPage() {
           </div>
 
           
-
-          <div className="flex gap-2">
-
-            <motion.button
-
-              whileHover={{ scale: 1.05 }}
-
-              whileTap={{ scale: 0.95 }}
-
-              onClick={() => setShowInterestedPeople(true)}
-
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-blue-300"
-
-            >
-
-              <Users className="w-4 h-4" />
-
-              Personas Interesadas
-
-            </motion.button>
-
-          </div>
-
         </motion.div>
 
 
@@ -1815,19 +2055,19 @@ export function SalesManagementPage() {
 
                   <tr>
 
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Registro</th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Registro</th>
 
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tipo</th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Tipo</th>
 
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Comprador</th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Comprador</th>
 
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fecha</th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Fecha</th>
 
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Valor</th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Valor</th>
 
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
 
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
 
                   </tr>
 
@@ -1871,29 +2111,41 @@ export function SalesManagementPage() {
 
                       >
 
-                        <td className="px-6 py-4 text-sm text-slate-700">{v.registro}</td>
+                        <td className="px-6 py-4 text-center text-sm text-slate-700">{v.registro}</td>
 
-                        <td className="px-6 py-4 text-sm text-slate-700">{v.tipo}</td>
+                        <td className="px-6 py-4 text-center text-sm text-slate-700">{v.tipo}</td>
 
-                        <td className="px-6 py-4 text-sm text-slate-700 truncate max-w-[180px]">{v.comprador}</td>
+                        <td className="px-6 py-4 text-center text-sm text-slate-700">
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="font-semibold text-slate-800 truncate max-w-[200px]">{v.comprador}</span>
+                            <span className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              {v.compradorCorreo || "Sin correo"}
+                            </span>
+                          </div>
+                        </td>
 
-                        <td className="px-6 py-4 text-sm text-slate-700">{v.fecha}</td>
+                        <td className="px-6 py-4 text-center text-sm text-slate-700">{v.fecha}</td>
 
-                        <td className="px-6 py-4 text-sm font-semibold text-purple-700">
+                        <td className="px-6 py-4 text-center text-sm font-semibold text-purple-700">
 
                           {v.valor}
 
                         </td>
 
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 text-center">
 
-                          <EstadoBadge estado={v.estado} />
+                          <div className="flex flex-col items-center justify-center">
+
+                            <EstadoBadge estado={v.estado} />
+
+                          </div>
 
                         </td>
 
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 text-center">
 
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 justify-center">
 
                             <motion.button
 
@@ -1903,7 +2155,7 @@ export function SalesManagementPage() {
 
                               aria-label="Ver detalles de la venta"
 
-                              className="text-green-600 hover:text-green-800 transition-colors p-1 rounded-lg hover:bg-green-50"
+                              className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
 
                               onClick={() => handleViewClick(v)}
 
@@ -1919,17 +2171,19 @@ export function SalesManagementPage() {
 
                               whileTap={{ scale: 0.9 }}
 
-                              aria-label="Seguimiento de compra"
+                              aria-label="Seguimiento de venta"
 
-                              className="text-sky-600 hover:text-sky-800 transition-colors p-1 rounded-lg hover:bg-sky-50"
+                              className="p-2 text-amber-600 hover:text-amber-800 transition-colors"
 
-                              onClick={() => handleTrackingClick(v)}
+                              onClick={() => handleEditClick(v)}
 
                             >
 
-                              <BarChart3 className="w-4 h-4" />
+                              <ListChecks className="w-4 h-4" />
 
                             </motion.button>
+
+                            {/* Acción de eliminar deshabilitada porque una venta no se borra */}
 
                           </div>
 
@@ -1994,6 +2248,8 @@ export function SalesManagementPage() {
   );
 
 }
+
+
 
 
 

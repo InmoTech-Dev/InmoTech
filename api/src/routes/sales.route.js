@@ -7,7 +7,8 @@ const { createLimiter, strictLimiter } = require('../middlewares/security.middle
 const {
   createSaleSchema,
   updateSaleSchema,
-  createTrackingSchema
+  createTrackingSchema,
+  changeStatusSchema
 } = require('../validators/sales.validator');
 
 // POST /api/v1/sales - Crear venta
@@ -20,6 +21,9 @@ router.post(
 
 // GET /api/v1/sales - Obtener todas las ventas
 router.get('/', salesController.getAllSales);
+
+// GET /api/v1/sales/statuses - Catálogo de estados de venta
+router.get('/statuses/catalog', salesController.getStatusCatalog);
 
 // GET /api/v1/sales/:id - Obtener venta por ID
 router.get('/:id', salesController.getSaleById);
@@ -42,6 +46,14 @@ router.patch(
 
 // PATCH /api/v1/sales/:id/cancel - Cancelar venta
 router.patch('/:id/cancel', strictLimiter, salesController.cancelSale);
+
+// PATCH /api/v1/sales/:id/status - Cambiar estado usando catálogo
+router.patch(
+  '/:id/status',
+  strictLimiter,
+  validate(changeStatusSchema),
+  salesController.changeStatus
+);
 
 // PATCH /api/v1/sales/:id/finalize - Finalizar venta
 router.patch('/:id/finalize', strictLimiter, salesController.finalizeSale);

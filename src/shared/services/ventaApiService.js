@@ -19,12 +19,28 @@ export const ventaApiService = {
     return apiClient.get(`/sales/${id}`);
   },
 
+  async obtenerCatalogoEstados() {
+    return apiClient.get('/sales/statuses/catalog');
+  },
+
   async actualizarVenta(id, payload) {
     return apiClient.patch(`/sales/${id}`, payload);
   },
 
+  async cambiarEstado(id, payload) {
+    try {
+      return await apiClient.patch(`/sales/${id}/status`, payload);
+    } catch (error) {
+      // Compatibilidad: si la ruta no existe en el backend actual, usar el endpoint antiguo de tracking
+      if (error.status === 404) {
+        return apiClient.post(`/sales/${id}/tracking`, payload);
+      }
+      throw error;
+    }
+  },
+
   async agregarTracking(id, payload) {
-    console.log("se camibio estado");
+    // Ruta antigua; se mantiene por compatibilidad pero la lógica nueva usa cambiarEstado
     return apiClient.post(`/sales/${id}/tracking`, payload);
   },
 

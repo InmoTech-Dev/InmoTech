@@ -77,7 +77,8 @@ class ReportesInmobiliariosService {
     try {
       const response = await this.api.get(`/reportes-inmobiliarios/${reporteId}`);
       const body = this.unwrapResponseBody(response.data);
-      return body?.reporte || body;
+      // El backend devuelve { success, data: reporte } — desempaquetar correctamente
+      return body?.data || body?.reporte || body;
     } catch (error) {
       throw this.handleError(error, 'Error al obtener el reporte');
     }
@@ -297,68 +298,68 @@ export { ReportesInmobiliariosService };
 const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '/api';
 
 async function http(path, { method = 'GET', body, headers = {} } = {}) {
-    const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token');
 
-    const res = await fetch(`${API_BASE}${path}`, {
-        method,
-        headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...headers,
-        },
-        body: body ? JSON.stringify(body) : undefined,
-    });
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
 
-    const contentType = res.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json');
-    const data = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+  const data = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
 
-    if (!res.ok) {
-        const message = isJson && data && data.message ? data.message : res.statusText;
-        throw new Error(`Error ${res.status}: ${message}`);
-    }
+  if (!res.ok) {
+    const message = isJson && data && data.message ? data.message : res.statusText;
+    throw new Error(`Error ${res.status}: ${message}`);
+  }
 
-    return data;
+  return data;
 }
 
 function clean(obj) {
-    if (!obj || typeof obj !== 'object') return obj;
-    const out = {};
-    for (const [k, v] of Object.entries(obj)) {
-        if (v !== undefined && v !== null) out[k] = v;
-    }
-    return out;
+  if (!obj || typeof obj !== 'object') return obj;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined && v !== null) out[k] = v;
+  }
+  return out;
 }
 
 // Rubros (alineados con /reportes-inmobiliarios/:reporteId/rubros)
 export async function crearRubro(reporteId, rubro) {
-    if (!reporteId) throw new Error('reporteId es requerido para crear un rubro');
-    return http(`/reportes-inmobiliarios/${reporteId}/rubros`, { method: 'POST', body: clean(rubro) });
+  if (!reporteId) throw new Error('reporteId es requerido para crear un rubro');
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros`, { method: 'POST', body: clean(rubro) });
 }
 
 export async function obtenerRubros(reporteId) {
-    if (!reporteId) throw new Error('reporteId es requerido para listar rubros');
-    return http(`/reportes-inmobiliarios/${reporteId}/rubros`, { method: 'GET' });
+  if (!reporteId) throw new Error('reporteId es requerido para listar rubros');
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros`, { method: 'GET' });
 }
 
 export async function actualizarRubro(reporteId, id, rubro) {
-    if (!reporteId || !id) throw new Error('IDs requeridos para actualizar rubro');
-    return http(`/reportes-inmobiliarios/${reporteId}/rubros/${id}`, { method: 'PATCH', body: clean(rubro) });
+  if (!reporteId || !id) throw new Error('IDs requeridos para actualizar rubro');
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${id}`, { method: 'PATCH', body: clean(rubro) });
 }
 
 // export helpers (seguir usando http y clean)
 // Seguimientos de rubro
 export async function crearSeguimientoRubro(reporteId, rubroId, seguimiento) {
-    if (!reporteId || !rubroId) throw new Error('reporteId y rubroId son requeridos para crear un seguimiento');
-    return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`, { method: 'POST', body: clean(seguimiento) });
+  if (!reporteId || !rubroId) throw new Error('reporteId y rubroId son requeridos para crear un seguimiento');
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`, { method: 'POST', body: clean(seguimiento) });
 }
 
 export async function obtenerSeguimientosRubro(reporteId, rubroId) {
-    if (!reporteId || !rubroId) throw new Error('reporteId y rubroId son requeridos para listar seguimientos');
-    return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`, { method: 'GET' });
+  if (!reporteId || !rubroId) throw new Error('reporteId y rubroId son requeridos para listar seguimientos');
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`, { method: 'GET' });
 }
 
 export async function actualizarSeguimientoRubro(reporteId, rubroId, seguimientoId, seguimiento) {
-    if (!reporteId || !rubroId || !seguimientoId) throw new Error('IDs requeridos para actualizar seguimiento');
-    return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos/${seguimientoId}`, { method: 'PATCH', body: clean(seguimiento) });
+  if (!reporteId || !rubroId || !seguimientoId) throw new Error('IDs requeridos para actualizar seguimiento');
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos/${seguimientoId}`, { method: 'PATCH', body: clean(seguimiento) });
 }

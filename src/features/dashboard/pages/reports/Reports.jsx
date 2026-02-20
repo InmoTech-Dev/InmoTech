@@ -49,7 +49,10 @@ const ReportsContent = () => {
         referencia: r.id_reporte ?? r.id ?? '',
         ubicacion: r.inmueble_ciudad || '',
         tipoInmueble: r.inmueble_categoria || '',
-        propietario: r.reporta_nombre || '',
+        // Usar el propietario real del inmueble, no quien creó el reporte
+        propietario: r.propietario_nombre || r.propietario || '',
+        // Responsable: quien creó/reportó el reporte
+        responsable: r.reporta_nombre || '',
         tipoReporte: r.tipo_reporte || '',
         fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
         estado: r.estado || 'Pendiente',
@@ -181,12 +184,18 @@ const ReportsContent = () => {
       // Add inmueble fields from shallow report or backend data
       detailedReport.ubicacion = report.ubicacion || detailedReport.inmueble_ciudad || ''
       detailedReport.tipoInmueble = report.tipoInmueble || detailedReport.inmueble_categoria || ''
-      detailedReport.propietario = report.propietario || detailedReport.reporta_nombre || ''
+      // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
+      detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
       detailedReport.referencia = report.referencia || detailedReport.referencia || reportId
       detailedReport.tipoReporte = report.tipoReporte || detailedReport.tipo_reporte || ''
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
-      detailedReport.responsable = report.responsable || detailedReport.responsable || 'No asignado'
+      // Responsable: primero del detalle del backend (reportadoPor), luego del shallow report
+      detailedReport.responsable =
+        detailedReport.reportadoPor?.nombre_completo ||
+        formatResponsableName(detailedReport.reportadoPor) ||
+        report.responsable ||
+        'No asignado'
       detailedReport.descripcion = detailedReport.descripcion || ''
       detailedReport.seguimientoGeneral = detailedReport.seguimiento_general || ''
 
@@ -244,7 +253,8 @@ const ReportsContent = () => {
       // Add inmueble fields from shallow report or backend data
       detailedReport.ubicacion = report.ubicacion || detailedReport.inmueble_ciudad || ''
       detailedReport.tipoInmueble = report.tipoInmueble || detailedReport.inmueble_categoria || ''
-      detailedReport.propietario = report.propietario || detailedReport.reporta_nombre || ''
+      // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
+      detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
       detailedReport.referencia = report.referencia || detailedReport.referencia || reportId
       detailedReport.tipoReporte = report.tipoReporte || detailedReport.tipo_reporte || ''
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'

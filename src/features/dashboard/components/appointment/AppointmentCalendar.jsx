@@ -392,19 +392,23 @@ const AppointmentCalendar = ({
     }
   };
 
-  const handleRescheduleConfirm = (reagendamientoData) => {
+  const handleRescheduleConfirm = async (reagendamientoData) => {
     if (rescheduleConfirm.appointment && reagendamientoData) {
       // ✅ CORREGIDO: Usar id_cita o id
       const appointmentId = rescheduleConfirm.appointment.id_cita || rescheduleConfirm.appointment.id;
 
       // Pasar todos los datos de reagendamiento (incluyendo motivo y nueva hora)
-      onRescheduleAppointment(appointmentId, reagendamientoData);
+      try {
+        await onRescheduleAppointment(appointmentId, reagendamientoData);
 
-      setTempRescheduledAppointments(prev => {
-        const copy = { ...prev };
-        delete copy[appointmentId];
-        return copy;
-      });
+        setTempRescheduledAppointments(prev => {
+          const copy = { ...prev };
+          delete copy[appointmentId];
+          return copy;
+        });
+      } catch (error) {
+        return;
+      }
     }
     setRescheduleConfirm({ isOpen: false, appointment: null, newDate: null });
   };

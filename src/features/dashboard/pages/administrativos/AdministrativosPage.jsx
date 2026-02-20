@@ -33,7 +33,7 @@ const AdministrativosPage = () => {
     endDate: ''
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(4);
+  const [itemsPerPage] = useState(6);
   const [availableRoles, setAvailableRoles] = useState([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -43,6 +43,8 @@ const AdministrativosPage = () => {
   const [selectedAdministrativo, setSelectedAdministrativo] = useState(null);
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
   const [loadingStatusChanges, setLoadingStatusChanges] = useState(new Set());
+  const [isDeletingAdministrativo, setIsDeletingAdministrativo] = useState(false);
+  const [isChangingAdministrativoStatus, setIsChangingAdministrativoStatus] = useState(false);
   const { toast } = useToast();
 
   // Cargar roles disponibles al montar el componente
@@ -106,12 +108,10 @@ const AdministrativosPage = () => {
         const fullName = `${admin.persona?.nombre_completo || ''} ${admin.persona?.apellido_completo || ''}`.toLowerCase().trim();
         const email = (admin.persona?.correo || '').toLowerCase();
         const employeeCode = (admin.codigo_empleado || '').toLowerCase();
-        const department = (admin.departamento || '').toLowerCase();
 
         return fullName.includes(searchTerm.toLowerCase()) ||
                email.includes(searchTerm.toLowerCase()) ||
-               employeeCode.includes(searchTerm.toLowerCase()) ||
-               department.includes(searchTerm.toLowerCase());
+               employeeCode.includes(searchTerm.toLowerCase());
       });
     }
 
@@ -198,15 +198,26 @@ const AdministrativosPage = () => {
   };
 
   const handleDeleteAdministrativo = async () => {
-    if (selectedAdministrativo) {
-      try {
-        await removeAdministrativo(selectedAdministrativo.id_administrativo);
-        setIsDeleteModalOpen(false);
-        setSelectedAdministrativo(null);
-      } catch (error) {
-        // Error ya manejado en el contexto
-      }
+    if (isDeletingAdministrativo || !selectedAdministrativo) {
+      return;
     }
+
+    setIsDeletingAdministrativo(true);
+    try {
+      await removeAdministrativo(selectedAdministrativo.id_administrativo);
+      setIsDeleteModalOpen(false);
+      setSelectedAdministrativo(null);
+    } catch (error) {
+      // Error ya manejado en el contexto
+    } finally {
+      setIsDeletingAdministrativo(false);
+    }
+  };
+
+  const handleCloseDeleteAdministrativoModal = () => {
+    if (isDeletingAdministrativo) return;
+    setIsDeleteModalOpen(false);
+    setSelectedAdministrativo(null);
   };
 
   const handleViewAdministrativo = (administrativo) => {
@@ -259,9 +270,27 @@ const AdministrativosPage = () => {
     setIsStatusChangeModalOpen(true);
   };
 
+  const handleCloseStatusChangeAdministrativoModal = () => {
+    if (isChangingAdministrativoStatus) return;
+    setLoadingStatusChanges(prev => {
+      const newSet = new Set(prev);
+      if (pendingStatusChange?.administrativoId) {
+        newSet.delete(pendingStatusChange.administrativoId);
+      }
+      return newSet;
+    });
+    setIsStatusChangeModalOpen(false);
+    setSelectedAdministrativo(null);
+    setPendingStatusChange(null);
+  };
+
   const handleStatusChangeConfirm = async () => {
-    if (pendingStatusChange) {
-      try {
+    if (isChangingAdministrativoStatus || !pendingStatusChange) {
+      return;
+    }
+
+    setIsChangingAdministrativoStatus(true);
+    try {
         await changeEstadoAdministrativo(
           selectedAdministrativo.id_administrativo,
           pendingStatusChange.newStatus
@@ -283,7 +312,7 @@ const AdministrativosPage = () => {
           description: `El estado del administrativo ${fullName} ha sido cambiado a ${pendingStatusChange.newStatus}.`,
           variant: "default"
         });
-      } catch (error) {
+    } catch (error) {
         setLoadingStatusChanges(prev => {
           const newSet = new Set(prev);
           newSet.delete(pendingStatusChange.administrativoId);
@@ -295,7 +324,8 @@ const AdministrativosPage = () => {
           description: "No se pudo cambiar el estado del administrativo",
           variant: "destructive"
         });
-      }
+    } finally {
+      setIsChangingAdministrativoStatus(false);
     }
   };
 
@@ -369,29 +399,30 @@ const AdministrativosPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="space-y-4"
+        className="flex flex-wrap items-center gap-2"
       >
         {/* Search Bar */}
-        <div className="flex-1 max-w-lg">
+        <div className="flex-1 min-w-[260px]">
           <SearchBar
-            placeholder="Buscar por nombre, email, código o departamento..."
+            placeholder="Buscar por nombre, email o código..."
             value={searchTerm}
             onChange={setSearchTerm}
           />
         </div>
 
         {/* Filters Row */}
-        <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.3 }}
+            className="w-full sm:w-auto"
           >
             <Select
               value={statusFilter}
               onValueChange={setStatusFilter}
             >
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="h-10 w-full sm:w-[160px]">
                 <SelectValue placeholder="Estado laboral"/>
               </SelectTrigger>
               <SelectContent>
@@ -406,12 +437,13 @@ const AdministrativosPage = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.4 }}
+            className="w-full sm:w-auto"
           >
             <Select
               value={roleFilter}
               onValueChange={setRoleFilter}
             >
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="h-10 w-full sm:w-[160px]">
                 <SelectValue placeholder="Rol"/>
               </SelectTrigger>
               <SelectContent>
@@ -429,12 +461,13 @@ const AdministrativosPage = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.5 }}
+            className="w-full sm:w-auto"
           >
             <Select
               value={dateFilter}
               onValueChange={setDateFilter}
             >
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="h-10 w-full sm:w-[170px]">
                 <SelectValue placeholder="Fecha de ingreso"/>
               </SelectTrigger>
               <SelectContent>
@@ -452,24 +485,24 @@ const AdministrativosPage = () => {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex gap-2 items-center"
+              className="flex flex-wrap gap-2 items-center w-full lg:w-auto"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <label className="text-sm font-medium text-slate-700">Desde:</label>
                 <input
                   type="date"
                   value={customDateRange.startDate}
                   onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                  className="h-10 px-3 rounded-md border border-slate-300 text-sm"
+                  className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
                 />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <label className="text-sm font-medium text-slate-700">Hasta:</label>
                 <input
                   type="date"
                   value={customDateRange.endDate}
                   onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                  className="h-10 px-3 rounded-md border border-slate-300 text-sm"
+                  className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
                 />
               </div>
             </motion.div>
@@ -518,27 +551,18 @@ const AdministrativosPage = () => {
 
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
+        onClose={handleCloseDeleteAdministrativoModal}
         onConfirm={handleDeleteAdministrativo}
+        isLoading={isDeletingAdministrativo}
         title="Eliminar Administrativo"
         message={`¿Estás seguro de que deseas eliminar al administrativo ${selectedAdministrativo?.persona?.primer_nombre || ''} ${selectedAdministrativo?.persona?.primer_apellido || ''}? Esta acción no se puede deshacer.`}
       />
 
       <StatusChangeConfirmModal
         isOpen={isStatusChangeModalOpen}
-        onClose={() => {
-          setLoadingStatusChanges(prev => {
-            const newSet = new Set(prev);
-            if (pendingStatusChange?.administrativoId) {
-              newSet.delete(pendingStatusChange.administrativoId);
-            }
-            return newSet;
-          });
-          setIsStatusChangeModalOpen(false);
-          setSelectedAdministrativo(null);
-          setPendingStatusChange(null);
-        }}
+        onClose={handleCloseStatusChangeAdministrativoModal}
         onConfirm={handleStatusChangeConfirm}
+        isLoading={isChangingAdministrativoStatus}
         title="Confirmar Cambio de Estado"
         message="¿Estás seguro de que deseas cambiar el estado laboral de este administrativo?"
         currentStatus={selectedAdministrativo?.estado_laboral}
@@ -547,9 +571,7 @@ const AdministrativosPage = () => {
           selectedAdministrativo
             ? {
                 nombre: `${selectedAdministrativo.persona?.nombre_completo || ''} ${selectedAdministrativo.persona?.apellido_completo || ''}`.trim(),
-                codigo: selectedAdministrativo.codigo_empleado,
-                cargo: selectedAdministrativo.cargo,
-                departamento: selectedAdministrativo.departamento
+                codigo: selectedAdministrativo.codigo_empleado
               }
             : null
         }
@@ -559,3 +581,4 @@ const AdministrativosPage = () => {
 };
 
 export default AdministrativosPage;
+

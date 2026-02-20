@@ -104,8 +104,8 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
     const yearAdjusted = monthNum < 3 ? yearNum - 1 : yearNum;
 
     const weekdayIndex = (dayNum + Math.floor(2.6 * ((monthAdjusted + 1) % 12) - 0.2) +
-                         yearAdjusted % 100 + Math.floor(yearAdjusted % 100 / 4) +
-                         Math.floor(yearAdjusted / 400) - 2 * Math.floor(yearAdjusted / 100)) % 7;
+      yearAdjusted % 100 + Math.floor(yearAdjusted % 100 / 4) +
+      Math.floor(yearAdjusted / 400) - 2 * Math.floor(yearAdjusted / 100)) % 7;
 
     const weekday = weekdays[Math.abs(weekdayIndex) % 7];
     const monthName = months[parseInt(month) - 1];
@@ -119,6 +119,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
 
     setLoadingHours(true);
     try {
+      let hoursToShow = [];
       // Si hay servicio seleccionado, usar la lógica de bloqueo
       // Caso contrario, usar horarios predeterminados
       if (servicio) {
@@ -139,8 +140,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
           id_servicio: idServicio
         };
 
-        const response = await citaApiService.obtenerHorariosDisponibles(data);
-        setAvailableHours(response);
+        hoursToShow = await citaApiService.obtenerHorariosDisponibles(data);
       } else {
         // Sin servicio seleccionado: horarios predeterminados
         console.log('Loading default hours (no service restriction)');
@@ -151,11 +151,31 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
             defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
           }
         }
-        setAvailableHours(defaultHours);
+        hoursToShow = defaultHours;
       }
+
+      // Filtrar horarios si es hoy (margen de 2 horas)
+      const today = new Date();
+      const isToday = fecha === formatDateForInput(today);
+
+      if (isToday) {
+        const currentHour = today.getHours();
+        const currentMinute = today.getMinutes();
+
+        hoursToShow = hoursToShow.filter(time => {
+          const [h, m] = time.split(':').map(Number);
+          // Convertir ambas a minutos desde inicio del día para comparar
+          const currentTotalMinutes = currentHour * 60 + currentMinute;
+          const appointmentTotalMinutes = h * 60 + m;
+          // Debe haber al menos 120 minutos (2 horas) de diferencia
+          return (appointmentTotalMinutes - currentTotalMinutes) >= 120;
+        });
+      }
+
+      setAvailableHours(hoursToShow);
     } catch (error) {
       console.error('Error loading available hours:', error);
-      // Fallback: horarios predeterminados
+      // Fallback: horarios predeterminados filtrados si es hoy
       const defaultHours = [];
       for (let hora = 8; hora <= 17; hora++) {
         defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
@@ -163,7 +183,17 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
           defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
         }
       }
-      setAvailableHours(defaultHours);
+
+      let filteredFallback = defaultHours;
+      const today = new Date();
+      if (fecha === formatDateForInput(today)) {
+        const currentTotalMinutes = today.getHours() * 60 + today.getMinutes();
+        filteredFallback = defaultHours.filter(time => {
+          const [h, m] = time.split(':').map(Number);
+          return (h * 60 + m - currentTotalMinutes) >= 120;
+        });
+      }
+      setAvailableHours(filteredFallback);
     } finally {
       setLoadingHours(false);
     }

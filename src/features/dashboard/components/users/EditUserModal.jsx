@@ -30,6 +30,7 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setConfirmOpen(true);
   };
 
@@ -42,6 +43,7 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
   const emailChanged = correoOriginal && correoActual && correoActual !== correoOriginal;
 
   const handleConfirmSubmit = async () => {
+    if (loading) return;
     setLoading(true);
     try {
       await onSubmit(formData);
@@ -49,6 +51,16 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRequestClose = () => {
+    if (loading) return;
+    onClose?.();
+  };
+
+  const handleCloseConfirm = () => {
+    if (loading) return;
+    setConfirmOpen(false);
   };
 
   if (!isOpen || !user) return null;
@@ -61,7 +73,7 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleRequestClose}
         />
 
         <motion.div
@@ -84,8 +96,9 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={onClose}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              onClick={handleRequestClose}
+              disabled={loading}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -183,8 +196,9 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
           <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 bg-slate-50">
             <button
               type="button"
-              onClick={onClose}
-              className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              onClick={handleRequestClose}
+              disabled={loading}
+              className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </button>
@@ -227,8 +241,9 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
             <div className="flex justify-end gap-3 mt-6">
               <button
                 type="button"
-                onClick={() => setConfirmOpen(false)}
-                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                onClick={handleCloseConfirm}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancelar
               </button>

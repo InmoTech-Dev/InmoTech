@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Briefcase, Mail, Phone, Calendar, Building, DollarSign, Shield, FileText, Users } from 'lucide-react';
+import { X, User, Briefcase, Mail, Phone, Calendar, Shield, FileText, Users } from 'lucide-react';
 
 const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
   if (!isOpen || !administrativo) return null;
@@ -12,11 +12,6 @@ const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
       return 'Sin rol asignado';
     }
     return roles[0].nombre_rol;
-  };
-
-  const formatCurrency = (amount) => {
-    if (!amount) return 'No especificado';
-    return `$${parseFloat(amount).toLocaleString('es-CO')}`;
   };
 
   const formatDate = (dateString) => {
@@ -96,21 +91,23 @@ const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                    <Phone className="w-4 h-4 text-slate-500" />
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">Teléfono</p>
-                      <p className="text-sm font-medium text-slate-800">{administrativo.persona?.telefono}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                      <Phone className="w-4 h-4 text-slate-500" />
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">Teléfono</p>
+                        <p className="text-sm font-medium text-slate-800">{administrativo.persona?.telefono}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                    <Calendar className="w-4 h-4 text-slate-500" />
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">Fecha de Registro</p>
-                      <p className="text-sm font-medium text-slate-800">
-                        {formatDate(administrativo.persona?.fecha_registro)}
-                      </p>
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                      <Calendar className="w-4 h-4 text-slate-500" />
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">Fecha de Registro</p>
+                        <p className="text-sm font-medium text-slate-800">
+                          {formatDate(administrativo.persona?.fecha_registro)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -142,25 +139,6 @@ const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                    <Briefcase className="w-4 h-4 text-slate-500" />
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">Cargo</p>
-                      <p className="text-sm font-medium text-slate-800">
-                        {administrativo.cargo || 'No especificado'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                    <Building className="w-4 h-4 text-slate-500" />
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">Departamento</p>
-                      <p className="text-sm font-medium text-slate-800">
-                        {administrativo.departamento || 'No especificado'}
-                      </p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>

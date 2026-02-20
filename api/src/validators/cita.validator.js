@@ -4,14 +4,14 @@ const Joi = require('joi');
 const isTodayOrFuture = (value, helpers) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
-  const citaDate = new Date(value);
+
+  const citaDate = new Date(`${value}T00:00:00`);
   citaDate.setHours(0, 0, 0, 0);
-  
+
   if (citaDate < today) {
     return helpers.error('date.min');
   }
-  
+
   return value;
 };
 
@@ -191,7 +191,7 @@ const reagendarCitaSchema = Joi.object({
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const citaDate = new Date(value);
+      const citaDate = new Date(`${value}T00:00:00`);
       citaDate.setHours(0, 0, 0, 0);
 
       if (citaDate < today) {

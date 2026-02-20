@@ -12,17 +12,21 @@ import React, {
   useContext,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import citaApiService, { actualizarEstadoCita } from '../services/citaApiService';
 import { useAuth } from './AuthContext';
+import realtimeBus from '../services/realtimeBus';
 
 const AppointmentContext = createContext(undefined);
+const REALTIME_REFRESH_DEBOUNCE_MS = 450;
 
 export const AppointmentProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { isAuthenticated, user, hasPermission } = useAuth();
+  const refreshDebounceRef = useRef(null);
 
   /**
    * Carga las citas desde la API
@@ -224,6 +228,48 @@ export const AppointmentProvider = ({ children }) => {
     await loadAppointments();
   }, [loadAppointments]);
 
+  const scheduleRealtimeRefresh = useCallback(() => {
+    if (!(isAuthenticated && user?.es_administrativo && hasPermission('citas', 'ver'))) {
+      return;
+    }
+
+    if (refreshDebounceRef.current) {
+      clearTimeout(refreshDebounceRef.current);
+    }
+
+    refreshDebounceRef.current = setTimeout(() => {
+      refrescarCitas().catch((refreshError) => {
+        console.warn('[REALTIME][APPOINTMENTS] No se pudo refrescar citas:', refreshError);
+      });
+    }, REALTIME_REFRESH_DEBOUNCE_MS);
+  }, [hasPermission, isAuthenticated, refrescarCitas, user?.es_administrativo]);
+
+  useEffect(() => {
+    if (!(isAuthenticated && user?.es_administrativo && hasPermission('citas', 'ver'))) {
+      return undefined;
+    }
+
+    const offChanged = realtimeBus.on('appointment.changed', () => {
+      scheduleRealtimeRefresh();
+    });
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', () => {
+      scheduleRealtimeRefresh();
+    });
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', () => {
+      scheduleRealtimeRefresh();
+    });
+
+    return () => {
+      offChanged();
+      offFallbackTick();
+      offReconcile();
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = null;
+      }
+    };
+  }, [hasPermission, isAuthenticated, scheduleRealtimeRefresh, user?.es_administrativo]);
+
   const value = {
     // Estado
     appointments,
@@ -232,6 +278,7 @@ export const AppointmentProvider = ({ children }) => {
 
     // Funciones CRUD
     createAppointment,
+    addAppointment: addExistingAppointment,
     addExistingAppointment,
     updateAppointment,
     deleteAppointment,

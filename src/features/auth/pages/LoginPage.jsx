@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield, Users, Building2, AlertCircle } from "lucide-react"
 import { useAuth } from "../../../shared/contexts/AuthContext"
-import { useNavigate, useLocation } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import ForgotPasswordModal from "../components/ForgotPasswordModal"
 
 export default function LoginPage() {
@@ -16,10 +16,6 @@ export default function LoginPage() {
 
   const { login, requestPasswordReset } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
-
-  // Obtener la ruta de redirección después del login
-  const from = location.state?.from?.pathname || "/"
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -28,29 +24,21 @@ export default function LoginPage() {
 
     try {
       const userData = await login(email, password, rememberMe)
-
-      const hasAdministrativeAccess =
-        userData?.es_administrativo === true ||
-        userData?.roles?.includes('Super Administrador') ||
-        userData?.roles?.includes('Administrador')
-
-      let redirectPath = "/"
-      if (hasAdministrativeAccess) {
-        redirectPath = "/dashboard"
-      }
-
-      if (from !== "/" && from.startsWith("/dashboard")) {
-        if (hasAdministrativeAccess) {
-          redirectPath = from
-        }
-      }
+      const hasAdministrativeAccess = userData?.es_administrativo === true
+      const redirectPath = hasAdministrativeAccess ? "/dashboard" : "/"
 
       setPendingVerificationEmail(null)
       navigate(redirectPath, { replace: true })
     } catch (err) {
+      const reason = err?.data?.reason
       const serverMessage = err?.data?.message || err?.message
       setPendingVerificationEmail(null)
-      setError(serverMessage || 'Error al iniciar sesión. Verifica tus credenciales.')
+      setPassword("")
+      if (reason === 'account_disabled') {
+        setError('Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.')
+      } else {
+        setError(serverMessage || 'Error al iniciar sesion. Verifica tus credenciales.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -268,3 +256,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

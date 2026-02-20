@@ -1,55 +1,42 @@
 const logger = require('../utils/logger');
 
+const mapValidationErrors = (error) => {
+  return error.details.map((detail) => ({
+    field: detail.path.join('.'),
+    message: detail.message
+  }));
+};
+
+const buildErrorResponse = (message, errors) => {
+  return {
+    success: false,
+    message,
+    errors: errors.reduce((acc, err) => {
+      acc[err.field] = err.message;
+      return acc;
+    }, {})
+  };
+};
+
 const validate = (schema) => {
   return (req, res, next) => {
-    // 🔍 DEBUGGING: Mostrar qué llega
-    console.log('═══════════════════════════════════════════════════════');
-    console.log('🔍 VALIDANDO REQUEST DE REGISTRO');
-    console.log('═══════════════════════════════════════════════════════');
-    console.log('📦 Body recibido:');
-    console.log(JSON.stringify(req.body, null, 2));
-    console.log('═══════════════════════════════════════════════════════');
-
     const { error, value } = schema.validate(req.body, {
       abortEarly: false,
       stripUnknown: true
     });
 
     if (error) {
-      const errors = error.details.map(detail => ({
-        field: detail.path.join('.'),
-        message: detail.message
-      }));
+      const errors = mapValidationErrors(error);
 
-      // 🔍 DEBUGGING: Mostrar errores
-      console.log('❌ ERRORES DE VALIDACIÓN:');
-      errors.forEach((err, index) => {
-        console.log(`   ${index + 1}. Campo: "${err.field}"`);
-        console.log(`      Mensaje: ${err.message}`);
+      logger.warn('Validacion fallida', {
+        method: req.method,
+        path: req.originalUrl || req.url,
+        errors
       });
-      console.log('═══════════════════════════════════════════════════════');
 
-      // Intentar log con logger
-      try {
-        logger.warn('Validación fallida:', { body: req.body, errors });
-      } catch (e) {
-        console.log('⚠️  Logger no funcionó');
-      }
-
-      return res.status(400).json({
-        success: false,
-        message: 'Error de validación',
-        errors: errors.reduce((acc, err) => {
-          acc[err.field] = err.message;
-          return acc;
-        }, {})
-      });
+      return res.status(400).json(buildErrorResponse('Error de validacion', errors));
     }
 
-    // ✅ CORRECCIÓN: Estas líneas deben estar FUERA del if (error)
-    console.log('✅ Validación exitosa');
-    console.log('═══════════════════════════════════════════════════════');
-    
     req.validatedData = value;
     next();
   };
@@ -63,29 +50,17 @@ const validateQuery = (schema) => {
     });
 
     if (error) {
-      const errors = error.details.map(detail => ({
-        field: detail.path.join('.'),
-        message: detail.message
-      }));
+      const errors = mapValidationErrors(error);
 
-      console.log('❌ VALIDACIÓN DE QUERY FALLIDA:');
-      console.log('Query:', JSON.stringify(req.query, null, 2));
-      console.log('Errores:', errors);
-
-      try {
-        logger.warn('Validación de query fallida:', { errors, query: req.query });
-      } catch (e) {
-        console.log('⚠️  Logger no funcionó');
-      }
-
-      return res.status(400).json({
-        success: false,
-        message: 'Error de validación en parámetros de consulta',
-        errors: errors.reduce((acc, err) => {
-          acc[err.field] = err.message;
-          return acc;
-        }, {})
+      logger.warn('Validacion de query fallida', {
+        method: req.method,
+        path: req.originalUrl || req.url,
+        errors
       });
+
+      return res
+        .status(400)
+        .json(buildErrorResponse('Error de validacion en parametros de consulta', errors));
     }
 
     req.validatedQuery = value;

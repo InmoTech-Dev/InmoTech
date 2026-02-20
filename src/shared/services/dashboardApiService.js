@@ -1,37 +1,44 @@
-/**
- * Servicio para consumir la API de estadísticas del dashboard
- */
-
 import { apiClient } from './api.config';
 
 class DashboardApiService {
-  /**
-   * Obtener estadísticas del dashboard
-   * @returns {Promise<Object>} Estadísticas del dashboard
-   */
-  async getDashboardStats({ range } = {}) {
-    try {
-      const queryParams = new URLSearchParams();
+  constructor() {
+    this.overviewInFlight = new Map();
+  }
 
-      if (range) {
-        queryParams.append('range', range);
-      }
-
-      const endpoint = queryParams.toString()
-        ? `/reportes/dashboard-stats?${queryParams.toString()}`
-        : '/reportes/dashboard-stats';
-
-      const response = await apiClient.get(endpoint);
-
-      if (response.success) {
-        return response.data;
-      } else {
-        throw new Error(response.message || 'Error obteniendo estadísticas del dashboard');
-      }
-    } catch (error) {
-      console.error('Error en getDashboardStats:', error);
-      throw error;
+  async getDashboardOverview({ range } = {}) {
+    const overviewKey = range || 'default';
+    if (this.overviewInFlight.has(overviewKey)) {
+      return this.overviewInFlight.get(overviewKey);
     }
+
+    const requestPromise = (async () => {
+      try {
+        const params = {};
+        if (range) {
+          params.range = range;
+        }
+
+        const response = await apiClient.get('/dashboard/overview', params);
+
+        if (!response?.success) {
+          throw new Error(response?.message || 'Error obteniendo overview del dashboard');
+        }
+
+        return response.data;
+      } catch (error) {
+        console.error('Error en getDashboardOverview:', error);
+        throw error;
+      } finally {
+        this.overviewInFlight.delete(overviewKey);
+      }
+    })();
+
+    this.overviewInFlight.set(overviewKey, requestPromise);
+    return requestPromise;
+  }
+
+  async getDashboardStats(params = {}) {
+    return this.getDashboardOverview(params);
   }
 }
 

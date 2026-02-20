@@ -27,11 +27,11 @@ const ProtectedRoute = ({
   redirectTo = '/login',
   fallback: FallbackComponent
 }) => {
-  const { isAuthenticated, loading, hasAccess, user } = useAuth();
+  const { isAuthenticated, initializing, hasAccess, user } = useAuth();
   const location = useLocation();
 
   // Mostrar componente de carga mientras verifica autenticación
-  if (loading) {
+  if (initializing) {
     if (FallbackComponent) {
       return <FallbackComponent />;
     }
@@ -53,8 +53,10 @@ const ProtectedRoute = ({
 
   // Si no requiere autenticación pero está autenticado (ej: páginas de login/register)
   if (!requireAuth && isAuthenticated) {
-    console.log('✅ Usuario ya autenticado, redirigiendo a la página principal');
-    return <Navigate to="/" replace />;
+    const hasAdministrativeAccess = user?.es_administrativo === true;
+    const redirectToAuthenticated = hasAdministrativeAccess ? '/dashboard' : '/';
+    console.log('✅ Usuario ya autenticado, redirigiendo según su tipo de acceso');
+    return <Navigate to={redirectToAuthenticated} replace />;
   }
 
   // Si requiere roles específicos y no tiene acceso
@@ -103,10 +105,10 @@ export const EmployeeRoute = ({ children, ...props }) => (
  * Componente específico para rutas del dashboard - permite cualquier rol administrativo
  */
 export const DashboardRoute = ({ children, ...props }) => {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, initializing, user } = useAuth();
 
   // Mostrar componente de carga mientras verifica autenticación
-  if (loading) {
+  if (initializing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -124,10 +126,7 @@ export const DashboardRoute = ({ children, ...props }) => {
   }
 
   // Verificar si el usuario tiene acceso administrativo
-  const hasAdministrativeAccess =
-    user?.es_administrativo === true ||
-    user?.roles?.includes('Super Administrador') ||
-    user?.roles?.includes('Administrador');
+  const hasAdministrativeAccess = user?.es_administrativo === true;
 
   if (!hasAdministrativeAccess) {
     console.log('🚫 Acceso denegado al dashboard: Usuario no tiene permisos administrativos', {
@@ -153,10 +152,10 @@ export const ModulePermissionRoute = ({
   action = 'ver',
   redirectTo = '/dashboard'
 }) => {
-  const { isAuthenticated, loading, hasPermission } = useAuth();
+  const { isAuthenticated, initializing, hasPermission } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  if (initializing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

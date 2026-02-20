@@ -1,11 +1,103 @@
 const authService = require('../services/auth.service');
 const logger = require('../utils/logger');
+const { generateCsrfToken, CSRF_COOKIE_NAME } = require('../middlewares/csrf.middleware');
+
+const ACCESS_COOKIE_NAME = 'accessToken';
+const REFRESH_COOKIE_NAME = 'refreshToken';
+const DEFAULT_ACCESS_TOKEN_MS = 60 * 60 * 1000;
+const DEFAULT_REFRESH_TOKEN_MS = 7 * 24 * 60 * 60 * 1000;
+
+const parseDurationToMs = (rawValue, fallbackValue) => {
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+    return rawValue * 1000;
+  }
+
+  if (!rawValue || typeof rawValue !== 'string') {
+    return fallbackValue;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  const match = normalized.match(/^(\d+)(ms|s|m|h|d)?$/);
+  if (!match) {
+    return fallbackValue;
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2] || 's';
+
+  switch (unit) {
+    case 'ms':
+      return amount;
+    case 's':
+      return amount * 1000;
+    case 'm':
+      return amount * 60 * 1000;
+    case 'h':
+      return amount * 60 * 60 * 1000;
+    case 'd':
+      return amount * 24 * 60 * 60 * 1000;
+    default:
+      return fallbackValue;
+  }
+};
 
 const buildCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === 'production';
   const secureCookies = process.env.COOKIE_SECURE === 'true' || isProduction;
   const sameSite = process.env.COOKIE_SAMESITE || 'lax';
-  return { secureCookies, sameSite };
+  const accessTokenMaxAge = parseDurationToMs(process.env.JWT_EXPIRES_IN, DEFAULT_ACCESS_TOKEN_MS);
+  const refreshTokenMaxAge = parseDurationToMs(
+    process.env.JWT_REFRESH_EXPIRES_IN,
+    DEFAULT_REFRESH_TOKEN_MS
+  );
+
+  return {
+    secureCookies,
+    sameSite,
+    accessTokenMaxAge,
+    refreshTokenMaxAge,
+  };
+};
+
+const setAuthCookies = (res, accessToken, refreshToken, cookieOptions) => {
+  const baseOptions = {
+    httpOnly: true,
+    secure: cookieOptions.secureCookies,
+    sameSite: cookieOptions.sameSite,
+  };
+
+  res.cookie(ACCESS_COOKIE_NAME, accessToken, {
+    ...baseOptions,
+    maxAge: cookieOptions.accessTokenMaxAge,
+  });
+
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+    ...baseOptions,
+    maxAge: cookieOptions.refreshTokenMaxAge,
+  });
+};
+
+const setCsrfCookie = (res, cookieOptions) => {
+  const csrfToken = generateCsrfToken();
+  res.cookie(CSRF_COOKIE_NAME, csrfToken, {
+    httpOnly: false,
+    secure: cookieOptions.secureCookies,
+    sameSite: cookieOptions.sameSite,
+    maxAge: cookieOptions.refreshTokenMaxAge,
+  });
+
+  return csrfToken;
+};
+
+const clearAuthCookies = (res, cookieOptions) => {
+  const clearOptions = {
+    secure: cookieOptions.secureCookies,
+    sameSite: cookieOptions.sameSite,
+  };
+
+  res.clearCookie(ACCESS_COOKIE_NAME, clearOptions);
+  res.clearCookie(REFRESH_COOKIE_NAME, clearOptions);
+  res.clearCookie(CSRF_COOKIE_NAME, clearOptions);
 };
 
 class AuthController {
@@ -38,21 +130,9 @@ class AuthController {
       const { email, password } = req.validatedData;
       const result = await authService.iniciarSesion(email, password);
       const { accessToken, refreshToken } = result;
-      const { secureCookies, sameSite } = buildCookieOptions();
-
-      res.cookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 60 * 60 * 1000, // 1h
-      });
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
-      });
+      const cookieOptions = buildCookieOptions();
+      setAuthCookies(res, accessToken, refreshToken, cookieOptions);
+      setCsrfCookie(res, cookieOptions);
 
       return res.status(200).json({
         success: true,
@@ -94,23 +174,22 @@ class AuthController {
 
   async refrescarToken(req, res, next) {
     try {
-      const { refreshToken } = req.validatedData;
+      const refreshTokenFromBody = req.validatedData?.refreshToken;
+      const refreshTokenFromCookie = req.cookies?.refreshToken;
+      const refreshToken = refreshTokenFromBody || refreshTokenFromCookie;
+
+      if (!refreshToken) {
+        return res.status(401).json({
+          success: false,
+          message: 'Token de refresco requerido',
+          reason: 'REFRESH_TOKEN_REQUIRED',
+        });
+      }
+
       const tokens = await authService.refrescarToken(refreshToken);
-      const { secureCookies, sameSite } = buildCookieOptions();
-
-      res.cookie('accessToken', tokens.accessToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 60 * 60 * 1000,
-      });
-
-      res.cookie('refreshToken', tokens.refreshToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      const cookieOptions = buildCookieOptions();
+      setAuthCookies(res, tokens.accessToken, tokens.refreshToken, cookieOptions);
+      setCsrfCookie(res, cookieOptions);
 
       return res.status(200).json({
         success: true,
@@ -119,7 +198,11 @@ class AuthController {
       });
     } catch (error) {
       logger.error('Error refrescando token:', error);
-      next(error);
+      return res.status(error.status || 401).json({
+        success: false,
+        message: error.message || 'Token de refresco invalido o expirado',
+        reason: error.code || 'INVALID_REFRESH_TOKEN',
+      });
     }
   }
 
@@ -254,10 +337,8 @@ class AuthController {
 
   async cerrarSesion(req, res, next) {
     try {
-      const { secureCookies, sameSite } = buildCookieOptions();
-
-      res.clearCookie('accessToken', { httpOnly: true, secure: secureCookies, sameSite });
-      res.clearCookie('refreshToken', { httpOnly: true, secure: secureCookies, sameSite });
+      const cookieOptions = buildCookieOptions();
+      clearAuthCookies(res, cookieOptions);
 
       return res.status(200).json({
         success: true,

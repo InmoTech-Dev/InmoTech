@@ -76,7 +76,31 @@ const permissionConfig = {
   "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
-  export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
+const VIEW_PERMISSION = "Ver";
+
+const getNextPermissionsSelection = (currentPermissions = [], permiso) => {
+  const selected = new Set(currentPermissions);
+  const isSelected = selected.has(permiso);
+
+  if (permiso === VIEW_PERMISSION) {
+    if (isSelected) {
+      return [];
+    }
+    selected.add(VIEW_PERMISSION);
+    return Array.from(selected);
+  }
+
+  if (isSelected) {
+    selected.delete(permiso);
+    return Array.from(selected);
+  }
+
+  selected.add(permiso);
+  selected.add(VIEW_PERMISSION);
+  return Array.from(selected);
+};
+
+export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
   const [nombre, setNombre] = useState("");
   const [esAdministrativo, setEsAdministrativo] = useState(true);
   const [modules, setModules] = useState(
@@ -133,6 +157,10 @@ const permissionConfig = {
               ...mod,
               enabled: !mod.enabled,
               permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
+              permissions: mod.permisos.reduce((acc, permiso) => {
+                acc[permiso] = !mod.enabled;
+                return acc;
+              }, {})
             }
           : mod
       )
@@ -146,9 +174,7 @@ const permissionConfig = {
         i === index
           ? {
               ...mod,
-              permisosSeleccionados: mod.permisosSeleccionados.includes(permiso)
-                ? mod.permisosSeleccionados.filter((p) => p !== permiso)
-                : [...mod.permisosSeleccionados, permiso],
+              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
             }
           : mod
       )
@@ -160,16 +186,19 @@ const permissionConfig = {
     setModules((prev) =>
       prev.map((mod, i) =>
         i === index
-          ? {
-              ...mod,
-              permissions: {
-                ...mod.permissions,
-                [permiso]: !mod.permissions[permiso]
-              },
-              permisosSeleccionados: mod.permissions[permiso]
-                ? mod.permisosSeleccionados.filter((p) => p !== permiso)
-                : [...mod.permisosSeleccionados, permiso],
-            }
+          ? (() => {
+              const nextSelection = getNextPermissionsSelection(mod.permisosSeleccionados, permiso);
+              const nextPermissions = mod.permisos.reduce((acc, modulePermission) => {
+                acc[modulePermission] = nextSelection.includes(modulePermission);
+                return acc;
+              }, {});
+
+              return {
+                ...mod,
+                permissions: nextPermissions,
+                permisosSeleccionados: nextSelection,
+              };
+            })()
           : mod
       )
     );

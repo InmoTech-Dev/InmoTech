@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, AlertTriangle, Grid3X3, List } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, AlertTriangle, Grid3X3, List, X } from 'lucide-react';
 import SearchBar from '../../components/SearchBar';
-import StatsCard from '../../components/StatsCard';
 import AppointmentTable from '../../components/appointment/AppointmentTable';
 import AppointmentCalendar from '../../components/appointment/AppointmentCalendar';
+import AppointmentSidebar from '../../components/appointment/AppointmentSidebar';
 import CreateAppointmentModal from '../../components/appointment/CreateAppointmentModal';
 import ViewAppointmentModal from '../../components/appointment/ViewAppointmentModal';
 import EditAppointmentModal from '../../components/appointment/EditAppointmentModal';
@@ -36,8 +36,9 @@ const CitasPage = () => {
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [selectedCita, setSelectedCita] = useState(null);
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
-  const [viewMode, setViewMode] = useState('table'); // 'table' or 'calendar'
+  const [viewMode, setViewMode] = useState('calendar'); // 'table' or 'calendar' - Default to calendar
   const [loadingStatusChanges, setLoadingStatusChanges] = useState(new Set());
+  const [isAlertDismissed, setIsAlertDismissed] = useState(false);
   const { toast } = useToast();
 
   // Filtrar citas
@@ -73,6 +74,12 @@ const CitasPage = () => {
     setFilteredCitas(filtered);
     setCurrentPage(1);
   }, [searchTerm, statusFilter, dateFilter, appointments]);
+
+  // Reset alert dismissal when component mounts (alert appears again each time user enters module)
+  useEffect(() => {
+    setIsAlertDismissed(false);
+  }, []);
+
 
   // Función para filtrar por citas de hoy
   const handleFilterToday = () => {
@@ -342,17 +349,19 @@ const CitasPage = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-[calc(100vh-200px)] overflow-hidden">
+      {/* Main Content Area - No Scroll */}
+      <div className="flex-1 flex flex-col space-y-2 overflow-hidden pr-4">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+          className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 flex-shrink-0"
         >
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">Gestión de Citas</h1>
-            <p className="text-slate-600 mt-1">Administra todas las citas de tus clientes</p>
+            <h1 className="text-2xl font-bold text-slate-800">Gestión de Citas</h1>
+            <p className="text-sm text-slate-600">Administra todas las citas de tus clientes</p>
           </div>
           {/* Botón aparece siempre pero deshabilitado si no tiene permisos */}
           <motion.button
@@ -360,94 +369,29 @@ const CitasPage = () => {
             whileHover={hasPermission("citas", "crear") ? { scale: 1.02 } : {}}
             whileTap={hasPermission("citas", "crear") ? { scale: 0.98 } : {}}
             onClick={() => hasPermission("citas", "crear") ? setIsCreateModalOpen(true) : null}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 ${hasPermission("citas", "crear") ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl' : 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-50'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${hasPermission("citas", "crear") ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl' : 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-50'}`}
             title={hasPermission("citas", "crear") ? "Crear nueva cita" : "No tienes permiso para crear citas"}
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             Nueva Cita
           </motion.button>
         </motion.div>
 
-        {/* Stats Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-4"
-        >
-          <StatsCard
-            title="Total Citas"
-            value={stats.total}
-            icon={Calendar}
-            color="bg-gradient-to-r from-blue-500 to-blue-600"
-            textColor="text-blue-600"
-            bgColor="bg-blue-50"
-          />
-          <StatsCard
-            title="Programadas"
-            value={stats.programadas}
-            icon={Clock}
-            color="bg-gradient-to-r from-yellow-500 to-yellow-600"
-            textColor="text-yellow-600"
-            bgColor="bg-yellow-50"
-          />
-          <StatsCard
-            title="Confirmadas"
-            value={stats.confirmadas}
-            icon={CheckCircle}
-            color="bg-gradient-to-r from-green-500 to-green-600"
-            textColor="text-green-600"
-            bgColor="bg-green-50"
-          />
-          <StatsCard
-            title="Canceladas"
-            value={stats.canceladas}
-            icon={XCircle}
-            color="bg-gradient-to-r from-red-500 to-red-600"
-            textColor="text-red-600"
-            bgColor="bg-red-50"
-          />
-          <StatsCard
-            title="Completadas"
-            value={stats.completadas}
-            icon={AlertCircle}
-            color="bg-gradient-to-r from-purple-500 to-purple-600"
-            textColor="text-purple-600"
-            bgColor="bg-purple-50"
-          />
-          <StatsCard
-            title="Re Agendadas"
-            value={stats['re agendada']}
-            icon={AlertCircle}
-            color="bg-gradient-to-r from-orange-500 to-orange-600"
-            textColor="text-orange-600"
-            bgColor="bg-orange-50"
-          />
-          <StatsCard
-            title="Solicitadas"
-            value={stats.solicitada}
-            icon={AlertCircle}
-            color="bg-gradient-to-r from-indigo-500 to-indigo-600"
-            textColor="text-indigo-600"
-            bgColor="bg-indigo-50"
-          />
-        </motion.div>
-
         {/* Pending Appointments Alert */}
-        {pendingAppointments.length > 0 && (
+        {pendingAppointments.length > 0 && !isAlertDismissed && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.05 }}
-            className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"
+            className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 flex-shrink-0"
           >
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-600" />
+              <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
               <div className="flex-1">
-                <h3 className="text-sm font-medium text-yellow-800">
+                <h3 className="text-xs font-medium text-yellow-800">
                   Citas Solicitadas Pendientes
                 </h3>
-                <p className="text-sm text-yellow-700 mt-1">
+                <p className="text-xs text-yellow-700">
                   Hay {pendingAppointments.length} cita{pendingAppointments.length > 1 ? 's' : ''} solicitada{pendingAppointments.length > 1 ? 's' : ''} que llevan más de 24 horas sin respuesta.
                   <button
                     onClick={() => setStatusFilter('solicitada')}
@@ -457,6 +401,13 @@ const CitasPage = () => {
                   </button>
                 </p>
               </div>
+              <button
+                onClick={() => setIsAlertDismissed(true)}
+                className="flex-shrink-0 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-100 rounded-lg p-1 transition-colors"
+                aria-label="Cerrar alerta"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </motion.div>
         )}
@@ -466,7 +417,7 @@ const CitasPage = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="flex flex-col sm:flex-row gap-4 items-start sm:items-center"
+          className="flex flex-col sm:flex-row gap-2 items-start sm:items-center flex-shrink-0"
         >
           <div className="flex-1 max-w-md">
             <SearchBar
@@ -475,30 +426,28 @@ const CitasPage = () => {
               onChange={setSearchTerm}
             />
           </div>
-          <div className="flex gap-2">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: 0.4 }}
-            >
-              <Select
-                value={statusFilter}
-                onValueChange={setStatusFilter}
+          <div className="flex gap-2 flex-wrap items-center">
+            {/* Status Filter */}
+            <div className="w-[180px]">
+              <Select 
+                value={statusFilter === 'solicitada' ? 'Todos los estados' : statusFilter} 
+                onValueChange={(value) => setStatusFilter(value)}
               >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Todos los estados"/>
+                <SelectTrigger className="w-full bg-white border-slate-200">
+                  <SelectValue placeholder="Estado" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Todos los estados">Todos los estados</SelectItem>
                   <SelectItem value="programada">Programadas</SelectItem>
                   <SelectItem value="confirmada">Confirmadas</SelectItem>
-                  <SelectItem value="cancelada">Canceladas</SelectItem>
                   <SelectItem value="completada">Completadas</SelectItem>
                   <SelectItem value="re agendada">Re Agendadas</SelectItem>
+                  <SelectItem value="cancelada">Canceladas</SelectItem>
                   <SelectItem value="solicitada">Solicitadas</SelectItem>
                 </SelectContent>
               </Select>
-            </motion.div>
+            </div>
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -541,11 +490,12 @@ const CitasPage = () => {
           </div>
         </motion.div>
 
-        {/* Content */}
+        {/* Content - Takes remaining space, no scroll */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
+          className="flex-1 overflow-hidden"
         >
           {viewMode === 'table' ? (
             <AppointmentTable
@@ -577,6 +527,13 @@ const CitasPage = () => {
             />
           )}
         </motion.div>
+      </div>
+
+      {/* Right Sidebar - Only scrollable element */}
+      <AppointmentSidebar
+        citas={appointments}
+        onAppointmentClick={handleViewCita}
+      />
 
         {/* Modals */}
         <CreateAppointmentModal

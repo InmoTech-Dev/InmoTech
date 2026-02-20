@@ -71,6 +71,30 @@ const permissionConfig = {
   "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
+const VIEW_PERMISSION = "Ver";
+
+const getNextPermissionsSelection = (currentPermissions = [], permiso) => {
+  const selected = new Set(currentPermissions);
+  const isSelected = selected.has(permiso);
+
+  if (permiso === VIEW_PERMISSION) {
+    if (isSelected) {
+      return [];
+    }
+    selected.add(VIEW_PERMISSION);
+    return Array.from(selected);
+  }
+
+  if (isSelected) {
+    selected.delete(permiso);
+    return Array.from(selected);
+  }
+
+  selected.add(permiso);
+  selected.add(VIEW_PERMISSION);
+  return Array.from(selected);
+};
+
 export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
   const [nombre, setNombre] = useState("");
   const [modules, setModules] = useState([]);
@@ -150,9 +174,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
         i === index
           ? {
               ...mod,
-              permisosSeleccionados: mod.permisosSeleccionados.includes(permiso)
-                ? mod.permisosSeleccionados.filter((p) => p !== permiso)
-                : [...mod.permisosSeleccionados, permiso],
+              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
             }
           : mod
       )

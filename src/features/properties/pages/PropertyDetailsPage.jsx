@@ -439,7 +439,7 @@ export default function PropertyDetailPage() {
       <PropertyVisitModal
         isOpen={isVisitModalOpen}
         onClose={() => setIsVisitModalOpen(false)}
-        property={property}
+        property={viewModel} // ✅ Pasar viewModel en lugar de property raw
         onSubmit={handleScheduleVisit}
       />
     </main>

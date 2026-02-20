@@ -1,11 +1,13 @@
-﻿const app = require('./app');
+const app = require('./app');
 const { testConnection } = require('./config/database');
+const { runPermissionsBackfill } = require('./startup/backfillPermissions');
 
 const PORT = process.env.PORT || 5000;
 
 // Configuración de reintentos para la conexión a BD
 const MAX_DB_RETRIES = parseInt(process.env.DB_MAX_RETRIES || '2', 10);
 const DB_RETRY_DELAY_MS = parseInt(process.env.DB_RETRY_DELAY_MS || '5000', 10);
+const PERMISSIONS_BACKFILL_FAIL_HARD = process.env.PERMISSIONS_BACKFILL_FAIL_HARD === 'true';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -38,6 +40,20 @@ const startServer = async () => {
       } else {
         console.warn('Arrancando sin conexion a BD (modo degradado). Configura FAIL_ON_DB_ERROR=true para forzar salida.');
       }
+    }
+
+    if (dbConnected) {
+      try {
+        await runPermissionsBackfill();
+      } catch (error) {
+        console.error('Error ejecutando backfill de permisos:', error);
+        if (PERMISSIONS_BACKFILL_FAIL_HARD) {
+          console.error('Abortando inicio por PERMISSIONS_BACKFILL_FAIL_HARD=true.');
+          process.exit(1);
+        }
+      }
+    } else {
+      console.warn('Backfill de permisos omitido por falta de conexión a BD.');
     }
 
     const server = app.listen(PORT, () => {

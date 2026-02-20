@@ -4,6 +4,7 @@ const authController = require('../controllers/auth.controller');
 const { validate, validateQuery } = require('../middlewares/validate.middleware');
 const { authenticateToken, optionalAuth } = require('../middlewares/auth.middleware');
 const { loginLimiter, invitationLimiter } = require('../middlewares/security.middleware');
+const { validateAuthOrigin } = require('../middlewares/origin.middleware');
 const {
   registroSchema,
   loginSchema,
@@ -29,7 +30,8 @@ const adminBypassInvitationLimiter = (req, res, next) => {
 // Rutas publicas
 router.post('/register', validate(registroSchema), authController.registrarUsuario);
 router.post('/login', validate(loginSchema), authController.iniciarSesion);
-router.post('/refresh', validate(refreshTokenSchema), authController.refrescarToken);
+router.post('/refresh', validateAuthOrigin, validate(refreshTokenSchema), authController.refrescarToken);
+router.post('/logout', validateAuthOrigin, authController.cerrarSesion);
 router.get('/verify-email', loginLimiter, validateQuery(verifyEmailSchema), authController.verificarCorreo);
 router.post('/verify-code', optionalAuth, adminBypassInvitationLimiter, validate(verifyCodeSchema), authController.verificarCodigo);
 router.post('/resend-code', optionalAuth, adminBypassInvitationLimiter, validate(resendCodeSchema), authController.reenviarCodigo);
@@ -43,6 +45,5 @@ router.get('/me', authController.obtenerPerfil);
 router.patch('/me', validate(actualizarPerfilSchema), authController.actualizarPerfil);
 router.patch('/change-password', validate(cambiarContrasenaSchema), authController.cambiarContrasena);
 router.get('/password-last-changed', authController.obtenerUltimoCambioPassword);
-router.post('/logout', authController.cerrarSesion);
 
 module.exports = router;

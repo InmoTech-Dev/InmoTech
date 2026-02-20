@@ -251,8 +251,16 @@ const DashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const canReadReports = hasPermission('reportes', 'ver');
 
   const loadStats = useCallback(async () => {
+    if (!canReadReports) {
+      setLoading(false);
+      setError(null);
+      setStats(DEFAULT_STATS);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -267,7 +275,7 @@ const DashboardPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [canReadReports, range]);
 
   useEffect(() => {
     loadStats();

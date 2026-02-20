@@ -6661,3 +6661,455 @@
 {"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-09 20:40:20","url":"/me"}
 {"0":"r","1":"o","10":"e","11":" ","12":"i","13":"s","14":" ","15":"n","16":"o","17":"t","18":" ","19":"a","2":"w","20":" ","21":"f","22":"u","23":"n","24":"c","25":"t","26":"i","27":"o","28":"n","3":"s","4":".","5":"r","6":"e","7":"d","8":"u","9":"c","level":"warn","message":"No se pudieron cargar inmuebles de propietarios:","timestamp":"2026-02-09 20:40:49"}
 {"0":"r","1":"o","10":"e","11":" ","12":"i","13":"s","14":" ","15":"n","16":"o","17":"t","18":" ","19":"a","2":"w","20":" ","21":"f","22":"u","23":"n","24":"c","25":"t","26":"i","27":"o","28":"n","3":"s","4":".","5":"r","6":"e","7":"d","8":"u","9":"c","level":"warn","message":"No se pudieron cargar inmuebles de propietarios:","timestamp":"2026-02-09 20:40:49"}
+{"level":"error","message":"Cloudinary no configurado: falta CLOUDINARY_CLOUD_NAME o CLOUDINARY_URL","timestamp":"2026-02-15 16:07:41"}
+{"level":"info","message":"🔌 Intentando conectar a SQL Server...","timestamp":"2026-02-15 16:07:41"}
+{"level":"info","message":"   Servidor: localhost","timestamp":"2026-02-15 16:07:41"}
+{"level":"info","message":"   Instancia: (por defecto)","timestamp":"2026-02-15 16:07:41"}
+{"level":"info","message":"   Puerto: (usando instancia/dinámico)","timestamp":"2026-02-15 16:07:41"}
+{"level":"info","message":"   Servidor: undefined","timestamp":"2026-02-15 16:07:41"}
+{"level":"info","message":"   Base de datos: undefined","timestamp":"2026-02-15 16:07:41"}
+{"level":"error","message":"✗ Error al conectar con SQL Server:","timestamp":"2026-02-15 16:07:42"}
+{"level":"error","message":"  - Servidor: undefined","timestamp":"2026-02-15 16:07:42"}
+{"level":"error","message":"  - Base de datos: undefined","timestamp":"2026-02-15 16:07:42"}
+{"level":"error","message":"  - Usuario: undefined","timestamp":"2026-02-15 16:07:42"}
+{"level":"error","message":"  - Error: Login failed for user ''.","timestamp":"2026-02-15 16:07:42"}
+{"level":"info","message":"🔌 Intentando conectar a SQL Server...","timestamp":"2026-02-15 16:07:47"}
+{"level":"info","message":"   Servidor: localhost","timestamp":"2026-02-15 16:07:47"}
+{"level":"info","message":"   Instancia: (por defecto)","timestamp":"2026-02-15 16:07:47"}
+{"level":"info","message":"   Puerto: (usando instancia/dinámico)","timestamp":"2026-02-15 16:07:47"}
+{"level":"info","message":"   Servidor: undefined","timestamp":"2026-02-15 16:07:47"}
+{"level":"info","message":"   Base de datos: undefined","timestamp":"2026-02-15 16:07:47"}
+{"level":"error","message":"✗ Error al conectar con SQL Server:","timestamp":"2026-02-15 16:07:47"}
+{"level":"error","message":"  - Servidor: undefined","timestamp":"2026-02-15 16:07:47"}
+{"level":"error","message":"  - Base de datos: undefined","timestamp":"2026-02-15 16:07:47"}
+{"level":"error","message":"  - Usuario: undefined","timestamp":"2026-02-15 16:07:47"}
+{"level":"error","message":"  - Error: Login failed for user ''.","timestamp":"2026-02-15 16:07:47"}
+{"level":"error","message":"Cloudinary no configurado: falta CLOUDINARY_CLOUD_NAME o CLOUDINARY_URL","timestamp":"2026-02-15 23:26:34"}
+{"level":"info","message":"🔌 Intentando conectar a SQL Server...","timestamp":"2026-02-15 23:26:34"}
+{"level":"info","message":"   Servidor: localhost","timestamp":"2026-02-15 23:26:34"}
+{"level":"info","message":"   Instancia: (por defecto)","timestamp":"2026-02-15 23:26:34"}
+{"level":"info","message":"   Puerto: (usando instancia/dinámico)","timestamp":"2026-02-15 23:26:34"}
+{"level":"info","message":"   Servidor: undefined","timestamp":"2026-02-15 23:26:34"}
+{"level":"info","message":"   Base de datos: undefined","timestamp":"2026-02-15 23:26:34"}
+{"level":"error","message":"✗ Error al conectar con SQL Server:","timestamp":"2026-02-15 23:26:34"}
+{"level":"error","message":"  - Servidor: undefined","timestamp":"2026-02-15 23:26:34"}
+{"level":"error","message":"  - Base de datos: undefined","timestamp":"2026-02-15 23:26:34"}
+{"level":"error","message":"  - Usuario: undefined","timestamp":"2026-02-15 23:26:34"}
+{"level":"error","message":"  - Error: Login failed for user ''.","timestamp":"2026-02-15 23:26:34"}
+{"level":"info","message":"🔌 Intentando conectar a SQL Server...","timestamp":"2026-02-15 23:26:39"}
+{"level":"info","message":"   Servidor: localhost","timestamp":"2026-02-15 23:26:39"}
+{"level":"info","message":"   Instancia: (por defecto)","timestamp":"2026-02-15 23:26:39"}
+{"level":"info","message":"   Puerto: (usando instancia/dinámico)","timestamp":"2026-02-15 23:26:39"}
+{"level":"info","message":"   Servidor: undefined","timestamp":"2026-02-15 23:26:39"}
+{"level":"info","message":"   Base de datos: undefined","timestamp":"2026-02-15 23:26:39"}
+{"level":"error","message":"✗ Error al conectar con SQL Server:","timestamp":"2026-02-15 23:26:39"}
+{"level":"error","message":"  - Servidor: undefined","timestamp":"2026-02-15 23:26:39"}
+{"level":"error","message":"  - Base de datos: undefined","timestamp":"2026-02-15 23:26:39"}
+{"level":"error","message":"  - Usuario: undefined","timestamp":"2026-02-15 23:26:39"}
+{"level":"error","message":"  - Error: Login failed for user ''.","timestamp":"2026-02-15 23:26:39"}
+{"level":"info","message":"🔌 Intentando conectar a SQL Server...","timestamp":"2026-02-15 23:26:44"}
+{"level":"info","message":"   Servidor: localhost","timestamp":"2026-02-15 23:26:44"}
+{"level":"info","message":"   Instancia: (por defecto)","timestamp":"2026-02-15 23:26:44"}
+{"level":"info","message":"   Puerto: (usando instancia/dinámico)","timestamp":"2026-02-15 23:26:44"}
+{"level":"info","message":"   Servidor: undefined","timestamp":"2026-02-15 23:26:44"}
+{"level":"info","message":"   Base de datos: undefined","timestamp":"2026-02-15 23:26:44"}
+{"level":"error","message":"✗ Error al conectar con SQL Server:","timestamp":"2026-02-15 23:26:45"}
+{"level":"error","message":"  - Servidor: undefined","timestamp":"2026-02-15 23:26:45"}
+{"level":"error","message":"  - Base de datos: undefined","timestamp":"2026-02-15 23:26:45"}
+{"level":"error","message":"  - Usuario: undefined","timestamp":"2026-02-15 23:26:45"}
+{"level":"error","message":"  - Error: Login failed for user ''.","timestamp":"2026-02-15 23:26:45"}
+{"level":"error","message":"Error en inicio de sesiÃ³n: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:151:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:39:22)","status":401,"timestamp":"2026-02-15 23:33:50"}
+{"level":"error","message":"Error en inicio de sesion: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:151:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:39:22)","status":401,"timestamp":"2026-02-15 23:33:50"}
+{"level":"error","message":"Error en inicio de sesiÃ³n: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:151:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:39:22)","status":401,"timestamp":"2026-02-15 23:34:17"}
+{"level":"error","message":"Error en inicio de sesion: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:151:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:39:22)","status":401,"timestamp":"2026-02-15 23:34:17"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 01:38:50","url":"/?_ts=1771223930488"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 01:38:50","url":"/"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 01:38:50","url":"/"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 01:39:24","url":"/"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 01:39:24","url":"/"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 01:39:24","url":"/?_ts=1771223964625"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 01:40:58","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 02:04:33","url":"/dashboard-stats?range=all"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 02:04:33","url":"/dashboard-stats?range=all"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:33","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 02:04:34","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 18:40:17","url":"/me"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 18:40:17","url":"/me"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:18","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 18:40:19","url":"/logout"}
+{"level":"error","message":"Error en inicio de sesiÃ³n: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:151:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:39:22)","status":401,"timestamp":"2026-02-16 19:40:14"}
+{"level":"error","message":"Error en inicio de sesion: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:151:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:39:22)","status":401,"timestamp":"2026-02-16 19:40:14"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:14","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 19:40:15","url":"/logout"}
+{"level":"warn","message":"Permiso denegado - Usuario: diana@mailinator.com, Módulo: reportes, Permisos requeridos: [read]","timestamp":"2026-02-16 19:42:30"}
+{"level":"warn","message":"Permiso denegado - Usuario: diana@mailinator.com, Módulo: reportes, Permisos requeridos: [read]","timestamp":"2026-02-16 19:42:30"}
+{"level":"warn","message":"Permiso denegado - Usuario: diana@mailinator.com, Módulo: reportes, Permisos requeridos: [read]","timestamp":"2026-02-16 19:44:42"}
+{"level":"warn","message":"Permiso denegado - Usuario: diana@mailinator.com, Módulo: reportes, Permisos requeridos: [read]","timestamp":"2026-02-16 19:44:42"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 21:35:49","url":"/dashboard-stats?range=all"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"GET","timestamp":"2026-02-16 21:35:49","url":"/dashboard-stats?range=all"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:49","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:50","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:51","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"level":"warn","message":"[AUTH] No access token in cookies for URL:","method":"POST","timestamp":"2026-02-16 21:35:52","url":"/logout"}
+{"code":"INVALID_CREDENTIALS","level":"error","message":"Error en inicio de sesión: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:211:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:131:22)","status":401,"timestamp":"2026-02-16 23:37:04"}
+{"code":"INVALID_CREDENTIALS","level":"error","message":"Error en inicio de sesion: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:211:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:131:22)","status":401,"timestamp":"2026-02-16 23:37:04"}
+{"level":"warn","message":"Permiso denegado - Usuario: diana@mailinator.com, Módulo: inmuebles, Permisos requeridos: [ver]","timestamp":"2026-02-16 23:37:37"}
+{"level":"warn","message":"Permiso denegado - Usuario: diana@mailinator.com, Módulo: inmuebles, Permisos requeridos: [ver]","timestamp":"2026-02-16 23:37:37"}
+{"level":"warn","message":"Permiso denegado - Usuario: diana@mailinator.com, Módulo: inmuebles, Permisos requeridos: [ver]","timestamp":"2026-02-16 23:37:41"}
+{"code":"INVALID_CREDENTIALS","level":"error","message":"Error en inicio de sesión: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:211:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:131:22)","status":401,"timestamp":"2026-02-16 23:40:10"}
+{"code":"INVALID_CREDENTIALS","level":"error","message":"Error en inicio de sesion: Credenciales inválidas","stack":"Error: Credenciales inválidas\n    at AuthService.iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\services\\auth.service.js:211:23)\n    at async iniciarSesion (C:\\Users\\YO SOY YO SOY YO SOY\\InmoTech\\api\\src\\controllers\\auth.controller.js:131:22)","status":401,"timestamp":"2026-02-16 23:40:10"}

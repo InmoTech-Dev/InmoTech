@@ -105,7 +105,7 @@ const DayCell = ({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className={`
-        day-cell min-h-[100px] max-h-[120px] p-1.5 border border-slate-200 rounded-lg transition-all duration-200 relative
+        day-cell w-full h-full p-1 border border-slate-200 rounded-md transition-all duration-200 relative flex flex-col overflow-hidden
         ${day ? 'hover:shadow-md cursor-pointer' : ''}
         ${isToday ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50'}
         ${isOver ? 'ring-2 ring-blue-400 ring-opacity-50 bg-blue-25' : ''}
@@ -117,11 +117,11 @@ const DayCell = ({
     >
       {day && (
         <>
-          <div className={`text-sm font-medium mb-2 ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>
+          <div className={`text-xs font-medium mb-1 flex-shrink-0 ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>
             {day}
           </div>
 
-          <div className="space-y-1 max-h-[80px] overflow-y-auto">
+          <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
             {visibleAppointments.map((appointment) => (
               activeAppointment?.id === appointment.id ? null : (
                 <AppointmentCard
@@ -141,7 +141,7 @@ const DayCell = ({
                   e.stopPropagation();
                   onMoreClick(appointments);
                 }}
-                className="w-full text-xs text-slate-500 text-center py-1 hover:text-slate-700 transition-colors"
+                className="w-full text-[10px] text-slate-500 text-center py-0.5 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
               >
                 +{appointments.length - 3} más
               </button>
@@ -158,10 +158,9 @@ const DayCell = ({
                 const dateString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 onCreateAppointment(dateString);
               }}
-              className="absolute bottom-2 right-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm px-3 py-2 rounded-full shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center gap-1 font-medium"
+              className="absolute bottom-1 right-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs px-2 py-1 rounded-full shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center gap-0.5 font-medium"
             >
-              <Plus className="w-4 h-4" />
-              Crear Cita
+              <Plus className="w-3 h-3" />
             </motion.button>
           )}
         </>
@@ -234,6 +233,11 @@ const AppointmentCalendar = ({
     // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(day);
+    }
+    
+    // Fill remaining cells to ensure 6 rows (42 cells)
+    while (days.length < 42) {
+      days.push(null);
     }
 
     return days;
@@ -478,11 +482,11 @@ const AppointmentCalendar = ({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 p-6 relative">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200/60 p-3 relative h-full flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-600" />
+          <div className="flex items-center justify-between mb-3 flex-shrink-0">
+            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-blue-600" />
               Calendario de Citas
             </h3>
             <div className="flex items-center gap-2">
@@ -490,84 +494,91 @@ const AppointmentCalendar = ({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => navigateMonth(-1)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </motion.button>
-              <span className="font-medium text-slate-700 min-w-[150px] text-center">
+              <span className="font-medium text-slate-700 min-w-[130px] text-center text-sm">
                 {monthName}
               </span>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => navigateMonth(1)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </motion.button>
             </div>
           </div>
 
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-1 mb-4">
-            {/* Days of week header */}
+          {/* Days of week header - Fixed height outside grid */}
+          <div className="grid grid-cols-7 gap-0.5 mb-1 flex-shrink-0">
             {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-              <div key={day} className="p-3 text-center font-medium text-slate-600 text-sm">
+              <div key={day} className="p-2 text-center font-medium text-slate-600 text-xs bg-slate-50 rounded-md">
                 {day}
               </div>
             ))}
-
-            {/* Calendar days */}
-            {days.map((day, index) => {
-              const dayAppointments = getAppointmentsForDate(day);
-              const isToday = day === new Date().getDate() &&
-                             currentDate.getMonth() === new Date().getMonth() &&
-                             currentDate.getFullYear() === new Date().getFullYear();
-              const isActive = activeDay === day && (userMode || hasPermission("citas", "crear")); // Mostrar para usuarios o admin con permisos
-
-              return (
-                <DayCell
-                  key={index}
-                  day={day}
-                  appointments={dayAppointments}
-                  isToday={isToday}
-                  activeAppointment={activeAppointment}
-                  onAppointmentClick={handleAppointmentClick}
-                  onEmptyCellClick={handleEmptyCellClick}
-                  onMoreClick={handleMoreClick}
-                  currentDate={currentDate}
-                  isActive={isActive}
-                  onCreateAppointment={onCreateAppointment}
-                />
-              );
-            })}
           </div>
 
-          {/* Legend */}
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-yellow-100 border border-yellow-200 rounded"></div>
-              <span>Programada</span>
+          {/* Calendar Grid - Consistent 6 rows for every month */}
+          <div className="flex-1 min-h-0 relative">
+            <div 
+              className="grid grid-cols-7 gap-0.5 h-full absolute inset-0"
+              style={{ gridTemplateRows: 'repeat(6, 1fr)' }}
+            >
+              {/* Calendar days */}
+              {days.map((day, index) => {
+                const dayAppointments = getAppointmentsForDate(day);
+                const isToday = day === new Date().getDate() &&
+                               currentDate.getMonth() === new Date().getMonth() &&
+                               currentDate.getFullYear() === new Date().getFullYear();
+                const isActive = activeDay === day && (userMode || hasPermission("citas", "crear"));
+
+                return (
+                  <DayCell
+                    key={index}
+                    day={day}
+                    appointments={dayAppointments}
+                    isToday={isToday}
+                    activeAppointment={activeAppointment}
+                    onAppointmentClick={handleAppointmentClick}
+                    onEmptyCellClick={handleEmptyCellClick}
+                    onMoreClick={handleMoreClick}
+                    currentDate={currentDate}
+                    isActive={isActive}
+                    onCreateAppointment={onCreateAppointment}
+                  />
+                );
+              })}
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
-              <span>Confirmada</span>
+          </div>
+
+          {/* Legend - Fixed at bottom */}
+          <div className="flex flex-wrap gap-3 text-xs flex-shrink-0 border-t border-slate-200 pt-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 bg-yellow-100 border border-yellow-200 rounded"></div>
+              <span className="text-slate-600">Programada</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-purple-100 border border-purple-200 rounded"></div>
-              <span>Completada</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 bg-green-100 border border-green-200 rounded"></div>
+              <span className="text-slate-600">Confirmada</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div>
-              <span>Cancelada</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 bg-purple-100 border border-purple-200 rounded"></div>
+              <span className="text-slate-600">Completada</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-orange-100 border border-orange-200 rounded"></div>
-              <span>Re Agendada</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 bg-red-100 border border-red-200 rounded"></div>
+              <span className="text-slate-600">Cancelada</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-indigo-100 border border-indigo-200 rounded"></div>
-              <span>Solicitada</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 bg-orange-100 border border-orange-200 rounded"></div>
+              <span className="text-slate-600">Re Agendada</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 bg-indigo-100 border border-indigo-200 rounded"></div>
+              <span className="text-slate-600">Solicitada</span>
             </div>
           </div>
         </div>

@@ -176,9 +176,9 @@ const actualizarPerfilSchema = Joi.object({
 
 const refreshTokenSchema = Joi.object({
   refreshToken: Joi.string()
-    .required()
+    .optional()
     .messages({
-      'any.required': 'El token de refresco es obligatorio'
+      'string.base': 'El token de refresco debe ser texto'
     })
 });
 

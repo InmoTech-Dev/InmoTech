@@ -103,7 +103,7 @@ export const EmployeeRoute = ({ children, ...props }) => (
  * Componente específico para rutas del dashboard - permite cualquier rol administrativo
  */
 export const DashboardRoute = ({ children, ...props }) => {
-  const { isAuthenticated, loading, user, getAvailableModules } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
 
   // Mostrar componente de carga mientras verifica autenticación
   if (loading) {
@@ -124,18 +124,15 @@ export const DashboardRoute = ({ children, ...props }) => {
   }
 
   // Verificar si el usuario tiene acceso administrativo
-  const availableModules = getAvailableModules();
   const hasAdministrativeAccess =
     user?.es_administrativo === true ||
     user?.roles?.includes('Super Administrador') ||
-    user?.roles?.includes('Administrador') ||
-    availableModules.includes('administrativos');
+    user?.roles?.includes('Administrador');
 
   if (!hasAdministrativeAccess) {
     console.log('🚫 Acceso denegado al dashboard: Usuario no tiene permisos administrativos', {
       es_administrativo: user?.es_administrativo,
       roles: user?.roles,
-      availableModules,
       hasAdministrativeAccess
     });
     // Redirigir a página de acceso denegado o home
@@ -144,6 +141,40 @@ export const DashboardRoute = ({ children, ...props }) => {
 
   // Acceso permitido
   console.log('✅ Acceso permitido al dashboard');
+  return children;
+};
+
+/**
+ * Componente específico para validar permiso por módulo/acción
+ */
+export const ModulePermissionRoute = ({
+  children,
+  moduleName,
+  action = 'ver',
+  redirectTo = '/dashboard'
+}) => {
+  const { isAuthenticated, loading, hasPermission } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Verificando acceso...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!hasPermission(moduleName, action)) {
+    return <Navigate to={redirectTo} replace />;
+  }
+
   return children;
 };
 
@@ -166,3 +197,4 @@ export const PublicRoute = ({ children, ...props }) => (
 );
 
 export default ProtectedRoute;
+

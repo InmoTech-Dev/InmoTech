@@ -1,15 +1,21 @@
 const notificacionService = require('../services/notificacion.service');
-const logger = require('../utils/logger');
+
+const parseId = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
 
 class NotificacionController {
+  construirScopeUsuario(req) {
+    const idPersona = parseId(req.user?.id_persona || req.user?.id);
+    const roleNames = Array.isArray(req.user?.roles) ? req.user.roles : [];
+    return { idPersona, roleNames };
+  }
+
   async obtenerNotificacionesNoLeidas(req, res, next) {
     try {
-      const { id_rol, id_persona } = req.query;
-
-      const notificaciones = await notificacionService.obtenerNotificacionesNoLeidas(
-        id_rol ? parseInt(id_rol) : null,
-        id_persona ? parseInt(id_persona) : null
-      );
+      const scope = this.construirScopeUsuario(req);
+      const notificaciones = await notificacionService.obtenerNotificacionesNoLeidas(scope);
 
       return res.status(200).json({
         success: true,
@@ -24,12 +30,20 @@ class NotificacionController {
 
   async marcarComoLeida(req, res, next) {
     try {
-      const { id } = req.params;
-      const notificacion = await notificacionService.marcarComoLeida(parseInt(id));
+      const id = parseId(req.params.id);
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID de notificacion invalido'
+        });
+      }
+
+      const scope = this.construirScopeUsuario(req);
+      const notificacion = await notificacionService.marcarComoLeida(id, scope);
 
       return res.status(200).json({
         success: true,
-        message: 'Notificación marcada como leída',
+        message: 'Notificacion marcada como leida',
         data: notificacion
       });
     } catch (error) {
@@ -39,20 +53,24 @@ class NotificacionController {
 
   async marcarVariasComoLeidas(req, res, next) {
     try {
-      const { ids } = req.body;
+      const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map(parseId).filter(Boolean)
+        : [];
 
-      if (!Array.isArray(ids) || ids.length === 0) {
+      if (ids.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Debe proporcionar un array de IDs'
+          message: 'Debe proporcionar un array de IDs valido'
         });
       }
 
-      await notificacionService.marcarVariasComoLeidas(ids);
+      const scope = this.construirScopeUsuario(req);
+      const actualizadas = await notificacionService.marcarVariasComoLeidas(ids, scope);
 
       return res.status(200).json({
         success: true,
-        message: `${ids.length} notificaciones marcadas como leídas`
+        message: `${actualizadas} notificaciones marcadas como leidas`,
+        data: { total_actualizadas: actualizadas }
       });
     } catch (error) {
       next(error);

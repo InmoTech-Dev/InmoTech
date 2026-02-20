@@ -22,7 +22,7 @@ export const AppointmentProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, hasPermission } = useAuth();
 
   /**
    * Carga las citas desde la API
@@ -45,12 +45,13 @@ export const AppointmentProvider = ({ children }) => {
 
   // Cargar citas solo si hay autenticación y es un administrativo
   useEffect(() => {
-    if (isAuthenticated && user?.es_administrativo) {
+    if (isAuthenticated && user?.es_administrativo && hasPermission('citas', 'ver')) {
       loadAppointments();
     } else {
+      setAppointments([]);
       setLoading(false);
     }
-  }, [loadAppointments, isAuthenticated, user?.es_administrativo]);
+  }, [loadAppointments, isAuthenticated, user?.es_administrativo, hasPermission]);
 
   /**
    * Crea una nueva cita en el backend y la agrega al estado
@@ -263,3 +264,4 @@ export const useAppointments = () => {
 };
 
 export default AppointmentContext;
+

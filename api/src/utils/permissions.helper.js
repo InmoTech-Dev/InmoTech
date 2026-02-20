@@ -114,6 +114,31 @@ const getPermissionSearchValues = (permissionNames = []) => {
     .filter(Boolean);
 };
 
+const VIEW_PERMISSION = 'ver';
+
+const enforceViewDependency = (canonicalPermissions = {}) => {
+  const normalized = {};
+
+  Object.entries(canonicalPermissions).forEach(([moduleKey, modulePerms]) => {
+    if (!modulePerms || typeof modulePerms !== 'object') {
+      return;
+    }
+
+    const nextModulePerms = { ...modulePerms };
+    const hasNonViewPermission = Object.entries(nextModulePerms).some(
+      ([permissionKey, value]) => permissionKey !== VIEW_PERMISSION && value === true
+    );
+
+    if (hasNonViewPermission) {
+      nextModulePerms[VIEW_PERMISSION] = true;
+    }
+
+    normalized[moduleKey] = nextModulePerms;
+  });
+
+  return normalized;
+};
+
 const normalizePermissionsStructure = (permisos = {}) => {
   if (!permisos) {
     return {};
@@ -142,7 +167,7 @@ const normalizePermissionsStructure = (permisos = {}) => {
         assignPermission(permiso.modulo, permiso.permiso);
       }
     });
-    return canonicalPermissions;
+    return enforceViewDependency(canonicalPermissions);
   }
 
   Object.entries(permisos).forEach(([moduleKey, modulePerms]) => {
@@ -157,7 +182,7 @@ const normalizePermissionsStructure = (permisos = {}) => {
     });
   });
 
-  return canonicalPermissions;
+  return enforceViewDependency(canonicalPermissions);
 };
 
 const expandPermissionsMap = (canonicalPermissions = {}) => {
@@ -190,7 +215,7 @@ const buildPermissionsPayload = (permisosInput = {}, idRol) => {
     return [];
   }
 
-  const canonicalPermissions = normalizePermissionsStructure(permisosInput);
+  const canonicalPermissions = enforceViewDependency(normalizePermissionsStructure(permisosInput));
   const payload = [];
 
   Object.entries(canonicalPermissions).forEach(([moduleKey, modulePerms]) => {
@@ -217,6 +242,7 @@ module.exports = {
   getPermissionAliases,
   getModuleSearchValues,
   getPermissionSearchValues,
+  enforceViewDependency,
   normalizePermissionsStructure,
   buildPermissionsResponse,
   buildPermissionsPayload

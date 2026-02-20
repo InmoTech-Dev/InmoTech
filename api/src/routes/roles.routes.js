@@ -23,10 +23,11 @@ router.get('/',
   rolesController.listarRoles
 );
 
-// Obtener rol por ID (todos los usuarios autenticados)
+// Obtener rol por ID (solo Super Admin y Admin)
 router.get('/:id',
   generalLimiter,
   auth.authenticateToken,
+  auth.authorizeRoles(['Super Administrador', 'Administrador']),
   rolesController.obtenerRol
 );
 

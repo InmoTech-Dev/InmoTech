@@ -3,9 +3,10 @@ import { dashboardRoutes } from './routes/index'
 import Navbar from './shared/components/Navbar'
 import Footer from './shared/components/Footer'
 import ScrollToTop from './shared/components/ScrollToTop'
+import BackToTopButton from './shared/components/BackToTopButton'
 import { Toaster } from './shared/components/ui/toaster'
 import DashboardLayout from './shared/components/dashboard/Layout/DashboardLayout'
-import ProtectedRoute, { EmployeeRoute, DashboardRoute, AuthenticatedRoute } from './shared/components/ProtectedRoute'
+import ProtectedRoute, { AdminRoute, DashboardRoute, ModulePermissionRoute } from './shared/components/ProtectedRoute'
 
 // Pages
 import HomePage from './features/properties/pages/HomePage'
@@ -39,6 +40,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
+      <BackToTopButton />
       <Routes>
 
         {/* Public routes with navbar and footer */}
@@ -160,9 +162,11 @@ function App() {
           path={dashboardRoutes.properties}
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <InmueblesDashboardPage />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="inmuebles" action="ver">
+                <DashboardLayout>
+                  <InmueblesDashboardPage />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -170,9 +174,11 @@ function App() {
           path={dashboardRoutes.owners}
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <OwnerDashboardPage />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="inmuebles" action="ver">
+                <DashboardLayout>
+                  <OwnerDashboardPage />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -180,9 +186,11 @@ function App() {
           path="/dashboard/salesManagement"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <SalesManagementPage />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="ventas" action="ver">
+                <DashboardLayout>
+                  <SalesManagementPage />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -190,9 +198,11 @@ function App() {
           path="/dashboard/buyersManagement"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <BuyersManagementPage />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="ventas" action="ver">
+                <DashboardLayout>
+                  <BuyersManagementPage />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -200,9 +210,11 @@ function App() {
           path="/dashboard/leasesManagement"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <LeasesManagementPage />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="arriendos" action="ver">
+                <DashboardLayout>
+                  <LeasesManagementPage />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -210,9 +222,11 @@ function App() {
           path="/dashboard/renantManagement"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <RenantManagementPage />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="arriendos" action="ver">
+                <DashboardLayout>
+                  <RenantManagementPage />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -220,9 +234,11 @@ function App() {
           path="/dashboard/citas"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <AppointmentPage />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="citas" action="ver">
+                <DashboardLayout>
+                  <AppointmentPage />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -230,9 +246,11 @@ function App() {
           path="/reportes/gestion"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <Reports />
-              </DashboardLayout>
+              <ModulePermissionRoute moduleName="reportes" action="ver">
+                <DashboardLayout>
+                  <Reports />
+                </DashboardLayout>
+              </ModulePermissionRoute>
             </DashboardRoute>
           }
         />
@@ -240,9 +258,11 @@ function App() {
           path="/seguridad/roles"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <Roles />
-              </DashboardLayout>
+              <AdminRoute>
+                <DashboardLayout>
+                  <Roles />
+                </DashboardLayout>
+              </AdminRoute>
             </DashboardRoute>
           }
         />
@@ -250,9 +270,11 @@ function App() {
           path="/seguridad/administrativos"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <AdministrativosPage />
-              </DashboardLayout>
+              <AdminRoute>
+                <DashboardLayout>
+                  <AdministrativosPage />
+                </DashboardLayout>
+              </AdminRoute>
             </DashboardRoute>
           }
         />
@@ -260,9 +282,11 @@ function App() {
           path="/seguridad/usuarios"
           element={
             <DashboardRoute>
-              <DashboardLayout>
-                <UsersPage />
-              </DashboardLayout>
+              <AdminRoute>
+                <DashboardLayout>
+                  <UsersPage />
+                </DashboardLayout>
+              </AdminRoute>
             </DashboardRoute>
           }
         />

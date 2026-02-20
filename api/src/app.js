@@ -10,6 +10,7 @@ const corsOptions = require("./config/cors");
 const routes = require("./routes");
 const { errorHandler, notFoundHandler } = require("./middlewares/errorHandler.middleware");
 const { generalLimiter, sanitizeInput } = require("./middlewares/security.middleware");
+const { csrfProtection } = require("./middlewares/csrf.middleware");
 const logger = require("./utils/logger");
 
 const app = express();
@@ -42,6 +43,7 @@ if (process.env.NODE_ENV === "development") {
 
 app.use(sanitizeInput);
 app.use(generalLimiter);
+app.use(csrfProtection);
 
 // Servir archivos estaticos de imagenes subidas
 app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads")));

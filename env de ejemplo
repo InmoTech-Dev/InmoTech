@@ -44,7 +44,6 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 # CONFIGURACIÓN DE EMAIL (BREVO)
 # =====================================================
 # CONFIGURACIÓN DE BREVO (ACTUALIZAR ESTOS DATOS)
-
 EMAIL_HOST=smtp-relay.brevo.com
 EMAIL_PORT=587
 EMAIL_USER=matriz.inmobiliaria001@gmail.com

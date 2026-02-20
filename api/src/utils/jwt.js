@@ -1,8 +1,16 @@
 const jwt = require('jsonwebtoken');
 const logger = require('./logger');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'inmotech-secret-key-2024';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'inmotech-refresh-secret-key-2024';
+const getRequiredSecret = (name) => {
+  const raw = process.env[name];
+  if (!raw || typeof raw !== 'string' || raw.trim().length === 0) {
+    throw new Error(`[JWT] Missing required environment variable: ${name}`);
+  }
+  return raw.trim();
+};
+
+const JWT_SECRET = getRequiredSecret('JWT_SECRET');
+const JWT_REFRESH_SECRET = getRequiredSecret('JWT_REFRESH_SECRET');
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 

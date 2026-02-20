@@ -20,6 +20,7 @@ const sseRoutes = require('./sse.routes');
 const invitacionesRoutes = require('./invitaciones.routes');
 const uploadRoutes = require('./upload.routes');
 const arriendoRoutes = require('./arriendo.routes');
+const dashboardRoutes = require('./dashboard.route');
 
 // Montaje de rutas
 router.use('/auth', authRoutes);
@@ -41,11 +42,12 @@ router.use('/sse', sseRoutes);
 router.use('/invitaciones', invitacionesRoutes);
 router.use('/files', uploadRoutes);
 router.use('/arriendos', arriendoRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 // Ruta de salud
 router.get('/health', async (req, res) => {
   try {
-    const dbStatus = await require('./config/database').testConnection();
+    const dbStatus = await require('../config/database').testConnection();
     res.json({
       success: true,
       status: 'OK',

@@ -1,613 +1,562 @@
-﻿import React, { useEffect, useMemo, useCallback, useState } from 'react';
-import { motion } from 'framer-motion';
-import { useAuth } from '../../shared/contexts/AuthContext';
-import dashboardApiService from '../../shared/services/dashboardApiService';
-import {
-  MdCalendarToday,
-  MdPeople,
-  MdAssignmentInd,
-  MdShield,
-  MdRefresh,
-  MdAccessTime,
-  MdTrendingUp
-} from 'react-icons/md';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
   CartesianGrid,
   Tooltip,
-  BarChart,
-  Bar
+  XAxis,
+  YAxis,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
+import { useAuth } from '../../shared/contexts/AuthContext';
+import dashboardApiService from '../../shared/services/dashboardApiService';
+import DashboardHeader from './components/DashboardHeader';
+import PersonalOverview from './components/PersonalOverview';
+import ModuleSection from './components/ModuleSection';
+import ModuleTabs from './components/ModuleTabs';
+import KpiCard from './components/KpiCard';
+import InsightList from './components/InsightList';
+import { MODULE_META, FALLBACK_MODULES } from './utils/dashboardConfig';
+import { formatNumber, formatCurrency, formatDateLabel, formatDateTime } from './utils/dashboardFormatters';
 
-const RANGE_OPTIONS = [
-  { value: 'all', label: 'Todo' },
-  { value: '90d', label: '90 días' },
-  { value: '30d', label: '30 días' },
-  { value: '7d', label: '7 días' }
-];
+const STATUS_COLORS = ['#00457B', '#0EA5E9', '#16A34A', '#F59E0B', '#DC2626', '#7C3AED'];
+const DEFAULT_REFRESH_IN_SEC = 60;
 
-const STATUS_COLORS = ['#0ea5e9', '#6366f1', '#f97316', '#f43f5e', '#22c55e'];
-const HEATMAP_DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-const HEATMAP_HOURS = [8, 10, 12, 14, 16, 18];
-
-const DEFAULT_STATS = {
-  highlights: [
-    { id: 'citas', module: 'citas', label: 'Citas', value: 0, delta: 0, helper: 'Sin datos disponibles' },
-    { id: 'usuarios', module: 'usuarios', label: 'Usuarios', value: 0, delta: 0 },
-    { id: 'administrativos', module: 'administrativos', label: 'Administrativos', value: 0, delta: 0 },
-    { id: 'roles', module: 'roles', label: 'Roles', value: 0, delta: 0 }
-  ],
-  citas: { porEstado: [], porMes: [] },
-  usuarios: { porRol: [] },
-  administrativos: { porEstado: [] },
-  roles: { porPermiso: [] },
-  agendaHoy: [],
-  heatmap: [],
-  modulesAccess: {}
-};
-
-const HIGHLIGHT_THEMES = {
-  citas: { gradient: 'from-sky-500 to-indigo-500', icon: MdCalendarToday },
-  usuarios: { gradient: 'from-emerald-500 to-green-600', icon: MdPeople },
-  administrativos: { gradient: 'from-fuchsia-500 to-purple-500', icon: MdAssignmentInd },
-  roles: { gradient: 'from-amber-500 to-orange-500', icon: MdShield }
-};
-
-const formatNumber = (value = 0) => value.toLocaleString('es-CO');
-const formatPercentage = (value = 0) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
-
-const RangeSelector = ({ value, onChange, onRefresh, loading, className = '' }) => (
-  <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-    {RANGE_OPTIONS.map((option) => (
-      <button
-        key={option.value}
-        disabled={loading}
-        onClick={() => onChange(option.value)}
-        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
-          option.value === value
-            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-            : 'text-slate-600 border-slate-200 hover:border-blue-400'
-        }`}
-      >
-        {option.label}
-      </button>
-    ))}
-    <button
-      onClick={onRefresh}
-      disabled={loading}
-      className="p-2 rounded-full border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-400 transition-colors"
-      title="Actualizar estadísticas"
-    >
-      <MdRefresh size={20} className={loading ? 'animate-spin' : ''} />
-    </button>
+const ChartContainer = ({ children, height = 240 }) => (
+  <div className="w-full min-w-0" style={{ minHeight: height }}>
+    <ResponsiveContainer width="100%" height={height}>
+      {children}
+    </ResponsiveContainer>
   </div>
 );
 
-const HighlightCard = ({ item }) => {
-  const theme = HIGHLIGHT_THEMES[item.module] || HIGHLIGHT_THEMES.citas;
-  const Icon = theme.icon;
-
-  return (
-    <motion.div
-      whileHover={{ y: -4, scale: 1.01 }}
-      transition={{ duration: 0.2 }}
-      className={`rounded-2xl p-5 text-white shadow-lg bg-gradient-to-br ${theme.gradient}`}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-white/70 text-sm">{item.label}</p>
-          <p className="text-3xl font-semibold mt-1">{formatNumber(item.value)}</p>
-          {typeof item.delta === 'number' && (
-            <p className={`text-sm mt-1 ${item.delta >= 0 ? 'text-white' : 'text-red-100'}`}>
-              {formatPercentage(item.delta)}
-            </p>
-          )}
-        </div>
-        <div className="bg-white/20 p-3 rounded-2xl">
-          <Icon size={32} />
-        </div>
-      </div>
-      {item.helper && (
-        <p className="text-white/70 text-xs mt-3">{item.helper}</p>
-      )}
-    </motion.div>
-  );
-};
-
-const SectionCard = ({ title, description, children, actions }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.3 }}
-    className="bg-white/90 border border-slate-100 rounded-2xl shadow-sm p-6 flex flex-col gap-4 w-full min-w-0"
-  >
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-        {description && <p className="text-slate-500 text-sm mt-1">{description}</p>}
-      </div>
-      {actions}
-    </div>
-    {children}
-  </motion.div>
+const KpiGrid = ({ children }) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">{children}</div>
 );
 
-const HeatmapGrid = ({ data = [] }) => {
-  const mapped = useMemo(() => {
-    const map = new Map();
-    data.forEach((entry) => {
-      const dayKey = entry.diaIndice || 1;
-      const hourKey = entry.hora;
-      const key = `${dayKey}-${hourKey}`;
-      map.set(key, (map.get(key) || 0) + entry.total);
-    });
-    return map;
-  }, [data]);
-
-  const maxValue = Math.max(1, ...Array.from(mapped.values()));
-
-  const getColor = (value) => {
-    const intensity = value / maxValue;
-    return `rgba(59,130,246,${0.15 + intensity * 0.85})`;
-  };
-
-  return (
-    <div className="overflow-x-auto w-full">
-      <div className="min-w-[520px] grid grid-cols-7 gap-2 text-xs">
-        {HEATMAP_DAYS.map((day, dayIndex) => (
-          <div key={day} className="flex flex-col gap-2">
-            <p className="text-center text-slate-500 font-medium">{day}</p>
-            {HEATMAP_HOURS.map((hour) => {
-              const key = `${dayIndex + 1}-${hour}`;
-              const value = mapped.get(key) || 0;
-              return (
-                <div
-                  key={key}
-                  className="h-10 rounded-lg border border-slate-100 flex items-center justify-center text-[11px]"
-                  style={{ backgroundColor: value ? getColor(value) : 'rgba(148, 163, 184, 0.1)' }}
-                >
-                  {value ? value : ''}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const EmptyState = ({ message }) => (
-  <div className="flex items-center justify-center py-8 text-slate-400 text-sm">
+const EmptyModule = ({ message }) => (
+  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
     {message}
   </div>
 );
 
-const AgendaList = ({ items = [] }) => {
-  if (!items.length) {
-    return <EmptyState message="No hay citas programadas para hoy" />;
-  }
+const renderCitas = (data = {}) => {
+  const trend = (data.serie_ultimos_30d || []).map((item) => ({
+    fecha: formatDateLabel(item.fecha),
+    total: Number(item.total) || 0
+  }));
+
+  const insights = (data.agenda_hoy || []).slice(0, 6).map((item) => ({
+    id: item.id,
+    label: `${item.hora_inicio?.slice(0, 5) || '--:--'} - ${item.cliente || 'Cliente'}`,
+    description: `${item.servicio || 'Servicio'} - ${item.estado || 'Sin estado'}`
+  }));
 
   return (
-    <div className="space-y-3">
-      {items.map((item) => (
-        <div key={item.id} className="flex items-center justify-between border border-slate-100 rounded-xl p-3">
-          <div>
-            <p className="text-slate-800 font-medium">{item.cliente || 'Cliente sin nombre'}</p>
-            <p className="text-slate-500 text-sm">{item.servicio || 'Servicio general'}</p>
-            <p className="text-slate-400 text-xs mt-1">
-              {item.agente ? `Agente: ${item.agente}` : 'Sin agente asignado'}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="flex items-center justify-end text-sm text-slate-500">
-              <MdAccessTime className="mr-1" />
-              {item.hora_inicio?.slice(0, 5)} - {item.hora_fin?.slice(0, 5)}
-            </p>
-            <span className="inline-block mt-2 px-3 py-1 text-xs rounded-full bg-blue-50 text-blue-600 uppercase">
-              {item.estado || 'Pendiente'}
-            </span>
-          </div>
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Hoy total" value={formatNumber(data.hoy_total)} tone="primary" />
+        <KpiCard label="Pendientes" value={formatNumber(data.hoy_pendientes)} tone="warning" />
+        <KpiCard label="Confirmadas" value={formatNumber(data.hoy_confirmadas)} tone="success" />
+        <KpiCard label="Proximas 24h" value={formatNumber(data.proximas_24h)} tone="info" />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          {trend.length ? (
+            <ChartContainer>
+              <LineChart data={trend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="total" stroke="#00457B" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ChartContainer>
+          ) : (
+            <EmptyModule message="No hay tendencia para mostrar." />
+          )}
         </div>
-      ))}
+
+        <InsightList title="Agenda e insights" items={insights} emptyMessage="Sin agenda para hoy." />
+      </div>
     </div>
   );
 };
 
-const AgentsChart = ({ data = [] }) => {
-  if (!data.length) {
-    return <EmptyState message="Aún no hay agentes con citas registradas" />;
+const renderVentas = (data = {}) => {
+  const insights = (data.por_estado || []).map((item, idx) => ({
+    id: `${item.estado}-${idx}`,
+    label: item.estado || 'Sin estado',
+    description: `Monto: ${formatCurrency(item.monto_total || 0)}`,
+    value: formatNumber(item.total || 0)
+  }));
+
+  return (
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Ventas mes" value={formatNumber(data.ventas_este_mes)} tone="success" />
+        <KpiCard label="Facturado mes" value={formatCurrency(data.total_facturado_mes)} tone="primary" />
+        <KpiCard label="Ticket promedio" value={formatCurrency(data.ticket_promedio_mes)} tone="info" />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          {(data.por_estado || []).length ? (
+            <ChartContainer>
+              <BarChart data={data.por_estado}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="estado" tick={{ fontSize: 11 }} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="total" fill="#0B6FA4" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <EmptyModule message="Sin datos de ventas para el rango." />
+          )}
+        </div>
+
+        <InsightList title="Estado comercial" items={insights} emptyMessage="Sin estados registrados." />
+      </div>
+    </div>
+  );
+};
+
+const renderArriendos = (data = {}) => {
+  const insights = (data.por_estado || []).map((item, idx) => ({
+    id: `${item.estado}-${idx}`,
+    label: item.estado || 'Sin estado',
+    description: `Valor mensual: ${formatCurrency(item.monto_mensual || 0)}`,
+    value: formatNumber(item.total || 0)
+  }));
+
+  return (
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Activos" value={formatNumber(data.activos)} tone="success" />
+        <KpiCard label="Ingresos mes" value={formatCurrency(data.ingresos_este_mes)} tone="primary" />
+        <KpiCard label="Cobros pendientes" value={formatNumber(data.cobros_pendientes)} tone="warning" />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          {(data.por_estado || []).length ? (
+            <ChartContainer>
+              <BarChart data={data.por_estado}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="estado" tick={{ fontSize: 11 }} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="total" fill="#0F766E" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <EmptyModule message="Sin datos de arriendos para el rango." />
+          )}
+        </div>
+
+        <InsightList title="Estado de arriendos" items={insights} emptyMessage="Sin estados registrados." />
+      </div>
+    </div>
+  );
+};
+
+const renderInmuebles = (data = {}) => {
+  const pieData = [
+    { name: 'Disponibles', total: Number(data.disponibles) || 0 },
+    { name: 'Arrendados', total: Number(data.arrendados) || 0 },
+    { name: 'Vendidos', total: Number(data.vendidos) || 0 },
+    { name: 'En proceso', total: Number(data.en_proceso_arrendamiento) || 0 }
+  ];
+
+  const insights = pieData.map((item) => ({
+    id: item.name,
+    label: item.name,
+    value: formatNumber(item.total)
+  }));
+
+  return (
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Total inventario" value={formatNumber(data.total_inmuebles)} tone="primary" />
+        <KpiCard label="Disponibles" value={formatNumber(data.disponibles)} tone="success" />
+        <KpiCard label="Arrendados" value={formatNumber(data.arrendados)} tone="info" />
+        <KpiCard label="Vendidos" value={formatNumber(data.vendidos)} tone="warning" />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          {pieData.some((item) => item.total > 0) ? (
+            <ChartContainer>
+              <PieChart>
+                <Pie data={pieData} dataKey="total" nameKey="name" outerRadius={88} innerRadius={52}>
+                  {pieData.map((item, idx) => (
+                    <Cell key={item.name} fill={STATUS_COLORS[idx % STATUS_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ChartContainer>
+          ) : (
+            <EmptyModule message="No hay composicion de inventario para mostrar." />
+          )}
+        </div>
+
+        <InsightList title="Disponibilidad" items={insights} emptyMessage="Sin datos de disponibilidad." />
+      </div>
+    </div>
+  );
+};
+
+const renderUsuarios = (data = {}) => {
+  const chartData = [
+    { estado: 'Activos', total: Number(data.activos) || 0 },
+    { estado: 'Inactivos', total: Number(data.inactivos) || 0 },
+    { estado: 'Nuevos 30d', total: Number(data.nuevos_30d) || 0 }
+  ];
+
+  const insights = (data.activos_recientes || []).slice(0, 6).map((item) => ({
+    id: item.id_persona,
+    label: item.nombre || 'Usuario',
+    description: `${item.correo || 'Sin correo'} - ${formatDateTime(item.ultimo_acceso)}`
+  }));
+
+  return (
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Activos" value={formatNumber(data.activos)} tone="success" />
+        <KpiCard label="Inactivos" value={formatNumber(data.inactivos)} tone="warning" />
+        <KpiCard label="Nuevos 30d" value={formatNumber(data.nuevos_30d)} tone="info" />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          <ChartContainer>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+              <XAxis dataKey="estado" tick={{ fontSize: 11 }} />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="total" fill="#475569" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ChartContainer>
+        </div>
+
+        <InsightList title="Actividad reciente" items={insights} emptyMessage="No hay actividad reciente." />
+      </div>
+    </div>
+  );
+};
+
+const renderAdministrativos = (data = {}) => {
+  const insights = (data.distribucion_cargo || []).slice(0, 6).map((item) => ({
+    id: item.cargo,
+    label: item.cargo || 'Sin cargo',
+    value: formatNumber(item.total || 0)
+  }));
+
+  return (
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Activos" value={formatNumber(data.activos)} tone="success" />
+        <KpiCard label="No activos" value={formatNumber(data.inactivos)} tone="warning" />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          {(data.distribucion_estado || []).length ? (
+            <ChartContainer>
+              <BarChart data={data.distribucion_estado}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="estado" tick={{ fontSize: 11 }} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="total" fill="#0E7490" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <EmptyModule message="Sin estado laboral para mostrar." />
+          )}
+        </div>
+
+        <InsightList title="Distribucion de cargos" items={insights} emptyMessage="Sin cargos registrados." />
+      </div>
+    </div>
+  );
+};
+
+const renderRoles = (data = {}) => {
+  const insights = (data.roles_mas_asignados || []).slice(0, 6).map((item) => ({
+    id: item.id_rol,
+    label: item.nombre_rol || 'Sin rol',
+    value: formatNumber(item.total || 0)
+  }));
+
+  if ((data.usuarios_sin_rol || 0) > 0) {
+    insights.unshift({
+      id: 'sin-rol',
+      label: 'Usuarios sin rol',
+      value: formatNumber(data.usuarios_sin_rol),
+      description: 'Requiere revision de seguridad'
+    });
   }
 
   return (
-    <div className="w-full min-w-0" style={{ minHeight: 256 }}>
-      <ResponsiveContainer width="100%" height={256}>
-        <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey={(item) => item.nombre?.split(' ')[0] || 'Agente'} stroke="#94a3b8" />
-          <YAxis stroke="#94a3b8" allowDecimals={false} />
-          <Tooltip formatter={(value) => formatNumber(value)} />
-          <Bar dataKey="total" fill="#0ea5e9" radius={[8, 8, 0, 0]}>
-            {data.map((_, idx) => (
-              <Cell key={idx} fill={STATUS_COLORS[idx % STATUS_COLORS.length]} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Usuarios sin rol" value={formatNumber(data.usuarios_sin_rol)} tone="danger" />
+        <KpiCard
+          label="Roles con asignacion"
+          value={formatNumber((data.roles_mas_asignados || []).length)}
+          tone="primary"
+        />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          {(data.roles_mas_asignados || []).length ? (
+            <ChartContainer>
+              <BarChart data={data.roles_mas_asignados}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="nombre_rol" tick={{ fontSize: 11 }} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="total" fill="#7C3AED" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <EmptyModule message="No hay asignaciones de roles registradas." />
+          )}
+        </div>
+
+        <InsightList title="Resumen de perfiles" items={insights} emptyMessage="Sin perfiles para revisar." />
+      </div>
     </div>
   );
+};
+
+const renderReportes = (data = {}) => {
+  const insights = (data.por_estado || []).map((item, idx) => ({
+    id: `${item.estado}-${idx}`,
+    label: item.estado || 'Sin estado',
+    value: formatNumber(item.total || 0)
+  }));
+
+  return (
+    <div className="space-y-4">
+      <KpiGrid>
+        <KpiCard label="Reportes del mes" value={formatNumber(data.reportes_mes)} tone="primary" />
+        <KpiCard label="Pendientes" value={formatNumber(data.pendientes)} tone="warning" />
+        <KpiCard label="Resueltos" value={formatNumber(data.resueltos)} tone="success" />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-200 p-3">
+          {(data.por_estado || []).length ? (
+            <ChartContainer>
+              <BarChart data={data.por_estado}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="estado" tick={{ fontSize: 11 }} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="total" fill="#B45309" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <EmptyModule message="No hay estados de reportes para mostrar." />
+          )}
+        </div>
+
+        <InsightList title="Estado de reportes" items={insights} emptyMessage="Sin estado de reportes." />
+      </div>
+    </div>
+  );
+};
+
+const MODULE_RENDERERS = {
+  citas: renderCitas,
+  ventas: renderVentas,
+  arriendos: renderArriendos,
+  inmuebles: renderInmuebles,
+  usuarios: renderUsuarios,
+  administrativos: renderAdministrativos,
+  roles: renderRoles,
+  reportes: renderReportes
+};
+
+const getPreferredInitialTab = (modules = []) => {
+  if (modules.includes('citas')) return 'citas';
+  return modules[0] || null;
 };
 
 const DashboardPage = () => {
   const { user, hasPermission } = useAuth();
-  const [range, setRange] = useState('all');
-  const [stats, setStats] = useState(null);
+  const prefersReducedMotion = useReducedMotion();
+  const [range, setRange] = useState('30d');
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const canReadReports = hasPermission('reportes', 'ver');
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [activeModuleTab, setActiveModuleTab] = useState(null);
+  const [refreshInSec, setRefreshInSec] = useState(DEFAULT_REFRESH_IN_SEC);
+  const latestRequestRef = useRef(0);
 
-  const loadStats = useCallback(async () => {
-    if (!canReadReports) {
-      setLoading(false);
-      setError(null);
-      setStats(DEFAULT_STATS);
+  const loadDashboard = useCallback(
+    async ({ silent = false } = {}) => {
+      const requestId = latestRequestRef.current + 1;
+      latestRequestRef.current = requestId;
+
+      try {
+        if (silent) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+        setError('');
+
+        const payload = await dashboardApiService.getDashboardOverview({ range });
+        if (requestId !== latestRequestRef.current) return;
+        setDashboardData(payload);
+        const nextRefreshInSec = Number(payload?.refreshInSec);
+        if (Number.isFinite(nextRefreshInSec) && nextRefreshInSec > 0) {
+          setRefreshInSec(nextRefreshInSec);
+        }
+      } catch (err) {
+        if (requestId !== latestRequestRef.current) return;
+        setError(err?.message || 'No se pudo cargar el dashboard.');
+      } finally {
+        if (requestId !== latestRequestRef.current) return;
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [range]
+  );
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    const intervalMs = Math.max(1, Number(refreshInSec) || DEFAULT_REFRESH_IN_SEC) * 1000;
+    const timer = setInterval(() => {
+      loadDashboard({ silent: true });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [loadDashboard, refreshInSec]);
+
+  const fallbackModules = useMemo(
+    () => FALLBACK_MODULES.filter((moduleKey) => hasPermission(moduleKey, 'ver')),
+    [hasPermission]
+  );
+
+  const visibleModules = useMemo(() => {
+    const modules = dashboardData?.visibility?.modules;
+    if (Array.isArray(modules) && modules.length) {
+      return modules;
+    }
+    return fallbackModules;
+  }, [dashboardData, fallbackModules]);
+
+  useEffect(() => {
+    if (!visibleModules.length) {
+      setActiveModuleTab(null);
       return;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await dashboardApiService.getDashboardStats({ range });
-      setStats(response);
-    } catch (err) {
-      setError(err.message || 'No se pudieron cargar las estadísticas');
-
-
-      setStats(DEFAULT_STATS);
-
-    } finally {
-      setLoading(false);
+    if (!activeModuleTab || !visibleModules.includes(activeModuleTab)) {
+      setActiveModuleTab(getPreferredInitialTab(visibleModules));
     }
-  }, [canReadReports, range]);
+  }, [activeModuleTab, visibleModules]);
 
-  useEffect(() => {
-    loadStats();
-  }, [loadStats]);
-
-  const modulesAccess = useMemo(() => {
-    if (stats?.modulesAccess) {
-      return stats.modulesAccess;
-    }
-      return {
-        citas: hasPermission('citas'),
-        usuarios: hasPermission('usuarios'),
-        administrativos: hasPermission('administrativos'),
-        roles: hasPermission('roles')
-      };
-  }, [stats, hasPermission]);
-
-  const highlights = stats?.highlights || [];
-  const citasData = stats?.citas;
-  const usuariosData = stats?.usuarios;
-  const administrativosData = stats?.administrativos;
-  const rolesData = stats?.roles;
-
-  const citasTrend = useMemo(() => {
-    if (!citasData?.porMes) return [];
-    return citasData.porMes.map((item) => {
-      const [year, month] = item.periodo.split('-').map((value) => parseInt(value, 10));
-      const date = new Date(year, month - 1, 1);
-      return {
-        periodo: new Intl.DateTimeFormat('es-ES', { month: 'short' }).format(date),
-        cantidad: item.cantidad
-      };
-    });
-  }, [citasData]);
-
-  const handleRefresh = () => {
-    loadStats();
+  const personal = dashboardData?.global?.personal || {
+    agendaHoy: [],
+    pendientesUsuario: 0,
+    notificacionesNoLeidas: 0
   };
+  const quickActions = dashboardData?.global?.quickActions || [];
+  const moduleErrors = dashboardData?.moduleErrors || {};
+  const modulesPayload = dashboardData?.modules || {};
+  const activeMeta = activeModuleTab ? MODULE_META[activeModuleTab] : null;
+  const activeModuleData = activeModuleTab ? modulesPayload[activeModuleTab] || {} : {};
+  const activeModuleError = activeModuleTab ? moduleErrors[activeModuleTab] : null;
+  const activeRenderer = activeModuleTab ? MODULE_RENDERERS[activeModuleTab] : null;
+
+  const isBusy = loading || refreshing;
+  const tabTransition = prefersReducedMotion
+    ? { duration: 0 }
+    : { duration: 0.18, ease: 'easeOut' };
 
   return (
-    <div className="space-y-8 w-full min-w-0">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 w-full min-w-0">
-          <div className="min-w-0 text-center md:text-left">
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-800 truncate">
-              Bienvenido, {user?.nombre_completo || 'equipo'}
-            </h1>
-            <p className="text-slate-500 text-base mt-1">Panel inteligente con datos actualizados en tiempo real.</p>
-          </div>
-          <RangeSelector
-            value={range}
-            onChange={setRange}
-            onRefresh={handleRefresh}
-            loading={loading}
-            className="justify-center md:justify-end"
-          />
-        </div>
-      </motion.div>
+    <div className="space-y-6">
+      <DashboardHeader
+        userName={user?.nombre_completo}
+        range={range}
+        onRangeChange={setRange}
+        onRefresh={() => loadDashboard({ silent: true })}
+        loading={isBusy}
+        generatedAt={dashboardData?.generatedAt}
+      />
 
-      {error && (
-        <div className="bg-red-50 border border-red-100 text-red-600 rounded-2xl p-4 text-sm">
+      {error ? (
+        <div className="rounded-xl border border-[#DC2626]/30 bg-[#DC2626]/10 p-4 text-sm text-[#991B1B]">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {loading && !stats ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, idx) => (
-            <div key={idx} className="h-32 rounded-2xl bg-slate-100 animate-pulse" />
+      {loading && !dashboardData ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="h-28 rounded-xl bg-slate-100 animate-pulse" />
           ))}
         </div>
       ) : (
         <>
-          {highlights.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full min-w-0">
-              {highlights.map((item) => (
-                <HighlightCard key={item.id} item={item} />
-              ))}
-            </div>
-          )}
+          <PersonalOverview personal={personal} quickActions={quickActions} />
 
-          {modulesAccess.citas && (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
-              <SectionCard
-                title="Estado de las citas"
-                description="Distribución por estado en el periodo seleccionado"
+          {visibleModules.length ? (
+            <ModuleTabs
+              modules={visibleModules}
+              activeTab={activeModuleTab}
+              onChange={setActiveModuleTab}
+            />
+          ) : null}
+
+          <AnimatePresence mode="wait">
+            {activeMeta && activeRenderer ? (
+              <motion.div
+                key={activeModuleTab}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: -6 }}
+                transition={tabTransition}
               >
-                {citasData?.porEstado?.length ? (
-                  <div className="w-full min-w-0" style={{ minHeight: 288 }}>
-                    <ResponsiveContainer width="100%" height={288}>
-                      <PieChart>
-                        <Pie
-                          data={citasData.porEstado}
-                          dataKey="cantidad"
-                          nameKey="estado"
-                          innerRadius={60}
-                          outerRadius={100}
-                          paddingAngle={4}
-                        >
-                          {citasData.porEstado.map((entry, index) => (
-                            <Cell key={entry.estado} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => formatNumber(value)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="grid grid-cols-2 gap-2 mt-4 text-sm">
-                      {citasData.porEstado.map((item, index) => (
-                        <div key={item.estado} className="flex items-center gap-2">
-                          <span
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: STATUS_COLORS[index % STATUS_COLORS.length] }}
-                          ></span>
-                          <span className="text-slate-600">{item.estado}</span>
-                          <span className="ml-auto font-semibold text-slate-800">{formatNumber(item.cantidad)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <EmptyState message="Aún no hay citas registradas en este periodo" />
-                )}
-              </SectionCard>
+                <ModuleSection
+                  title={activeMeta.title}
+                  description={activeMeta.description}
+                  icon={activeMeta.icon}
+                  accent={activeMeta.accent}
+                  error={activeModuleError}
+                >
+                  {activeRenderer(activeModuleData)}
+                </ModuleSection>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
-              <SectionCard
-                title="Tendencia mensual"
-                description="Histórico de citas por mes"
-                actions={
-                  <div className="flex items-center text-xs text-slate-400">
-                    <MdTrendingUp className="mr-1" /> Última actualización {new Date(stats?.metadata?.generatedAt || Date.now()).toLocaleString('es-CO')}
-                  </div>
-                }
-              >
-                {citasTrend.length ? (
-                  <div className="w-full min-w-0" style={{ minHeight: 288 }}>
-                    <ResponsiveContainer width="100%" height={288}>
-                      <AreaChart data={citasTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorCitas" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="periodo" stroke="#94a3b8" />
-                        <YAxis stroke="#94a3b8" allowDecimals={false} />
-                        <Tooltip formatter={(value) => formatNumber(value)} />
-                        <Area type="monotone" dataKey="cantidad" stroke="#2563eb" fillOpacity={1} fill="url(#colorCitas)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <EmptyState message="No hay datos suficientes para graficar" />
-                )}
-              </SectionCard>
-
-              <SectionCard title="Carga semanal" description="Horas con mayor concentración de citas">
-                <HeatmapGrid data={citasData?.heatmap} />
-              </SectionCard>
-
-              <SectionCard title="Agentes destacados" description="Ranking por citas asignadas">
-                <AgentsChart data={citasData?.topAgentes} />
-              </SectionCard>
-
-              <SectionCard title="Agenda para hoy" description="Citas programadas para la fecha actual">
-                <AgendaList items={citasData?.agendaHoy} />
-              </SectionCard>
+          {!visibleModules.length ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+              No hay modulos habilitados para este usuario. Contacta a un administrador para ajustar permisos.
             </div>
-          )}
-
-          {modulesAccess.usuarios && (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 w-full min-w-0">
-              <SectionCard title="Resumen de usuarios" description="Estado general de cuentas activas">
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div className="bg-slate-50 rounded-2xl p-4">
-                    <p className="text-sm text-slate-500">Usuarios activos</p>
-                    <p className="text-2xl font-semibold text-slate-800 mt-1">
-                      {formatNumber(usuariosData?.resumen?.activos || 0)}
-                    </p>
-                  </div>
-                  <div className="bg-slate-50 rounded-2xl p-4">
-                    <p className="text-sm text-slate-500">Nuevos del mes</p>
-                    <p className="text-2xl font-semibold text-slate-800 mt-1">
-                      {formatNumber(usuariosData?.resumen?.nuevosMes || 0)}
-                    </p>
-                    <p className="text-xs text-emerald-600 mt-1">
-                      {formatPercentage(usuariosData?.resumen?.variacionNuevos || 0)}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 text-sm text-slate-500">
-                  Usuarios conectados ahora: <span className="text-slate-900 font-medium">{formatNumber(usuariosData?.resumen?.activosAhora || 0)}</span>
-                </div>
-              </SectionCard>
-
-              <SectionCard title="Actividad reciente" description="Últimos accesos registrados">
-                {usuariosData?.activosRecientes?.length ? (
-                  <ul className="space-y-3 text-sm">
-                    {usuariosData.activosRecientes.map((item) => (
-                      <li key={item.id} className="flex items-center justify-between border border-slate-100 p-3 rounded-xl">
-                        <div>
-                          <p className="text-slate-800 font-medium">{item.nombre}</p>
-                          <p className="text-slate-500 text-xs">{item.correo}</p>
-                        </div>
-                        <p className="text-xs text-slate-400">
-                          {item.ultimo_acceso ? new Date(item.ultimo_acceso).toLocaleString('es-CO') : 'Sin registro'}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <EmptyState message="No hay actividad reciente" />
-                )}
-              </SectionCard>
-
-              <SectionCard title="Sin actividad" description="Usuarios que requieren seguimiento">
-                {usuariosData?.sinActividad?.length ? (
-                  <ul className="space-y-3 text-sm">
-                    {usuariosData.sinActividad.map((item) => (
-                      <li key={item.id} className="flex items-center justify-between border border-slate-100 p-3 rounded-xl">
-                        <div>
-                          <p className="text-slate-800 font-medium">{item.nombre}</p>
-                          <p className="text-slate-500 text-xs">{item.correo}</p>
-                        </div>
-                        <span className="text-xs text-orange-500 font-semibold">
-                          {item.dias_sin_actividad} días
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <EmptyState message="Sin usuarios pendientes" />
-                )}
-              </SectionCard>
-            </div>
-          )}
-
-          {modulesAccess.administrativos && (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
-              <SectionCard title="Equipo administrativo" description="Distribución por estado laboral">
-                {administrativosData?.distribucionEstado?.length ? (
-                  <div className="w-full min-w-0" style={{ minHeight: 288 }}>
-                    <ResponsiveContainer width="100%" height={288}>
-                      <PieChart>
-                        <Pie
-                          data={administrativosData.distribucionEstado}
-                          dataKey="cantidad"
-                          nameKey="estado"
-                          outerRadius={100}
-                          label
-                        >
-                          {administrativosData.distribucionEstado.map((entry, index) => (
-                            <Cell key={entry.estado} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => formatNumber(value)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <EmptyState message="No hay administrativos registrados" />
-                )}
-              </SectionCard>
-
-              <SectionCard title="Administrativos destacados" description="Basado en citas gestionadas en el periodo">
-                {administrativosData?.destacados?.length ? (
-                  <ul className="space-y-3">
-                    {administrativosData.destacados.map((item) => (
-                      <li key={item.id} className="border border-slate-100 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-slate-800 font-medium">{item.nombre}</p>
-                            <p className="text-slate-500 text-xs">{item.cargo || 'Cargo no asignado'}</p>
-                          </div>
-                          <div className="text-right text-sm">
-                            <p className="text-slate-600">
-                              {formatNumber(item.citas)} citas
-                            </p>
-                            <p className="text-emerald-600 text-xs">
-                              {item.completadas} completadas
-                            </p>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <EmptyState message="Sin registros en este periodo" />
-                )}
-              </SectionCard>
-            </div>
-          )}
-
-          {modulesAccess.roles && (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
-              <SectionCard title="Distribución de roles" description="Cantidad de usuarios por rol">
-                {rolesData?.rolesMasUsados?.length ? (
-                  <div className="w-full min-w-0" style={{ minHeight: 288 }}>
-                    <ResponsiveContainer width="100%" height={288}>
-                      <BarChart data={rolesData.rolesMasUsados} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="nombre" stroke="#94a3b8" />
-                        <YAxis stroke="#94a3b8" allowDecimals={false} />
-                        <Tooltip formatter={(value) => formatNumber(value)} />
-                        <Bar dataKey="asignados" fill="#14b8a6" radius={[8, 8, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <EmptyState message="Sin datos de roles asignados" />
-                )}
-              </SectionCard>
-
-              <SectionCard title="Permisos por módulo" description="Permisos activos en cada módulo">
-                {rolesData?.permisosPorModulo?.length ? (
-                  <div className="space-y-3 text-sm">
-                    {rolesData.permisosPorModulo.map((item, index) => (
-                      <div
-                        key={`${item.modulo}-${index}`}
-                        className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"
-                      >
-                        <p className="text-slate-600 font-medium">{item.modulo}</p>
-                        <span className="text-slate-900 font-semibold">{formatNumber(item.cantidad)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState message="No hay permisos registrados" />
-                )}
-              </SectionCard>
-            </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

@@ -267,6 +267,7 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
 
   
   const handleClose = () => {
+    if (isSubmitting) return;
     setErrors({});
     setNombre("");
     setEsAdministrativo(true);
@@ -331,7 +332,8 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleClose}
-              className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="p-2 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -511,7 +513,8 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleClose}
-              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+              disabled={isSubmitting}
+              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </motion.button>

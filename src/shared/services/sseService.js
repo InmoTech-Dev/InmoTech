@@ -1,280 +1,310 @@
 /**
- * Servicio de Server-Sent Events para notificaciones en tiempo real
- * Maneja la conexión SSE con el backend para recibir notificaciones de seguridad
+ * SSE client service.
+ * Keeps backward compatibility with legacy security events and adds
+ * standardized realtime events for appointments/notifications.
  */
+
+const parseRetryAfterMs = (rawValue) => {
+  if (!rawValue) return null;
+
+  const seconds = Number.parseInt(rawValue, 10);
+  if (Number.isInteger(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+
+  const retryAt = Date.parse(rawValue);
+  if (!Number.isFinite(retryAt)) return null;
+
+  return Math.max(0, retryAt - Date.now());
+};
 
 class SSEService {
   constructor() {
     this.eventSource = null;
     this.listeners = new Map();
     this._isConnected = false;
-    this.forcedDisconnect = false; // Bandera para evitar reconexión en logout forzado
+    this.forcedDisconnect = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 1000; // 1 segundo
-    this.maxReconnectDelay = 30000; // 30 segundos
+    this.reconnectDelay = 1000;
+    this.maxReconnectDelay = 30000;
+    this.verifySessionInFlight = false;
+    this.verifySessionCooldownUntil = 0;
+    this.verifySessionFailures = 0;
   }
 
-  /**
-   * Conecta al servidor SSE usando cookies httpOnly
-   * @returns {Promise<void>}
-   */
+  getApiBaseUrl() {
+    return import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+  }
+
+  parseEventData(event) {
+    try {
+      return JSON.parse(event.data);
+    } catch {
+      return null;
+    }
+  }
+
+  emitConnectionState(extra = {}) {
+    this.emit('connection_state', {
+      connected: this.isConnected,
+      reconnectAttempts: this.reconnectAttempts,
+      forcedDisconnect: this.forcedDisconnect,
+      ...extra,
+    });
+  }
+
+  emitForcedLogout(payload = {}) {
+    const reason = payload?.reason || payload?.action || 'session_revoked';
+    const message = payload?.message || '¡Hasta luego! Vuelva pronto. La sesión se ha cerrado correctamente.';
+    const occurredAt = payload?.occurred_at || payload?.timestamp || new Date().toISOString();
+
+    const normalizedPayload = {
+      reason,
+      message,
+      occurred_at: occurredAt,
+    };
+
+    this.emit('session.force_logout', normalizedPayload);
+    // Backward compatibility for legacy subscribers.
+    this.emit('user_disabled', {
+      message,
+      action: 'logout',
+      timestamp: occurredAt,
+      reason,
+    });
+  }
+
+  async verifySessionAfterError() {
+    const now = Date.now();
+    if (this.verifySessionInFlight) {
+      return { forceLogout: false, payload: null };
+    }
+    if (now < this.verifySessionCooldownUntil) {
+      return { forceLogout: false, payload: null };
+    }
+
+    this.verifySessionInFlight = true;
+
+    try {
+      const response = await fetch(`${this.getApiBaseUrl()}/auth/me`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.status === 429) {
+        this.verifySessionFailures += 1;
+        const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
+        const exponentialCooldown = 30000 * Math.min(2 ** (this.verifySessionFailures - 1), 8);
+        const cooldownMs = Math.min(300000, Math.max(retryAfterMs || 0, exponentialCooldown));
+        this.verifySessionCooldownUntil = Date.now() + cooldownMs;
+        return { forceLogout: false, payload: null };
+      }
+
+      if (response.status === 401 || response.status === 403 || response.status === 423) {
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        return {
+          forceLogout: true,
+          payload: {
+            reason: payload?.reason || 'session_revoked',
+            message: payload?.message || '¡Hasta luego! Vuelva pronto. La sesión se ha cerrado correctamente.',
+            occurred_at: new Date().toISOString(),
+          },
+        };
+      }
+
+      if (response.ok) {
+        this.verifySessionFailures = 0;
+        this.verifySessionCooldownUntil = 0;
+        return { forceLogout: false, payload: null };
+      }
+
+      this.verifySessionFailures += 1;
+      const cooldownMs = Math.min(180000, 10000 * Math.min(2 ** (this.verifySessionFailures - 1), 8));
+      this.verifySessionCooldownUntil = Date.now() + cooldownMs;
+
+      return { forceLogout: false, payload: null };
+    } catch (error) {
+      this.verifySessionFailures += 1;
+      const cooldownMs = Math.min(180000, 10000 * Math.min(2 ** (this.verifySessionFailures - 1), 8));
+      this.verifySessionCooldownUntil = Date.now() + cooldownMs;
+      console.warn('[SSE] Could not verify session after error:', error.message);
+      return { forceLogout: false, payload: null };
+    } finally {
+      this.verifySessionInFlight = false;
+    }
+  }
+
   async connect() {
     if (this.eventSource) {
       this.disconnect();
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
-      const url = `${baseUrl}/sse/connect`;
-
-      console.log('📡 SSE: Intentando conectar con cookies httpOnly...', url);
-
-      // ⚠️ IMPORTANTE: EventSource NO soporta headers, pero sí soporta credentials
-      // Las cookies httpOnly se enviarán automáticamente porque el navegador las incluye
-      const urlWithCreds = url + '?credentials=include'; // Este query param tiene meaning en el servidor
-      this.eventSource = new EventSource(urlWithCreds, { withCredentials: true });
+      const url = `${this.getApiBaseUrl()}/sse/connect?credentials=include`;
+      this.eventSource = new EventSource(url, { withCredentials: true });
 
       this.eventSource.onopen = () => {
-        console.log('📡 SSE: Conexión establecida');
         this._isConnected = true;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
+        this.emit('connected', { occurred_at: new Date().toISOString() });
+        this.emitConnectionState({ source: 'onopen' });
       };
 
       this.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this.handleMessage(event.type || 'message', data);
-        } catch (error) {
-          console.error('❌ SSE: Error parseando mensaje:', error);
-        }
+        const data = this.parseEventData(event);
+        if (!data) return;
+        this.emit(event.type || 'message', data);
       };
 
-      this.eventSource.onerror = async (error) => {
-        console.error('❌ SSE: Error de conexión:', error);
+      this.eventSource.onerror = async () => {
         this._isConnected = false;
+        this.emit('disconnected', { occurred_at: new Date().toISOString() });
+        this.emitConnectionState({ source: 'onerror' });
 
-        let shouldForceLogout = false;
-
-        // Verificar si el usuario está deshabilitado haciendo petición con cookies
-        try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/auth/me`, {
-            method: 'GET',
-            credentials: 'include', // ⚠️ IMPORTANTE: incluye cookies automáticamente
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (response.status === 403 || response.status === 401 || response.status === 423) {
-            console.log('🚨 SSE: Usuario deshabilitado detectado - ejecutando logout forzado');
-            shouldForceLogout = true;
-          }
-        } catch (verifyError) {
-          console.warn('⚠️ Error verificando estado después de error SSE:', verifyError.message);
-        }
-
-        if (shouldForceLogout) {
-          // Emitir evento para logout forzado
-          this.emit('user_disabled', {
-            message: 'Tu cuenta ha sido deshabilitada por un administrador',
-            action: 'logout',
-            timestamp: new Date().toISOString()
-          });
-          // Marcar como desconexión forzada para evitar reconexión
+        const { forceLogout, payload } = await this.verifySessionAfterError();
+        if (forceLogout) {
           this.setForcedDisconnect();
-          return; // NO reconectar
+          this.emitForcedLogout(payload);
+          return;
         }
 
-        // NO intentar reconectar si el usuario fue forzado a logout
         if (!this.forcedDisconnect) {
           this.handleReconnect();
-        } else {
-          console.log('📡 SSE: Usuario forzado logout - no reconectar');
         }
       };
 
-      // Configurar listeners para eventos específicos
       this.setupEventListeners();
-
     } catch (error) {
-      console.error('❌ SSE: Error creando conexión:', error);
+      console.error('[SSE] Error creating connection:', error);
       this.handleReconnect();
     }
   }
 
-  /**
-   * Configura los listeners para eventos específicos
-   */
   setupEventListeners() {
     if (!this.eventSource) return;
 
-    // Evento de conexión
-    this.eventSource.addEventListener('connected', (event) => {
-      const data = JSON.parse(event.data);
-      console.log('📡 SSE: Conectado al servidor', data);
-      this.emit('connected', data);
-    });
+    const bind = (eventName, callback) => {
+      this.eventSource.addEventListener(eventName, (event) => {
+        const data = this.parseEventData(event);
+        if (!data) return;
+        callback(data);
+      });
+    };
 
-    // Usuario deshabilitado
-    this.eventSource.addEventListener('user_disabled', (event) => {
-      const data = JSON.parse(event.data);
-      console.log('🚫 SSE: Usuario deshabilitado recibido', data);
-      this.emit('user_disabled', data);
-    });
+    bind('connected', (data) => this.emit('connected', data));
 
-    // Contraseña cambiada
-    this.eventSource.addEventListener('password_changed', (event) => {
-      const data = JSON.parse(event.data);
-      console.log('🔑 SSE: Contraseña cambiada recibida', data);
-      this.emit('password_changed', data);
-    });
+    bind('user_disabled', (data) => this.emit('user_disabled', data));
+    bind('password_changed', (data) => this.emit('password_changed', data));
+    bind('admin_access_revoked', (data) => this.emit('admin_access_revoked', data));
 
-    // Acceso administrativo revocado
-    this.eventSource.addEventListener('admin_access_revoked', (event) => {
-      const data = JSON.parse(event.data);
-      console.log('🚫 SSE: Acceso administrativo revocado recibido', data);
-      this.emit('admin_access_revoked', data);
-    });
+    bind('session.force_logout', (data) => this.emitForcedLogout(data));
 
-    // Heartbeat
-    this.eventSource.addEventListener('heartbeat', (event) => {
-      const data = JSON.parse(event.data);
-      // No loguear heartbeats para evitar spam
-      this.emit('heartbeat', data);
-    });
+    bind('appointment.changed', (data) => this.emit('appointment.changed', data));
+    bind('notification.changed', (data) => this.emit('notification.changed', data));
+    bind('user.changed', (data) => this.emit('user.changed', data));
+
+    bind('heartbeat', (data) => this.emit('heartbeat', data));
   }
 
-  /**
-   * Maneja la reconexión automática
-   */
   handleReconnect() {
-    // NO reconectar si el usuario fue forzado a logout
     if (this.forcedDisconnect) {
-      console.log('📡 SSE: Omitiendo reconexión - usuario forzado logout');
       return;
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('❌ SSE: Máximo número de intentos de reconexión alcanzado');
-      this.emit('max_reconnect_attempts_reached');
+      this.emit('max_reconnect_attempts_reached', {
+        occurred_at: new Date().toISOString(),
+      });
+      this.emitConnectionState({ source: 'max_reconnect' });
       return;
     }
 
-    this.reconnectAttempts++;
-    console.log(`📡 SSE: Intentando reconectar en ${this.reconnectDelay}ms (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    this.reconnectAttempts += 1;
+    this.emit('reconnect_scheduled', {
+      attempt: this.reconnectAttempts,
+      delay_ms: this.reconnectDelay,
+      occurred_at: new Date().toISOString(),
+    });
 
     setTimeout(() => {
       this.connect();
     }, this.reconnectDelay);
 
-    // Aumentar el delay exponencialmente
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
   }
 
-  /**
-   * Maneja mensajes recibidos
-   * @param {string} type - Tipo de evento
-   * @param {Object} data - Datos del evento
-   */
-  handleMessage(type, data) {
-    console.log(`📡 SSE: Mensaje recibido - Tipo: ${type}`, data);
-    this.emit(type, data);
-  }
-
-  /**
-   * Desconecta del servidor SSE
-   */
   disconnect() {
     if (this.eventSource) {
-      console.log('📡 SSE: Desconectando...');
       this.eventSource.close();
       this.eventSource = null;
       this._isConnected = false;
+      this.emitConnectionState({ source: 'disconnect' });
     }
   }
 
-  /**
-   * Agrega un listener para un evento
-   * @param {string} event - Nombre del evento
-   * @param {Function} callback - Función callback
-   */
   on(event, callback) {
     if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
+      this.listeners.set(event, new Set());
     }
-    this.listeners.get(event).push(callback);
+    this.listeners.get(event).add(callback);
+    return () => this.off(event, callback);
   }
 
-  /**
-   * Remueve un listener para un evento
-   * @param {string} event - Nombre del evento
-   * @param {Function} callback - Función callback a remover
-   */
   off(event, callback) {
-    if (this.listeners.has(event)) {
-      const callbacks = this.listeners.get(event);
-      const index = callbacks.indexOf(callback);
-      if (index > -1) {
-        callbacks.splice(index, 1);
-      }
+    if (!this.listeners.has(event)) return;
+    const callbacks = this.listeners.get(event);
+    callbacks.delete(callback);
+    if (callbacks.size === 0) {
+      this.listeners.delete(event);
     }
   }
 
-  /**
-   * Emite un evento a todos los listeners
-   * @param {string} event - Nombre del evento
-   * @param {*} data - Datos del evento
-   */
   emit(event, data) {
-    if (this.listeners.has(event)) {
-      this.listeners.get(event).forEach(callback => {
-        try {
-          callback(data);
-        } catch (error) {
-          console.error(`❌ SSE: Error en callback de evento ${event}:`, error);
-        }
-      });
-    }
+    const callbacks = this.listeners.get(event);
+    if (!callbacks || callbacks.size === 0) return;
+    callbacks.forEach((callback) => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error(`[SSE] Listener error for "${event}":`, error);
+      }
+    });
   }
 
-  /**
-   * Obtiene el estado de conexión
-   * @returns {boolean} True si está conectado
-   */
   get isConnected() {
     return this._isConnected && this.eventSource && this.eventSource.readyState === EventSource.OPEN;
   }
 
-  /**
-   * Marca que la desconexión es forzada (no debe reconectar automáticamente)
-   */
   setForcedDisconnect() {
     this.forcedDisconnect = true;
   }
 
-  /**
-   * Resetea la bandera de desconexión forzada
-   */
   resetForcedDisconnect() {
     this.forcedDisconnect = false;
+    this.verifySessionFailures = 0;
+    this.verifySessionCooldownUntil = 0;
   }
 
-  /**
-   * Obtiene estadísticas de conexión
-   * @returns {Object} Estadísticas
-   */
   getStats() {
     return {
       isConnected: this.isConnected,
       reconnectAttempts: this.reconnectAttempts,
       readyState: this.eventSource ? this.eventSource.readyState : -1,
       listenersCount: this.listeners.size,
-      forcedDisconnect: this.forcedDisconnect
+      forcedDisconnect: this.forcedDisconnect,
     };
   }
 }
 
-// Exportar instancia singleton
 export default new SSEService();

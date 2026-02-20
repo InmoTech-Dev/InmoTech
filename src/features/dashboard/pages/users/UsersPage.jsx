@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Eye, Edit, UserCheck, UserX, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Plus, UserCheck, UserX, AlertTriangle, ShieldCheck } from 'lucide-react';
 import SearchBar from '../../components/SearchBar';
 import StatsCard from '../../components/StatsCard';
 import CreateUserModal from '../../components/users/CreateUserModal';
@@ -36,7 +36,7 @@ const UsersPage = () => {
     endDate: ''
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(4);
+  const [itemsPerPage] = useState(6);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -45,6 +45,8 @@ const UsersPage = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
   const [loadingStatusChanges, setLoadingStatusChanges] = useState(new Set());
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [isChangingUserStatus, setIsChangingUserStatus] = useState(false);
   const [serverErrors, setServerErrors] = useState({});
   const { toast } = useToast();
   const [loadingResend, setLoadingResend] = useState(new Set());
@@ -195,15 +197,26 @@ const UsersPage = () => {
   };
 
   const handleDeleteUser = async () => {
-    if (selectedUser) {
-      try {
-        await removeUser(selectedUser.id_persona);
-        setIsDeleteModalOpen(false);
-        setSelectedUser(null);
-      } catch (error) {
-        // Error ya manejado en el contexto
-      }
+    if (isDeletingUser || !selectedUser) {
+      return;
     }
+
+    setIsDeletingUser(true);
+    try {
+      await removeUser(selectedUser.id_persona);
+      setIsDeleteModalOpen(false);
+      setSelectedUser(null);
+    } catch (error) {
+      // Error ya manejado en el contexto
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    if (isDeletingUser) return;
+    setIsDeleteModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handleViewUser = (user) => {
@@ -228,9 +241,27 @@ const UsersPage = () => {
     setIsStatusChangeModalOpen(true);
   };
 
+  const handleCloseStatusChangeModal = () => {
+    if (isChangingUserStatus) return;
+    setLoadingStatusChanges(prev => {
+      const newSet = new Set(prev);
+      if (pendingStatusChange?.userId) {
+        newSet.delete(pendingStatusChange.userId);
+      }
+      return newSet;
+    });
+    setIsStatusChangeModalOpen(false);
+    setSelectedUser(null);
+    setPendingStatusChange(null);
+  };
+
   const handleStatusChangeConfirm = async () => {
-    if (pendingStatusChange) {
-      try {
+    if (isChangingUserStatus || !pendingStatusChange) {
+      return;
+    }
+
+    setIsChangingUserStatus(true);
+    try {
         const nuevoEstado = pendingStatusChange.newStatus; // boolean
         await changeUserStatus(selectedUser.id_persona, nuevoEstado);
 
@@ -251,7 +282,7 @@ const UsersPage = () => {
           description: `El usuario ${fullName} ha sido ${estadoText}.`,
           variant: "default"
         });
-      } catch (error) {
+    } catch (error) {
         setLoadingStatusChanges(prev => {
           const newSet = new Set(prev);
           newSet.delete(pendingStatusChange.userId);
@@ -263,7 +294,8 @@ const UsersPage = () => {
           description: "No se pudo cambiar el estado del usuario",
           variant: "destructive"
         });
-      }
+    } finally {
+      setIsChangingUserStatus(false);
     }
   };
 
@@ -322,17 +354,17 @@ const UsersPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full overflow-hidden flex flex-col min-h-0 h-[calc(100dvh-12rem)] md:h-[calc(100dvh-13rem)] max-h-[calc(100dvh-12rem)] md:max-h-[calc(100dvh-13rem)] gap-3">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
       >
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Gestión de Usuarios</h1>
-          <p className="text-slate-600 mt-1">Administra todos los usuarios registrados</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-800 leading-tight">Gestión de Usuarios</h1>
+          <p className="text-slate-600 text-sm mt-0.5">Administra todos los usuarios registrados</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.02 }}
@@ -341,9 +373,9 @@ const UsersPage = () => {
             setServerErrors({}); // Limpiar errores al abrir el modal
             setIsCreateModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300"
+          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2.5 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-sm md:text-base"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4 md:w-5 md:h-5" />
           Nuevo Usuario
         </motion.button>
       </motion.div>
@@ -353,7 +385,7 @@ const UsersPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+        className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2"
       >
         <StatsCard
           title="Total Usuarios"
@@ -379,13 +411,6 @@ const UsersPage = () => {
           textColor="text-red-600"
           bgColor="bg-red-50"
         />
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.15 }}
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-      >
         <StatsCard
           title="Cuenta activa"
           value={accessStats.activa}
@@ -417,10 +442,9 @@ const UsersPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="space-y-4"
+        className="flex flex-wrap items-center gap-2"
       >
-        {/* Search Bar */}
-        <div className="flex-1 max-w-lg">
+        <div className="flex-1 min-w-[260px]">
           <SearchBar
             placeholder="Buscar por nombre, email, documento..."
             value={searchTerm}
@@ -428,99 +452,99 @@ const UsersPage = () => {
           />
         </div>
 
-        {/* Filters Row */}
-        <div className="flex flex-wrap gap-3 items-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.3 }}
+          className="w-full sm:w-auto"
+        >
+          <Select
+            value={statusFilter}
+            onValueChange={setStatusFilter}
           >
-            <Select
-              value={statusFilter}
-              onValueChange={setStatusFilter}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Estado"/>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Todos">Todos</SelectItem>
-                <SelectItem value="Habilitado">Habilitados</SelectItem>
-                <SelectItem value="Deshabilitado">Deshabilitados</SelectItem>
-              </SelectContent>
-            </Select>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: 0.4 }}
-          >
-            <Select
-              value={accessFilter}
-              onValueChange={setAccessFilter}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Estado de acceso"/>
-              </SelectTrigger>
-              <SelectContent>
+            <SelectTrigger className="h-10 w-full sm:w-[136px]">
+              <SelectValue placeholder="Estado"/>
+            </SelectTrigger>
+            <SelectContent>
               <SelectItem value="Todos">Todos</SelectItem>
-              <SelectItem value="Cuenta activa">Cuenta activa</SelectItem>
-              <SelectItem value="Verificación pendiente">Verificación pendiente</SelectItem>
-              <SelectItem value="Cuenta deshabilitada">Cuenta deshabilitada</SelectItem>
+              <SelectItem value="Habilitado">Habilitados</SelectItem>
+              <SelectItem value="Deshabilitado">Deshabilitados</SelectItem>
             </SelectContent>
           </Select>
-          </motion.div>
+        </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: 0.5 }}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
+          className="w-full sm:w-auto"
+        >
+          <Select
+            value={accessFilter}
+            onValueChange={setAccessFilter}
           >
-            <Select
-              value={dateFilter}
-              onValueChange={setDateFilter}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Fecha de registro"/>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Todos los periodos">Todos los periodos</SelectItem>
-                <SelectItem value="Hoy">Hoy</SelectItem>
-                <SelectItem value="Esta semana">Esta semana</SelectItem>
-                <SelectItem value="Este mes">Este mes</SelectItem>
-                <SelectItem value="Personalizado">Personalizado</SelectItem>
-              </SelectContent>
-            </Select>
-          </motion.div>
+            <SelectTrigger className="h-10 w-full sm:w-[180px]">
+              <SelectValue placeholder="Estado de acceso"/>
+            </SelectTrigger>
+            <SelectContent>
+            <SelectItem value="Todos">Todos</SelectItem>
+            <SelectItem value="Cuenta activa">Cuenta activa</SelectItem>
+            <SelectItem value="Verificación pendiente">Verificación pendiente</SelectItem>
+            <SelectItem value="Cuenta deshabilitada">Cuenta deshabilitada</SelectItem>
+          </SelectContent>
+        </Select>
+        </motion.div>
 
-          {dateFilter === 'Personalizado' && (
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
-              className="flex gap-2 items-center"
-            >
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-slate-700">Desde:</label>
-                <input
-                  type="date"
-                  value={customDateRange.startDate}
-                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                  className="h-10 px-3 rounded-md border border-slate-300 text-sm"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-slate-700">Hasta:</label>
-                <input
-                  type="date"
-                  value={customDateRange.endDate}
-                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                  className="h-10 px-3 rounded-md border border-slate-300 text-sm"
-                />
-              </div>
-            </motion.div>
-          )}
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.5 }}
+          className="w-full sm:w-auto"
+        >
+          <Select
+            value={dateFilter}
+            onValueChange={setDateFilter}
+          >
+            <SelectTrigger className="h-10 w-full sm:w-[170px]">
+              <SelectValue placeholder="Fecha de registro"/>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todos los periodos">Todos los periodos</SelectItem>
+              <SelectItem value="Hoy">Hoy</SelectItem>
+              <SelectItem value="Esta semana">Esta semana</SelectItem>
+              <SelectItem value="Este mes">Este mes</SelectItem>
+              <SelectItem value="Personalizado">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+        </motion.div>
+
+        {dateFilter === 'Personalizado' && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex flex-wrap gap-2 items-center w-full lg:w-auto"
+          >
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <label className="text-sm font-medium text-slate-700">Desde:</label>
+              <input
+                type="date"
+                value={customDateRange.startDate}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <label className="text-sm font-medium text-slate-700">Hasta:</label>
+              <input
+                type="date"
+                value={customDateRange.endDate}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
+              />
+            </div>
+          </motion.div>
+        )}
       </motion.div>
 
       {/* Content */}
@@ -528,6 +552,7 @@ const UsersPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.3 }}
+        className="flex-1 min-h-0 overflow-hidden"
       >
         <UserTable
           users={currentItems}
@@ -567,27 +592,18 @@ const UsersPage = () => {
 
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
+        onClose={handleCloseDeleteModal}
         onConfirm={handleDeleteUser}
+        isLoading={isDeletingUser}
         title="Eliminar Usuario"
         message={`¿Estás seguro de que deseas eliminar al usuario ${selectedUser?.nombre_completo || ''} ${selectedUser?.apellido_completo || ''}? Esta acción no se puede deshacer.`}
       />
 
       <StatusChangeConfirmModal
         isOpen={isStatusChangeModalOpen}
-        onClose={() => {
-          setLoadingStatusChanges(prev => {
-            const newSet = new Set(prev);
-            if (pendingStatusChange?.userId) {
-              newSet.delete(pendingStatusChange.userId);
-            }
-            return newSet;
-          });
-          setIsStatusChangeModalOpen(false);
-          setSelectedUser(null);
-          setPendingStatusChange(null);
-        }}
+        onClose={handleCloseStatusChangeModal}
         onConfirm={handleStatusChangeConfirm}
+        isLoading={isChangingUserStatus}
         title="Confirmar Cambio de Estado"
         message="¿Estás seguro de que deseas cambiar el estado de este usuario?"
         currentStatus={selectedUser?.estado ? 'Habilitado' : 'Deshabilitado'}
@@ -607,3 +623,6 @@ const UsersPage = () => {
 };
 
 export default UsersPage;
+
+
+

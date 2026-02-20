@@ -28,24 +28,21 @@ router.get('/connect', authenticateToken, async (req, res) => {
     });
 
     if (!persona || !persona.estado) {
-      //  CRITICO: Si el usuario esta inactivo, enviar evento SSE ANTES de rechazar
-      const sseService = require('../services/sse.service');
-
-      // Avisar al cliente que debe hacer logout inmediato
       const forcedLogoutData = {
-        message: 'Tu cuenta ha sido deshabilitada por un administrador',
+        reason: 'account_disabled',
+        message: 'Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.',
         action: 'logout',
         timestamp: new Date().toISOString()
       };
 
-      // Si hay una conexion SSE activa, enviarle el evento y desconectarla
       sseService.sendImmediateLogout(userId, forcedLogoutData);
 
       logger.warn('[SSE] Inactive user detected, forced logout sent', { userId });
 
-      return res.status(403).json({
+      return res.status(423).json({
         success: false,
-        message: 'Usuario inactivo - logout forzado enviado',
+        message: 'Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.',
+        reason: 'account_disabled',
         forceLogout: true
       });
     }

@@ -1,6 +1,52 @@
 import { apiClient } from './api.config';
 
 class UsersApiService {
+  normalizeTelefonoParaApi(telefono) {
+    if (telefono === undefined || telefono === null) return '';
+
+    const raw = String(telefono).trim();
+    if (!raw) return '';
+
+    const digits = raw.replace(/\D/g, '');
+
+    // Aceptar formato local colombiano: 3XXXXXXXXX
+    if (/^3\d{9}$/.test(digits)) {
+      return digits;
+    }
+
+    // Corregir formato comun invalido: 57XXXXXXXXXX (sin el +)
+    if (/^573\d{9}$/.test(digits)) {
+      return digits.slice(2);
+    }
+
+    // Mantener +57 cuando venga correcto
+    if (raw.startsWith('+57')) {
+      const localDigits = digits.startsWith('57') ? digits.slice(2) : digits;
+      if (/^3\d{9}$/.test(localDigits)) {
+        return `+57 ${localDigits}`;
+      }
+    }
+
+    // Dejar el valor original para que backend valide otros casos
+    return raw;
+  }
+
+  normalizeTelefonoParaUI(telefono) {
+    if (telefono === undefined || telefono === null) return '';
+
+    const raw = String(telefono).trim();
+    if (!raw) return '';
+
+    const digits = raw.replace(/\D/g, '');
+
+    // Si viene guardado como 57XXXXXXXXXX, presentarlo de forma amigable
+    if (/^573\d{9}$/.test(digits)) {
+      return `+57 ${digits.slice(2)}`;
+    }
+
+    return raw;
+  }
+
   /**
    * Normaliza campos de personas para formato consistente en UI
    */
@@ -22,7 +68,7 @@ class UsersApiService {
           nombre_completo: safeString(persona.nombre_completo) || safeString(persona.nombres) || safeString(persona.primer_nombre),
           apellido_completo: safeString(persona.apellido_completo) || safeString(persona.apellidos) || safeString(persona.primer_apellido),
           correo: safeString(persona.correo) || safeString(persona.email),
-          telefono: safeString(persona.telefono) || safeString(persona.phone),
+          telefono: this.normalizeTelefonoParaUI(safeString(persona.telefono) || safeString(persona.phone)),
           tipo_documento: safeString(persona.tipo_documento) || safeString(persona.tipoDocumento),
         numero_documento: safeString(persona.numero_documento) || safeString(persona.numeroDocumento),
         fecha_registro: persona.fecha_registro || persona.createdAt || persona.fecha_creacion || null,
@@ -94,7 +140,7 @@ class UsersApiService {
         nombre_completo: userData.nombre_completo,
         apellido_completo: userData.apellido_completo,
         correo: userData.correo,
-        telefono: userData.telefono,
+        telefono: this.normalizeTelefonoParaApi(userData.telefono),
         password: userData.password,
         confirmPassword: userData.confirmPassword
       };
@@ -111,7 +157,11 @@ class UsersApiService {
    */
   async updateUser(id, userData) {
     try {
-      return await apiClient.patch(`/personas/${id}`, userData);
+      const payload = {
+        ...userData,
+        telefono: this.normalizeTelefonoParaApi(userData?.telefono)
+      };
+      return await apiClient.patch(`/personas/${id}`, payload);
     } catch (error) {
       console.error('Error actualizando usuario:', error);
       throw error;

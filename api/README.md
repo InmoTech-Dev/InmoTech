@@ -286,6 +286,16 @@ Los logs se guardan en la carpeta `logs/`:
 
 Consulta `.env.example` para ver todas las variables disponibles.
 
+### Invitaciones administrativas y recuperacion operativa
+
+- Si el correo de invitacion falla, la creacion del administrativo no se revierte.
+- La respuesta de `POST /api/v1/administrativos` incluye `data.invitacion.estado`:
+  - `enviada`: correo enviado correctamente.
+  - `pendiente_reenvio`: fallo de envio tras reintentos automaticos.
+- Para casos `pendiente_reenvio`, reenviar manualmente con:
+  - `POST /api/v1/invitaciones` (admin autenticado)
+  - Body: `{ "id_persona": <id_persona_del_administrativo> }`
+
 ## Mejores Prácticas Implementadas
 
 1. **Arquitectura en capas**: Separación de responsabilidades

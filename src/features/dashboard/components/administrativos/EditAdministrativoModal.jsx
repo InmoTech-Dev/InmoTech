@@ -6,9 +6,8 @@ import StepIndicator from '../StepIndicator';
 import PersonalEditStep from './steps/PersonalEditStep';
 import LaboralEditStep from './steps/LaboralEditStep';
 import { useToast } from '../../../../shared/hooks/use-toast';
-import { useAdministrativos } from '../../../../shared/contexts/AdministrativosContext';
 
-const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
+const EditAdministrativoModal = ({ isOpen, onClose, administrativo, onSubmit }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     // Paso 1: Información Personal
@@ -21,8 +20,8 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
     rol: null,
   });
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const { updateAdministrativo } = useAdministrativos();
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -163,7 +162,10 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     if (validateAllSteps()) {
+      setIsSubmitting(true);
       try {
         const updateData = {
           personaData: {
@@ -176,7 +178,11 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
           rolId: formData.rol
         };
 
-        await updateAdministrativo(administrativo.id_administrativo, updateData);
+        if (typeof onSubmit !== 'function') {
+          throw new Error('No se encontro el handler de guardado para editar administrativo');
+        }
+
+        await onSubmit(updateData);
 
         toast({
           title: 'Administrativo actualizado exitosamente',
@@ -192,6 +198,8 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
           description: 'No se pudieron guardar los cambios. Por favor, intenta nuevamente.',
           variant: 'destructive'
         });
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
       toast({
@@ -203,6 +211,7 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
   };
 
   const handleClose = () => {
+    if (isSubmitting) return;
     setCurrentStep(1);
     setFormData({
       nombreCompleto: '',
@@ -288,6 +297,7 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
   };
 
   if (!isOpen) return null;
+  const isNoScrollStep = currentStep === 1 || currentStep === 2;
 
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -319,7 +329,8 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleClose}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -331,7 +342,15 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
           </div>
 
           {/* Content */}
-          <div ref={contentRef} className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 min-h-0 ${currentStep === 1 ? 'p-6 pb-2' : 'p-6'}`}>
+          <div
+            ref={contentRef}
+            data-edit-admin-content="true"
+            className={`flex-1 min-h-0 ${
+              isNoScrollStep
+                ? 'overflow-y-auto md:overflow-hidden px-6 py-4'
+                : 'overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 p-6'
+            }`}
+          >
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentStep}
@@ -346,12 +365,12 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
           </div>
 
           {/* Footer */}
-          <div className={`flex items-center justify-between border-t border-slate-200 bg-slate-50 flex-shrink-0 ${currentStep === 1 ? 'p-4 pt-3' : 'p-6'}`}>
+          <div className={`flex items-center justify-between border-t border-slate-200 bg-slate-50 flex-shrink-0 ${isNoScrollStep ? 'p-4' : 'p-6'}`}>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handlePrev}
-              disabled={currentStep === 1}
+              disabled={currentStep === 1 || isSubmitting}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -363,7 +382,8 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleClose}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                disabled={isSubmitting}
+                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancelar
               </motion.button>
@@ -373,7 +393,8 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Siguiente
                   <ChevronRight className="w-4 h-4" />
@@ -383,10 +404,11 @@ const EditAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  Guardar Cambios
+                  {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
                 </motion.button>
               )}
             </div>

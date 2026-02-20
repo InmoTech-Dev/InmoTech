@@ -5,6 +5,42 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 
 const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
   const [internalFilter, setInternalFilter] = React.useState('Todos los estados');
+  const getCitaFecha = (cita) => {
+    const raw = cita?.fecha_cita || cita?.fecha || null;
+    if (!raw) return null;
+
+    if (typeof raw === 'string') {
+      if (raw.includes('T')) return raw.split('T')[0];
+      const simpleMatch = raw.match(/^\d{4}-\d{2}-\d{2}$/);
+      if (simpleMatch) return raw;
+    }
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const getCitaHora = (cita) => cita?.hora_inicio || cita?.hora || null;
+  const normalizarHora = (hora) => {
+    if (!hora) return null;
+
+    const raw = String(hora).trim();
+    const simpleMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (simpleMatch) {
+      return `${simpleMatch[1].padStart(2, '0')}:${simpleMatch[2]}`;
+    }
+
+    if (raw.includes('T')) {
+      const isoMatch = raw.match(/T(\d{2}):(\d{2})/);
+      if (isoMatch) {
+        return `${isoMatch[1]}:${isoMatch[2]}`;
+      }
+    }
+
+    return raw;
+  };
 
   // Get upcoming appointments (next 10 appointments sorted by date and time)
   const upcomingAppointments = useMemo(() => {
@@ -12,28 +48,33 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
     
     return filtered
       .filter(cita => {
+        const fechaCita = getCitaFecha(cita);
+        if (!fechaCita) return false;
+
         if (internalFilter !== 'Todos los estados' && cita.estado !== internalFilter) {
           return false;
         }
 
         // Fix date comparison by using string comparison for "today" logic
-        // Assuming cita.fecha is YYYY-MM-DD
+        // Assuming fecha is YYYY-MM-DD
         const today = new Date();
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
         const todayStr = `${year}-${month}-${day}`;
 
-        return cita.fecha >= todayStr && cita.estado !== 'cancelada';
+        return fechaCita >= todayStr && cita.estado !== 'cancelada';
       })
       .sort((a, b) => {
         // Sort by date, then by time
-        const dateCompare = new Date(a.fecha) - new Date(b.fecha);
+        const fechaA = getCitaFecha(a);
+        const fechaB = getCitaFecha(b);
+        const dateCompare = fechaA.localeCompare(fechaB);
         if (dateCompare !== 0) return dateCompare;
         
         // Compare times if dates are equal
-        const timeA = a.hora || '00:00';
-        const timeB = b.hora || '00:00';
+        const timeA = normalizarHora(getCitaHora(a)) || '00:00';
+        const timeB = normalizarHora(getCitaHora(b)) || '00:00';
         return timeA.localeCompare(timeB);
       })
       .slice(0, 10); // Show next 10 appointments
@@ -145,7 +186,7 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
                   <Calendar className="w-4 h-4 text-blue-600" />
-                  {formatDate(cita.fecha)}
+                  {formatDate(getCitaFecha(cita))}
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(cita.estado)}`}>
                   {cita.estado}
@@ -153,10 +194,10 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
               </div>
 
               {/* Time */}
-              {cita.hora && (
+              {getCitaHora(cita) && (
                 <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
                   <Clock className="w-3.5 h-3.5" />
-                  {cita.hora}
+                  {normalizarHora(getCitaHora(cita))}
                 </div>
               )}
 

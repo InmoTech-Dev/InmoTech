@@ -1,5 +1,5 @@
 /**
- * Context de React para gestion global de autenticacion JWT
+ * React context for global authentication state
  */
 
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
@@ -24,6 +24,15 @@ const ALL_MODULES = [
 
 const normalizeKey = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
+const parseUserJson = (rawValue) => {
+  if (!rawValue || typeof rawValue !== 'string') return null;
+  try {
+    return JSON.parse(rawValue);
+  } catch (error) {
+    return null;
+  }
+};
+
 const extractPermissionsByModule = (user) => {
   if (!user) return {};
 
@@ -42,85 +51,9 @@ const extractPermissionsByModule = (user) => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState(null);
-
-  const loadAuthFromStorage = useCallback(async () => {
-    try {
-      const accessToken = apiClient.getAccessToken();
-      const refreshToken = apiClient.getRefreshToken();
-
-      // Sin tokens, no hay sesión
-      if (!accessToken) {
-        setUser(null);
-        setIsAuthenticated(false);
-        return;
-      }
-
-      let userData = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
-
-      let parsedUser = null;
-      if (userData) {
-        try {
-          parsedUser = JSON.parse(userData);
-        } catch {
-          // Si el JSON estaba corrupto, solo limpiamos el usuario persistido
-          localStorage.removeItem(USER_KEY);
-          sessionStorage.removeItem(USER_KEY);
-        }
-      }
-
-      if (parsedUser) {
-        const hasPermissionsPayload =
-          parsedUser?.permisos && typeof parsedUser.permisos === 'object' && Object.keys(parsedUser.permisos).length > 0;
-
-        if (hasPermissionsPayload || !refreshToken) {
-          setUser(parsedUser);
-          setIsAuthenticated(true);
-          return;
-        }
-      }
-
-      // Hay tokens pero no usuario guardado: intentar reconstruir con /auth/me
-      if (refreshToken) {
-        try {
-          const profileResp = await authService.getProfile();
-          const profileUser = profileResp?.data || profileResp?.user || profileResp?.data?.user;
-          if (profileUser) {
-            localStorage.setItem(USER_KEY, JSON.stringify(profileUser));
-            setUser(profileUser);
-            setIsAuthenticated(true);
-            return;
-          }
-        } catch (err) {
-          console.warn('No se pudo reconstruir el usuario con /auth/me:', err?.message || err);
-        }
-      }
-
-      // Como último recurso, mantener tokens pero marcar no autenticado si no hay usuario
-      setUser(null);
-      setIsAuthenticated(false);
-    } catch (err) {
-      console.error('Error cargando autenticacion:', err);
-      clearAuthData();
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const saveAuthToStorage = useCallback((userData, accessToken, refreshToken, rememberMe = false) => {
-    try {
-      apiClient.setTokens(accessToken, refreshToken);
-      const userDataString = JSON.stringify(userData);
-      if (rememberMe) {
-        localStorage.setItem(USER_KEY, userDataString);
-      } else {
-        sessionStorage.setItem(USER_KEY, userDataString);
-      }
-    } catch (err) {
-      console.error('Error guardando autenticacion:', err);
-    }
-  }, []);
 
   const clearAuthData = useCallback(() => {
     apiClient.clearTokens();
@@ -131,36 +64,79 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   }, []);
 
+  const saveUserToStorage = useCallback((userData, rememberMe = false) => {
+    try {
+      const userDataString = JSON.stringify(userData);
+      localStorage.removeItem(USER_KEY);
+      sessionStorage.removeItem(USER_KEY);
+
+      if (rememberMe) {
+        localStorage.setItem(USER_KEY, userDataString);
+      } else {
+        sessionStorage.setItem(USER_KEY, userDataString);
+      }
+    } catch (err) {
+      console.error('Error saving auth user:', err);
+    }
+  }, []);
+
+  const loadAuthFromStorage = useCallback(async () => {
+    try {
+      const localStored = localStorage.getItem(USER_KEY);
+      const sessionStored = sessionStorage.getItem(USER_KEY);
+      const rememberMe = Boolean(localStored);
+      const storedUser = parseUserJson(localStored || sessionStored);
+
+      if (!storedUser && sessionStored && !parseUserJson(sessionStored)) {
+        sessionStorage.removeItem(USER_KEY);
+      }
+      if (!storedUser && localStored && !parseUserJson(localStored)) {
+        localStorage.removeItem(USER_KEY);
+      }
+
+      const profileResp = await authService.getProfile();
+      const profileUser = profileResp?.data?.user || profileResp?.data || profileResp?.user;
+
+      if (!profileUser) {
+        clearAuthData();
+        return;
+      }
+
+      saveUserToStorage(profileUser, rememberMe);
+      setUser(profileUser);
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error('Error loading auth session:', err);
+      clearAuthData();
+    } finally {
+      setInitializing(false);
+    }
+  }, [clearAuthData, saveUserToStorage]);
+
   const login = async (email, password, rememberMe = false) => {
     try {
       setLoading(true);
       setError(null);
 
       const response = await authService.login(email, password);
-
-      if (response.success && response.data) {
-        const { user: userData, accessToken, refreshToken } = response.data;
-
-        const savedAccessToken = apiClient.getAccessToken();
-        const savedRefreshToken = apiClient.getRefreshToken();
-
-        if (!savedAccessToken || !savedRefreshToken) {
-          apiClient.setTokens(accessToken, refreshToken);
-        }
-
-        const userDataString = JSON.stringify(userData);
-        if (rememberMe) {
-          localStorage.setItem(USER_KEY, userDataString);
-        } else {
-          sessionStorage.setItem(USER_KEY, userDataString);
-        }
-
-        setUser(userData);
-        setIsAuthenticated(true);
-        return userData;
-      } else {
-        throw new Error(response.message || 'Error en la autenticacion');
+      if (!response?.success) {
+        throw new Error(response?.message || 'Error en la autenticacion');
       }
+
+      let userData = response?.data?.user || null;
+      if (!userData) {
+        const profileResp = await authService.getProfile();
+        userData = profileResp?.data?.user || profileResp?.data || profileResp?.user || null;
+      }
+
+      if (!userData) {
+        throw new Error('No se pudo obtener el perfil despues del login');
+      }
+
+      saveUserToStorage(userData, rememberMe);
+      setUser(userData);
+      setIsAuthenticated(true);
+      return userData;
     } catch (err) {
       setError(err.message || 'Error al iniciar sesion');
       throw err;
@@ -175,16 +151,11 @@ export const AuthProvider = ({ children }) => {
       setError(null);
 
       const response = await authService.register(userData);
-
-      if (response.success && response.data) {
-        const { user: newUser, accessToken, refreshToken } = response.data;
-        saveAuthToStorage(newUser, accessToken, refreshToken, true);
-        setUser(newUser);
-        setIsAuthenticated(true);
-        return newUser;
-      } else {
-        throw new Error(response.message || 'Error en el registro');
+      if (!response?.success) {
+        throw new Error(response?.message || 'Error en el registro');
       }
+
+      return response?.data?.user || null;
     } catch (err) {
       setError(err.message || 'Error al registrar usuario');
       throw err;
@@ -199,7 +170,7 @@ export const AuthProvider = ({ children }) => {
       try {
         await authService.logout();
       } catch {
-        // ignore backend logout errors
+        // Keep local cleanup even if backend logout fails
       }
       clearAuthData();
     } catch (err) {
@@ -211,26 +182,22 @@ export const AuthProvider = ({ children }) => {
 
   const refreshToken = async () => {
     try {
-      const storedRefreshToken = apiClient.getRefreshToken();
-      const response = await authService.refreshToken(storedRefreshToken);
-
-      if (response.success && response.data) {
-        const { accessToken, refreshToken: newRefreshToken, user: refreshedUser } = response.data;
-        apiClient.setTokens(accessToken, newRefreshToken);
-
-        if (refreshedUser) {
-          setUser(refreshedUser);
-          const userDataString = JSON.stringify(refreshedUser);
-          if (localStorage.getItem(USER_KEY)) {
-            localStorage.setItem(USER_KEY, userDataString);
-          } else {
-            sessionStorage.setItem(USER_KEY, userDataString);
-          }
-        }
-
-        return true;
+      const response = await authService.refreshToken();
+      if (!response?.success) {
+        throw new Error('Error al refrescar sesion');
       }
-      throw new Error('Error al refrescar token');
+
+      const profileResp = await authService.getProfile();
+      const refreshedUser = profileResp?.data?.user || profileResp?.data || profileResp?.user;
+
+      if (refreshedUser) {
+        const rememberMe = Boolean(localStorage.getItem(USER_KEY));
+        saveUserToStorage(refreshedUser, rememberMe);
+        setUser(refreshedUser);
+      }
+
+      setIsAuthenticated(true);
+      return true;
     } catch (err) {
       clearAuthData();
       return false;
@@ -247,18 +214,12 @@ export const AuthProvider = ({ children }) => {
       if (response.success && response.data) {
         const updatedUser = { ...user, ...response.data };
         setUser(updatedUser);
-
-        const userData = JSON.stringify(updatedUser);
-        if (localStorage.getItem(USER_KEY)) {
-          localStorage.setItem(USER_KEY, userData);
-        } else {
-          sessionStorage.setItem(USER_KEY, userData);
-        }
-
+        const rememberMe = Boolean(localStorage.getItem(USER_KEY));
+        saveUserToStorage(updatedUser, rememberMe);
         return updatedUser;
-      } else {
-        throw new Error(response.message || 'Error al actualizar perfil');
       }
+
+      throw new Error(response.message || 'Error al actualizar perfil');
     } catch (err) {
       setError(err.message || 'Error al actualizar perfil');
       throw err;
@@ -320,7 +281,7 @@ export const AuthProvider = ({ children }) => {
     if (!user || !user.roles) return false;
     const userRoles = user.roles;
     if (Array.isArray(roles)) {
-      return roles.some(role => userRoles.includes(role));
+      return roles.some((role) => userRoles.includes(role));
     }
     return userRoles.includes(roles);
   }, [user]);
@@ -373,9 +334,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     loadAuthFromStorage();
-    // Cierre local de sesion solo cuando el refresh ya fallo.
+
     apiClient.registerUnauthorizedCallback(() => {
-      console.log('⚠️ Sesion expirada (401), limpiando autenticacion local...');
+      console.log('Sesion expirada (401), limpiando autenticacion local...');
       clearAuthData();
     });
   }, [loadAuthFromStorage, clearAuthData]);
@@ -383,6 +344,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     isAuthenticated,
+    initializing,
     loading,
     error,
     login,

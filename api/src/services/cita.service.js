@@ -18,6 +18,63 @@ const normalizarFechaCita = (fecha) => {
   return parsed.toISOString().slice(0, 10);
 };
 
+const normalizarHoraTexto = (hora) => {
+  if (typeof hora === 'undefined' || hora === null) return null;
+
+  const match = String(hora).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+
+  const horas = Number(match[1]);
+  const minutos = Number(match[2]);
+  if (Number.isNaN(horas) || Number.isNaN(minutos) || horas < 0 || horas > 23 || minutos < 0 || minutos > 59) {
+    return null;
+  }
+
+  return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+};
+
+const horaEnMinutos = (hora) => {
+  const horaNormalizada = normalizarHoraTexto(hora);
+  if (!horaNormalizada) return null;
+
+  const [horas, minutos] = horaNormalizada.split(':').map(Number);
+  return (horas * 60) + minutos;
+};
+
+const sumarMinutosHora = (hora, minutosASumar = 30) => {
+  const totalActual = horaEnMinutos(hora);
+  if (totalActual === null) return null;
+
+  const totalFinal = totalActual + minutosASumar;
+  if (totalFinal >= 24 * 60) return null;
+
+  const horas = Math.floor(totalFinal / 60);
+  const minutos = totalFinal % 60;
+  return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+};
+
+const resolverRangoHorario = ({ horaInicio, horaFin }) => {
+  const inicioNormalizado = normalizarHoraTexto(horaInicio);
+  if (!inicioNormalizado) {
+    return { horaInicio: null, horaFin: null };
+  }
+
+  const finNormalizado = normalizarHoraTexto(horaFin);
+  const inicioMinutos = horaEnMinutos(inicioNormalizado);
+  const finMinutos = finNormalizado ? horaEnMinutos(finNormalizado) : null;
+
+  if (finMinutos === null || finMinutos <= inicioMinutos) {
+    return {
+      horaInicio: inicioNormalizado,
+      horaFin: sumarMinutosHora(inicioNormalizado, 30)
+    };
+  }
+
+  return {
+    horaInicio: inicioNormalizado,
+    horaFin: finNormalizado
+  };
+};
 class CitaService {
 
   async crearCita(dataCita) {
@@ -60,32 +117,82 @@ class CitaService {
         const nombre_completo = dataCita.nombre_completo || '';
         const apellido_completo = dataCita.apellido_completo || '';
 
-        // 1. Buscar o crear persona
-        const correo = dataCita.correo || dataCita.email || '';
-        const [persona, creada] = await Persona.findOrCreate({
+        // 1. Buscar persona por documento
+        let persona = await Persona.findOne({
           where: {
             tipo_documento: dataCita.tipo_documento,
             numero_documento: dataCita.numero_documento
           },
-          defaults: {
-            tipo_documento: dataCita.tipo_documento,
-            numero_documento: dataCita.numero_documento,
-            nombre_completo,
-            apellido_completo,
-            correo,
-            telefono: dataCita.telefono,
-            tiene_cuenta: false
-          },
           transaction: t
         });
 
-        if (!creada) {
-          await persona.update({
-            nombre_completo,
-            apellido_completo,
-            correo,
-            telefono: dataCita.telefono
-          }, { transaction: t });
+        const correoPrincipal = (dataCita.correo || dataCita.email || '').trim().toLowerCase();
+
+        if (persona) {
+          // Si la persona existe, actualizamos sus datos pero verificamos que el correo no lo tenga OTRO
+          if (correoPrincipal && correoPrincipal !== (persona.correo || '').toLowerCase()) {
+            const correoEnUsoPorOtro = await Persona.findOne({
+              where: {
+                correo: correoPrincipal,
+                id_persona: { [Op.ne]: persona.id_persona }
+              },
+              transaction: t
+            });
+
+            if (correoEnUsoPorOtro) {
+              // Si el correo lo tiene otro, no lo actualizamos para evitar 409, 
+              // pero permitimos que la cita siga con la persona encontrada (por documento)
+              logger.warn(`El correo ${correoPrincipal} ya está en uso por otra persona (ID: ${correoEnUsoPorOtro.id_persona}). No se actualizará en este registro.`);
+            } else {
+              await persona.update({
+                nombre_completo,
+                apellido_completo,
+                correo: correoPrincipal,
+                telefono: dataCita.telefono
+              }, { transaction: t });
+            }
+          } else {
+            // Actualizar solo nombres y teléfono si cambiaron
+            await persona.update({
+              nombre_completo,
+              apellido_completo,
+              telefono: dataCita.telefono
+            }, { transaction: t });
+          }
+        } else {
+          // Si NO existe por documento, verificamos si el correo ya existe
+          const personaPorCorreo = await Persona.findOne({
+            where: { correo: correoPrincipal },
+            transaction: t
+          });
+
+          if (personaPorCorreo) {
+            // CONFLICTO: El documento es nuevo pero el correo ya existe.
+            // Para evitar errores 409 y duplicados inconsistentes, asumimos que es la misma persona 
+            // pero que tal vez se registró con otro documento antes o hubo un error.
+            // Por seguridad en este flujo de citas, usamos la persona encontrada por correo.
+            persona = personaPorCorreo;
+            logger.info(`Persona encontrada por correo (${correoPrincipal}) aunque el documento es distinto.`);
+
+            // Actualizamos el documento si es necesario? Mejor no por seguridad, 
+            // solo actualizamos nombres y teléfono.
+            await persona.update({
+              nombre_completo,
+              apellido_completo,
+              telefono: dataCita.telefono
+            }, { transaction: t });
+          } else {
+            // Si no existe por ninguno, creamos nuevo
+            persona = await Persona.create({
+              tipo_documento: dataCita.tipo_documento,
+              numero_documento: dataCita.numero_documento,
+              nombre_completo,
+              apellido_completo,
+              correo: correoPrincipal,
+              telefono: dataCita.telefono,
+              tiene_cuenta: false
+            }, { transaction: t });
+          }
         }
 
         const citaExistente = await Cita.findOne({
@@ -594,11 +701,11 @@ class CitaService {
     }
   }
 
-/**
-   * Obtener historial de asignaciones de una cita
-   * @param {number} idCita - ID de la cita
-   * @returns {Promise<Array>} Historial de asignaciones
-   */
+  /**
+     * Obtener historial de asignaciones de una cita
+     * @param {number} idCita - ID de la cita
+     * @returns {Promise<Array>} Historial de asignaciones
+     */
   async obtenerHistorialAsignaciones(idCita) {
     try {
       const { HistorialAsignacionAgente } = require('../models');
@@ -1016,7 +1123,7 @@ class CitaService {
    * @param {Object} nuevosDatos - Datos para actualizar
    * @returns {Promise<Object>} Cita actualizada con contador incrementado
    */
-  async incrementarContadorEdicionesActualizar(idCita, nuevosDatos) {
+  async incrementarContadorEdicionesActualizar(idCita, nuevosDatos = {}) {
     console.log(`🚨🚨🚨 [SERVICE] incrementarContadorEdicionesActualizar llamado para cita ${idCita}`);
     console.log(`🚨🚨🚨 [SERVICE] Datos recibidos:`, nuevosDatos);
 
@@ -1033,6 +1140,7 @@ class CitaService {
             'id_cita',
             'fecha_cita',
             'hora_inicio',
+            'hora_fin',
             'ediciones_realizadas',
             'ediciones_maximas',
             'id_agente_asignado',
@@ -1040,7 +1148,8 @@ class CitaService {
             'id_inmueble',
             'id_servicio',
             'id_estado_cita',
-            'observaciones'
+            'observaciones',
+            'motivo_reagendamiento'
           ],
           transaction: t
         });
@@ -1058,10 +1167,18 @@ class CitaService {
           transaction: t
         });
 
+        if (!citaActual) {
+          throw new Error(`Cita ${idCita} no encontrada durante la actualizacion`);
+        }
+
         const valorActual = citaActual.ediciones_realizadas || 0;
         const nuevoValor = valorActual + 1;
 
-        logger.info(`✅ [DEBUG] Valor actual del contador: ${valorActual}, nuevo valor: ${nuevoValor}`);
+        logger.info(`OK [DEBUG] Valor actual del contador: ${valorActual}, nuevo valor: ${nuevoValor}`);
+
+        const fechaFinal = typeof nuevosDatos.fecha_cita !== 'undefined'
+          ? normalizarFechaCita(nuevosDatos.fecha_cita)
+          : citaOriginal.fecha_cita;
 
         const servicioFinal = typeof nuevosDatos.id_servicio !== 'undefined'
           ? nuevosDatos.id_servicio
@@ -1075,17 +1192,146 @@ class CitaService {
           ? nuevosDatos.id_estado_cita
           : citaOriginal.id_estado_cita;
 
-        // ACTUALIZACIÓN SIMULTÁNEA: Fecha/hora Y contador en una sola operación
+        const agenteFinal = typeof nuevosDatos.id_agente_asignado !== 'undefined'
+          ? nuevosDatos.id_agente_asignado
+          : citaOriginal.id_agente_asignado;
+
+        const motivoReagendamientoFinal = typeof nuevosDatos.motivo_reagendamiento !== 'undefined'
+          ? nuevosDatos.motivo_reagendamiento
+          : citaOriginal.motivo_reagendamiento;
+
+        const rangoHorarioFinal = resolverRangoHorario({
+          horaInicio: typeof nuevosDatos.hora_inicio !== 'undefined'
+            ? nuevosDatos.hora_inicio
+            : citaOriginal.hora_inicio,
+          horaFin: typeof nuevosDatos.hora_fin !== 'undefined'
+            ? nuevosDatos.hora_fin
+            : citaOriginal.hora_fin
+        });
+
+        if (!rangoHorarioFinal.horaInicio || !rangoHorarioFinal.horaFin) {
+          const horarioError = new Error('Horario de cita invalido. Verifique hora de inicio y hora de fin.');
+          horarioError.status = 400;
+          throw horarioError;
+        }
+
+        const debeActualizarPersona = [
+          'tipo_documento',
+          'numero_documento',
+          'nombre_completo',
+          'apellido_completo',
+          'email',
+          'correo',
+          'telefono'
+        ].some((campo) => typeof nuevosDatos[campo] !== 'undefined');
+
+        if (debeActualizarPersona) {
+          const personaAsociada = await Persona.findByPk(citaOriginal.id_persona, {
+            attributes: [
+              'id_persona',
+              'tipo_documento',
+              'numero_documento',
+              'nombre_completo',
+              'apellido_completo',
+              'correo',
+              'telefono'
+            ],
+            transaction: t
+          });
+
+          if (!personaAsociada) {
+            throw new Error(`Persona asociada a la cita ${idCita} no encontrada`);
+          }
+
+          const datosPersonaActualizados = {};
+
+          if (typeof nuevosDatos.nombre_completo !== 'undefined') {
+            datosPersonaActualizados.nombre_completo = String(nuevosDatos.nombre_completo || '').trim();
+          }
+
+          if (typeof nuevosDatos.apellido_completo !== 'undefined') {
+            datosPersonaActualizados.apellido_completo = String(nuevosDatos.apellido_completo || '').trim();
+          }
+
+          if (typeof nuevosDatos.telefono !== 'undefined') {
+            datosPersonaActualizados.telefono = nuevosDatos.telefono;
+          }
+
+          const correoEntrada = typeof nuevosDatos.email !== 'undefined'
+            ? nuevosDatos.email
+            : nuevosDatos.correo;
+
+          if (typeof correoEntrada !== 'undefined') {
+            const correoNormalizado = correoEntrada
+              ? String(correoEntrada).trim().toLowerCase()
+              : null;
+
+            if (correoNormalizado) {
+              const correoEnUso = await Persona.findOne({
+                where: {
+                  correo: correoNormalizado,
+                  id_persona: { [Op.ne]: personaAsociada.id_persona }
+                },
+                transaction: t
+              });
+
+              if (correoEnUso) {
+                const correoError = new Error(`El correo ${correoNormalizado} ya esta en uso por otra persona`);
+                correoError.status = 409;
+                throw correoError;
+              }
+            }
+
+            datosPersonaActualizados.correo = correoNormalizado;
+          }
+
+          const tipoDocumentoFinal = typeof nuevosDatos.tipo_documento !== 'undefined'
+            ? nuevosDatos.tipo_documento
+            : personaAsociada.tipo_documento;
+          const numeroDocumentoFinal = typeof nuevosDatos.numero_documento !== 'undefined'
+            ? nuevosDatos.numero_documento
+            : personaAsociada.numero_documento;
+          const documentoFueEditado = typeof nuevosDatos.tipo_documento !== 'undefined'
+            || typeof nuevosDatos.numero_documento !== 'undefined';
+
+          if (documentoFueEditado) {
+            const documentoEnUso = await Persona.findOne({
+              where: {
+                tipo_documento: tipoDocumentoFinal,
+                numero_documento: numeroDocumentoFinal,
+                id_persona: { [Op.ne]: personaAsociada.id_persona }
+              },
+              transaction: t
+            });
+
+            if (documentoEnUso) {
+              const documentoError = new Error(
+                `Ya existe una persona con documento ${tipoDocumentoFinal} ${numeroDocumentoFinal}`
+              );
+              documentoError.status = 409;
+              throw documentoError;
+            }
+
+            datosPersonaActualizados.tipo_documento = tipoDocumentoFinal;
+            datosPersonaActualizados.numero_documento = numeroDocumentoFinal;
+          }
+
+          if (Object.keys(datosPersonaActualizados).length > 0) {
+            await personaAsociada.update(datosPersonaActualizados, { transaction: t });
+          }
+        }
+
+        // Actualizacion atomica: fecha/hora y contador en una sola operacion
         const datosCompletos = {
-          fecha_cita: normalizarFechaCita(nuevosDatos.fecha_cita),
-          hora_inicio: nuevosDatos.hora_inicio,
-          hora_fin: nuevosDatos.hora_fin,
-          motivo_reagendamiento: nuevosDatos.motivo_reagendamiento,
+          fecha_cita: fechaFinal,
+          hora_inicio: rangoHorarioFinal.horaInicio,
+          hora_fin: rangoHorarioFinal.horaFin,
+          motivo_reagendamiento: motivoReagendamientoFinal,
           id_servicio: servicioFinal,
-          id_agente_asignado: nuevosDatos.id_agente_asignado,
+          id_agente_asignado: agenteFinal,
           id_estado_cita: estadoFinal,
           observaciones: observacionesFinal,
-          ediciones_realizadas: nuevoValor, // ✅ VALOR CALCULADO (0+1=1)
+          ediciones_realizadas: nuevoValor,
           ediciones_maximas: edicionesMaximas,
           fecha_actualizacion: new Date()
         };
@@ -1122,4 +1368,3 @@ class CitaService {
 }
 
 module.exports = new CitaService();
-

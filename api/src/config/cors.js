@@ -35,7 +35,7 @@ const corsOptions = {
     'Authorization',
     'X-Requested-With',
     'Accept',
-    // Permitir cabeceras de control de caché usadas por fetch
+    'headers',
     'Cache-Control',
     'Pragma'
   ]

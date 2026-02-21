@@ -1,5 +1,6 @@
 ﻿const app = require('./app');
 const { testConnection } = require('./config/database');
+const { scheduleDailyOverdues } = require('./jobs/paymentsOverdue.job');
 
 const PORT = process.env.PORT || 5000;
 
@@ -49,6 +50,9 @@ const startServer = async () => {
       console.log(`Health: http://localhost:${PORT}/api/${process.env.API_VERSION || 'v1'}/health`);
       console.log('=================================================');
     });
+
+    // Programar job diario de mora de cobros
+    scheduleDailyOverdues();
 
     const gracefulShutdown = (signal) => {
       console.log(`\n${signal} recibido. Cerrando servidor gracefully...`);

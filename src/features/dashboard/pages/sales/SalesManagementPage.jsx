@@ -257,7 +257,7 @@ const mapEstadoUiToVentaEstado = (estado = "") => {
 
 
 const buildTrackingPayload = (updatedSale = {}, statusCatalog = []) => {
-  const estadoSeguimiento =
+  let estadoSeguimiento =
     updatedSale.estadoSeguimiento ||
     updatedSale.estado ||
     statusCatalog[0]?.nombre_estado ||
@@ -290,7 +290,6 @@ const buildTrackingPayload = (updatedSale = {}, statusCatalog = []) => {
 
 
   if (!estadoId) {
-    // Si el estado no está en el mapa, usar un id neutro (En espera) y preservar el texto en la descripción
     const fallback =
       statusCatalog.find(
         (s) => STATUS_NORMALIZE(s.nombre_estado) === STATUS_NORMALIZE("En espera")
@@ -299,7 +298,7 @@ const buildTrackingPayload = (updatedSale = {}, statusCatalog = []) => {
         (s) => STATUS_NORMALIZE(s.nombre_estado) === STATUS_NORMALIZE("En espera")
       );
     estadoId = fallback?.id_estado_venta ?? 3;
-    updatedSale.descripcionSeguimiento = `[Estado personalizado: ${estadoSeguimiento}] ${updatedSale.descripcionSeguimiento || ""}`.trim();
+    estadoSeguimiento = fallback?.nombre_estado ?? "En espera";
   }
 
   if (!compradorId) return null;
@@ -1508,86 +1507,61 @@ export function SalesManagementPage() {
 
 
 
-  const handleUpdateTracking = async (updatedSale) => {
-
-    const saleId = updatedSale?.id || updatedSale?.id_venta;
+  const handleUpdateTracking = async (updatedSale, opts = {}) => {
+    const saleId =
+      opts?.saleId ||
+      updatedSale?.id ||
+      updatedSale?.id_venta ||
+      updatedSale?.idVenta ||
+      trackingSale?.id ||
+      trackingSale?.id_venta ||
+      trackingSale?.idVenta;
 
     if (!saleId) {
-
       setStatusMessage({
-
         type: "error",
-
         text: "No se pudo identificar la venta para actualizar.",
-
       });
-
       return;
-
     }
 
-
-
-    const existingSale = ventas.find((v) => String(v.id) === String(saleId)) || {};
+    const existingSale =
+      ventas.find((v) => String(v.id) === String(saleId)) || trackingSale || {};
 
     const mergedPayload = {
-
       ...existingSale,
-
       ...updatedSale,
-
       raw: existingSale?.raw || updatedSale?.raw,
-
     };
 
     if (!mergedPayload.estado) mergedPayload.estado = existingSale?.estado || "En espera";
-
     if (!mergedPayload.estadoSeguimiento)
-
       mergedPayload.estadoSeguimiento = mergedPayload.estado || "Iniciada";
 
-
-
     try {
-
       setStatusMessage({ type: "info", text: "Guardando cambios..." });
 
-
-
-      // Optimista
-
       setVentas((prevVentas) =>
-
         prevVentas.map((v) =>
-
           String(v.id) === String(saleId)
-
-            ? { ...v, estado: mergedPayload.estado, estadoSeguimiento: mergedPayload.estadoSeguimiento, descripcionSeguimiento: mergedPayload.descripcionSeguimiento }
-
+            ? {
+                ...v,
+                estado: mergedPayload.estado,
+                estadoSeguimiento: mergedPayload.estadoSeguimiento,
+                descripcionSeguimiento: mergedPayload.descripcionSeguimiento,
+              }
             : v
-
         )
-
       );
-
-
-
-      // Registrar seguimiento + cambio de estado con catÃ¡logo
 
       const trackingPayload = buildTrackingPayload(mergedPayload, statusCatalog);
 
       if (!trackingPayload) {
-
         setStatusMessage({
-
           type: "error",
-
           text: "No se pudo registrar seguimiento: falta id_comprador o estado.",
-
         });
-
         return;
-
       }
 
       await ventaApiService.cambiarEstado(saleId, {
@@ -1595,69 +1569,38 @@ export function SalesManagementPage() {
         descripcion: mergedPayload.descripcionSeguimiento || trackingPayload.descripcion,
       });
 
-
-      // Refrescar desde API
-
       const refreshed = await ventaApiService.obtenerVenta(saleId);
-
       const apiSale = refreshed?.data?.data || refreshed?.data || refreshed;
 
       const normalized = normalizeSaleRecord(apiSale, mergedPayload);
 
       const merged = {
-
         ...normalized,
-
         estado: mergedPayload.estado || normalized.estado,
-
         estadoSeguimiento: mergedPayload.estadoSeguimiento || normalized.estadoSeguimiento,
-
         descripcionSeguimiento:
-
           mergedPayload.descripcionSeguimiento ?? normalized.descripcionSeguimiento,
-
       };
 
-
-
       setVentas((prevVentas) =>
-
         prevVentas.map((v) =>
-
           String(v.id) === String(saleId) ? { ...v, ...merged, raw: apiSale } : v
-
         )
-
       );
 
-
-
       setStatusMessage({
-
         type: "success",
-
         text: "Estados guardados correctamente.",
-
       });
-
     } catch (error) {
-
       console.error("Error actualizando estados:", error);
-
       setStatusMessage({
-
         type: "error",
-
         text: error?.message || "No se pudo actualizar el estado. Intenta nuevamente.",
-
       });
-
     } finally {
-
       setTrackingSale(null);
-
     }
-
   };
 
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaCalendar, FaDollarSign } from "react-icons/fa";
@@ -18,8 +18,19 @@ const mapApiArriendoToRow = (arriendo = {}) => {
   const inmueble = arriendo.Inmueble || arriendo.inmueble || {};
   const arrendatario = arriendo.arrendatario || arriendo.Arrendatario || {};
   const persona = arrendatario.persona || arrendatario.Persona || {};
-  const codeudor = arriendo.codeudor || arriendo.Codeudor || {};
-  const codeudorPersona = codeudor.persona || codeudor.Persona || (codeudor.id_persona ? codeudor : {});
+  const codeudor =
+    arriendo.codeudor ||
+    arriendo.Codeudor ||
+    arriendo.codeudor_persona ||
+    arriendo.codeudorPersona ||
+    {};
+
+  const codeudorPersona =
+    codeudor.persona ||
+    codeudor.Persona ||
+    arriendo.codeudor_persona ||
+    arriendo.codeudorPersona ||
+    (codeudor.id_persona ? codeudor : {});
 
   const nombreCompletoBase = arrendatario.nombre_completo || persona.nombre_completo || "";
   const apellidosBase = arrendatario.apellido_completo || persona.apellido_completo || "";
@@ -33,15 +44,69 @@ const mapApiArriendoToRow = (arriendo = {}) => {
   const [primerApellidoCod = "", segundoApellidoCod = ""] = apellidosCod.split(" ");
 
   const valor = arriendo.valor_mensual || arriendo.valor_arriendo || arriendo.valor_arriendo_mensual || arriendo.precio_arriendo || 0;
-  const fechaInicio = arriendo.fecha_inicio || "";
+  const fechaInicio = arriendo.fecha_inicio || arriendo.fechaInicio || "";
   const fechaFin = arriendo.fecha_finalizacion || arriendo.fecha_fin || "";
+  const cobros = arriendo.Cobros || arriendo.cobros || [];
+  const cobroOrdenado = cobros
+    .slice()
+    .sort((a, b) => new Date(a.fecha_cobro) - new Date(b.fecha_cobro))[0];
 
-  // Extraer comodidades para habitaciones y baños
+  const fechaCobroRaw =
+    (cobroOrdenado && cobroOrdenado.fecha_cobro) ||
+    arriendo.fecha_cobro ||
+    arriendo.fechaCobro ||
+    fechaInicio;
+  const fechaCobroDate = fechaCobroRaw ? new Date(fechaCobroRaw) : null;
+  const fechaCobroStr =
+    fechaCobroDate && !Number.isNaN(fechaCobroDate.getTime())
+      ? fechaCobroDate.toISOString().slice(0, 10).replace(/-/g, '/')
+      : "";
+
+  // Extraer comodidades para habitaciones y baÃ±os
   const comodidades = inmueble.comodidades || [];
   const habCom = comodidades.find(c => c.nombre === "Habitaciones");
-  const banCom = comodidades.find(c => c.nombre === "Baños" || c.nombre === "BaÃ±os");
+  const banCom = comodidades.find(c => c.nombre === "BaÃ±os" || c.nombre === "BaÃƒÂ±os");
   const habCantidad = habCom?.Inmueble_Comodidades?.cantidad || habCom?.Inmueble_Comodidad?.cantidad || habCom?.cantidad || "";
   const banCantidad = banCom?.Inmueble_Comodidades?.cantidad || banCom?.Inmueble_Comodidad?.cantidad || banCom?.cantidad || "";
+
+  const ultimoEstado =
+    arriendo.ultimo_seguimiento_estado ||
+    arriendo.ultimoSeguimientoEstado ||
+    arriendo.seguimientos?.[0]?.estado ||
+    "";
+
+  const ultimoComentario =
+    arriendo.ultimo_seguimiento_comentario ||
+    arriendo.ultimoSeguimientoComentario ||
+    arriendo.ultimo_seguimiento_descripcion ||
+    arriendo.ultimoSeguimientoDescripcion ||
+    arriendo.comentario ||
+    arriendo.seguimientos?.[0]?.descripcion ||
+    arriendo.seguimientos?.[0]?.comentario ||
+    "";
+  const ultimoDescripcion =
+    arriendo.ultimo_seguimiento_descripcion ||
+    arriendo.ultimoSeguimientoDescripcion ||
+    arriendo.seguimientos?.[0]?.descripcion ||
+    arriendo.comentario ||
+    ultimoComentario;
+  const descripcionContrato =
+    arriendo.descripcion_contrato ||
+    arriendo.descripcionContrato ||
+    arriendo.descripcion ||
+    arriendo.descripcion_garantia ||
+    arriendo.observaciones ||
+    arriendo.descripcionInmueble ||
+    arriendo.descripcion_arriendo ||
+    arriendo.descripcion_inmueble ||
+    "";
+
+  const ultimoFechaRaw =
+    arriendo.ultimo_seguimiento_fecha ||
+    arriendo.ultimoSeguimientoFecha ||
+    arriendo.seguimientos?.[0]?.fecha_creacion ||
+    "";
+  const totalSeguimientos = arriendo.total_seguimientos ?? arriendo.totalSeguimientos ?? 0;
 
   return {
     id: arriendo.id_arrendamiento || arriendo.id_arriendo || arriendo.id || Date.now(),
@@ -81,11 +146,18 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     precioInmueble: formatCurrency(inmueble.precio_arriendo || inmueble.precio || valor),
     fechaInicio: fechaInicio ? String(fechaInicio).slice(0, 10) : "",
     fechaFinal: fechaFin ? String(fechaFin).slice(0, 10) : "",
-    fechaCobro: "",
+    fechaCobro: fechaCobroStr || "No especificada",
     precio: formatCurrency(valor),
+    descripcion: descripcionContrato,
+    descripcionContrato,
     estado: arriendo.estado || "Pendiente",
     fechaLimite: "",
     valorMensual: formatCurrency(valor),
+    ultimoSeguimientoEstado: ultimoEstado,
+    ultimoSeguimientoComentario: ultimoComentario,
+    ultimoSeguimientoDescripcion: ultimoDescripcion,
+    ultimoSeguimientoFecha: ultimoFechaRaw ? String(ultimoFechaRaw).slice(0, 10) : "",
+    totalSeguimientos,
   };
 };
 
@@ -164,10 +236,17 @@ export function RenantManagementPage() {
 
   // 🗑️ ELIMINAR
   const handleDelete = async (id) => {
-    // No hay endpoint de borrado de arriendos en uso; removemos local y refrescamos
     if (!window.confirm("¿Estás seguro de eliminar este registro?")) return;
-    setArriendos((prev) => prev.filter((r) => r.id !== id));
-    setStatusMessage({ type: "info", message: "Arriendo removido de la lista local. Refresca si persiste." });
+    try {
+      await arriendoApiService.eliminarArriendo(id);
+      setArriendos((prev) => prev.filter((r) => r.id !== id));
+      setStatusMessage({ type: "success", message: "Arriendo eliminado correctamente" });
+    } catch (error) {
+      setStatusMessage({
+        type: "error",
+        message: error?.response?.data?.message || error?.message || "No se pudo eliminar el arriendo",
+      });
+    }
   };
 
   const filteredRents =
@@ -204,7 +283,7 @@ export function RenantManagementPage() {
     }
   };
 
-  // Calcular estadísticas
+  // Calcular estadÃ­sticas
   const stats = {
     total: filteredRents.length,
     activos: filteredRents.filter(r => r.estado === 'Pagado' || r.estado === 'Activo').length,
@@ -215,7 +294,7 @@ export function RenantManagementPage() {
     }, 0)
   };
 
-  // 🔑 --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
+  // ðŸ”‘ --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
   const renderFormModal = () => {
     if (!showForm) return null;
 
@@ -301,7 +380,7 @@ export function RenantManagementPage() {
             </label>
 
             <label className="block text-sm font-medium text-slate-700">
-              Comentario (opcional)
+              Descripción (opcional)
               <textarea
                 className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={3}
@@ -538,3 +617,4 @@ export function RenantManagementPage() {
     </>
   );
 }
+

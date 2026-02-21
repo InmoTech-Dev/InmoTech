@@ -1,5 +1,12 @@
 const saleService = require('../services/sales.service');
 const logger = require('../utils/logger');
+const { VentaAdjunto } = require('../models');
+const cloudinary = require('../config/cloudinary');
+const multer = require('multer');
+
+// Reutilizamos storage en memoria
+const upload = multer({ storage: multer.memoryStorage() });
+const uploadSingle = upload.single('file');
 
 class SalesController {
   async createSale(req, res, next) {
@@ -191,6 +198,108 @@ class SalesController {
         success: true,
         message: 'Estadísticas obtenidas exitosamente',
         data: statistics
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Adjuntar comprobante/contrato a una venta
+  attachMiddleware() {
+    return uploadSingle;
+  }
+
+  async addAttachment(req, res, next) {
+    try {
+      const { id } = req.params;
+      const saleId = parseInt(id);
+      const { tipo } = req.body;
+      if (!['comprobante', 'contrato'].includes(tipo)) {
+        return res.status(400).json({
+          success: false,
+          message: "El tipo debe ser 'comprobante' o 'contrato'"
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'Debe enviar un archivo en el campo file'
+        });
+      }
+
+      // Subir a Cloudinary (permite PDF e imágenes)
+      const folder = `inmotech/ventas/${saleId}`;
+      const uploadResult = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder,
+            resource_type: 'auto'
+          },
+          (error, result) => {
+            if (error) return reject(error);
+            return resolve(result);
+          }
+        );
+        stream.end(req.file.buffer);
+      });
+
+      const adjunto = await VentaAdjunto.create({
+        id_venta: saleId,
+        tipo,
+        nombre_archivo: req.file.originalname || uploadResult.original_filename,
+        url: uploadResult.secure_url,
+        mime_type: req.file.mimetype || uploadResult.resource_type,
+        tamano_bytes: req.file.size || uploadResult.bytes
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Adjunto guardado correctamente',
+        data: adjunto
+      });
+    } catch (error) {
+      logger.error(`Error al subir adjunto de venta: ${error.message}`);
+      return res.status(500).json({
+        success: false,
+        message: 'No se pudo guardar el adjunto'
+      });
+    }
+  }
+
+  async listAttachments(req, res, next) {
+    try {
+      const saleId = parseInt(req.params.id);
+      const adjuntos = await VentaAdjunto.findAll({
+        where: { id_venta: saleId },
+        order: [['fecha_creacion', 'DESC']]
+      });
+      return res.status(200).json({
+        success: true,
+        data: adjuntos,
+        total: adjuntos.length
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteAttachment(req, res, next) {
+    try {
+      const saleId = parseInt(req.params.id);
+      const adjuntoId = parseInt(req.params.adjuntoId);
+      const deleted = await VentaAdjunto.destroy({
+        where: { id_venta: saleId, id_adjunto: adjuntoId }
+      });
+      if (!deleted) {
+        return res.status(404).json({
+          success: false,
+          message: 'Adjunto no encontrado'
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'Adjunto eliminado'
       });
     } catch (error) {
       next(error);

@@ -124,6 +124,23 @@ class ArriendoApiService {
   }
 
   /**
+   * Elimina un arriendo por ID
+   * @param {number|string} id - ID del arriendo
+   * @returns {Promise<Object>} Respuesta del servidor
+   */
+  async eliminarArriendo(id) {
+    try {
+      console.log(`🗑️ Eliminando arriendo con ID: ${id}`);
+      const response = await apiClient.delete(`/leases/${id}`);
+      console.log('✅ Arriendo eliminado');
+      return response;
+    } catch (error) {
+      console.error('❌ Error eliminando arriendo:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Actualiza únicamente el estado del arriendo (flujo de seguimiento)
    * @param {number} id - ID del arriendo
    * @param {{estado: string, comentario?: string}} payload - Estado nuevo y comentario opcional

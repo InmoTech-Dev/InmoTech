@@ -126,7 +126,7 @@ export function RenantManagementPage() {
 
   // 🗑️ ELIMINAR
   const handleDelete = (id) => {
-    if (window.confirm("¿Estás seguro de eliminar este registro?")) {
+    if (window.confirm("�Est�s seguro de eliminar este registro?")) {
       setArriendos((prev) => prev.filter((r) => r.id !== id));
     }
   };

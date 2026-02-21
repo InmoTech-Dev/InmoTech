@@ -66,6 +66,8 @@ const initial = {
     fechaVenta: new Date().toISOString().slice(0, 10),
     medioPago: "efectivo",
     medioPagoDescripcion: "",
+    medioPagoEfectivo: "",
+    medioPagoTransferencia: "",
 };
 
 export default function SalesForm({ onClose, onSubmit }) {
@@ -100,7 +102,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     // Campos estrictamente numéricos (solo dígitos)
     const strictNumericFields = [];
 
-    const currencyFields = ["inmueblePrecio"];
+    const currencyFields = ["inmueblePrecio", "medioPagoEfectivo", "medioPagoTransferencia"];
 
     // Campos para validaciones de formato
     const nameFields = [
@@ -126,7 +128,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             "inmuebleBarrio", "inmuebleDireccion", "inmuebleGaraje"
         ],
         4: [
-            "fechaVenta", "medioPago", "medioPagoDescripcion", "inmueblePrecio"
+            "fechaVenta", "medioPago", "medioPagoEfectivo", "medioPagoTransferencia", "inmueblePrecio"
         ]
     };
 
@@ -173,6 +175,8 @@ export default function SalesForm({ onClose, onSubmit }) {
             fechaVenta: "Fecha de Venta",
             medioPago: "Medio de Pago",
             medioPagoDescripcion: "Descripción del pago mixto",
+            medioPagoEfectivo: "Pago en efectivo",
+            medioPagoTransferencia: "Pago por transferencia",
         };
         return labels[name] ?? name;
     };
@@ -313,19 +317,33 @@ export default function SalesForm({ onClose, onSubmit }) {
             });
         }
 
-        // Si cambia el medio de pago a algo distinto de mixto, limpiar la descripción
+        // Si cambia el medio de pago a algo distinto de mixto, limpiar campos mixtos
         if (name === "medioPago" && cleanValue.toLowerCase() !== "mixto") {
             valuesRef.current.medioPagoDescripcion = "";
             displayValuesRef.current.medioPagoDescripcion = "";
+            valuesRef.current.medioPagoEfectivo = "";
+            valuesRef.current.medioPagoTransferencia = "";
+            displayValuesRef.current.medioPagoEfectivo = "";
+            displayValuesRef.current.medioPagoTransferencia = "";
 
             const descEl = elRefs.current.medioPagoDescripcion;
+            const efEl = elRefs.current.medioPagoEfectivo;
+            const trEl = elRefs.current.medioPagoTransferencia;
             if (descEl) {
                 try { descEl.value = ""; } catch (_err) { /* ignore */ }
+            }
+            if (efEl) {
+                try { efEl.value = ""; } catch (_err) { /* ignore */ }
+            }
+            if (trEl) {
+                try { trEl.value = ""; } catch (_err) { /* ignore */ }
             }
 
             setErrors(prev => {
                 const next = { ...prev };
                 delete next.medioPagoDescripcion;
+                delete next.medioPagoEfectivo;
+                delete next.medioPagoTransferencia;
                 return next;
             });
         }
@@ -818,7 +836,12 @@ export default function SalesForm({ onClose, onSubmit }) {
             let error = null;
 
             const isPaymentDescription = fieldName === "medioPagoDescripcion";
-            const isRequired = requiredFields.includes(fieldName) || (isPaymentDescription && medioPagoActual === "mixto");
+            const isCashSplit = fieldName === "medioPagoEfectivo";
+            const isTransferSplit = fieldName === "medioPagoTransferencia";
+            const isMixto = medioPagoActual === "mixto";
+            const isRequired =
+                requiredFields.includes(fieldName) ||
+                (isMixto && (isCashSplit || isTransferSplit));
             
             // Validación de obligatoriedad
             if (isRequired && !value.toString().trim() && fieldName !== 'inmuebleGaraje') { 
@@ -826,7 +849,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             } 
             
             // Validación de números estrictos
-            if (isRequired && strictNumericFields.includes(fieldName)) {
+            if (isRequired && (strictNumericFields.includes(fieldName) || isCashSplit || isTransferSplit)) {
                  if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                      error = "Este campo es obligatorio y debe ser mayor a 0";
                  }
@@ -858,13 +881,13 @@ export default function SalesForm({ onClose, onSubmit }) {
                 } 
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
                     error = `Debe ser un correo electrónico válido.`;
-                } 
+                }
                 else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) { 
                     error = `Solo se permiten números enteros.`;
                 }
-                else if (isPaymentDescription && medioPagoActual === "mixto") {
-                    if (value.trim().length < 8) {
-                        error = "Describe brevemente cómo se distribuye el pago mixto (mínimo 8 caracteres).";
+                else if (isMixto && (isCashSplit || isTransferSplit)) {
+                    if (!isValidNumeric(value)) {
+                        error = "Solo se permiten números enteros.";
                     }
                 }
             }
@@ -906,6 +929,11 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
+    const asNumber = (val) => {
+        const clean = (val ?? "").toString().replace(/[^0-9]/g, "");
+        return clean ? Number(clean) : 0;
+    };
+
     // Envío del formulario
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -932,6 +960,29 @@ export default function SalesForm({ onClose, onSubmit }) {
             return;
         }
 
+        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
+        if (medioPagoActual === "mixto") {
+            const efectivo = asNumber(valuesRef.current.medioPagoEfectivo);
+            const transferencia = asNumber(valuesRef.current.medioPagoTransferencia);
+            const total = asNumber(valuesRef.current.inmueblePrecio);
+
+            const mixErrors = {};
+            if (!efectivo) mixErrors.medioPagoEfectivo = "Ingresa el valor en efectivo (mayor a 0).";
+            if (!transferencia) mixErrors.medioPagoTransferencia = "Ingresa el valor por transferencia (mayor a 0).";
+            if (efectivo && transferencia && total && efectivo + transferencia !== total) {
+                mixErrors.medioPagoTransferencia = "La suma de efectivo y transferencia debe igualar el precio de venta.";
+            }
+
+            if (Object.keys(mixErrors).length) {
+                setErrors((prev) => ({ ...prev, ...mixErrors }));
+                setStep(4);
+                const first = Object.keys(mixErrors)[0];
+                const el = elRefs.current[first];
+                if (el) el.focus();
+                return;
+            }
+        }
+
         let buyerRef = selectedBuyerRef.current;
 
         if (!buyerRef) {
@@ -952,6 +1003,14 @@ export default function SalesForm({ onClose, onSubmit }) {
             ...normalizedValues,
             selectedBuyer: buyerRef,
         };
+
+        if (medioPagoActual === "mixto") {
+            const efectivo = asNumber(valuesRef.current.medioPagoEfectivo);
+            const transferencia = asNumber(valuesRef.current.medioPagoTransferencia);
+            const formattedEfectivo = formatNumberWithThousandsSeparator(efectivo.toString());
+            const formattedTransferencia = formatNumberWithThousandsSeparator(transferencia.toString());
+            payload.medioPagoDescripcion = `Efectivo: $ ${formattedEfectivo} | Transferencia: $ ${formattedTransferencia}`;
+        }
         
         if (onSubmit) onSubmit(payload);
         onClose?.();
@@ -962,8 +1021,13 @@ export default function SalesForm({ onClose, onSubmit }) {
         const label = getLabel(name);
         const errorMessage = errors[name];
         const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
+        const isMixto = medioPagoActual === "mixto";
         const isPaymentDescription = name === "medioPagoDescripcion";
-        const isRequired = requiredFields.includes(name) || (isPaymentDescription && medioPagoActual === "mixto");
+        const isCashSplit = name === "medioPagoEfectivo";
+        const isTransferSplit = name === "medioPagoTransferencia";
+        const isRequired =
+            requiredFields.includes(name) ||
+            (isMixto && (isCashSplit || isTransferSplit));
 
         const isDocField = docFields.includes(name);
         const isPhoneField = phoneFields.includes(name);
@@ -1239,13 +1303,16 @@ export default function SalesForm({ onClose, onSubmit }) {
                                     options={PAYMENT_OPTIONS}
                                 />
                                 {(valuesRef.current.medioPago || "").toLowerCase() === "mixto" && (
-                                    <div className="md:col-span-2">
+                                    <>
                                         <Field
-                                            name="medioPagoDescripcion"
-                                            as="textarea"
-                                            placeholder="Describe cómo se distribuirá el pago mixto (por ejemplo, 50% transferencia y 50% crédito)."
+                                            name="medioPagoEfectivo"
+                                            placeholder="Valor en efectivo (COP)"
                                         />
-                                    </div>
+                                        <Field
+                                            name="medioPagoTransferencia"
+                                            placeholder="Valor por transferencia (COP)"
+                                        />
+                                    </>
                                 )}
                                 <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
                             </div>

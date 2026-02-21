@@ -3,12 +3,14 @@ const router = express.Router();
 const salesController = require('../controllers/sales.controller');
 const { validate } = require('../middlewares/validate.middleware');
 const { createLimiter, strictLimiter } = require('../middlewares/security.middleware');
+const { authenticateToken } = require('../middlewares/auth.middleware');
 
 const {
   createSaleSchema,
   updateSaleSchema,
   createTrackingSchema,
-  changeStatusSchema
+  changeStatusSchema,
+  createAttachmentSchema
 } = require('../validators/sales.validator');
 
 // POST /api/v1/sales - Crear venta
@@ -68,6 +70,21 @@ router.post(
 
 // GET /api/v1/sales/:id/tracking - Obtener seguimientos
 router.get('/:id/tracking', salesController.getTracking);
+
+// POST /api/v1/sales/:id/attachments - Subir comprobante/contrato
+router.post(
+  '/:id/attachments',
+  authenticateToken,
+  salesController.attachMiddleware(),
+  validate(createAttachmentSchema),
+  salesController.addAttachment
+);
+
+// GET /api/v1/sales/:id/attachments - Listar adjuntos
+router.get('/:id/attachments', authenticateToken, salesController.listAttachments);
+
+// DELETE /api/v1/sales/:id/attachments/:adjuntoId - Borrar adjunto
+router.delete('/:id/attachments/:adjuntoId', authenticateToken, salesController.deleteAttachment);
 
 // GET /api/v1/sales/dashboard/statistics - Obtener estadísticas
 router.get('/dashboard/statistics', salesController.getStatistics);

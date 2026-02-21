@@ -48,9 +48,14 @@ const changeStatusSchema = Joi.object({
   descripcion: Joi.string().max(500).allow('', null)
 });
 
+const createAttachmentSchema = Joi.object({
+  tipo: Joi.string().valid('comprobante', 'contrato').required()
+});
+
 module.exports = {
   createSaleSchema,
   updateSaleSchema,
   createTrackingSchema,
-  changeStatusSchema
+  changeStatusSchema,
+  createAttachmentSchema
 };

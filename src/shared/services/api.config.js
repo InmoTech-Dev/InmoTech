@@ -109,6 +109,8 @@ class ApiClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
+    const isFormData = options.body instanceof FormData;
+
     const config = {
       ...options,
       headers: {
@@ -119,6 +121,13 @@ class ApiClient {
       credentials: 'include',
       signal: controller.signal,
     };
+
+    // No forzar Content-Type en multipart
+    if (isFormData) {
+      delete config.headers['Content-Type'];
+    } else if (options.body && typeof options.body !== 'string') {
+      config.body = JSON.stringify(options.body);
+    }
 
     // No reenviar params en fetch
     delete config.params;
@@ -202,7 +211,7 @@ class ApiClient {
     return this.request(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body,
     });
   }
 
@@ -210,7 +219,7 @@ class ApiClient {
     return this.request(endpoint, {
       method: 'PUT',
       headers,
-      body: JSON.stringify(body),
+      body,
     });
   }
 
@@ -218,7 +227,7 @@ class ApiClient {
     return this.request(endpoint, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify(body),
+      body,
     });
   }
 

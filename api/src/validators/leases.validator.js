@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-const leaseStatuses = ['Activo', 'Pendiente', 'Finalizado', 'Cancelado', 'Al día', 'Recuperación'];
+const leaseStatuses = ['Activo', 'Pendiente', 'Debe', 'Finalizado', 'Cancelado', 'Al día', 'Recuperación'];
 
 const createLeaseSchema = Joi.object({
   id_cliente: Joi.number().integer().required(),
@@ -39,7 +39,8 @@ const updateLeaseSchema = Joi.object({
 
 const updateLeaseStatusSchema = Joi.object({
   estado: Joi.string().valid(...leaseStatuses).required(),
-  comentario: Joi.string().max(500).allow('', null)
+  comentario: Joi.string().max(500).allow('', null),
+  descripcion: Joi.string().max(500).allow('', null) // alias para compatibilidad con BD
 });
 
 const createPaymentSchema = Joi.object({

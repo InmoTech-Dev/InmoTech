@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Sale, Buyer, Inmueble, Persona, SeguimientoVenta, EstadosVenta } = require('../models');
+const { Sale, Buyer, Inmueble, Persona, SeguimientoVenta, EstadosVenta, VentaAdjunto } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -180,6 +180,18 @@ class SaleService {
               ]
             }
           ]
+        },
+        {
+          association: 'adjuntos',
+          attributes: [
+            'id_adjunto',
+            'tipo',
+            'nombre_archivo',
+            'url',
+            'mime_type',
+            'tamano_bytes',
+            'fecha_creacion'
+          ]
         }
       ],
       transaction
@@ -277,6 +289,18 @@ class SaleService {
                 'numero_documento'
               ]
             }
+          ]
+        },
+        {
+          association: 'adjuntos',
+          attributes: [
+            'id_adjunto',
+            'tipo',
+            'nombre_archivo',
+            'url',
+            'mime_type',
+            'tamano_bytes',
+            'fecha_creacion'
           ]
         }
       ];
@@ -386,7 +410,16 @@ class SaleService {
               correo: sale.comprador.persona?.correo,
               telefono: sale.comprador.persona?.telefono
             }
-          : null
+          : null,
+        adjuntos: (sale.adjuntos || []).map((adj) => ({
+          id_adjunto: adj.id_adjunto,
+          tipo: adj.tipo,
+          nombre_archivo: adj.nombre_archivo,
+          url: adj.url,
+          mime_type: adj.mime_type,
+          tamano_bytes: adj.tamano_bytes,
+          fecha_creacion: adj.fecha_creacion
+        }))
       }));
     } catch (error) {
       const dbMsg = error.original?.message || error.message || 'Error consultando ventas';

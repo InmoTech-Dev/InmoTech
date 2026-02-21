@@ -47,6 +47,18 @@ export const ventaApiService = {
   async crearVenta(payload) {
     return apiClient.post('/sales', payload);
   },
+
+  async subirAdjunto(idVenta, file, tipo) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tipo', tipo);
+    // No enviar cabecera headers anidada; fetch infiere multipart con FormData
+    return apiClient.post(`/sales/${idVenta}/attachments`, formData);
+  },
+
+  async listarAdjuntos(idVenta) {
+    return apiClient.get(`/sales/${idVenta}/attachments`);
+  },
 };
 
 export default ventaApiService;

@@ -68,8 +68,14 @@ class LeasesController {
   async updateLeaseStatus(req, res, next) {
     try {
       const { id } = req.params;
-      const { estado, comentario } = req.validatedData || req.body;
-      const lease = await leaseService.updateLeaseStatus(parseInt(id, 10), estado, comentario);
+      const { estado, comentario, descripcion } = req.validatedData || req.body;
+      const userId = req.user?.id || req.user?.id_persona || null;
+      const lease = await leaseService.updateLeaseStatus(
+        parseInt(id, 10),
+        estado,
+        comentario ?? descripcion ?? null,
+        userId
+      );
       return res.status(200).json({
         success: true,
         message: 'Estado del arrendamiento actualizado exitosamente',

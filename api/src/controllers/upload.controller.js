@@ -28,7 +28,7 @@ const subirImagen = async (req, res) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder,
-          resource_type: 'image',
+          resource_type: 'auto', // permite pdf/imágenes
         },
         (error, result) => {
           if (error) return reject(error);

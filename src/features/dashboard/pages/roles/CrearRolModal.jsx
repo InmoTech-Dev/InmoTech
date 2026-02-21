@@ -76,7 +76,31 @@ const permissionConfig = {
   "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
-  export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
+const VIEW_PERMISSION = "Ver";
+
+const getNextPermissionsSelection = (currentPermissions = [], permiso) => {
+  const selected = new Set(currentPermissions);
+  const isSelected = selected.has(permiso);
+
+  if (permiso === VIEW_PERMISSION) {
+    if (isSelected) {
+      return [];
+    }
+    selected.add(VIEW_PERMISSION);
+    return Array.from(selected);
+  }
+
+  if (isSelected) {
+    selected.delete(permiso);
+    return Array.from(selected);
+  }
+
+  selected.add(permiso);
+  selected.add(VIEW_PERMISSION);
+  return Array.from(selected);
+};
+
+export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
   const [nombre, setNombre] = useState("");
   const [esAdministrativo, setEsAdministrativo] = useState(true);
   const [modules, setModules] = useState(
@@ -133,6 +157,10 @@ const permissionConfig = {
               ...mod,
               enabled: !mod.enabled,
               permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
+              permissions: mod.permisos.reduce((acc, permiso) => {
+                acc[permiso] = !mod.enabled;
+                return acc;
+              }, {})
             }
           : mod
       )
@@ -146,9 +174,7 @@ const permissionConfig = {
         i === index
           ? {
               ...mod,
-              permisosSeleccionados: mod.permisosSeleccionados.includes(permiso)
-                ? mod.permisosSeleccionados.filter((p) => p !== permiso)
-                : [...mod.permisosSeleccionados, permiso],
+              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
             }
           : mod
       )
@@ -160,16 +186,19 @@ const permissionConfig = {
     setModules((prev) =>
       prev.map((mod, i) =>
         i === index
-          ? {
-              ...mod,
-              permissions: {
-                ...mod.permissions,
-                [permiso]: !mod.permissions[permiso]
-              },
-              permisosSeleccionados: mod.permissions[permiso]
-                ? mod.permisosSeleccionados.filter((p) => p !== permiso)
-                : [...mod.permisosSeleccionados, permiso],
-            }
+          ? (() => {
+              const nextSelection = getNextPermissionsSelection(mod.permisosSeleccionados, permiso);
+              const nextPermissions = mod.permisos.reduce((acc, modulePermission) => {
+                acc[modulePermission] = nextSelection.includes(modulePermission);
+                return acc;
+              }, {});
+
+              return {
+                ...mod,
+                permissions: nextPermissions,
+                permisosSeleccionados: nextSelection,
+              };
+            })()
           : mod
       )
     );
@@ -238,6 +267,7 @@ const permissionConfig = {
 
   
   const handleClose = () => {
+    if (isSubmitting) return;
     setErrors({});
     setNombre("");
     setEsAdministrativo(true);
@@ -302,7 +332,8 @@ const permissionConfig = {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleClose}
-              className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="p-2 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -482,7 +513,8 @@ const permissionConfig = {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleClose}
-              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+              disabled={isSubmitting}
+              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </motion.button>

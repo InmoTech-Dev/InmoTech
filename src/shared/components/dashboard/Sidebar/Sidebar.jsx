@@ -17,7 +17,7 @@ const Sidebar = React.forwardRef(({
   onLogout,
   onGoToSite
 }, ref) => {
-  const { user, hasRole, getAvailableModules } = useAuth();
+  const { user, getAvailableModules } = useAuth();
 
   const sidebarVariants = {
     expanded: {

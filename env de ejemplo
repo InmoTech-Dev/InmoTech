@@ -1,0 +1,89 @@
+# =====================================================
+# CONFIGURACIÓN DE BASE DE DATOS SQL SERVER
+# =====================================================
+
+# ⭐ CORRECTO: Conectarse a SQLEXPRESS (donde está tu base de datos)
+DB_SERVER=localhost
+DB_INSTANCE=SQLEXPRESS
+DB_PORT=1433
+DB_NAME=InmobiliariaDB
+DB_USER=sa
+DB_PASSWORD=12345678
+DB_DIALECT=mssql
+DB_ENCRYPT=true
+DB_TRUST_SERVER_CERTIFICATE=true
+
+# =====================================================
+# CONFIGURACIÓN DEL SERVIDOR
+# =====================================================
+
+PORT=5000
+NODE_ENV=development
+API_VERSION=v1
+
+# =====================================================
+# CONFIGURACIÓN DE SEGURIDAD
+# =====================================================
+
+JWT_SECRET=75c5c42e0f550c2a73e99faef4667e0d8e3af6c97b763a8c9fd08241d66d26af40ef4e8cffdb20dd6866408fcf139cbcc20dd5ecb23a97832b3a5cdd097d5079
+JWT_REFRESH_SECRET=1321dde809d492a13d7bd01529ccd815a8ce10f6e8fa371f390c2b606f4c41860add093a380a4cd011b6bec67e426861eb5e5c5c1cf8542e8d0a0e571405bf9f
+JWT_EXPIRES_IN=24h
+BCRYPT_ROUNDS=12
+
+
+SETUP_SECRET_KEY=tu_clave_secreta_para_setup_aqui
+
+# =====================================================
+# CONFIGURACIÓN DE CORS
+# =====================================================
+
+CORS_ORIGIN=http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# =====================================================
+# CONFIGURACIÓN DE EMAIL (BREVO)
+# =====================================================
+# CONFIGURACIÓN DE BREVO (ACTUALIZAR ESTOS DATOS)
+EMAIL_HOST=smtp-relay.brevo.com
+EMAIL_PORT=587
+EMAIL_USER=matriz.inmobiliaria001@gmail.com
+EMAIL_PASS=CAMBIAR_POR_TU_CLAVE_SMTP_DE_BREVO
+# Asegurate de que este correo este verificado en "Senders & IPs" en Brevo
+EMAIL_FROM="Matriz Inmobiliaria" <matriz.inmobiliaria001@gmail.com>
+
+EMAIL_LOGO_URL=https://matrizinmobiliaria.com/images/logo-matriz-sin-fondo.png
+INVITATION_URL_BASE=http://localhost:3000/activar
+INVITATION_TTL_HOURS=24
+INVITATION_MAX_INTENTOS=5
+
+# =====================================================
+# CONFIGURACIÓN ANTERIOR (SENDGRID - RESPALDO)
+# =====================================================
+# EMAIL_HOST=smtp.sendgrid.net
+# EMAIL_PORT=587
+# EMAIL_USER=apikey
+# EMAIL_PASS=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
+# codigo secreto de SendGrid (obsoleto): JE9912K91Z4BAH5N1DLYNWLW
+# 82REEQ827YCN2ZYQPVZ12535
+
+#RATE_LIMIT_WINDOW_MS=900000
+#RATE_LIMIT_MAX_REQUESTS=100
+#
+## =====================================================
+## CONFIGURACIÓN DE LOGS
+## =====================================================
+#
+#LOG_LEVEL=warn
+#LOG_FILE_PATH=./logs
+#
+#
+#codigo secreto de SendGrid: JE9912K91Z4BAH5N1DLYNWLW
+#82REEQ827YCN2ZYQPVZ12535
+
+# =====================================================
+# CLOUDiNARY
+# =====================================================
+
+CLOUDINARY_CLOUD_NAME=djpkvambx
+CLOUDINARY_API_KEY=651441134149751
+CLOUDINARY_API_SECRET=1HVcj-BqznS5-pgZvpI1AuG_eQs

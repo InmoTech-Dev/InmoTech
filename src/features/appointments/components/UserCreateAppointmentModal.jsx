@@ -305,6 +305,10 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
   };
 
   const handleClose = () => {
+    if (isSubmitting) {
+      return;
+    }
+
     setFormData({
       fecha: "",
       hora: "",
@@ -336,6 +340,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
   };
 
   const updateFormData = (field, value) => {
+    if (isSubmitting) return;
     const newData = { ...formData, [field]: value };
     setFormData(newData);
 
@@ -347,12 +352,14 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
   };
 
   const handleDateSelect = (day) => {
+    if (isSubmitting) return;
     if (day.isDisabled) return;
     const dateString = formatDateForInput(day.date);
     updateFormData("fecha", dateString);
   };
 
   const navigateMonth = (direction) => {
+    if (isSubmitting) return;
     if (preselectedDate) {
       // Si hay fecha preseleccionada, permitir navegación normal pero no resetear a hoy
       setCurrentMonth((prev) => {
@@ -437,7 +444,8 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleClose}
-              className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+              className="p-2 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -460,6 +468,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => updateFormData("servicio", servicio.name)}
+                      disabled={isSubmitting}
                       className={`w-full p-4 rounded-xl border transition-all duration-200 ${
                         formData.servicio === servicio.name
                           ? "bg-blue-600 text-white border-blue-600 shadow-lg"
@@ -491,7 +500,10 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
 
             {/* Form */}
             <div className="lg:w-2/3 p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 min-h-0">
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form
+                onSubmit={handleSubmit}
+                className={`space-y-6 ${isSubmitting ? 'pointer-events-none' : ''}`}
+              >
                 {/* User Information - Auto-filled */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 mb-4">
@@ -553,6 +565,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => navigateMonth(-1)}
+                        disabled={isSubmitting}
                         className="p-2 hover:bg-white rounded-lg transition-colors"
                       >
                         <ChevronLeft className="w-5 h-5 text-slate-600" />
@@ -568,6 +581,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => navigateMonth(1)}
+                        disabled={isSubmitting}
                         className="p-2 hover:bg-white rounded-lg transition-colors"
                       >
                         <ChevronRight className="w-5 h-5 text-slate-600" />
@@ -599,7 +613,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                             whileHover={!day.isDisabled ? { scale: 1.05 } : {}}
                             whileTap={!day.isDisabled ? { scale: 0.95 } : {}}
                             onClick={() => handleDateSelect(day)}
-                            disabled={day.isDisabled}
+                            disabled={day.isDisabled || isSubmitting}
                             className={`h-10 w-10 rounded-lg text-sm font-medium transition-all duration-200 ${
                               day.isDisabled
                                 ? "text-slate-300 cursor-not-allowed"
@@ -659,6 +673,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => updateFormData("hora", hour)}
+                            disabled={isSubmitting}
                             className={`py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                               formData.hora === hour
                                 ? "bg-blue-600 text-white"
@@ -686,6 +701,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                   <textarea
                     value={formData.mensaje}
                     onChange={(e) => updateFormData("mensaje", e.target.value)}
+                    disabled={isSubmitting}
                     rows={3}
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none"
                     placeholder="¿Hay algo específico que te gustaría saber o comentar?"

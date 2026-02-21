@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState, useCallback, useEffect } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 

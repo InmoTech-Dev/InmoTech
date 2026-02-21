@@ -19,6 +19,10 @@ export const AdministrativosProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const { toast } = useToast();
   const { isAuthenticated, user } = useAuth();
+  const getAdministrativoId = useCallback(
+    (admin) => admin?.id_administrativo ?? admin?.administrativo?.id_administrativo ?? null,
+    []
+  );
 
   // Cargar administrativos
   const loadAdministrativos = useCallback(async (params = {}) => {
@@ -26,7 +30,11 @@ export const AdministrativosProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       const response = await administrativosApiService.getAdministrativos(params);
-      setAdministrativos(response.data.administrativos || []);
+      const administrativosResponse = response?.data?.data?.administrativos
+        || response?.data?.administrativos
+        || response?.administrativos
+        || [];
+      setAdministrativos(Array.isArray(administrativosResponse) ? administrativosResponse.filter(Boolean) : []);
     } catch (err) {
       setError(err.message || 'Error al cargar administrativos');
       toast({
@@ -41,26 +49,34 @@ export const AdministrativosProvider = ({ children }) => {
 
   // Agregar administrativo
   const addAdministrativo = useCallback((nuevoAdministrativo) => {
+    if (!nuevoAdministrativo || typeof nuevoAdministrativo !== 'object') {
+      return;
+    }
     setAdministrativos(prev => [...prev, nuevoAdministrativo]);
   }, []);
 
   // Actualizar administrativo
   const updateAdministrativo = useCallback((administrativoActualizado) => {
+    const idActualizado = getAdministrativoId(administrativoActualizado);
+    if (!idActualizado) {
+      return;
+    }
+
     setAdministrativos(prev =>
       prev.map(admin =>
-        admin.id_administrativo === administrativoActualizado.id_administrativo
+        getAdministrativoId(admin) === idActualizado
           ? administrativoActualizado
           : admin
       )
     );
-  }, []);
+  }, [getAdministrativoId]);
 
   // Eliminar administrativo
   const deleteAdministrativo = useCallback((id) => {
     setAdministrativos(prev =>
-      prev.filter(admin => admin.id_administrativo !== id)
+      prev.filter(admin => getAdministrativoId(admin) !== id)
     );
-  }, []);
+  }, [getAdministrativoId]);
 
   // Cambiar estado de administrativo
   const changeEstadoAdministrativo = useCallback(async (id, nuevoEstado, fechaRetiro = null) => {
@@ -75,7 +91,7 @@ export const AdministrativosProvider = ({ children }) => {
       // Actualizar el estado local
       setAdministrativos(prev =>
         prev.map(admin =>
-          admin.id_administrativo === id
+          getAdministrativoId(admin) === id
             ? { ...admin, estado_laboral: nuevoEstado, fecha_retiro: fechaRetiro }
             : admin
         )
@@ -86,13 +102,13 @@ export const AdministrativosProvider = ({ children }) => {
       console.error('Error cambiando estado:', error);
       throw error;
     }
-  }, []);
+  }, [getAdministrativoId]);
 
   // Crear administrativo
   const createAdministrativo = useCallback(async (adminData) => {
     try {
       const response = await administrativosApiService.createAdministrativo(adminData);
-      const nuevoAdmin = response.data;
+      const nuevoAdmin = response?.data?.data || response?.data || response;
 
       // Agregar a la lista local
       addAdministrativo(nuevoAdmin);
@@ -119,7 +135,7 @@ export const AdministrativosProvider = ({ children }) => {
   const updateAdministrativoComplete = useCallback(async (id, adminData) => {
     try {
       const response = await administrativosApiService.updateAdministrativo(id, adminData);
-      const adminActualizado = response.data.data;
+      const adminActualizado = response?.data?.data || response?.data || response;
 
       // Actualizar en la lista local
       updateAdministrativo(adminActualizado);

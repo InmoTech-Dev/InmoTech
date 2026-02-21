@@ -122,6 +122,10 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
 
   // Manejar cambios en el formulario
   const handleInputChange = (field, value) => {
+    if (isSubmitting) {
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -272,6 +276,7 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
   const fechaNuevaLegible = formatearFecha(newDate);
 
   const handleDateSelect = (day) => {
+    if (isSubmitting) return;
     if (day.isDisabled) return;
 
     const dateString = formatDateForInput(day.date);
@@ -287,6 +292,7 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
   };
 
   const navigateMonth = (direction) => {
+    if (isSubmitting) return;
     setCurrentMonth((prev) => {
       const newDate = new Date(prev);
       newDate.setMonth(prev.getMonth() + direction);
@@ -354,12 +360,8 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
       };
 
       console.log('🔍 UserRescheduleModal handleSubmit llamando onConfirm con reagendamientoData:', reagendamientoData);
-
-      // Cerrar el modal inmediatamente despues de enviar
+      await onConfirm(appointment.id, reagendamientoData);
       onClose();
-
-      // Llamar a la función de confirmación
-      onConfirm(appointment.id, reagendamientoData);
 
       toast({
         title: "Reagendando cita...",
@@ -377,7 +379,13 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
       setIsSubmitting(false);
     }
   };
+  const handleRequestClose = () => {
+    if (isSubmitting) {
+      return;
+    }
 
+    onClose();
+  };
   const applySuggestion = (suggestedTime) => {
     handleInputChange('hora_inicio', suggestedTime);
   };
@@ -419,7 +427,7 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleRequestClose}
         />
 
         {/* Modal */}
@@ -449,8 +457,9 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={onClose}
-              className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+              onClick={handleRequestClose}
+              className="p-2 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -522,7 +531,10 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
 
             {/* Form */}
             <div className="lg:w-2/3 p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 min-h-0">
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form
+                onSubmit={handleSubmit}
+                className={`space-y-6 ${isSubmitting ? 'pointer-events-none' : ''}`}
+              >
                 {/* Instrucción */}
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                   <div className="flex items-start gap-3">
@@ -777,7 +789,7 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
                     type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={onClose}
+                    onClick={handleRequestClose}
                     disabled={isSubmitting}
                     className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -810,3 +822,4 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
 };
 
 export default UserRescheduleModal;
+

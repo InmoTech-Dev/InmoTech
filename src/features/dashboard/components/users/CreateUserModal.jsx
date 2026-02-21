@@ -32,6 +32,7 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit, serverErrors = {} }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
 
     // Validar todos los campos antes de enviar
     Object.keys(formData).forEach(field => validateField(field, formData[field]));
@@ -54,6 +55,11 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit, serverErrors = {} }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRequestClose = () => {
+    if (loading) return;
+    onClose?.();
   };
 
   // Validaciones
@@ -250,7 +256,7 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit, serverErrors = {} }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleRequestClose}
         />
 
         <motion.div
@@ -273,8 +279,9 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit, serverErrors = {} }) => {
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={onClose}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              onClick={handleRequestClose}
+              disabled={loading}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -522,8 +529,9 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit, serverErrors = {} }) => {
           <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 bg-slate-50">
             <button
               type="button"
-              onClick={onClose}
-              className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              onClick={handleRequestClose}
+              disabled={loading}
+              className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </button>

@@ -55,6 +55,21 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // Errores de conectividad a base de datos
+  if (
+    err.name === 'SequelizeConnectionError' ||
+    err.name === 'SequelizeConnectionRefusedError' ||
+    err.name === 'SequelizeHostNotReachableError' ||
+    err.parent?.code === 'ETIMEOUT' ||
+    err.original?.code === 'ETIMEOUT'
+  ) {
+    return res.status(503).json({
+      success: false,
+      message: 'La base de datos no está disponible temporalmente. Intenta nuevamente.',
+      reason: 'database_unavailable'
+    });
+  }
+
   // Errores de validación con Joi
   if (err.isJoi) {
     return res.status(400).json({

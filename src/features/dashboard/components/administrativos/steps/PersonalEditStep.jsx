@@ -26,114 +26,112 @@ const PersonalEditStep = ({ formData, errors, updateFormData, administrativo }) 
       e.preventDefault();
     }
   };
+
   return (
-    <div className="space-y-6">
-      <div className="text-center mb-6">
-        <h3 className="text-lg font-semibold text-slate-800">Editar Información Personal</h3>
-        <p className="text-slate-600 text-sm">Modifica los datos personales del administrativo</p>
+    <div className="h-full flex flex-col gap-4">
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold text-slate-800">Editar Informacion Personal</h3>
+        <p className="text-sm text-slate-600">Modifica los datos personales del administrativo</p>
       </div>
 
-      {/* Información del administrativo actual */}
-      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-        <div className="flex items-center gap-2 mb-2">
-          <User className="w-4 h-4 text-slate-600" />
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="mb-2 flex items-center gap-2">
+          <User className="h-4 w-4 text-slate-600" />
           <span className="text-sm font-medium text-slate-700">Administrativo actual</span>
         </div>
-        <p className="text-sm text-slate-600">
-          <strong>Código:</strong> {administrativo?.codigo_empleado} |
-          <strong> Documento:</strong> {administrativo?.persona?.tipo_documento} {administrativo?.persona?.numero_documento}
-        </p>
+        <div className="grid grid-cols-1 gap-1 text-sm text-slate-600 md:grid-cols-2 md:gap-3">
+          <p><strong>Codigo:</strong> {administrativo?.codigo_empleado}</p>
+          <p><strong>Documento:</strong> {administrativo?.persona?.tipo_documento} {administrativo?.persona?.numero_documento}</p>
+        </div>
       </div>
 
-      {/* Nombre Completo */}
-      <div className="space-y-2">
-        <Label htmlFor="nombreCompleto" className="text-sm font-medium text-slate-700">
-          Nombre Completo *
-        </Label>
-        <Input
-          id="nombreCompleto"
-          type="text"
-          value={formData.nombreCompleto}
-          onChange={(e) => updateFormData('nombreCompleto', e.target.value)}
-          className={`h-10 ${errors.nombreCompleto ? 'border-red-500' : ''}`}
-          placeholder="Ingresa el nombre completo"
-        />
-        {errors.nombreCompleto && (
-          <p className="text-sm text-red-600">{errors.nombreCompleto}</p>
-        )}
-      </div>
-
-      {/* Apellido Completo */}
-      <div className="space-y-2">
-        <Label htmlFor="apellidoCompleto" className="text-sm font-medium text-slate-700">
-          Apellido Completo *
-        </Label>
-        <Input
-          id="apellidoCompleto"
-          type="text"
-          value={formData.apellidoCompleto}
-          onChange={(e) => updateFormData('apellidoCompleto', e.target.value)}
-          className={`h-10 ${errors.apellidoCompleto ? 'border-red-500' : ''}`}
-          placeholder="Ingresa el apellido completo"
-        />
-        {errors.apellidoCompleto && (
-          <p className="text-sm text-red-600">{errors.apellidoCompleto}</p>
-        )}
-      </div>
-
-      {/* Email */}
-      <div className="space-y-2">
-        <Label htmlFor="email" className="text-sm font-medium text-slate-700">
-          Email *
-        </Label>
-        <div className="relative">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="nombreCompleto" className="text-sm font-medium text-slate-700">
+            Nombre Completo *
+          </Label>
           <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => updateFormData('email', e.target.value)}
-            className={`h-10 pl-10 ${errors.email ? 'border-red-500' : ''}`}
-            placeholder="correo@ejemplo.com"
+            id="nombreCompleto"
+            type="text"
+            value={formData.nombreCompleto}
+            onChange={(e) => updateFormData('nombreCompleto', e.target.value)}
+            className={`h-10 ${errors.nombreCompleto ? 'border-red-500' : ''}`}
+            placeholder="Ingresa el nombre completo"
           />
-          <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          {errors.nombreCompleto && (
+            <p className="text-xs text-red-600">{errors.nombreCompleto}</p>
+          )}
         </div>
-        {errors.email && (
-          <p className="text-sm text-red-600">{errors.email}</p>
-        )}
-      </div>
 
-      {/* Teléfono */}
-      <div className="space-y-2">
-        <Label htmlFor="telefono" className="text-sm font-medium text-slate-700">
-          Teléfono *
-        </Label>
-        <div className="relative">
+        <div className="space-y-1.5">
+          <Label htmlFor="apellidoCompleto" className="text-sm font-medium text-slate-700">
+            Apellido Completo *
+          </Label>
           <Input
-            id="telefono"
-            type="tel"
-            value={formData.telefono}
-            onChange={handlePhoneChange}
-            onKeyDown={handlePhoneKeyDown}
-            className={`h-10 pl-10 ${errors.telefono ? 'border-red-500' : ''}`}
-            placeholder="+57 300 000 0000"
+            id="apellidoCompleto"
+            type="text"
+            value={formData.apellidoCompleto}
+            onChange={(e) => updateFormData('apellidoCompleto', e.target.value)}
+            className={`h-10 ${errors.apellidoCompleto ? 'border-red-500' : ''}`}
+            placeholder="Ingresa el apellido completo"
           />
-          <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          {errors.apellidoCompleto && (
+            <p className="text-xs text-red-600">{errors.apellidoCompleto}</p>
+          )}
         </div>
-        {errors.telefono && (
-          <p className="text-sm text-red-600">{errors.telefono}</p>
-        )}
       </div>
 
-      {/* Información adicional */}
-      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <FileText className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-medium text-blue-800">Información importante</span>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-sm font-medium text-slate-700">
+            Email *
+          </Label>
+          <div className="relative">
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => updateFormData('email', e.target.value)}
+              className={`h-10 pl-10 ${errors.email ? 'border-red-500' : ''}`}
+              placeholder="correo@ejemplo.com"
+            />
+            <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+          </div>
+          {errors.email && (
+            <p className="text-xs text-red-600">{errors.email}</p>
+          )}
         </div>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• El tipo y número de documento no se pueden modificar por seguridad</li>
-          <li>• La contraseña no se puede cambiar desde aquí</li>
-          <li>• Los cambios se aplicarán inmediatamente después de guardar</li>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="telefono" className="text-sm font-medium text-slate-700">
+            Telefono *
+          </Label>
+          <div className="relative">
+            <Input
+              id="telefono"
+              type="tel"
+              value={formData.telefono}
+              onChange={handlePhoneChange}
+              onKeyDown={handlePhoneKeyDown}
+              className={`h-10 pl-10 ${errors.telefono ? 'border-red-500' : ''}`}
+              placeholder="+57 300 000 0000"
+            />
+            <Phone className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+          </div>
+          {errors.telefono && (
+            <p className="text-xs text-red-600">{errors.telefono}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+        <div className="mb-1 flex items-center gap-2">
+          <FileText className="h-4 w-4 text-blue-600" />
+          <span className="text-sm font-medium text-blue-800">Informacion importante</span>
+        </div>
+        <ul className="space-y-0.5 text-xs text-blue-700">
+          <li>- Documento y tipo de documento no se modifican por seguridad.</li>
+          <li>- La contrasena se gestiona desde configuracion de cuenta.</li>
         </ul>
       </div>
     </div>

@@ -1,11 +1,113 @@
 const authService = require('../services/auth.service');
 const logger = require('../utils/logger');
+const opsConsoleLogger = require('../utils/opsConsoleLogger');
+const { generateCsrfToken, CSRF_COOKIE_NAME } = require('../middlewares/csrf.middleware');
+
+const ACCESS_COOKIE_NAME = 'accessToken';
+const REFRESH_COOKIE_NAME = 'refreshToken';
+const DEFAULT_ACCESS_TOKEN_MS = 60 * 60 * 1000;
+const DEFAULT_REFRESH_TOKEN_MS = 7 * 24 * 60 * 60 * 1000;
+
+const parseDurationToMs = (rawValue, fallbackValue) => {
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+    return rawValue * 1000;
+  }
+
+  if (!rawValue || typeof rawValue !== 'string') {
+    return fallbackValue;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  const match = normalized.match(/^(\d+)(ms|s|m|h|d)?$/);
+  if (!match) {
+    return fallbackValue;
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2] || 's';
+
+  switch (unit) {
+    case 'ms':
+      return amount;
+    case 's':
+      return amount * 1000;
+    case 'm':
+      return amount * 60 * 1000;
+    case 'h':
+      return amount * 60 * 60 * 1000;
+    case 'd':
+      return amount * 24 * 60 * 60 * 1000;
+    default:
+      return fallbackValue;
+  }
+};
 
 const buildCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === 'production';
   const secureCookies = process.env.COOKIE_SECURE === 'true' || isProduction;
   const sameSite = process.env.COOKIE_SAMESITE || 'lax';
-  return { secureCookies, sameSite };
+  const accessTokenMaxAge = parseDurationToMs(process.env.JWT_EXPIRES_IN, DEFAULT_ACCESS_TOKEN_MS);
+  const refreshTokenMaxAge = parseDurationToMs(
+    process.env.JWT_REFRESH_EXPIRES_IN,
+    DEFAULT_REFRESH_TOKEN_MS
+  );
+
+  return {
+    secureCookies,
+    sameSite,
+    accessTokenMaxAge,
+    refreshTokenMaxAge,
+  };
+};
+
+const setAuthCookies = (res, accessToken, refreshToken, cookieOptions) => {
+  const baseOptions = {
+    httpOnly: true,
+    secure: cookieOptions.secureCookies,
+    sameSite: cookieOptions.sameSite,
+  };
+
+  res.cookie(ACCESS_COOKIE_NAME, accessToken, {
+    ...baseOptions,
+    maxAge: cookieOptions.accessTokenMaxAge,
+  });
+
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+    ...baseOptions,
+    maxAge: cookieOptions.refreshTokenMaxAge,
+  });
+};
+
+const setCsrfCookie = (res, cookieOptions) => {
+  const csrfToken = generateCsrfToken();
+  res.cookie(CSRF_COOKIE_NAME, csrfToken, {
+    httpOnly: false,
+    secure: cookieOptions.secureCookies,
+    sameSite: cookieOptions.sameSite,
+    maxAge: cookieOptions.refreshTokenMaxAge,
+  });
+
+  return csrfToken;
+};
+
+const clearAuthCookies = (res, cookieOptions) => {
+  const clearOptions = {
+    secure: cookieOptions.secureCookies,
+    sameSite: cookieOptions.sameSite,
+  };
+
+  res.clearCookie(ACCESS_COOKIE_NAME, clearOptions);
+  res.clearCookie(REFRESH_COOKIE_NAME, clearOptions);
+  res.clearCookie(CSRF_COOKIE_NAME, clearOptions);
+};
+
+const resolveClientIp = (req) => {
+  const forwardedFor = req.headers?.['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || 'unknown';
 };
 
 class AuthController {
@@ -34,37 +136,77 @@ class AuthController {
   }
 
   async iniciarSesion(req, res, next) {
+    const { email, password } = req.validatedData;
+    const clientIp = resolveClientIp(req);
+    const userAgent = req.get('user-agent') || 'unknown';
+
+    opsConsoleLogger.authBlock({
+      action: 'LOGIN',
+      outcome: 'ATTEMPT',
+      fields: [
+        { label: 'email', value: email },
+        {
+          label: 'password',
+          value: opsConsoleLogger.isPlainPasswordEnabled ? password : '********'
+        },
+        { label: 'ip', value: clientIp },
+        { label: 'user-agent', value: userAgent },
+      ],
+      footer: '⏳ validando credenciales...',
+    });
+
     try {
-      const { email, password } = req.validatedData;
       const result = await authService.iniciarSesion(email, password);
       const { accessToken, refreshToken } = result;
-      const { secureCookies, sameSite } = buildCookieOptions();
+      const cookieOptions = buildCookieOptions();
+      setAuthCookies(res, accessToken, refreshToken, cookieOptions);
+      setCsrfCookie(res, cookieOptions);
 
-      res.cookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 60 * 60 * 1000, // 1h
-      });
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
+      opsConsoleLogger.authBlock({
+        action: 'LOGIN',
+        outcome: 'OK',
+        fields: [
+          { label: 'email', value: email },
+          { label: 'user-id', value: result?.user?.id_persona || result?.user?.id || 'unknown' },
+          { label: 'ip', value: clientIp },
+        ],
+        footer: '✅ sesion iniciada',
       });
 
       return res.status(200).json({
         success: true,
         message: 'Inicio de sesion exitoso',
         data: {
-          user: result.user,
-          accessToken,
-          refreshToken
+          user: result.user
         },
       });
     } catch (error) {
+      opsConsoleLogger.authBlock({
+        action: 'LOGIN',
+        outcome: 'FAIL',
+        method: 'warn',
+        fields: [
+          { label: 'email', value: email },
+          { label: 'ip', value: clientIp },
+          { label: 'reason', value: error.code || error.message || 'UNKNOWN_ERROR' },
+        ],
+        footer: '❌ sesion no iniciada',
+      });
       logger.error('Error en inicio de sesion:', error);
+      if (error.code === 'ACCOUNT_DISABLED') {
+        return res.status(error.status || 423).json({
+          success: false,
+          message: error.message,
+          reason: 'account_disabled',
+        });
+      }
+      if (error.code === 'ADMIN_ACCESS_REVOKED') {
+        return res.status(error.status || 403).json({
+          success: false,
+          message: error.message,
+          reason: 'admin_access_revoked',
+        });
+      }
       if (error.code === 'EMAIL_NOT_VERIFIED' || error.code === 'EMAIL_VERIFICATION_LIMIT') {
         return res.status(error.status || 403).json({
           success: false,
@@ -94,32 +236,44 @@ class AuthController {
 
   async refrescarToken(req, res, next) {
     try {
-      const { refreshToken } = req.validatedData;
+      const refreshTokenFromCookie = req.cookies?.refreshToken;
+      const refreshToken = refreshTokenFromCookie;
+
+      if (!refreshToken) {
+        return res.status(401).json({
+          success: false,
+          message: 'Token de refresco requerido',
+          reason: 'REFRESH_TOKEN_REQUIRED',
+        });
+      }
+
       const tokens = await authService.refrescarToken(refreshToken);
-      const { secureCookies, sameSite } = buildCookieOptions();
-
-      res.cookie('accessToken', tokens.accessToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 60 * 60 * 1000,
-      });
-
-      res.cookie('refreshToken', tokens.refreshToken, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      const cookieOptions = buildCookieOptions();
+      setAuthCookies(res, tokens.accessToken, tokens.refreshToken, cookieOptions);
+      setCsrfCookie(res, cookieOptions);
 
       return res.status(200).json({
         success: true,
         message: 'Token refrescado exitosamente',
-        data: tokens,
+        data: {
+          user: tokens.user
+        },
       });
     } catch (error) {
       logger.error('Error refrescando token:', error);
-      next(error);
+      const normalizedReason =
+        error.code === 'ACCOUNT_DISABLED'
+          ? 'account_disabled'
+          : error.code === 'ADMIN_ACCESS_REVOKED'
+            ? 'admin_access_revoked'
+            : error.code || 'INVALID_REFRESH_TOKEN';
+
+      return res.status(error.status || 401).json({
+        success: false,
+        message: error.message || 'Token de refresco invalido o expirado',
+        reason: normalizedReason,
+        forceLogout: normalizedReason === 'account_disabled' || normalizedReason === 'admin_access_revoked',
+      });
     }
   }
 
@@ -194,17 +348,17 @@ class AuthController {
     } catch (error) {
       logger.error('Error obteniendo perfil:', error);
 
-      if (error.message.includes('Usuario inactivo') || error.message.includes('deshabilitado')) {
+      if (error.code === 'ACCOUNT_DISABLED' || error.message.includes('Usuario inactivo') || error.message.includes('deshabilitado')) {
         logger.warn(`Logout forzado para usuario ${req.user.id}: ${error.message}`);
         return res.status(423).json({
           success: false,
-          message: 'Tu cuenta ha sido deshabilitada por un administrador. Sesion terminada.',
+          message: 'Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.',
           forceLogout: true,
-          reason: 'user_disabled',
+          reason: 'account_disabled',
         });
       }
 
-      if (error.message.includes('Acceso administrativo revocado')) {
+      if (error.code === 'ADMIN_ACCESS_REVOKED' || error.message.includes('Acceso administrativo revocado')) {
         logger.warn(`Logout forzado para usuario administrativo ${req.user.id}: ${error.message}`);
         return res.status(403).json({
           success: false,
@@ -254,16 +408,35 @@ class AuthController {
 
   async cerrarSesion(req, res, next) {
     try {
-      const { secureCookies, sameSite } = buildCookieOptions();
+      const cookieOptions = buildCookieOptions();
+      clearAuthCookies(res, cookieOptions);
 
-      res.clearCookie('accessToken', { httpOnly: true, secure: secureCookies, sameSite });
-      res.clearCookie('refreshToken', { httpOnly: true, secure: secureCookies, sameSite });
+      opsConsoleLogger.authBlock({
+        action: 'LOGOUT',
+        outcome: 'OK',
+        fields: [
+          { label: 'user-id', value: req.user?.id || req.user?.id_persona || 'anonymous' },
+          { label: 'email', value: req.user?.email || req.user?.correo || 'unknown' },
+          { label: 'ip', value: resolveClientIp(req) },
+        ],
+        footer: '✅ sesion cerrada',
+      });
 
       return res.status(200).json({
         success: true,
         message: 'Sesion cerrada exitosamente',
       });
     } catch (error) {
+      opsConsoleLogger.authBlock({
+        action: 'LOGOUT',
+        outcome: 'FAIL',
+        method: 'error',
+        fields: [
+          { label: 'reason', value: error.message || 'UNKNOWN_ERROR' },
+          { label: 'ip', value: resolveClientIp(req) },
+        ],
+        footer: '❌ no se pudo cerrar la sesion',
+      });
       logger.error('Error cerrando sesion:', error);
       next(error);
     }

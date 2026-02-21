@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, User, MapPin, FileText, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, User, MapPin, FileText, AlertTriangle, RefreshCw, ChevronLeft } from 'lucide-react';
 import citaApiService from '../../../../shared/services/citaApiService';
 
 const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newDate }) => {
@@ -22,17 +22,31 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
       // Extraer hora actual de la cita
       let currentTime = '';
       if (appointment.hora_inicio) {
-        // Si es formato ISO, extraer hora
-        if (appointment.hora_inicio.includes('T')) {
+        const timeStr = appointment.hora_inicio;
+
+        // 1. Intentar extraer HH:mm directamente del string (formato "08:30" o "Thu Jan 01 1970 08:30:00")
+        const timeRegex = /(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?(?:\s|$)/;
+        const match = timeStr.match(timeRegex);
+
+        if (match) {
+          currentTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
+        }
+        // 2. Fallback a Date si tiene T (ISO)
+        else if (timeStr.includes('T')) {
           try {
-            const date = new Date(appointment.hora_inicio);
-            currentTime = date.toISOString().substring(11, 16); // HH:mm format
+            const date = new Date(timeStr);
+            if (!isNaN(date.getTime())) {
+              const hours = String(date.getHours()).padStart(2, '0');
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              currentTime = `${hours}:${minutes}`;
+            } else {
+              currentTime = timeStr;
+            }
           } catch (error) {
-            console.error('Error parsing current time:', error);
-            currentTime = appointment.hora_inicio;
+            currentTime = timeStr;
           }
         } else {
-          currentTime = appointment.hora_inicio;
+          currentTime = timeStr;
         }
       }
 
@@ -48,6 +62,13 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
     }
   }, [isOpen, appointment, newDate]);
 
+  // Helper para normalizar fecha (YYYY-MM-DD)
+  const normalizeDate = (d) => {
+    if (!d) return '';
+    if (d.includes('T')) return d.split('T')[0];
+    return d;
+  };
+
   // Función para cargar horarios disponibles
   const loadAvailableTimes = async (fecha, servicioId) => {
     if (!fecha) return;
@@ -56,10 +77,45 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
     try {
       console.log('🔍 Cargando horarios disponibles para:', { fecha, servicioId });
 
-      const response = await citaApiService.obtenerHorariosDisponibles({
+      let response = await citaApiService.obtenerHorariosDisponibles({
         fecha_cita: fecha,
         id_servicio: servicioId
       });
+
+      // Filtrar si es el día de hoy (margen de 2 horas)
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const isToday = normalizeDate(fecha) === todayStr;
+
+      if (isToday) {
+        const currentTotalMinutes = today.getHours() * 60 + today.getMinutes();
+
+        response = response.filter(time => {
+          const [h, m] = time.split(':').map(Number);
+          const appointmentTotalMinutes = h * 60 + m;
+          return (appointmentTotalMinutes - currentTotalMinutes) >= 120;
+        });
+      }
+
+      // Siempre incluir la hora actual si la fecha coincide con la original
+      const originalDate = normalizeDate(appointment?.fecha_cita || appointment?.fecha);
+      if (normalizeDate(fecha) === originalDate && appointment?.hora_inicio) {
+        // Extraer HH:mm si es ISO
+        let currentTime = appointment.hora_inicio;
+        if (currentTime.includes('T') || currentTime.includes(':')) {
+          const date = new Date(currentTime);
+          if (!isNaN(date.getTime())) {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            currentTime = `${hours}:${minutes}`;
+          }
+        }
+
+        if (!response.includes(currentTime)) {
+          response.unshift(currentTime);
+          response.sort(); // Opcional: mantener orden cronológico
+        }
+      }
 
       setAvailableTimes(response);
       setValidationResult(null);
@@ -142,20 +198,28 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
 
   // ✅ CORREGIDO: Función para convertir formato ISO a 12 horas
   const formatTime = (timeString) => {
-    if (!timeString) return '';
-    
-    // Manejar formato ISO (1970-01-01T06:00:00.000Z)
-    if (timeString.includes('T') && timeString.includes('Z')) {
+    // 1. Intentar extraer HH:mm directamente si es un string de fecha largo o ya tiene formato hora
+    const timeMatch = timeString.match(/(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?(?:\s|$|am|pm|AM|PM)/i);
+    if (timeMatch && !timeString.includes('T')) {
+      const hours = parseInt(timeMatch[1], 10);
+      const minutes = timeMatch[2];
+      const isPM = timeString.toLowerCase().includes('pm') || hours >= 12;
+      const hours12 = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
+      const ampm = isPM ? 'pm' : 'am';
+      return `${hours12}:${minutes} ${ampm}`;
+    }
+
+    // 2. Manejar formato ISO
+    if (timeString.includes('T')) {
       const date = new Date(timeString);
       if (!isNaN(date.getTime())) {
-        const hours = date.getUTCHours();
-        const minutes = date.getUTCMinutes();
+        const hours = date.getHours();
+        const minutes = date.getMinutes();
         const isPM = hours >= 12;
         const hours12 = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
         return `${hours12}:${String(minutes).padStart(2, '0')} ${isPM ? 'pm' : 'am'}`;
       }
     }
-    
     // Clean multiple AM/PM suffixes for display safety
     let cleanedTime = timeString;
     const amMatches = timeString.match(/\b(am|AM)\b/g);
@@ -166,26 +230,24 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
       const lastAM = amMatches && amMatches.length > 0 ? amMatches[amMatches.length - 1] : null;
       const lastPM = pmMatches && pmMatches.length > 0 ? pmMatches[pmMatches.length - 1] : null;
       cleanedTime = timeString.replace(/\s*\b(am|pm)\b/gi, '');
-      
       if (lastPM) {
         cleanedTime += ' ' + lastPM.toLowerCase();
       } else if (lastAM) {
         cleanedTime += ' ' + lastAM.toLowerCase();
       }
-      
       cleanedTime = cleanedTime.trim();
     }
 
     if (cleanedTime.includes('am') || cleanedTime.includes('pm') ||
-        cleanedTime.includes('AM') || cleanedTime.includes('PM')) {
+      cleanedTime.includes('AM') || cleanedTime.includes('PM')) {
       return cleanedTime;
     }
 
     const [hours, minutes] = cleanedTime.split(':');
     const hour24 = parseInt(hours, 10);
-    
+
     if (isNaN(hour24)) return cleanedTime;
-    
+
     const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
     const ampm = hour24 >= 12 ? 'pm' : 'am';
 
@@ -204,7 +266,6 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
   const clienteTelefono = cliente.telefono || 'No especificado';
   const servicioNombre = servicio.nombre_servicio || 'Servicio no especificado';
   const inmuebleInfo = inmueble.direccion || 'Propiedad no especificada';
-  
   // ✅ CORREGIDO: Usar fecha_cita en lugar de fecha
   const fechaActual = appointment.fecha_cita || appointment.fecha;
   const horaActual = formatTime(appointment.hora_inicio || appointment.hora || '');
@@ -212,15 +273,15 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
   // ✅ CORREGIDO: Función para formatear fecha con validación
   const formatearFecha = (dateString) => {
     if (!dateString) return 'Fecha no especificada';
-    
+
     try {
       const [year, month, day] = dateString.split('-').map(Number);
       const dateObj = new Date(year, month - 1, day);
-      
+
       if (isNaN(dateObj.getTime())) {
         return 'Fecha inválida';
       }
-      
+
       return dateObj.toLocaleDateString('es-ES', {
         weekday: 'long',
         year: 'numeric',
@@ -260,6 +321,10 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -276,7 +341,7 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
       };
 
       // Llamar a la función de confirmación que maneja el reagendamiento
-      onConfirm(reagendamientoData);
+      await onConfirm(reagendamientoData);
     } catch (error) {
       console.error('Error during reschedule:', error);
       setErrors({
@@ -287,293 +352,278 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
     }
   };
 
+  const handleRequestClose = () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    onCancel();
+  };
+
   // Aplicar sugerencia de horario
   const applySuggestion = (suggestedTime) => {
     handleInputChange('hora_inicio', suggestedTime);
   };
 
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 my-8 overflow-hidden max-h-[90vh] overflow-y-auto"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-full"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Calendar className="w-6 h-6" />
-            Reagendar Cita - Validación Inteligente
-          </h2>
+        <div className="bg-white border-b border-slate-100 px-8 py-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center">
+              <Calendar className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">
+                Confirmar Reagendamiento
+              </h2>
+              <p className="text-sm text-slate-500">
+                Ajusta los detalles para mover esta cita
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleRequestClose}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSubmitting}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Instrucción */}
-          <p className="text-gray-600 text-sm bg-blue-50 p-3 rounded-lg">
-            📅 <strong>Cita arrastrada al calendario:</strong> Se aplicarán validaciones automáticas de disponibilidad
-          </p>
+        {/* Content Area - Single Scrollable Section */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8">
 
-          {/* Información de la cita */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-              <User className="w-5 h-5 text-blue-600" />
-              Información de la Cita
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Cliente */}
-              <div className="flex items-center gap-3">
-                <User className="w-4 h-4 text-gray-500" />
-                <div>
-                  <p className="text-xs text-gray-500">Cliente</p>
-                  <p className="font-semibold text-gray-900">{clienteNombre}</p>
+          {/* Quick Context Card */}
+          <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-slate-200 shadow-sm">
+                    <User className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Cliente</p>
+                    <p className="font-semibold text-slate-700">{clienteNombre}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-slate-200 shadow-sm">
+                    <MapPin className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Servicio</p>
+                    <p className="font-semibold text-slate-700">{servicioNombre}</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Teléfono */}
-              <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <div>
-                  <p className="text-xs text-gray-500">Teléfono</p>
-                  <p className="font-semibold text-gray-900">{clienteTelefono}</p>
+              <div className="flex items-center gap-1 md:gap-4 self-center md:self-auto">
+                <div className="text-center px-4 py-2 bg-white rounded-xl border border-slate-200 shadow-sm min-w-[140px]">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Actual</p>
+                  <p className="text-sm font-semibold text-red-500">{formatearFecha(fechaActual)}</p>
+                  <p className="text-xs text-slate-400">{horaActual}</p>
                 </div>
-              </div>
-
-              {/* Servicio */}
-              <div className="flex items-center gap-3">
-                <MapPin className="w-4 h-4 text-gray-500" />
-                <div>
-                  <p className="text-xs text-gray-500">Servicio</p>
-                  <p className="font-semibold text-gray-900">{servicioNombre}</p>
+                <div className="w-8 flex items-center justify-center">
+                  <ChevronLeft className="w-5 h-5 text-slate-300 rotate-180" />
                 </div>
-              </div>
-
-              {/* Hora actual */}
-              <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <div>
-                  <p className="text-xs text-gray-500">Hora actual</p>
-                  <p className="font-semibold text-gray-900">{horaActual}</p>
+                <div className="text-center px-4 py-2 bg-blue-600 rounded-xl border border-blue-500 shadow-lg shadow-blue-100 min-w-[140px]">
+                  <p className="text-[10px] uppercase font-bold text-blue-200 mb-1">Nueva Fecha</p>
+                  <p className="text-sm font-semibold text-white">{formatearFecha(newDate)}</p>
+                  <p className="text-xs text-blue-100">
+                    {formData.hora_inicio ? formatTime(formData.hora_inicio) : 'Pendiente'}
+                  </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Comparación de fechas */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Fecha actual */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-xs font-medium text-red-600 mb-2">📅 Fecha actual</p>
-              <p className="text-sm font-semibold text-gray-900">
-                {formatearFecha(fechaActual)}
-              </p>
-              <p className="text-xs text-gray-600 mt-1">a las {horaActual}</p>
-            </div>
+          <form
+            onSubmit={handleSubmit}
+            className={`space-y-8 ${isSubmitting ? 'pointer-events-none' : ''}`}
+          >
+            {/* Time Selection Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-500" />
+                  Seleccionar Horario
+                </h3>
+                {loadingTimes && (
+                  <div className="flex items-center gap-2 text-xs text-blue-600 font-medium animate-pulse">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Buscando disponibles...
+                  </div>
+                )}
+              </div>
 
-            {/* Nueva fecha */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-xs font-medium text-green-600 mb-2">🎯 Nueva fecha</p>
-              <p className="text-sm font-semibold text-gray-900">
-                {formatearFecha(newDate)}
-              </p>
-              <p className="text-xs text-gray-600 mt-1">
-                {formData.hora_inicio ? `a las ${formatTime(formData.hora_inicio)}` : 'selecciona hora'}
-              </p>
-            </div>
-          </div>
-
-          {/* Selector de nueva hora */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              Nueva hora para {formatearFecha(newDate)}
-            </label>
-
-            {loadingTimes ? (
-              <div className="flex items-center justify-center py-8 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3 text-gray-600">
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Cargando horarios disponibles...</span>
+              {availableTimes.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                  {availableTimes.map(hour => {
+                    const isSelected = formData.hora_inicio === hour;
+                    return (
+                      <motion.button
+                        key={hour}
+                        type="button"
+                        onClick={() => handleInputChange('hora_inicio', hour)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        disabled={isSubmitting}
+                        className={`
+                          py-3 rounded-xl text-xs font-bold transition-all duration-200 border
+                          ${isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:bg-blue-50'
+                          }
+                        `}
+                      >
+                        {formatTime(hour).replace(' am', '').replace(' pm', '')}
+                        <span className="block text-[8px] opacity-70 uppercase">
+                          {formatTime(hour).includes('am') ? 'Mañana' : 'Tarde'}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
-              </div>
-            ) : availableTimes.length > 0 ? (
-              <div className="grid grid-cols-4 gap-3">
-                {availableTimes.map(hour => {
-                  const isSelected = formData.hora_inicio === hour;
-                  const isValid = validateTimeSelection();
-
-                  return (
-                    <motion.button
-                      key={hour}
-                      type="button"
-                      onClick={() => handleInputChange('hora_inicio', hour)}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`
-                        py-3 px-3 rounded-lg text-sm font-medium transition-all duration-200 border
-                        ${isSelected
-                          ? isValid
-                            ? 'bg-green-600 text-white border-green-600 shadow-md'
-                            : 'bg-red-600 text-white border-red-600 shadow-md'
-                          : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:border-blue-400'
-                        }
-                      `}
-                    >
-                      {formatTime(hour)}
-                    </motion.button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-8 border border-yellow-200 rounded-lg bg-yellow-50">
-                <div className="text-center text-yellow-700">
-                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
-                  <p className="text-sm font-medium">No hay horarios disponibles</p>
-                  <p className="text-xs">Selecciona otra fecha</p>
+              ) : !loadingTimes && (
+                <div className="p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 text-center">
+                  <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-slate-700">Sin espacios disponibles</p>
+                  <p className="text-xs text-slate-500">Prueba con otra fecha arrastrando la cita de nuevo.</p>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Error de hora */}
-            {errors.hora_inicio && (
-              <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                <AlertTriangle className="w-4 h-4" />
-                {errors.hora_inicio}
-              </p>
-            )}
-
-            {/* Mensaje de validación */}
-            {validationResult && !validationResult.isValid && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-800 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600" />
-                  {validationResult.message}
+              {errors.hora_inicio && (
+                <p className="text-xs text-red-500 flex items-center gap-1 font-medium mt-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {errors.hora_inicio}
                 </p>
-              </div>
-            )}
+              )}
 
-            {/* Sugerencias de horarios alternativos */}
-            {suggestedTimes.length > 0 && (
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800 mb-2 flex items-center gap-2">
-                  💡 <strong>Horarios sugeridos alternativos:</strong>
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedTimes.map(time => (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() => applySuggestion(time)}
-                      className="px-3 py-1 bg-white border border-blue-300 rounded-md text-sm text-blue-700 hover:bg-blue-100 transition-colors"
-                    >
-                      {formatTime(time)}
-                    </button>
-                  ))}
+              {/* Suggestions */}
+              {suggestedTimes.length > 0 && (
+                <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                  <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3">Sugerencias inteligentes</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedTimes.map(time => (
+                      <button
+                        key={time}
+                        type="button"
+                        onClick={() => applySuggestion(time)}
+                        disabled={isSubmitting}
+                        className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-[10px] font-bold text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all duration-200 shadow-sm"
+                      >
+                        {formatTime(time)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Campo de motivo del reagendamiento */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Motivo del reagendamiento <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <textarea
-                name="motivo_reagendamiento"
-                value={formData.motivo_reagendamiento}
-                onChange={(e) => handleInputChange('motivo_reagendamiento', e.target.value)}
-                rows={3}
-                placeholder="Ej: El cliente solicitó cambiar la fecha por compromiso laboral ineludible..."
-                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none ${
-                  errors.motivo_reagendamiento ? 'border-red-300' : 'border-gray-300'
-                }`}
-              />
-              <FileText className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+              )}
             </div>
 
-            {/* Contador de caracteres */}
-            <div className="flex justify-between mt-1">
+            {/* Motivo Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-500" />
+                Motivo del Cambio
+              </h3>
+              <div className="relative group">
+                <textarea
+                  name="motivo_reagendamiento"
+                  value={formData.motivo_reagendamiento}
+                  onChange={(e) => handleInputChange('motivo_reagendamiento', e.target.value)}
+                  disabled={isSubmitting}
+                  rows={4}
+                  placeholder="Por favor, describe una razón válida para este cambio administrativo..."
+                  className={`w-full p-5 bg-slate-50 border rounded-2xl focus:ring-4 focus:ring-blue-100 transition-all duration-300 resize-none text-slate-700 text-sm placeholder:text-slate-400 leading-relaxed
+                    ${errors.motivo_reagendamiento ? 'border-red-200 focus:border-red-400' : 'border-slate-100 focus:border-blue-500 group-hover:border-slate-300'}
+                  `}
+                />
+                <div className="absolute bottom-4 right-4 text-[10px] font-bold text-slate-400 bg-white/80 px-2 py-1 rounded-md backdrop-blur-sm border border-slate-100 shadow-sm">
+                  {formData.motivo_reagendamiento.length}/500
+                </div>
+              </div>
               {errors.motivo_reagendamiento && (
-                <p className="text-sm text-red-600 flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4" />
+                <p className="text-xs text-red-500 flex items-center gap-1 font-medium">
+                  <AlertTriangle className="w-3 h-3" />
                   {errors.motivo_reagendamiento}
                 </p>
               )}
-              <p className="text-sm text-gray-500 ml-auto">
-                {formData.motivo_reagendamiento.length}/500 caracteres
-              </p>
             </div>
-          </div>
 
-          {/* Error general */}
-          {errors.general && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">
-                ❌ {errors.general}
-              </p>
-            </div>
-          )}
+            <button type="submit" className="hidden" /> {/* Hidden submit allow enter key */}
+          </form>
 
-          {/* Información importante */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div className="text-sm text-amber-800">
-                <p className="font-semibold mb-1">Validaciones aplicadas</p>
-                <ul className="space-y-1 text-xs">
-                  <li>• Solo se permiten horarios no ocupados para visitas a inmuebles</li>
-                  <li>• Se valida la disponibilidad en tiempo real</li>
-                  <li>• El motivo es obligatorio para auditoría</li>
-                  <li>• Las otras fechas se sugieren automáticamente si hay conflictos</li>
-                </ul>
+          {/* Guidelines Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+              <div className="text-[10px] font-bold text-emerald-600 uppercase mb-2 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                Validación Automática
               </div>
+              <p className="text-[11px] text-emerald-700 leading-relaxed">
+                El sistema ha validado la disponibilidad del agente y del servicio para esta nueva fecha seleccionada.
+              </p>
+            </div>
+            <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100">
+              <p className="text-[10px] font-bold text-amber-600 uppercase mb-2">Aviso Importante</p>
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                Esta acción se registrará en el historial de la cita. El cliente recibirá una notificación automática.
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* Footer - Botones */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+        {/* Footer */}
+        <div className="bg-slate-50/80 backdrop-blur-md border-t border-slate-100 px-8 py-6 flex items-center justify-between">
             <button
               type="button"
-              onClick={onCancel}
-              className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              onClick={handleRequestClose}
+              className="px-6 py-3 text-slate-500 hover:text-slate-800 font-bold text-sm transition-colors"
               disabled={isSubmitting}
             >
-              Cancelar
-            </button>
+            Descartar cambios
+          </button>
 
-            <div className="flex items-center gap-3">
-              {!validateTimeSelection() && suggestedTimes.length > 0 && (
-                <span className="text-xs text-gray-500">
-                  💡 Selecciona una de las sugerencias o elige otro horario
-                </span>
-              )}
-
-              <button
-                type="submit"
-                disabled={isSubmitting || !validateTimeSelection()}
-                className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Procesando...
-                  </>
-                ) : (
-                  <>
-                    <Calendar className="w-4 h-4" />
-                    Confirmar Reagendamiento
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </form>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !validateTimeSelection()}
+            className={`
+              px-8 py-3 rounded-2xl font-bold text-sm flex items-center gap-3 transition-all duration-300 shadow-xl shadow-blue-100
+              ${isSubmitting || !validateTimeSelection()
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                : 'bg-blue-600 text-white hover:bg-blue-700 hover:-translate-y-0.5 active:translate-y-0'
+              }
+            `}
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                Actualizando...
+              </>
+            ) : (
+              <>
+                Confirmar Reagendamiento
+                <ChevronLeft className="w-4 h-4 rotate-180" />
+              </>
+            )}
+          </button>
+        </div>
       </motion.div>
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+      `}</style>
     </div>,
     document.body
   );

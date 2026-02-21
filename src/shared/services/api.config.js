@@ -1,5 +1,6 @@
 /**
- * Cliente API simplificado usando fetch con cookies httpOnly.
+ * Cliente API usando fetch + cookies httpOnly.
+ * Incluye refresh single-flight, retry unico en 401 y envio de CSRF para mutaciones.
  */
 
 const API_CONFIG = {
@@ -10,91 +11,185 @@ const API_CONFIG = {
   HEADERS: {
     'Content-Type': 'application/json',
   },
+  CSRF_COOKIE_NAME: import.meta.env.VITE_CSRF_COOKIE_NAME || 'csrfToken',
+  CSRF_HEADER_NAME: import.meta.env.VITE_CSRF_HEADER_NAME || 'X-CSRF-Token',
 };
 
-const ACCESS_TOKEN_KEY = 'inmotech_access_token';
-const REFRESH_TOKEN_KEY = 'inmotech_refresh_token';
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const REFRESH_ENDPOINT = '/auth/refresh';
+const LOGOUT_ENDPOINT = '/auth/logout';
+const PUBLIC_AUTH_ENDPOINTS = new Set([
+  '/auth/login',
+  '/auth/register',
+  '/auth/verify-code',
+  '/auth/resend-code',
+  '/auth/verify-email',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+]);
 
 class ApiClient {
   constructor() {
-    this.maxRetries = 2;
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.loadTokensFromStorage();
+    this.maxRetries = API_CONFIG.RETRY_ATTEMPTS;
+    this.onUnauthorized = null;
+    this.refreshPromise = null;
+    this.isHandlingUnauthorized = false;
+  }
+
+  registerUnauthorizedCallback(callback) {
+    this.onUnauthorized = callback;
   }
 
   delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  // Manejo simple de tokens para adjuntar Authorization en cada request
-  setTokens(accessToken, refreshToken) {
-    this.accessToken = accessToken || null;
-    this.refreshToken = refreshToken || null;
+  normalizeEndpoint(endpoint) {
+    if (!endpoint) return '/';
+    return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  }
 
-    try {
-      if (accessToken) {
-        localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-      } else {
-        localStorage.removeItem(ACCESS_TOKEN_KEY);
-      }
+  shouldIncludeAuth(options = {}) {
+    return options.skipAuth !== true;
+  }
 
-      if (refreshToken) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-      } else {
-        localStorage.removeItem(REFRESH_TOKEN_KEY);
-      }
-    } catch {
-      // En entornos sin localStorage (SSR/tests), ignorar
-    }
+  isMutatingMethod(method = 'GET') {
+    return MUTATING_METHODS.has(String(method).toUpperCase());
+  }
+
+  isRefreshEndpoint(endpoint = '') {
+    return endpoint.startsWith(REFRESH_ENDPOINT);
+  }
+
+  isLogoutEndpoint(endpoint = '') {
+    return endpoint.startsWith(LOGOUT_ENDPOINT);
+  }
+
+  isPublicAuthEndpoint(endpoint = '') {
+    return PUBLIC_AUTH_ENDPOINTS.has(endpoint);
+  }
+
+  getCookieValue(name) {
+    if (typeof document === 'undefined' || !document.cookie) return null;
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  getCsrfToken() {
+    return this.getCookieValue(API_CONFIG.CSRF_COOKIE_NAME);
+  }
+
+  setTokens() {
+    // Cookies httpOnly gestionan sesion; no guardar tokens en JS storage.
   }
 
   clearTokens() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    try {
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
-    } catch {
-      // noop
-    }
+    // Cookies httpOnly gestionan sesion; no limpiar tokens en JS storage.
   }
 
   getAccessToken() {
-    if (this.accessToken) return this.accessToken;
-    try {
-      const stored = localStorage.getItem(ACCESS_TOKEN_KEY);
-      this.accessToken = stored || null;
-      return this.accessToken;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   getRefreshToken() {
-    if (this.refreshToken) return this.refreshToken;
-    try {
-      const stored = localStorage.getItem(REFRESH_TOKEN_KEY);
-      this.refreshToken = stored || null;
-      return this.refreshToken;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   loadTokensFromStorage() {
+    // Cookies httpOnly gestionan sesion; no leer tokens desde JS storage.
+  }
+
+  async parseResponsePayload(response) {
+    return response.json().catch(() => null);
+  }
+
+  buildError(status, payload, fallbackMessage) {
+    const error = new Error(payload?.message || fallbackMessage || `Error ${status}`);
+    error.status = status;
+    error.data = payload || null;
+    return error;
+  }
+
+  shouldForceLogout(status, payload) {
+    if (status === 401) return true;
+    if (status !== 403 && status !== 423) return false;
+
+    if (payload?.forceLogout === true) return true;
+
+    const reason = String(payload?.reason || '').toLowerCase();
+    return reason === 'account_disabled' || reason === 'admin_access_revoked' || reason === 'session_revoked';
+  }
+
+  getUnauthorizedReason(payload, fallback = 'unauthorized') {
+    const reason = payload?.reason;
+    return typeof reason === 'string' && reason.trim() ? reason : fallback;
+  }
+
+  async triggerUnauthorized(reason = 'unauthorized') {
+    if (!this.onUnauthorized || this.isHandlingUnauthorized) return;
+
+    this.isHandlingUnauthorized = true;
     try {
-      this.accessToken = localStorage.getItem(ACCESS_TOKEN_KEY) || null;
-      this.refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY) || null;
-    } catch {
-      this.accessToken = null;
-      this.refreshToken = null;
+      await Promise.resolve(this.onUnauthorized(reason));
+    } finally {
+      this.isHandlingUnauthorized = false;
     }
   }
 
-  async request(endpoint, options = {}, retryCount = 0) {
-    const url = new URL(`${API_CONFIG.BASE_URL}${endpoint}`);
+  async performRefresh() {
+    const response = await fetch(`${API_CONFIG.BASE_URL}${REFRESH_ENDPOINT}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...API_CONFIG.HEADERS,
+      },
+      body: '{}',
+    });
 
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = await this.parseResponsePayload(response);
+    return payload?.success === true;
+  }
+
+  async refreshSessionSingleFlight() {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this.performRefresh().finally(() => {
+      this.refreshPromise = null;
+    });
+
+    return this.refreshPromise;
+  }
+
+  buildRequestHeaders(endpoint, options = {}) {
+    const headers = {
+      ...API_CONFIG.HEADERS,
+      ...(options.headers || {}),
+    };
+
+    const method = options.method || 'GET';
+    if (this.isMutatingMethod(method)) {
+      const csrfToken = this.getCsrfToken();
+      if (csrfToken && !headers[API_CONFIG.CSRF_HEADER_NAME]) {
+        headers[API_CONFIG.CSRF_HEADER_NAME] = csrfToken;
+      }
+    }
+
+    return headers;
+  }
+
+  async request(endpoint, options = {}, retryCount = 0) {
+    const normalizedEndpoint = this.normalizeEndpoint(endpoint);
+    const isRetryAfterRefresh = options.__isRetryAfterRefresh === true;
+    const skipAuthRefresh = options.skipAuthRefresh === true || options.skipAuth === true;
+
+    const url = new URL(`${API_CONFIG.BASE_URL}${normalizedEndpoint}`);
     if (options.params && Object.keys(options.params).length > 0) {
       Object.entries(options.params).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
@@ -103,70 +198,89 @@ class ApiClient {
       });
     }
 
-    // Asegurar que tomamos el token más reciente almacenado
-    const token = this.getAccessToken();
-
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
-    const isFormData = options.body instanceof FormData;
-
     const config = {
       ...options,
-      headers: {
-        ...API_CONFIG.HEADERS,
-        ...(options.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: this.buildRequestHeaders(normalizedEndpoint, options),
       credentials: 'include',
       signal: controller.signal,
     };
 
-    // No forzar Content-Type en multipart
-    if (isFormData) {
-      delete config.headers['Content-Type'];
-    } else if (options.body && typeof options.body !== 'string') {
-      config.body = JSON.stringify(options.body);
-    }
-
-    // No reenviar params en fetch
     delete config.params;
+    delete config.__isRetryAfterRefresh;
+    delete config.skipAuthRefresh;
+    delete config.skipAuth;
 
     try {
       const response = await fetch(url.toString(), config);
       clearTimeout(timeoutId);
 
+      const isAuthEndpoint =
+        this.isRefreshEndpoint(normalizedEndpoint) || this.isLogoutEndpoint(normalizedEndpoint);
+      const isPublicAuthEndpoint = this.isPublicAuthEndpoint(normalizedEndpoint);
+
+      if (response.status === 401) {
+
+        if (!isAuthEndpoint && !isPublicAuthEndpoint && !isRetryAfterRefresh && !skipAuthRefresh) {
+          const refreshed = await this.refreshSessionSingleFlight();
+          if (refreshed) {
+            return this.request(
+              normalizedEndpoint,
+              { ...options, __isRetryAfterRefresh: true },
+              retryCount
+            );
+          }
+        }
+
+        const payload = await this.parseResponsePayload(response);
+        if (
+          !isAuthEndpoint &&
+          !isPublicAuthEndpoint &&
+          !skipAuthRefresh &&
+          this.shouldForceLogout(response.status, payload)
+        ) {
+          await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'unauthorized'));
+        }
+        throw this.buildError(response.status, payload, 'Sesion no autorizada');
+      }
+
+      if (response.status === 403 || response.status === 423) {
+        const payload = await this.parseResponsePayload(response);
+
+        if (
+          !isAuthEndpoint &&
+          !isPublicAuthEndpoint &&
+          !skipAuthRefresh &&
+          this.shouldForceLogout(response.status, payload)
+        ) {
+          await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'session_revoked'));
+        }
+
+        throw this.buildError(response.status, payload, payload?.message || response.statusText);
+      }
+
       if (response.status === 429) {
         if (retryCount < API_CONFIG.RETRY_ATTEMPTS + 2) {
           const waitTime = API_CONFIG.RETRY_DELAY * (retryCount + 1);
           await this.delay(waitTime);
-          return this.request(endpoint, options, retryCount + 1);
+          return this.request(normalizedEndpoint, options, retryCount + 1);
         }
         throw new Error('Demasiadas peticiones. Por favor, espera e intenta nuevamente.');
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          message: response.statusText,
-        }));
-        const error = new Error(errorData.message || `Error ${response.status}`);
-        error.status = response.status;
-        error.data = errorData;
-        throw error;
+        const errorPayload = await this.parseResponsePayload(response);
+        throw this.buildError(response.status, errorPayload, response.statusText);
       }
 
-      const data = await response.json();
-
-      if (data?.success && data?.data?.accessToken) {
-        this.setTokens(data.data.accessToken, data.data.refreshToken);
-      }
-
-      return data;
+      return await this.parseResponsePayload(response);
     } catch (error) {
       if (error.name === 'AbortError') {
         if (retryCount < API_CONFIG.RETRY_ATTEMPTS) {
           await this.delay(API_CONFIG.RETRY_DELAY);
-          return this.request(endpoint, options, retryCount + 1);
+          return this.request(normalizedEndpoint, options, retryCount + 1);
         }
         const timeoutError = new Error('La peticion tardo demasiado tiempo.');
         timeoutError.code = 'TIMEOUT';
@@ -184,7 +298,6 @@ class ApiClient {
   }
 
   async get(endpoint, paramsOrOptions = {}) {
-    // Allow passing either a plain params object or a full options object (with params, headers, etc.)
     const isOptionsObject =
       paramsOrOptions &&
       typeof paramsOrOptions === 'object' &&
@@ -193,7 +306,9 @@ class ApiClient {
         Object.prototype.hasOwnProperty.call(paramsOrOptions, 'method') ||
         Object.prototype.hasOwnProperty.call(paramsOrOptions, 'body') ||
         Object.prototype.hasOwnProperty.call(paramsOrOptions, 'cache') ||
-        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'credentials'));
+        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'credentials') ||
+        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'skipAuth') ||
+        Object.prototype.hasOwnProperty.call(paramsOrOptions, 'skipAuthRefresh'));
 
     if (isOptionsObject) {
       const { params = {}, ...rest } = paramsOrOptions;
@@ -211,7 +326,7 @@ class ApiClient {
     return this.request(endpoint, {
       method: 'POST',
       headers,
-      body,
+      body: JSON.stringify(body),
     });
   }
 
@@ -219,7 +334,7 @@ class ApiClient {
     return this.request(endpoint, {
       method: 'PUT',
       headers,
-      body,
+      body: JSON.stringify(body),
     });
   }
 
@@ -227,7 +342,7 @@ class ApiClient {
     return this.request(endpoint, {
       method: 'PATCH',
       headers,
-      body,
+      body: JSON.stringify(body),
     });
   }
 

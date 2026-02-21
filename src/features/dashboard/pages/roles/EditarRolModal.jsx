@@ -71,6 +71,30 @@ const permissionConfig = {
   "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
+const VIEW_PERMISSION = "Ver";
+
+const getNextPermissionsSelection = (currentPermissions = [], permiso) => {
+  const selected = new Set(currentPermissions);
+  const isSelected = selected.has(permiso);
+
+  if (permiso === VIEW_PERMISSION) {
+    if (isSelected) {
+      return [];
+    }
+    selected.add(VIEW_PERMISSION);
+    return Array.from(selected);
+  }
+
+  if (isSelected) {
+    selected.delete(permiso);
+    return Array.from(selected);
+  }
+
+  selected.add(permiso);
+  selected.add(VIEW_PERMISSION);
+  return Array.from(selected);
+};
+
 export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
   const [nombre, setNombre] = useState("");
   const [modules, setModules] = useState([]);
@@ -150,9 +174,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
         i === index
           ? {
               ...mod,
-              permisosSeleccionados: mod.permisosSeleccionados.includes(permiso)
-                ? mod.permisosSeleccionados.filter((p) => p !== permiso)
-                : [...mod.permisosSeleccionados, permiso],
+              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
             }
           : mod
       )
@@ -204,6 +226,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
   };
 
   const handleClose = () => {
+    if (isSubmitting) return;
     setErrors({});
     onClose();
   };
@@ -255,7 +278,8 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleClose}
-              className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="p-2 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -397,7 +421,8 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleClose}
-              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+              disabled={isSubmitting}
+              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </motion.button>

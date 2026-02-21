@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const leasesController = require('../controllers/leases.controller');
 const { validate } = require('../middlewares/validate.middleware');

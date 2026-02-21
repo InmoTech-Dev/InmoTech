@@ -1,6 +1,9 @@
 const nodemailer = require("nodemailer");
 const logger = require("../utils/logger");
 
+const EMAIL_SEND_RETRY_ATTEMPTS = Math.max(1, Number(process.env.EMAIL_SEND_RETRY_ATTEMPTS || 3));
+const EMAIL_SEND_RETRY_BASE_DELAY_MS = Math.max(0, Number(process.env.EMAIL_SEND_RETRY_BASE_DELAY_MS || 2000));
+
 class EmailService {
   constructor() {
     const port = Number(process.env.EMAIL_PORT) || 587;
@@ -13,6 +16,62 @@ class EmailService {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+    });
+  }
+
+  _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  _buildDeliveryError(originalError, { intentos, contexto, to }) {
+    const message = originalError?.message || "No se pudo enviar el correo";
+    const deliveryError = new Error(message);
+
+    deliveryError.code = "EMAIL_DELIVERY_FAILED";
+    deliveryError.intentos_envio = intentos;
+    deliveryError.contexto = contexto || null;
+    deliveryError.to = to || null;
+    deliveryError.host = originalError?.host || null;
+    deliveryError.reason = originalError?.reason || null;
+    deliveryError.command = originalError?.command || null;
+    deliveryError.originalError = originalError || null;
+
+    return deliveryError;
+  }
+
+  async _enviarConReintentos(mailOptions, { logContext = "EMAIL", metadata = {} } = {}) {
+    let ultimoError = null;
+
+    for (let intento = 1; intento <= EMAIL_SEND_RETRY_ATTEMPTS; intento += 1) {
+      try {
+        const info = await this.transporter.sendMail(mailOptions);
+        return { info, intentos_envio: intento };
+      } catch (error) {
+        ultimoError = error;
+        const reintentara = intento < EMAIL_SEND_RETRY_ATTEMPTS;
+        const waitMs = EMAIL_SEND_RETRY_BASE_DELAY_MS * (2 ** (intento - 1));
+
+        logger.warn("[EMAIL][RETRY] Fallo de envio", {
+          contexto: logContext,
+          to: mailOptions?.to || null,
+          intento,
+          max_intentos: EMAIL_SEND_RETRY_ATTEMPTS,
+          reintentara,
+          espera_ms: reintentara ? waitMs : 0,
+          metadata,
+          error
+        });
+
+        if (reintentara && waitMs > 0) {
+          await this._sleep(waitMs);
+        }
+      }
+    }
+
+    throw this._buildDeliveryError(ultimoError, {
+      intentos: EMAIL_SEND_RETRY_ATTEMPTS,
+      contexto: logContext,
+      to: mailOptions?.to || null
     });
   }
 
@@ -50,11 +109,19 @@ class EmailService {
         subject: es_administrativo ? 'Activa tu acceso administrativo' : 'Activa tu cuenta en Matriz Inmobiliaria',
         html: this.generarTemplateInvitacion(nombre_completo, codigo_6d, expira_en, activationLink, email, rol_asignado, es_administrativo)
       };
-      const info = await this.transporter.sendMail(mailOptions);
+      const { info, intentos_envio } = await this._enviarConReintentos(mailOptions, {
+        logContext: 'INVITACION',
+        metadata: { es_administrativo: Boolean(es_administrativo), email }
+      });
       logger.info(`Invitacion enviada a: ${email}`, { messageId: info.messageId });
-      return { success: true, messageId: info.messageId, token };
+      return { success: true, messageId: info.messageId, token, intentos_envio };
     } catch (error) {
-      logger.error('Error enviando invitacion:', error);
+      logger.error('Error enviando invitacion:', {
+        email: data?.email || null,
+        code: error?.code || null,
+        intentos_envio: error?.intentos_envio || null,
+        error
+      });
       throw error;
     }
   }
@@ -68,11 +135,19 @@ class EmailService {
         subject: 'Confirma tu correo en Matriz Inmobiliaria',
         html: this.generarTemplateVerificacion(nombre_completo, expira_en, verificationLink, codigo_6d)
       };
-      const info = await this.transporter.sendMail(mailOptions);
+      const { info, intentos_envio } = await this._enviarConReintentos(mailOptions, {
+        logContext: 'VERIFICACION',
+        metadata: { email }
+      });
       logger.info(`Email de verificacion enviado a: ${email}`, { messageId: info.messageId });
-      return { success: true, messageId: info.messageId };
+      return { success: true, messageId: info.messageId, intentos_envio };
     } catch (error) {
-      logger.error('Error enviando email de verificacion:', error);
+      logger.error('Error enviando email de verificacion:', {
+        email: data?.email || null,
+        code: error?.code || null,
+        intentos_envio: error?.intentos_envio || null,
+        error
+      });
       throw error;
     }
   }

@@ -123,17 +123,6 @@ const validarActualizacionAdmin = [
     .isObject()
     .withMessage('Los datos administrativos deben ser un objeto'),
 
-  body('administrativoData.cargo')
-    .optional()
-    .trim()
-    .isLength({ min: 0, max: 100 })
-    .withMessage('El cargo debe tener máximo 100 caracteres'),
-
-  body('administrativoData.departamento')
-    .optional()
-    .trim()
-    .isLength({ min: 0, max: 100 })
-    .withMessage('El departamento debe tener máximo 100 caracteres'),
   handleValidationErrors
 ];
 

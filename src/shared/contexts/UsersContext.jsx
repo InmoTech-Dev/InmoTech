@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import usersApiService from '../services/usersApiService';
 import invitacionApiService from '../services/invitacionApiService';
 import authService from '../services/authService';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from './AuthContext';
+import realtimeBus from '../services/realtimeBus';
 
 const UsersContext = createContext();
 
@@ -22,6 +23,7 @@ export const UsersProvider = ({ children }) => {
   const [loadingInvites, setLoadingInvites] = useState(new Set());
   const { toast } = useToast();
   const { isAuthenticated, hasRole } = useAuth();
+  const realtimeRefreshRef = useRef(null);
 
   const computeInvitacionEstado = useCallback((user) => {
     if (!user) return 'Cuenta activa';
@@ -30,6 +32,20 @@ export const UsersProvider = ({ children }) => {
     if (correoVerificado === false) return 'Verificacion de correo pendiente';
     if (user.tiene_cuenta === false) return 'Pendiente de activacion (sin contrasena)';
     return 'Cuenta activa';
+  }, []);
+
+  const getApiErrorMessage = useCallback((error, fallbackMessage) => {
+    const validationErrors = error?.data?.errors || error?.response?.data?.errors;
+    if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+      return validationErrors.map((err) => err?.message).filter(Boolean).join(' | ');
+    }
+
+    return (
+      error?.data?.message ||
+      error?.response?.data?.message ||
+      error?.message ||
+      fallbackMessage
+    );
   }, []);
 
   // Cargar usuarios
@@ -102,7 +118,7 @@ export const UsersProvider = ({ children }) => {
   // Crear usuario
   const createUser = useCallback(async (userData) => {
     try {
-      console.log('👤 USERS CONTEXT: Creando usuario con datos:', userData);
+      console.log('ðŸ‘¤ USERS CONTEXT: Creando usuario con datos:', userData);
 
       const sanitizedUserData = {
         ...userData,
@@ -114,12 +130,12 @@ export const UsersProvider = ({ children }) => {
         numero_documento: userData.numero_documento?.trim() || ''
       };
 
-      console.log('👤 USERS CONTEXT: Datos sanitizados antes de enviar:', sanitizedUserData);
+      console.log('ðŸ‘¤ USERS CONTEXT: Datos sanitizados antes de enviar:', sanitizedUserData);
 
       const response = await usersApiService.createUser(sanitizedUserData);
       const userFromResponse = response.data?.user || response.data;
 
-      console.log('👤 USERS CONTEXT: Usuario creado en BD:', userFromResponse);
+      console.log('ðŸ‘¤ USERS CONTEXT: Usuario creado en BD:', userFromResponse);
 
       const hasPassword = Boolean((sanitizedUserData.password || '').trim());
       const tieneCuenta = userFromResponse.tiene_cuenta !== undefined ? userFromResponse.tiene_cuenta : hasPassword;
@@ -148,11 +164,11 @@ export const UsersProvider = ({ children }) => {
         fecha_registro: userFromResponse.fecha_registro || new Date().toISOString()
       };
 
-      console.log('👤 USERS CONTEXT: Agregando usuario al estado local:', userWithEstado);
+      console.log('ðŸ‘¤ USERS CONTEXT: Agregando usuario al estado local:', userWithEstado);
       addUser(userWithEstado);
 
       toast({
-        title: "✅ Éxito!",
+        title: "Exito",
         description: "Usuario creado correctamente",
         variant: "default"
       });
@@ -160,16 +176,7 @@ export const UsersProvider = ({ children }) => {
       return userWithEstado;
     } catch (error) {
       console.error('Error creando usuario:', error);
-
-      let errorMessage = "Error al crear usuario";
-
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
-        errorMessage = error.response.data.errors.map(err => err.message).join(', ');
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
+      const errorMessage = getApiErrorMessage(error, "Error al crear usuario");
 
       toast({
         title: "Error",
@@ -178,7 +185,7 @@ export const UsersProvider = ({ children }) => {
       });
       throw error;
     }
-  }, [addUser, toast]);
+  }, [addUser, getApiErrorMessage, toast]);
 
   const updateUserComplete = useCallback(async (id, userData) => {
     try {
@@ -210,7 +217,7 @@ export const UsersProvider = ({ children }) => {
       }
 
       toast({
-        title: "✅ Éxito!",
+        title: "Exito",
         description: "Usuario actualizado correctamente",
         variant: "default"
       });
@@ -220,12 +227,12 @@ export const UsersProvider = ({ children }) => {
       console.error('Error actualizando usuario:', error);
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Error al actualizar usuario",
+        description: getApiErrorMessage(error, "Error al actualizar usuario"),
         variant: "destructive"
       });
       throw error;
     }
-  }, [updateUser, loadUsers, toast, users, computeInvitacionEstado]);
+  }, [updateUser, loadUsers, toast, users, computeInvitacionEstado, getApiErrorMessage]);
 
   const removeUser = useCallback(async (id) => {
     try {
@@ -233,7 +240,7 @@ export const UsersProvider = ({ children }) => {
       deleteUser(id);
 
       toast({
-        title: "✅ Éxito!",
+        title: "Exito",
         description: "Usuario eliminado correctamente",
         variant: "default"
       });
@@ -263,34 +270,56 @@ export const UsersProvider = ({ children }) => {
   // Reenviar invitacion/activacion
   const resendInvitation = useCallback(async (user) => {
     if (!user?.id_persona) return false;
+
     setLoadingInvites(prev => {
       const next = new Set(prev);
       next.add(user.id_persona);
       return next;
     });
+
     try {
-      // Para cuentas con correo sin verificar, usa el flujo de verificación de correo
-      if (user.correo && user.correo_verificado === false) {
-        await authService.resendVerificationCode(user.correo);
+      const hasAccount = user.tiene_cuenta === true;
+      const isVerified = user.correo_verificado === true;
+
+      if (isVerified) {
+        toast({
+          title: 'Sin cambios',
+          description: 'La cuenta ya tiene el correo verificado.',
+          variant: 'default'
+        });
+        return true;
+      }
+
+      if (hasAccount) {
+        const normalizedEmail = (user.correo || '').trim().toLowerCase();
+        if (!normalizedEmail) {
+          throw new Error('No se encontro un correo valido para reenviar la verificacion.');
+        }
+        await authService.resendVerificationCode(normalizedEmail);
       } else {
         await invitacionApiService.crearInvitacion(user.id_persona);
       }
+
       setUsers(prev => prev.map(u => {
         if (u?.id_persona === user.id_persona) {
           return {
             ...u,
-            invitacion_estado: 'Verificacion de correo pendiente',
-            correo_verificado: u.correo_verificado ?? false,
-            tiene_cuenta: u.tiene_cuenta ?? false
+            invitacion_estado: hasAccount
+              ? 'Verificacion de correo pendiente'
+              : 'Pendiente de activacion (sin contrasena)',
+            correo_verificado: false,
+            tiene_cuenta: u.tiene_cuenta ?? hasAccount
           };
         }
         return u;
       }));
+
       toast({
         title: 'Invitacion reenviada',
         description: `Se envio un nuevo correo a ${user.correo || 'el usuario'}.`,
         variant: 'default'
       });
+
       return true;
     } catch (error) {
       console.error('Error reenviando invitacion:', error);
@@ -323,6 +352,45 @@ export const UsersProvider = ({ children }) => {
       }
     }
   }, [loadUsers, isAuthenticated, hasRole]);
+
+  useEffect(() => {
+    const isAdminRole = hasRole(['Super Administrador', 'Administrador']);
+    if (!(isAuthenticated && isAdminRole)) {
+      return undefined;
+    }
+
+    const scheduleLoadUsers = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+      }
+
+      realtimeRefreshRef.current = setTimeout(() => {
+        loadUsers().catch((refreshError) => {
+          console.warn('[REALTIME][USERS] No se pudo refrescar listado de usuarios:', refreshError);
+        });
+      }, 450);
+    };
+
+    const offUserChanged = realtimeBus.on('user.changed', () => {
+      scheduleLoadUsers();
+    });
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', () => {
+      scheduleLoadUsers();
+    });
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', () => {
+      scheduleLoadUsers();
+    });
+
+    return () => {
+      offUserChanged();
+      offFallbackTick();
+      offReconcile();
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+        realtimeRefreshRef.current = null;
+      }
+    };
+  }, [hasRole, isAuthenticated, loadUsers]);
 
   const value = {
     users,

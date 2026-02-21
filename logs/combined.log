@@ -1,0 +1,4 @@
+{"level":"error","message":"Cloudinary no configurado: falta CLOUDINARY_CLOUD_NAME o CLOUDINARY_URL","timestamp":"2026-02-18 16:25:30"}
+{"level":"error","message":"Cloudinary no configurado: falta CLOUDINARY_CLOUD_NAME o CLOUDINARY_URL","timestamp":"2026-02-18 16:26:33"}
+{"level":"error","message":"Test circular object","payload":{"name":"circular-test","self":"[Circular]"},"timestamp":"2026-02-19 17:13:49"}
+{"level":"warn","message":"Test indexed meta","meta":{"indexed_message":"ABC"},"timestamp":"2026-02-19 17:13:49"}

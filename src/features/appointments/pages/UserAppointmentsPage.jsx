@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Clock, MapPin, Building, Phone, Mail, AlertCircle, CheckCircle, XCircle, List, Grid, Eye, Edit, Trash2, Filter, BarChart3, TrendingUp, User, Sparkles, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/components/ui/select';
@@ -11,6 +11,7 @@ import UserEditAppointmentModal from '../components/UserEditAppointmentModal';
 import UserViewAppointmentModal from '../components/UserViewAppointmentModal';
 import UserCreateAppointmentModal from '../components/UserCreateAppointmentModal';
 import UserRescheduleModal from '../components/UserRescheduleModal';
+import realtimeBus from '../../../shared/services/realtimeBus';
 
 const UserAppointmentsPage = () => {
   const [appointments, setAppointments] = useState([]);
@@ -27,12 +28,9 @@ const UserAppointmentsPage = () => {
   const APPOINTMENTS_PER_PAGE = 4;
   const { toast } = useToast();
   const { user } = useAuth();
+  const realtimeReloadTimeoutRef = useRef(null);
 
-  useEffect(() => {
-    loadUserAppointments();
-  }, []);
-
-  const loadUserAppointments = async () => {
+  const loadUserAppointments = useCallback(async () => {
     try {
       setLoading(true);
       const data = await citaApiService.obtenerMisCitas();
@@ -54,7 +52,62 @@ const UserAppointmentsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadUserAppointments();
+  }, [loadUserAppointments]);
+
+  useEffect(() => {
+    const currentUserId = Number.parseInt(user?.id ?? user?.id_persona, 10);
+    const isAffectedUserEvent = (payload = {}) => {
+      const affectedIds = Array.isArray(payload?.affected_user_ids)
+        ? payload.affected_user_ids
+            .map((value) => Number.parseInt(value, 10))
+            .filter((value) => Number.isInteger(value) && value > 0)
+        : [];
+      return Number.isInteger(currentUserId) && affectedIds.includes(currentUserId);
+    };
+
+    const scheduleReload = (includeCalendarRefresh = false) => {
+      if (realtimeReloadTimeoutRef.current) {
+        clearTimeout(realtimeReloadTimeoutRef.current);
+      }
+
+      realtimeReloadTimeoutRef.current = setTimeout(async () => {
+        try {
+          await loadUserAppointments();
+          if (includeCalendarRefresh) {
+            setCalendarKey((prev) => prev + 1);
+          }
+        } catch (reloadError) {
+          console.warn('[REALTIME][USER_APPOINTMENTS] No se pudo recargar mis citas:', reloadError);
+        }
+      }, 450);
+    };
+
+    const offAppointments = realtimeBus.on('appointment.changed', (payload) => {
+      if (isAffectedUserEvent(payload)) {
+        scheduleReload(true);
+      }
+    });
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', () => {
+      scheduleReload(false);
+    });
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', () => {
+      scheduleReload(false);
+    });
+
+    return () => {
+      offAppointments();
+      offFallbackTick();
+      offReconcile();
+      if (realtimeReloadTimeoutRef.current) {
+        clearTimeout(realtimeReloadTimeoutRef.current);
+        realtimeReloadTimeoutRef.current = null;
+      }
+    };
+  }, [loadUserAppointments, user?.id, user?.id_persona]);
 
   const getStatusInfo = (status) => {
     const statusConfig = {
@@ -256,6 +309,7 @@ try {
         description: error.message || "No se pudo reagendar la cita. Intentalo de nuevo.",
         variant: "destructive"
       });
+      throw error;
     }
   };
 

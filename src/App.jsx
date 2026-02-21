@@ -6,7 +6,7 @@ import ScrollToTop from './shared/components/ScrollToTop'
 import BackToTopButton from './shared/components/BackToTopButton'
 import { Toaster } from './shared/components/ui/toaster'
 import DashboardLayout from './shared/components/dashboard/Layout/DashboardLayout'
-import ProtectedRoute, { AdminRoute, DashboardRoute, ModulePermissionRoute } from './shared/components/ProtectedRoute'
+import ProtectedRoute, { AdminRoute, DashboardRoute, ModulePermissionRoute, PublicRoute } from './shared/components/ProtectedRoute'
 
 // Pages
 import HomePage from './features/properties/pages/HomePage'
@@ -123,21 +123,21 @@ function App() {
         <Route
           path="/login"
           element={
-            <>
+            <PublicRoute>
               <Navbar />
               <LoginPage />
               <Footer />
-            </>
+            </PublicRoute>
           }
         />
         <Route
           path="/registro"
           element={
-            <>
+            <PublicRoute>
               <Navbar />
               <RegisterPage />
               <Footer />
-            </>
+            </PublicRoute>
           }
         />
         <Route

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Phone, Mail, Calendar, Clock, Home, FileText, MapPin, Hash } from 'lucide-react';
@@ -6,14 +6,24 @@ import { useAuth } from '../../../../shared/contexts/AuthContext';
 import citaApiService from '../../../../shared/services/citaApiService';
 
 const ViewAppointmentModal = ({ isOpen, onClose, cita }) => {
-  const contentRef = useRef(null);
   const { user } = useAuth();
 
-  // Scroll to top when modal opens
   useEffect(() => {
-    if (isOpen && contentRef.current) {
-      contentRef.current.scrollTop = 0;
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
   }, [isOpen]);
 
   if (!isOpen || !cita) return null;
@@ -195,29 +205,30 @@ const infoItems = [
 
   return ReactDOM.createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <>
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
           onClick={onClose}
         />
 
-        {/* Modal */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ duration: 0.3 }}
-          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col"
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-4">
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.3 }}
+              className="relative bg-white rounded-xl shadow-2xl w-full max-w-[760px] overflow-hidden flex flex-col"
+            >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div>
-              <h2 className="text-2xl font-bold text-slate-800">Detalles de la Cita</h2>
-              <p className="text-slate-600 mt-1">Información completa de la cita</p>
+              <h2 className="text-xl font-bold text-slate-800">Detalles de la Cita</h2>
+              <p className="text-sm text-slate-600 mt-0.5">Información completa de la cita</p>
             </div>
             <div className="flex items-center gap-3">
             {getStatusBadge(cita.estado_detalle?.nombre_estado || cita.estado)} {/* ✅ Manejar objeto estado */}
@@ -225,33 +236,33 @@ const infoItems = [
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={onClose}
-                className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-white/50 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-slate-500" />
+                <X className="w-4 h-4 text-slate-500" />
               </motion.button>
             </div>
           </div>
 
           {/* Content */}
-          <div ref={contentRef} className="flex-1 p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 min-h-0">
-            <div className="space-y-6">
+          <div className="p-4">
+            <div className="space-y-4">
               {/* Información Principal */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {infoItems.map((item, index) => (
                   <motion.div
                     key={item.label}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className={`p-4 rounded-xl border ${item.bgColor} border-opacity-50`}
+                    className={`p-3 rounded-lg border ${item.bgColor} border-opacity-50`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg bg-white shadow-sm`}>
-                        <item.icon className={`w-5 h-5 ${item.color}`} />
+                    <div className="flex items-start gap-2.5">
+                      <div className={`p-1.5 rounded-lg bg-white shadow-sm`}>
+                        <item.icon className={`w-4 h-4 ${item.color}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-600 mb-1">{item.label}</p>
-                        <p className="text-slate-800 font-semibold">{item.value}</p>
+                        <p className="text-xs font-medium text-slate-600 mb-0.5">{item.label}</p>
+                        <p className="text-sm text-slate-800 font-semibold leading-snug">{item.value}</p>
                       </div>
                     </div>
                   </motion.div>
@@ -264,14 +275,14 @@ const infoItems = [
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.6 }}
-                  className="bg-slate-50 border border-slate-200 rounded-xl p-4"
+                  className="bg-slate-50 border border-slate-200 rounded-lg p-3"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-white shadow-sm">
-                      <FileText className="w-5 h-5 text-slate-600" />
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-white shadow-sm">
+                      <FileText className="w-4 h-4 text-slate-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-600 mb-2">Observaciones</p>
+                      <p className="text-xs font-medium text-slate-600 mb-1">Observaciones</p>
                       <p className="text-slate-800 leading-relaxed">{cita.observaciones}</p> {/* ✅ CAMBIO: notas → observaciones */}
                     </div>
                   </div>
@@ -284,14 +295,14 @@ const infoItems = [
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.7 }}
-                  className="bg-orange-50 border border-orange-200 rounded-xl p-4"
+                  className="bg-orange-50 border border-orange-200 rounded-lg p-3"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-white shadow-sm">
-                      <FileText className="w-5 h-5 text-orange-600" />
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-white shadow-sm">
+                      <FileText className="w-4 h-4 text-orange-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-orange-600 mb-2">Motivo de la Edici&oacute;n *</p>
+                      <p className="text-xs font-medium text-orange-600 mb-1">Motivo de la Edici&oacute;n *</p>
                       <p className="text-orange-800 leading-relaxed">{editNote || 'Motivo no registrado'}</p>
                     </div>
                   </div>
@@ -304,14 +315,14 @@ const infoItems = [
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.75 }}
-                  className="bg-red-50 border border-red-200 rounded-xl p-4"
+                  className="bg-red-50 border border-red-200 rounded-lg p-3"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-white shadow-sm">
-                      <FileText className="w-5 h-5 text-red-600" />
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-white shadow-sm">
+                      <FileText className="w-4 h-4 text-red-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-red-600 mb-2">Motivo de cancelaci&oacute;n</p>
+                      <p className="text-xs font-medium text-red-600 mb-1">Motivo de cancelaci&oacute;n</p>
                       <p className="text-red-800 leading-relaxed">{cancelNote}</p>
                     </div>
                   </div>
@@ -323,28 +334,28 @@ const infoItems = [
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.6 }}
-                className="bg-green-50 border border-green-200 rounded-xl p-4"
+                className="bg-green-50 border border-green-200 rounded-lg p-3"
               >
-                <h4 className="font-semibold text-green-800 mb-3">Información de Agentes</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-white shadow-sm">
+                <h4 className="font-semibold text-green-800 mb-2">Información de Agentes</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-white shadow-sm">
                       <User className="w-4 h-4 text-green-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-green-600">Agente Asignado</p>
-                      <p className="text-green-800 font-semibold">
+                      <p className="text-xs font-medium text-green-600">Agente Asignado</p>
+                      <p className="text-sm text-green-800 font-semibold leading-snug">
                         {cita.agente ? `${cita.agente.nombre_completo} ${cita.agente.apellido_completo}` : 'No asignado'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-white shadow-sm">
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-white shadow-sm">
                       <User className="w-4 h-4 text-green-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-green-600">Creador de la Cita</p>
-                      <p className="text-green-800 font-semibold">
+                      <p className="text-xs font-medium text-green-600">Creador de la Cita</p>
+                      <p className="text-sm text-green-800 font-semibold leading-snug">
                         {cita.creador
                           ? `${cita.creador.nombre_completo} ${cita.creador.apellido_completo}`
                           : user
@@ -362,10 +373,10 @@ const infoItems = [
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.7 }}
-                className="bg-blue-50 border border-blue-200 rounded-xl p-4"
+                className="bg-blue-50 border border-blue-200 rounded-lg p-3"
               >
-                <h4 className="font-semibold text-blue-800 mb-3">Información Adicional</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <h4 className="font-semibold text-blue-800 mb-2">Información Adicional</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-blue-600 font-medium">ID de Cita:</span>
                     <span className="text-blue-800 ml-2">#{cita.id_cita || cita.id} {/* ✅ Usar id_cita de tu BD */}
@@ -381,21 +392,24 @@ const infoItems = [
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end p-6 border-t border-slate-200 bg-slate-50 flex-shrink-0">
+          <div className="flex items-center justify-end px-4 py-3 border-t border-slate-200 bg-slate-50 flex-shrink-0">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={onClose}
-              className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+              className="px-4 py-1.5 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm"
             >
               Cerrar
             </motion.button>
           </div>
-        </motion.div>
-      </div>
+            </motion.div>
+        </div>
+      </>
     </AnimatePresence>,
     document.body
   );
 };
 
 export default ViewAppointmentModal;
+
+

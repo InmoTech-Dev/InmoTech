@@ -17,6 +17,10 @@ const UserCancelAppointmentModal = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!motivoCancelacion.trim()) {
       toast({
         title: "Comentario obligatorio",

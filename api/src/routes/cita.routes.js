@@ -3,7 +3,7 @@ const Joi = require('joi');
 const router = express.Router();
 const citaController = require('../controllers/cita.controller');
 const { validate, validateQuery } = require('../middlewares/validate.middleware');
-const { createLimiter, strictLimiter } = require('../middlewares/security.middleware');
+const { createLimiter, strictLimiter, identityLookupLimiter } = require('../middlewares/security.middleware');
 const { authenticateToken, authorizePermissions, optionalAuth } = require('../middlewares/auth.middleware');
 
 const {
@@ -42,6 +42,7 @@ router.get(
 // GET /api/v1/citas/buscar-persona - Buscar persona por documento (SIN AUTENTICACIÓN)
 router.get(
   '/buscar-persona',
+  identityLookupLimiter,
   validateQuery(buscarPersonaSchema),
   citaController.buscarPersonaPorDocumento
 );

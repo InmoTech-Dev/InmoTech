@@ -6,6 +6,13 @@ const parseId = (value) => {
 };
 
 class NotificacionController {
+  constructor() {
+    this.construirScopeUsuario = this.construirScopeUsuario.bind(this);
+    this.obtenerNotificacionesNoLeidas = this.obtenerNotificacionesNoLeidas.bind(this);
+    this.marcarComoLeida = this.marcarComoLeida.bind(this);
+    this.marcarVariasComoLeidas = this.marcarVariasComoLeidas.bind(this);
+  }
+
   construirScopeUsuario(req) {
     const idPersona = parseId(req.user?.id_persona || req.user?.id);
     const roleNames = Array.isArray(req.user?.roles) ? req.user.roles : [];

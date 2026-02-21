@@ -9,8 +9,13 @@ import RoleStep from './steps/RoleStep';
 import SummaryStep from './steps/SummaryStep';
 import { useToast } from '../../../../shared/hooks/use-toast';
 import { useAdministrativos } from '../../../../shared/contexts/AdministrativosContext';
+import administrativosApiService from '../../../../shared/services/administrativosApiService';
 
 const CreateAdministrativoModal = ({ isOpen, onClose }) => {
+  const DUPLICATE_DOCUMENT_ERROR = 'Ya existe un administrativo con este tipo y numero de documento';
+  const DUPLICATE_EMAIL_ERROR = 'Ya existe un administrativo con este correo electronico';
+  const DEBOUNCE_MS = 600;
+
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     tipoDocumento: '',
@@ -21,18 +26,233 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
     telefono: '',
     fechaIngreso: '',
     rol: '',
+    rolNombre: '',
     estado: 'programada'
   });
   const [errors, setErrors] = useState({});
+  const [isCheckingEmailDuplicate, setIsCheckingEmailDuplicate] = useState(false);
+  const [isCheckingDocumentoDuplicate, setIsCheckingDocumentoDuplicate] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { createAdministrativo } = useAdministrativos();
   const contentRef = useRef(null);
+  const emailDebounceRef = useRef(null);
+  const documentoDebounceRef = useRef(null);
+  const emailRequestIdRef = useRef(0);
+  const documentoRequestIdRef = useRef(0);
+  const isNoScrollStep = currentStep === 3 || currentStep === 4;
 
   useEffect(() => {
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
   }, [currentStep]);
+
+  useEffect(() => () => {
+    if (emailDebounceRef.current) {
+      clearTimeout(emailDebounceRef.current);
+    }
+    if (documentoDebounceRef.current) {
+      clearTimeout(documentoDebounceRef.current);
+    }
+  }, []);
+
+  const normalizeDocumentoNumero = (numeroDocumento = '') => numeroDocumento.replace(/[\s\-\.]/g, '').trim();
+  const normalizeEmail = (email = '') => email.trim().toLowerCase();
+
+  const setFieldError = (field, message) => {
+    setErrors((prev) => ({ ...prev, [field]: message }));
+  };
+
+  const clearFieldErrorIfMatches = (field, message) => {
+    setErrors((prev) => {
+      if (prev[field] !== message) return prev;
+      const nextErrors = { ...prev };
+      delete nextErrors[field];
+      return nextErrors;
+    });
+  };
+
+  const isBlockingIdentityError = (message = '') => {
+    const normalizedMessage = String(message || '').toLowerCase();
+    return (
+      normalizedMessage.includes('administrativo') ||
+      normalizedMessage.includes('no es administrativa') ||
+      normalizedMessage.includes('pertenecen a personas diferentes')
+    );
+  };
+
+  const hasDuplicateErrors = () =>
+    isBlockingIdentityError(errors.numeroDocumento) || isBlockingIdentityError(errors.email);
+
+  const getApiErrorMessage = (error) => (
+    error?.response?.data?.message ||
+    error?.message ||
+    'No se pudo registrar el administrativo. Por favor, intenta nuevamente.'
+  );
+
+  const mapBackendErrorToFieldErrors = (message) => {
+    const normalizedMessage = String(message || '').toLowerCase();
+    const nextFieldErrors = {};
+
+    if (normalizedMessage.includes('documento y el correo pertenecen a personas diferentes')) {
+      nextFieldErrors.numeroDocumento = 'El documento pertenece a una persona diferente al correo';
+      nextFieldErrors.email = 'El correo pertenece a una persona diferente al documento';
+      return nextFieldErrors;
+    }
+
+    if (normalizedMessage.includes('documento y correo')) {
+      nextFieldErrors.numeroDocumento = message;
+      nextFieldErrors.email = message;
+      return nextFieldErrors;
+    }
+
+    if (normalizedMessage.includes('tipo y numero de documento')) {
+      nextFieldErrors.numeroDocumento = message;
+    }
+
+    if (normalizedMessage.includes('correo electronico') || normalizedMessage.includes('correo')) {
+      nextFieldErrors.email = message;
+    }
+
+    return nextFieldErrors;
+  };
+
+  const checkDocumentoDuplicateRealtime = async (tipoDocumentoInput, numeroDocumentoInput) => {
+    const tipoDocumentoValue = (tipoDocumentoInput || '').trim().toUpperCase();
+    const numeroDocumentoValue = numeroDocumentoInput || '';
+    const numeroLimpio = normalizeDocumentoNumero(numeroDocumentoValue);
+    const tipoError = validateTipoDocumento(tipoDocumentoInput);
+    const numeroError = validateNumeroDocumento(numeroDocumentoValue, tipoDocumentoInput);
+
+    if (!tipoDocumentoValue || !numeroLimpio || tipoError || numeroError) {
+      documentoRequestIdRef.current += 1;
+      setIsCheckingDocumentoDuplicate(false);
+      clearFieldErrorIfMatches('numeroDocumento', DUPLICATE_DOCUMENT_ERROR);
+      return true;
+    }
+
+    const requestId = ++documentoRequestIdRef.current;
+    setIsCheckingDocumentoDuplicate(true);
+
+    try {
+      const response = await administrativosApiService.verificarDocumentoAdministrativoExistente(tipoDocumentoValue, numeroLimpio);
+      if (requestId !== documentoRequestIdRef.current) return true;
+
+      const existe = Boolean(response?.data?.data?.existe ?? response?.data?.existe);
+
+      if (existe) {
+        setFieldError('numeroDocumento', DUPLICATE_DOCUMENT_ERROR);
+        return false;
+      }
+
+      clearFieldErrorIfMatches('numeroDocumento', DUPLICATE_DOCUMENT_ERROR);
+      return true;
+    } catch (error) {
+      if (requestId !== documentoRequestIdRef.current) return true;
+      console.error('Error verificando duplicado de documento:', error);
+      return true;
+    } finally {
+      if (requestId === documentoRequestIdRef.current) {
+        setIsCheckingDocumentoDuplicate(false);
+      }
+    }
+  };
+
+  const checkEmailDuplicateRealtime = async (emailInput) => {
+    const emailValue = emailInput || '';
+    const normalized = normalizeEmail(emailValue);
+    const emailError = validateEmail(emailValue);
+
+    if (!normalized || emailError) {
+      emailRequestIdRef.current += 1;
+      setIsCheckingEmailDuplicate(false);
+      clearFieldErrorIfMatches('email', DUPLICATE_EMAIL_ERROR);
+      return true;
+    }
+
+    const requestId = ++emailRequestIdRef.current;
+    setIsCheckingEmailDuplicate(true);
+
+    try {
+      const response = await administrativosApiService.verificarCorreoAdministrativoExistente(normalized);
+      if (requestId !== emailRequestIdRef.current) return true;
+
+      const existe = Boolean(response?.data?.data?.existe ?? response?.data?.existe);
+
+      if (existe) {
+        setFieldError('email', DUPLICATE_EMAIL_ERROR);
+        return false;
+      }
+
+      clearFieldErrorIfMatches('email', DUPLICATE_EMAIL_ERROR);
+      return true;
+    } catch (error) {
+      if (requestId !== emailRequestIdRef.current) return true;
+      console.error('Error verificando duplicado de email:', error);
+      return true;
+    } finally {
+      if (requestId === emailRequestIdRef.current) {
+        setIsCheckingEmailDuplicate(false);
+      }
+    }
+  };
+
+  const scheduleDocumentoDuplicateCheck = (tipoDocumentoValue, numeroDocumentoValue) => {
+    if (documentoDebounceRef.current) {
+      clearTimeout(documentoDebounceRef.current);
+    }
+
+    const tipoError = validateTipoDocumento(tipoDocumentoValue);
+    const numeroError = validateNumeroDocumento(numeroDocumentoValue || '', tipoDocumentoValue);
+    const numeroLimpio = normalizeDocumentoNumero(numeroDocumentoValue || '');
+
+    if (tipoError || numeroError || !tipoDocumentoValue || !numeroLimpio) {
+      documentoRequestIdRef.current += 1;
+      setIsCheckingDocumentoDuplicate(false);
+      clearFieldErrorIfMatches('numeroDocumento', DUPLICATE_DOCUMENT_ERROR);
+      return;
+    }
+
+    documentoDebounceRef.current = setTimeout(() => {
+      checkDocumentoDuplicateRealtime(tipoDocumentoValue, numeroDocumentoValue);
+    }, DEBOUNCE_MS);
+  };
+
+  const scheduleEmailDuplicateCheck = (emailValue) => {
+    if (emailDebounceRef.current) {
+      clearTimeout(emailDebounceRef.current);
+    }
+
+    const normalized = normalizeEmail(emailValue || '');
+    const emailError = validateEmail(emailValue || '');
+    if (emailError || !normalized) {
+      emailRequestIdRef.current += 1;
+      setIsCheckingEmailDuplicate(false);
+      clearFieldErrorIfMatches('email', DUPLICATE_EMAIL_ERROR);
+      return;
+    }
+
+    emailDebounceRef.current = setTimeout(() => {
+      checkEmailDuplicateRealtime(emailValue);
+    }, DEBOUNCE_MS);
+  };
+
+  const flushDocumentoDuplicateCheck = async () => {
+    if (documentoDebounceRef.current) {
+      clearTimeout(documentoDebounceRef.current);
+      documentoDebounceRef.current = null;
+    }
+    return checkDocumentoDuplicateRealtime(formData.tipoDocumento, formData.numeroDocumento);
+  };
+
+  const flushEmailDuplicateCheck = async () => {
+    if (emailDebounceRef.current) {
+      clearTimeout(emailDebounceRef.current);
+      emailDebounceRef.current = null;
+    }
+    return checkEmailDuplicateRealtime(formData.email);
+  };
 
   const steps = [
     { number: 1, title: 'Información Personal', icon: User },
@@ -191,17 +411,34 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleNext = () => {
-    if (canProceedToNextStep(currentStep)) {
-      setCurrentStep(prev => Math.min(prev + 1, 4));
-    } else {
+  const handleNext = async () => {
+    if (!canProceedToNextStep(currentStep)) {
       validateStep(currentStep);
       toast({
         title: 'Campos requeridos',
         description: 'Por favor corrige los errores antes de continuar',
         variant: 'destructive'
       });
+      return;
     }
+
+    if (currentStep === 1) {
+      const [isDocumentoAvailable, isEmailAvailable] = await Promise.all([
+        flushDocumentoDuplicateCheck(),
+        flushEmailDuplicateCheck()
+      ]);
+
+      if (!isDocumentoAvailable || !isEmailAvailable || hasDuplicateErrors()) {
+        toast({
+          title: 'Datos duplicados',
+          description: 'El documento o el correo no estan disponibles para crear el administrativo',
+          variant: 'destructive'
+        });
+        return;
+      }
+    }
+
+    setCurrentStep((prev) => Math.min(prev + 1, 4));
   };
 
   const handlePrev = () => {
@@ -219,9 +456,7 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
       telefono: validateTelefono(formData.telefono)
     } };
     allErrors = { ...allErrors, ...{
-      fechaIngreso: validateFechaIngreso(formData.fechaIngreso),
-      cargo: null,
-      departamento: null
+      fechaIngreso: validateFechaIngreso(formData.fechaIngreso)
     } };
     allErrors = { ...allErrors, ...{ rol: validateRol(formData.rol) } };
     setErrors(allErrors);
@@ -229,7 +464,12 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
     if (validateAllSteps()) {
+      setIsSubmitting(true);
       try {
         const telefonoLimpio = formData.telefono.replace(/[\s\-\(\)\+]/g, '');
 
@@ -241,8 +481,6 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
           email: formData.email.trim().toLowerCase(),
           telefono: telefonoLimpio,
           fecha_ingreso: formData.fechaIngreso,
-          cargo: null,
-          departamento: null,
           id_rol: parseInt(formData.rol, 10)
         };
 
@@ -250,18 +488,28 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
 
         toast({
           title: 'Administrativo creado exitosamente',
-          description: 'Se envió un correo para que el nuevo administrativo defina su contraseña.',
+          description: 'La invitacion se creo y el envio de correo esta en proceso.',
           variant: 'default'
         });
 
         handleClose();
       } catch (error) {
         console.error('Error al crear administrativo:', error);
+        const backendMessage = getApiErrorMessage(error);
+        const backendFieldErrors = mapBackendErrorToFieldErrors(backendMessage);
+
+        if (Object.keys(backendFieldErrors).length > 0) {
+          setErrors((prev) => ({ ...prev, ...backendFieldErrors }));
+          setCurrentStep(1);
+        }
+
         toast({
           title: 'Error al crear el administrativo',
-          description: error.message || 'No se pudo registrar el administrativo. Por favor, intenta nuevamente.',
+          description: backendMessage,
           variant: 'destructive'
         });
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
       toast({
@@ -273,6 +521,19 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
   };
   
   const handleClose = () => {
+    if (isSubmitting) return;
+    if (emailDebounceRef.current) {
+      clearTimeout(emailDebounceRef.current);
+      emailDebounceRef.current = null;
+    }
+    if (documentoDebounceRef.current) {
+      clearTimeout(documentoDebounceRef.current);
+      documentoDebounceRef.current = null;
+    }
+    emailRequestIdRef.current += 1;
+    documentoRequestIdRef.current += 1;
+    setIsCheckingEmailDuplicate(false);
+    setIsCheckingDocumentoDuplicate(false);
     setCurrentStep(1);
     setFormData({
       tipoDocumento: '',
@@ -282,9 +543,8 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
       email: '',
       telefono: '',
       fechaIngreso: '',
-      cargo: undefined,
-      departamento: undefined,
       rol: '',
+      rolNombre: '',
       estado: 'programada'
     });
     setErrors({});
@@ -295,16 +555,27 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
     setFormData(prev => ({ ...prev, [field]: value }));
 
     const newErrors = { ...errors };
+    let shouldUpdateErrors = true;
+    let shouldScheduleDocumentCheck = false;
+    let shouldScheduleEmailCheck = false;
+    let tipoDocumentoForCheck = formData.tipoDocumento;
+    let numeroDocumentoForCheck = formData.numeroDocumento;
+    let emailForCheck = formData.email;
 
     switch (field) {
       case 'tipoDocumento':
         newErrors.tipoDocumento = validateTipoDocumento(value);
-        if (formData.numeroDocumento) {
-          newErrors.numeroDocumento = validateNumeroDocumento(formData.numeroDocumento, value);
-        }
+        newErrors.numeroDocumento = formData.numeroDocumento
+          ? validateNumeroDocumento(formData.numeroDocumento, value)
+          : newErrors.numeroDocumento;
+        tipoDocumentoForCheck = value;
+        numeroDocumentoForCheck = formData.numeroDocumento;
+        shouldScheduleDocumentCheck = true;
         break;
       case 'numeroDocumento':
         newErrors.numeroDocumento = validateNumeroDocumento(value, formData.tipoDocumento);
+        numeroDocumentoForCheck = value;
+        shouldScheduleDocumentCheck = true;
         break;
       case 'nombreCompleto':
       case 'apellidoCompleto':
@@ -312,6 +583,8 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
         break;
       case 'email':
         newErrors.email = validateEmail(value);
+        emailForCheck = value;
+        shouldScheduleEmailCheck = true;
         break;
       case 'telefono':
         newErrors.telefono = validateTelefono(value);
@@ -322,11 +595,25 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
       case 'rol':
         newErrors.rol = validateRol(value);
         break;
+      case 'rolNombre':
+        shouldUpdateErrors = false;
+        break;
       default:
+        shouldUpdateErrors = false;
         break;
     }
 
-    setErrors(newErrors);
+    if (shouldUpdateErrors) {
+      setErrors(newErrors);
+    }
+
+    if (shouldScheduleDocumentCheck) {
+      scheduleDocumentoDuplicateCheck(tipoDocumentoForCheck, numeroDocumentoForCheck);
+    }
+
+    if (shouldScheduleEmailCheck) {
+      scheduleEmailDuplicateCheck(emailForCheck);
+    }
   };
 
   const renderStepContent = () => {
@@ -337,6 +624,10 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
             formData={formData}
             errors={errors}
             updateFormData={updateFormData}
+            onDocumentoBlur={flushDocumentoDuplicateCheck}
+            onEmailBlur={flushEmailDuplicateCheck}
+            isCheckingDocumentoDuplicate={isCheckingDocumentoDuplicate}
+            isCheckingEmailDuplicate={isCheckingEmailDuplicate}
           />
         );
       case 2:
@@ -393,7 +684,8 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleClose}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-slate-500" />
             </motion.button>
@@ -403,7 +695,11 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
             <StepIndicator steps={steps} currentStep={currentStep} />
           </div>
 
-          <div ref={contentRef} className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 min-h-0 ${currentStep === 1 ? 'p-6 pb-2' : 'p-6'}`}>
+          <div
+            ref={contentRef}
+            data-create-admin-content="true"
+            className={`flex-1 min-h-0 ${isNoScrollStep ? 'overflow-hidden' : 'overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100'} ${currentStep === 1 ? 'p-6 pb-2' : 'p-6'}`}
+          >
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentStep}
@@ -422,7 +718,7 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handlePrev}
-              disabled={currentStep === 1}
+              disabled={currentStep === 1 || isSubmitting}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -434,7 +730,8 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleClose}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                disabled={isSubmitting}
+                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancelar
               </motion.button>
@@ -444,7 +741,8 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Siguiente
                   <ChevronRight className="w-4 h-4" />
@@ -454,10 +752,11 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  Crear Administrativo
+                  {isSubmitting ? 'Creando...' : 'Crear Administrativo'}
                 </motion.button>
               )}
             </div>
@@ -470,3 +769,5 @@ const CreateAdministrativoModal = ({ isOpen, onClose }) => {
 };
 
 export default CreateAdministrativoModal;
+
+

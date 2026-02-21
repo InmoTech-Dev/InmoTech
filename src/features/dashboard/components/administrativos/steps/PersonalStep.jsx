@@ -4,7 +4,15 @@ import { Input } from '../../../../../shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../../shared/components/ui/select';
 import { formatPhoneNumber } from '../../../../../shared/utils/phoneFormatter';
 
-const PersonalStep = ({ formData, errors, updateFormData }) => {
+const PersonalStep = ({
+  formData,
+  errors,
+  updateFormData,
+  onDocumentoBlur,
+  onEmailBlur,
+  isCheckingDocumentoDuplicate = false,
+  isCheckingEmailDuplicate = false
+}) => {
   const [prevPhone, setPrevPhone] = useState('');
 
   const handlePhoneChange = (e) => {
@@ -30,7 +38,7 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
   return (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <h3 className="text-lg font-semibold text-slate-800">Información Personal</h3>
+        <h3 className="text-lg font-semibold text-slate-800">Informacion Personal</h3>
         <p className="text-slate-600 text-sm">Ingresa los datos personales del nuevo administrativo</p>
       </div>
 
@@ -47,8 +55,8 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="CC">Cédula de Ciudadanía</SelectItem>
-              <SelectItem value="CE">Cédula de Extranjería</SelectItem>
+              <SelectItem value="CC">Cedula de Ciudadania</SelectItem>
+              <SelectItem value="CE">Cedula de Extranjeria</SelectItem>
               <SelectItem value="NIT">NIT</SelectItem>
               <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
               <SelectItem value="TI">Tarjeta de Identidad</SelectItem>
@@ -61,13 +69,14 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
 
         <div className="space-y-2">
           <Label htmlFor="numeroDocumento" className="text-sm font-medium text-slate-700">
-            Número de Documento *
+            Numero de Documento *
           </Label>
           <Input
             id="numeroDocumento"
             type="text"
             value={formData.numeroDocumento}
             onChange={(e) => updateFormData('numeroDocumento', e.target.value)}
+            onBlur={onDocumentoBlur}
             onKeyDown={(e) => {
               const allowedKeys = [
                 '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
@@ -79,10 +88,14 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
               }
             }}
             className={`h-10 ${errors.numeroDocumento ? 'border-red-500' : ''}`}
-            placeholder="Ingresa el número"
+            placeholder="Ingresa el numero"
           />
-          {errors.numeroDocumento && (
+          {errors.numeroDocumento ? (
             <p className="text-sm text-red-600">{errors.numeroDocumento}</p>
+          ) : (
+            isCheckingDocumentoDuplicate && (
+              <p className="text-xs text-slate-500">Validando...</p>
+            )
           )}
         </div>
       </div>
@@ -99,10 +112,10 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
             onChange={(e) => updateFormData('nombreCompleto', e.target.value)}
             onKeyDown={(e) => {
               const allowedKeys = [
-                'a','b','c','d','e','f','g','h','i','j','k','l','m',
-                'n','o','p','q','r','s','t','u','v','w','x','y','z',
-                'A','B','C','D','E','F','G','H','I','J','K','L','M',
-                'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+                'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
                 ' ', 'Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight',
                 'ArrowUp', 'ArrowDown', 'Delete'
               ];
@@ -129,10 +142,10 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
             onChange={(e) => updateFormData('apellidoCompleto', e.target.value)}
             onKeyDown={(e) => {
               const allowedKeys = [
-                'a','b','c','d','e','f','g','h','i','j','k','l','m',
-                'n','o','p','q','r','s','t','u','v','w','x','y','z',
-                'A','B','C','D','E','F','G','H','I','J','K','L','M',
-                'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+                'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
                 ' ', 'Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight',
                 'ArrowUp', 'ArrowDown', 'Delete'
               ];
@@ -159,17 +172,22 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
             type="email"
             value={formData.email}
             onChange={(e) => updateFormData('email', e.target.value)}
+            onBlur={onEmailBlur}
             className={`h-10 ${errors.email ? 'border-red-500' : ''}`}
             placeholder="correo@ejemplo.com"
           />
-          {errors.email && (
+          {errors.email ? (
             <p className="text-sm text-red-600">{errors.email}</p>
+          ) : (
+            isCheckingEmailDuplicate && (
+              <p className="text-xs text-slate-500">Validando...</p>
+            )
           )}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="telefono" className="text-sm font-medium text-slate-700">
-            Teléfono *
+            Telefono *
           </Label>
           <Input
             id="telefono"
@@ -187,10 +205,11 @@ const PersonalStep = ({ formData, errors, updateFormData }) => {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-        Al guardar, enviaremos un correo al administrativo para que confirme su cuenta y defina su contraseña.
+        Al guardar, enviaremos un correo al administrativo para que confirme su cuenta y defina su contrasena.
       </div>
     </div>
   );
 };
 
 export default PersonalStep;
+

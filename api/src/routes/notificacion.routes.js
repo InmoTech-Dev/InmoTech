@@ -13,13 +13,13 @@ router.get(
 
 router.patch(
   '/:id/leer',
-  authorizePermissions('citas', 'editar'),
+  authorizePermissions('citas', 'ver'),
   notificacionController.marcarComoLeida
 );
 
 router.post(
   '/leer-multiples',
-  authorizePermissions('citas', 'editar'),
+  authorizePermissions('citas', 'ver'),
   notificacionController.marcarVariasComoLeidas
 );
 

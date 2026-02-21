@@ -2,7 +2,8 @@ const jwtUtils = require('../utils/jwt');
 
 const logger = require('../utils/logger');
 
-const { Permiso, Rol } = require('../models');
+const { Permiso, Rol, Persona } = require('../models');
+const authService = require('../services/auth.service');
 
 const { Op, fn, col, where } = require('sequelize');
 
@@ -44,8 +45,8 @@ const isAdministrator = (user) => {
 
  */
 
-const authenticateToken = (req, res, next) => {
-  logger.info('[AUTH] Verifying request', {
+const authenticateToken = async (req, res, next) => {
+  logger.info('[AUTH] Verifying cookie-based authentication', {
     method: req.method,
     url: req.url,
     hasAccessToken: !!req.cookies.accessToken,
@@ -53,18 +54,13 @@ const authenticateToken = (req, res, next) => {
   });
 
   try {
-    const cookieToken = req.cookies.accessToken;
-    const authHeader = req.headers.authorization || req.headers.Authorization;
-    const headerToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-      ? authHeader.slice('Bearer '.length).trim()
-      : null;
-    const accessToken = cookieToken || headerToken;
+    const accessToken = req.cookies.accessToken;
 
     if (!accessToken) {
-      logger.warn('[AUTH] No access token for URL:', {
+      logger.warn('[AUTH] Missing accessToken cookie', {
         method: req.method,
         url: req.url,
-        hasAuthHeader: !!authHeader
+        hasRefreshToken: !!req.cookies.refreshToken
       });
       return res.status(401).json({
         success: false,
@@ -74,25 +70,92 @@ const authenticateToken = (req, res, next) => {
 
     const decoded = jwtUtils.verifyAccessToken(accessToken);
 
-    if (!decoded) {
-      logger.warn('[AUTH] Invalid token for URL:', { method: req.method, url: req.url });
+    if (!decoded || !decoded.id) {
+      logger.warn('[AUTH] Invalid accessToken cookie', { method: req.method, url: req.url });
       return res.status(401).json({
         success: false,
         message: 'Token invalido'
       });
     }
 
-    logger.info('[AUTH] Token verified', {
-      userId: decoded.id,
-      email: decoded.email,
+    const persona = await Persona.findByPk(decoded.id, {
+      attributes: ['id_persona', 'estado']
+    });
+
+    if (!persona) {
+      logger.warn('[AUTH] Persona not found for token', { userId: decoded.id, url: req.url });
+      return res.status(401).json({
+        success: false,
+        message: 'Token invalido'
+      });
+    }
+
+    if (persona.estado === false) {
+      logger.warn('[AUTH] Disabled account attempted protected access', { userId: decoded.id, url: req.url });
+      return res.status(423).json({
+        success: false,
+        message: 'Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.',
+        reason: 'account_disabled',
+        forceLogout: true
+      });
+    }
+
+    const authContext = await authService.buildAuthContextByPersonaId(decoded.id);
+    if (!authContext) {
+      logger.warn('[AUTH] Auth context unavailable for token', { userId: decoded.id, url: req.url });
+      return res.status(401).json({
+        success: false,
+        message: 'Token invalido'
+      });
+    }
+
+    const { authUser, hasAdministrativeRole } = authContext;
+    if (hasAdministrativeRole && !authUser.es_administrativo) {
+      logger.warn('[AUTH] Administrative access revoked for active token', {
+        userId: decoded.id,
+        email: decoded.email,
+        url: req.url,
+        hasAdministrativeRole,
+        isSuperAdmin: authUser.roles?.includes('Super Administrador'),
+        hasEmployeeRecord: !!authContext.persona?.administrativo,
+        employeeStatus: authContext.persona?.administrativo?.estado_laboral || 'N/A'
+      });
+      return res.status(403).json({
+        success: false,
+        message: 'Tu acceso administrativo ha sido revocado. Sesion terminada.',
+        reason: 'admin_access_revoked',
+        forceLogout: true
+      });
+    }
+
+    req.user = {
+      ...authUser,
+      id: authUser.id_persona || authUser.id
+    };
+
+    logger.info('[AUTH] Token accepted', {
+      userId: req.user.id,
+      email: req.user.email,
       method: req.method,
       url: req.url
     });
 
-    req.user = decoded;
     next();
   } catch (error) {
     logger.error('[AUTH] Error authenticating token', { error: error.message, url: req.url });
+    if (
+      error?.name === 'SequelizeConnectionError' ||
+      error?.name === 'SequelizeConnectionRefusedError' ||
+      error?.name === 'SequelizeHostNotReachableError' ||
+      error?.parent?.code === 'ETIMEOUT' ||
+      error?.original?.code === 'ETIMEOUT'
+    ) {
+      return res.status(503).json({
+        success: false,
+        message: 'Servicio temporalmente no disponible. Intenta de nuevo en unos segundos.',
+        reason: 'database_unavailable'
+      });
+    }
     return res.status(403).json({
       success: false,
       message: 'Token invalido o expirado'
@@ -244,27 +307,27 @@ const authorizePermissions = (moduleName, requiredPermissions) => {
 
 
 
-        // Para usuarios normales, verificar permisos en la base de datos
+      // Para usuarios normales, verificar permisos en la base de datos
 
-        const normalizedModule = normalizeModuleKey(moduleName);
+      const normalizedModule = normalizeModuleKey(moduleName);
 
-        if (!normalizedModule) {
+      if (!normalizedModule) {
 
-          return res.status(403).json({
+        return res.status(403).json({
 
-            success: false,
+          success: false,
 
-            message: 'El mÃ³dulo solicitado no es vÃ¡lido'
+          message: 'El mÃ³dulo solicitado no es vÃ¡lido'
 
-          });
+        });
 
-        }
+      }
 
 
 
-        const permissions = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
+      const permissions = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
 
-        const normalizedPermissions = getPermissionSearchValues(permissions);
+      const normalizedPermissions = getPermissionSearchValues(permissions);
 
 
 
@@ -296,41 +359,41 @@ const authorizePermissions = (moduleName, requiredPermissions) => {
 
 
 
-        const moduleValues = getModuleSearchValues(normalizedModule);
+      const moduleValues = getModuleSearchValues(normalizedModule);
 
-        const whereConditions = [
+      const whereConditions = [
 
-          { id_rol: { [Op.in]: rolIds } },
+        { id_rol: { [Op.in]: rolIds } },
 
-          where(fn('LOWER', col('modulo')), { [Op.in]: moduleValues }),
+        where(fn('LOWER', col('modulo')), { [Op.in]: moduleValues }),
 
-          { estado: true }
+        { estado: true }
 
-        ];
+      ];
 
 
 
-        if (normalizedPermissions.length > 0) {
+      if (normalizedPermissions.length > 0) {
 
-          whereConditions.push(
+        whereConditions.push(
 
-            where(fn('LOWER', col('permiso')), { [Op.in]: normalizedPermissions })
+          where(fn('LOWER', col('permiso')), { [Op.in]: normalizedPermissions })
 
-          );
+        );
+
+      }
+
+
+
+      const permisoEncontrado = await Permiso.findOne({
+
+        where: {
+
+          [Op.and]: whereConditions
 
         }
 
-
-
-        const permisoEncontrado = await Permiso.findOne({
-
-          where: {
-
-            [Op.and]: whereConditions
-
-          }
-
-        });
+      });
 
 
 
@@ -463,3 +526,4 @@ module.exports = {
   isAdministrator
 
 };
+

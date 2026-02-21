@@ -27,6 +27,9 @@ router.post('/', validarRegistroAdmin, administrativosController.registrarAdmini
  */
 router.get('/', administrativosController.obtenerAdministrativos);
 
+router.get('/verificar-correo/:email', administrativosController.verificarCorreoExistente);
+router.get('/verificar-documento/:tipo/:numero', administrativosController.verificarDocumentoExistente);
+
 /**
  * @route GET /api/administrativos/:id
  * @desc Obtiene un administrativo por ID
@@ -56,3 +59,4 @@ router.patch('/:id/estado', validarCambioEstado, administrativosController.cambi
 router.delete('/:id', administrativosController.eliminarAdministrativo);
 
 module.exports = router;
+

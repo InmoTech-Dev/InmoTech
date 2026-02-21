@@ -112,6 +112,12 @@ class CitaApiService {
     try {
       if (!id) throw new Error("ID de cita es requerido");
 
+      const horaInicioNormalizada = this.formatHoraParaAPI(citaData.hora_inicio || '09:00');
+      const horaFinNormalizada = this.ensureHoraFinValida(
+        horaInicioNormalizada,
+        citaData.hora_fin
+      );
+
       const payload = {
         tipo_documento: citaData.cliente?.tipo_documento || citaData.tipo_documento,
         numero_documento: citaData.cliente?.numero_documento || citaData.numero_documento,
@@ -122,8 +128,8 @@ class CitaApiService {
         id_inmueble: citaData.inmueble?.id_inmueble ?? citaData.id_inmueble ?? null,
         id_servicio: citaData.servicio?.id_servicio ?? citaData.id_servicio,
         fecha_cita: citaData.fecha_cita,
-        hora_inicio: this.formatHoraParaAPI(citaData.hora_inicio || '09:00'),
-        hora_fin: this.formatHoraParaAPI(citaData.hora_fin || '10:00'),
+        hora_inicio: horaInicioNormalizada,
+        hora_fin: horaFinNormalizada,
         observaciones: citaData.observaciones || null,
         id_estado_cita: this.mapEstadoToId(citaData.estado) || citaData.id_estado_cita || 1
       };
@@ -446,16 +452,48 @@ class CitaApiService {
   }
 
   calcularHoraFin(horaInicio) {
-    const [horas, minutos] = horaInicio.split(":").map(Number);
+    const [horas, minutos] = horaInicio.split(':').map(Number);
     let horaFin = horas;
-    let minutosFin = minutos + 30; // â Citas de 30 minutos
+    let minutosFin = minutos + 30; // Citas de 30 minutos
 
     if (minutosFin >= 60) {
       horaFin += 1;
       minutosFin = 0;
     }
 
-    return `${String(horaFin).padStart(2, "0")}:${String(minutosFin).padStart(2, "0")}`;
+    return `${String(horaFin).padStart(2, '0')}:${String(minutosFin).padStart(2, '0')}`;
+  }
+
+  convertirHoraAMinutos(hora) {
+    const horaNormalizada = this.formatHoraParaAPI(hora);
+    if (!horaNormalizada || !horaNormalizada.includes(':')) {
+      return null;
+    }
+
+    const [horas, minutos] = horaNormalizada.split(':').map(Number);
+    if (Number.isNaN(horas) || Number.isNaN(minutos)) {
+      return null;
+    }
+
+    return (horas * 60) + minutos;
+  }
+
+  ensureHoraFinValida(horaInicio, horaFin) {
+    const inicioNormalizado = this.formatHoraParaAPI(horaInicio || '09:00');
+    const finNormalizado = horaFin ? this.formatHoraParaAPI(horaFin) : null;
+
+    const inicioMinutos = this.convertirHoraAMinutos(inicioNormalizado);
+    const finMinutos = finNormalizado ? this.convertirHoraAMinutos(finNormalizado) : null;
+
+    if (inicioMinutos === null) {
+      return this.calcularHoraFin('09:00');
+    }
+
+    if (finMinutos === null || finMinutos <= inicioMinutos) {
+      return this.calcularHoraFin(inicioNormalizado);
+    }
+
+    return finNormalizado;
   }
 
   /**

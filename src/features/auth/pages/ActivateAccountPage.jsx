@@ -24,6 +24,7 @@ export default function ActivateAccountPage() {
   const [expira, setExpira] = useState('');
   const [canResend, setCanResend] = useState(false);
   const [sessionBlocked, setSessionBlocked] = useState(false);
+  const [inlineError, setInlineError] = useState('');
 
   const [codigoDigits, setCodigoDigits] = useState(['', '', '', '', '', '']);
   const codeRefs = useRef(Array(6).fill(null));
@@ -55,6 +56,7 @@ export default function ActivateAccountPage() {
     const next = [...codigoDigits];
     next[idx] = digit;
     setCodigoDigits(next);
+    if (inlineError) setInlineError('');
 
     if (digit && idx < codeRefs.current.length - 1) {
       codeRefs.current[idx + 1]?.focus();
@@ -173,6 +175,7 @@ export default function ActivateAccountPage() {
 
     setIsSubmitting(true);
     setMensaje('');
+    setInlineError('');
     try {
       const res = await invitacionApi.aceptar({ token, codigo_6d: codigo, password });
       if (res && res.success) {
@@ -187,8 +190,13 @@ export default function ActivateAccountPage() {
           setTimeout(() => navigate('/'), 800);
           return;
         }
-        setEstado('error');
-        setMensaje(rawMsg);
+
+        if (rawMsg.toLowerCase().includes('codigo') || rawMsg.toLowerCase().includes('código')) {
+          setInlineError(rawMsg);
+        } else {
+          setEstado('error');
+          setMensaje(rawMsg);
+        }
       }
     } catch (err) {
       const rawMsg = err?.data?.message || err.message || 'No se pudo completar la activacion';
@@ -198,8 +206,13 @@ export default function ActivateAccountPage() {
         setTimeout(() => navigate('/'), 800);
         return;
       }
-      setEstado('error');
-      setMensaje(rawMsg);
+
+      if (rawMsg.toLowerCase().includes('codigo') || rawMsg.toLowerCase().includes('código')) {
+        setInlineError(rawMsg);
+      } else {
+        setEstado('error');
+        setMensaje(rawMsg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -368,6 +381,12 @@ export default function ActivateAccountPage() {
                       />
                     ))}
                   </div>
+                  {inlineError && (
+                    <div className="flex items-center mt-2 text-red-600 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <AlertTriangle className="h-4 w-4 mr-1.5" />
+                      <span className="text-sm font-medium">{inlineError}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">

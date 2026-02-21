@@ -15,9 +15,6 @@ const API_CONFIG = {
   CSRF_HEADER_NAME: import.meta.env.VITE_CSRF_HEADER_NAME || 'X-CSRF-Token',
 };
 
-const ACCESS_TOKEN_KEY = 'inmotech_access_token';
-const REFRESH_TOKEN_KEY = 'inmotech_refresh_token';
-
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const REFRESH_ENDPOINT = '/auth/refresh';
 const LOGOUT_ENDPOINT = '/auth/logout';
@@ -34,12 +31,9 @@ const PUBLIC_AUTH_ENDPOINTS = new Set([
 class ApiClient {
   constructor() {
     this.maxRetries = API_CONFIG.RETRY_ATTEMPTS;
-    this.accessToken = null;
-    this.refreshToken = null;
     this.onUnauthorized = null;
     this.refreshPromise = null;
     this.isHandlingUnauthorized = false;
-    this.loadTokensFromStorage();
   }
 
   registerUnauthorizedCallback(callback) {
@@ -86,68 +80,24 @@ class ApiClient {
     return this.getCookieValue(API_CONFIG.CSRF_COOKIE_NAME);
   }
 
-  setTokens(accessToken, refreshToken) {
-    this.accessToken = accessToken || null;
-    this.refreshToken = refreshToken || null;
-
-    try {
-      if (accessToken) {
-        localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-      } else {
-        localStorage.removeItem(ACCESS_TOKEN_KEY);
-      }
-
-      if (refreshToken) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-      } else {
-        localStorage.removeItem(REFRESH_TOKEN_KEY);
-      }
-    } catch {
-      // noop
-    }
+  setTokens() {
+    // Cookies httpOnly gestionan sesion; no guardar tokens en JS storage.
   }
 
   clearTokens() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    try {
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
-    } catch {
-      // noop
-    }
+    // Cookies httpOnly gestionan sesion; no limpiar tokens en JS storage.
   }
 
   getAccessToken() {
-    if (this.accessToken) return this.accessToken;
-    try {
-      const stored = localStorage.getItem(ACCESS_TOKEN_KEY);
-      this.accessToken = stored || null;
-      return this.accessToken;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   getRefreshToken() {
-    if (this.refreshToken) return this.refreshToken;
-    try {
-      const stored = localStorage.getItem(REFRESH_TOKEN_KEY);
-      this.refreshToken = stored || null;
-      return this.refreshToken;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   loadTokensFromStorage() {
-    try {
-      this.accessToken = localStorage.getItem(ACCESS_TOKEN_KEY) || null;
-      this.refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY) || null;
-    } catch {
-      this.accessToken = null;
-      this.refreshToken = null;
-    }
+    // Cookies httpOnly gestionan sesion; no leer tokens desde JS storage.
   }
 
   async parseResponsePayload(response) {
@@ -159,6 +109,21 @@ class ApiClient {
     error.status = status;
     error.data = payload || null;
     return error;
+  }
+
+  shouldForceLogout(status, payload) {
+    if (status === 401) return true;
+    if (status !== 403 && status !== 423) return false;
+
+    if (payload?.forceLogout === true) return true;
+
+    const reason = String(payload?.reason || '').toLowerCase();
+    return reason === 'account_disabled' || reason === 'admin_access_revoked' || reason === 'session_revoked';
+  }
+
+  getUnauthorizedReason(payload, fallback = 'unauthorized') {
+    const reason = payload?.reason;
+    return typeof reason === 'string' && reason.trim() ? reason : fallback;
   }
 
   async triggerUnauthorized(reason = 'unauthorized') {
@@ -173,16 +138,13 @@ class ApiClient {
   }
 
   async performRefresh() {
-    const refreshToken = this.getRefreshToken();
-    const body = refreshToken ? JSON.stringify({ refreshToken }) : '{}';
-
     const response = await fetch(`${API_CONFIG.BASE_URL}${REFRESH_ENDPOINT}`, {
       method: 'POST',
       credentials: 'include',
       headers: {
         ...API_CONFIG.HEADERS,
       },
-      body,
+      body: '{}',
     });
 
     if (!response.ok) {
@@ -190,12 +152,7 @@ class ApiClient {
     }
 
     const payload = await this.parseResponsePayload(response);
-    if (payload?.success && payload?.data?.accessToken) {
-      this.setTokens(payload.data.accessToken, payload.data.refreshToken);
-      return true;
-    }
-
-    return false;
+    return payload?.success === true;
   }
 
   async refreshSessionSingleFlight() {
@@ -215,13 +172,6 @@ class ApiClient {
       ...API_CONFIG.HEADERS,
       ...(options.headers || {}),
     };
-
-    if (this.shouldIncludeAuth(options)) {
-      const accessToken = this.getAccessToken();
-      if (accessToken) {
-        headers.Authorization = `Bearer ${accessToken}`;
-      }
-    }
 
     const method = options.method || 'GET';
     if (this.isMutatingMethod(method)) {
@@ -267,10 +217,11 @@ class ApiClient {
       const response = await fetch(url.toString(), config);
       clearTimeout(timeoutId);
 
+      const isAuthEndpoint =
+        this.isRefreshEndpoint(normalizedEndpoint) || this.isLogoutEndpoint(normalizedEndpoint);
+      const isPublicAuthEndpoint = this.isPublicAuthEndpoint(normalizedEndpoint);
+
       if (response.status === 401) {
-        const isAuthEndpoint =
-          this.isRefreshEndpoint(normalizedEndpoint) || this.isLogoutEndpoint(normalizedEndpoint);
-        const isPublicAuthEndpoint = this.isPublicAuthEndpoint(normalizedEndpoint);
 
         if (!isAuthEndpoint && !isPublicAuthEndpoint && !isRetryAfterRefresh && !skipAuthRefresh) {
           const refreshed = await this.refreshSessionSingleFlight();
@@ -283,12 +234,31 @@ class ApiClient {
           }
         }
 
-        if (!isAuthEndpoint && !isPublicAuthEndpoint && !skipAuthRefresh) {
-          await this.triggerUnauthorized('unauthorized');
+        const payload = await this.parseResponsePayload(response);
+        if (
+          !isAuthEndpoint &&
+          !isPublicAuthEndpoint &&
+          !skipAuthRefresh &&
+          this.shouldForceLogout(response.status, payload)
+        ) {
+          await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'unauthorized'));
+        }
+        throw this.buildError(response.status, payload, 'Sesion no autorizada');
+      }
+
+      if (response.status === 403 || response.status === 423) {
+        const payload = await this.parseResponsePayload(response);
+
+        if (
+          !isAuthEndpoint &&
+          !isPublicAuthEndpoint &&
+          !skipAuthRefresh &&
+          this.shouldForceLogout(response.status, payload)
+        ) {
+          await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'session_revoked'));
         }
 
-        const payload = await this.parseResponsePayload(response);
-        throw this.buildError(response.status, payload, 'Sesion no autorizada');
+        throw this.buildError(response.status, payload, payload?.message || response.statusText);
       }
 
       if (response.status === 429) {
@@ -305,12 +275,7 @@ class ApiClient {
         throw this.buildError(response.status, errorPayload, response.statusText);
       }
 
-      const data = await this.parseResponsePayload(response);
-      if (data?.success && data?.data?.accessToken) {
-        this.setTokens(data.data.accessToken, data.data.refreshToken);
-      }
-
-      return data;
+      return await this.parseResponsePayload(response);
     } catch (error) {
       if (error.name === 'AbortError') {
         if (retryCount < API_CONFIG.RETRY_ATTEMPTS) {

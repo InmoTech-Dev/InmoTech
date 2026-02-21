@@ -27,15 +27,20 @@ class InvitacionService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  async crearInvitacion({ id_persona, creado_por, tipo = INVITE_TYPES.ADMIN, reenvios = 0, rol_asignado = null, es_administrativo }) {
+  async crearInvitacion({
+    id_persona,
+    creado_por,
+    tipo = INVITE_TYPES.ADMIN,
+    reenvios = 0,
+    rol_asignado = null,
+    es_administrativo = false,
+    deferEmail = false
+  }) {
     const persona = await Persona.findByPk(id_persona);
     if (!persona) throw new Error('Persona no encontrada');
 
     const inviteType = tipo || INVITE_TYPES.ADMIN;
-    const esAdminInvite =
-      typeof es_administrativo === 'boolean'
-        ? es_administrativo
-        : inviteType === INVITE_TYPES.ADMIN;
+    const esAdminInvite = es_administrativo || inviteType === INVITE_TYPES.ADMIN;
 
     const token = this.generarToken();
     const token_hash = this.hashToken(token);
@@ -63,16 +68,18 @@ class InvitacionService {
     const activationLink = `${activationBase}?token=${encodeURIComponent(token)}`;
     const verificationLink = `${emailVerificationBase}?token=${encodeURIComponent(token)}`;
 
-    if (inviteType === INVITE_TYPES.SIGNUP_VERIFY) {
-      await emailService.enviarEmailVerificacion({
-        email: persona.correo,
-        nombre_completo: persona.nombre_completo,
-        codigo_6d,
-        expira_en,
-        verificationLink
-      });
-    } else {
-      await emailService.enviarEmailInvitacion({
+    const sendEmail = async () => {
+      if (inviteType === INVITE_TYPES.SIGNUP_VERIFY) {
+        return emailService.enviarEmailVerificacion({
+          email: persona.correo,
+          nombre_completo: persona.nombre_completo,
+          codigo_6d,
+          expira_en,
+          verificationLink
+        });
+      }
+
+      return emailService.enviarEmailInvitacion({
         email: persona.correo,
         nombre_completo: persona.nombre_completo,
         token,
@@ -82,10 +89,66 @@ class InvitacionService {
         rol_asignado: rol_asignado || (esAdminInvite ? 'Administrativo' : null),
         es_administrativo: esAdminInvite
       });
+    };
+
+    if (deferEmail) {
+      setImmediate(async () => {
+        try {
+          const deliveryResult = await sendEmail();
+          logger.info('Invitacion enviada en background', {
+            id_persona,
+            tipo: inviteType,
+            correo: persona.correo,
+            intentos_envio: deliveryResult?.intentos_envio || 1
+          });
+        } catch (emailError) {
+          logger.warn('Fallo envio diferido de invitacion', {
+            id_persona,
+            tipo: inviteType,
+            correo: persona.correo,
+            code: emailError?.code || null,
+            reason: emailError?.reason || null,
+            host: emailError?.host || null,
+            error: emailError
+          });
+        }
+      });
+
+      logger.info(`Invitacion creada para persona ${id_persona} por ${creado_por || 'sistema'} (envio diferido)`);
+      return {
+        token,
+        codigo_6d,
+        expira_en,
+        tipo: inviteType,
+        reenvios,
+        intentos_envio: 0,
+        estado: 'pendiente_envio'
+      };
+    }
+
+    let deliveryResult = null;
+    try {
+      deliveryResult = await sendEmail();
+    } catch (emailError) {
+      emailError.context = {
+        id_persona,
+        tipo: inviteType,
+        expira_en,
+        reenvios,
+        correo: persona.correo
+      };
+      throw emailError;
     }
 
     logger.info(`Invitacion creada para persona ${id_persona} por ${creado_por || 'sistema'}`);
-    return { token, codigo_6d, expira_en, tipo: inviteType, reenvios };
+    return {
+      token,
+      codigo_6d,
+      expira_en,
+      tipo: inviteType,
+      reenvios,
+      intentos_envio: deliveryResult?.intentos_envio || 1
+    };
   }
 
   async reenviar(token) {

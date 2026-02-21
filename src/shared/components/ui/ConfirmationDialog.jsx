@@ -51,6 +51,10 @@ const ConfirmationDialog = ({
   };
 
   const styles = getVariantStyles();
+  const handleClose = () => {
+    if (isLoading) return;
+    onClose?.();
+  };
 
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -61,7 +65,7 @@ const ConfirmationDialog = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleClose}
         />
 
         {/* Dialog */}
@@ -98,7 +102,7 @@ const ConfirmationDialog = ({
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={onClose}
+                  onClick={handleClose}
                   disabled={isLoading}
                   className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 font-medium"
                 >

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MdNotifications, MdKeyboardArrowDown } from 'react-icons/md';
 import NotificationDropdown from './NotificationDropdown';
@@ -9,25 +9,188 @@ import { useAppointments } from '../../../contexts/AppointmentContext';
 import { useToast } from '../../../hooks/use-toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import SettingsModal from '../Header/SettingsModal';
+import notificacionApiService from '../../../services/notificacionApiService';
+import realtimeBus from '../../../services/realtimeBus';
+
+const UNREAD_FETCH_COOLDOWN_MS = 15000;
+let unreadFetchInFlightGlobal = null;
+let lastUnreadFetchAtGlobal = 0;
 
 const Header = () => {
-  const { appointments, updateAppointmentStatus, logout } = useAppointments();
-  const { user } = useAuth();
+  const { appointments, updateAppointmentStatus } = useAppointments();
+  const { user, hasPermission } = useAuth();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isAcceptDialogOpen, setIsAcceptDialogOpen] = useState(false);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isBellFxActive, setIsBellFxActive] = useState(false);
+  const [unreadNotificationIds, setUnreadNotificationIds] = useState([]);
+  const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
+  const [isMarkingRead, setIsMarkingRead] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const notificationButtonRef = useRef(null);
   const userMenuRef = useRef(null);
   const userMenuButtonRef = useRef(null);
   const userMenuDropdownRef = useRef(null);
+  const bellFxTimeoutRef = useRef(null);
+  const unreadNotificationIdsRef = useRef([]);
   const { toast } = useToast();
 
   // Filtrar citas solicitadas pendientes
   const pendingAppointments = Array.isArray(appointments) ? appointments.filter(cita => cita.estado === 'solicitada') : [];
+  const notificationScopeKey = user?.id || user?.id_persona || user?.email || user?.correo || 'anon';
+  const canViewNotifications = hasPermission('citas', 'ver');
+
+  const triggerBellFx = useCallback(() => {
+    if (bellFxTimeoutRef.current) {
+      clearTimeout(bellFxTimeoutRef.current);
+      bellFxTimeoutRef.current = null;
+    }
+
+    setIsBellFxActive(true);
+    bellFxTimeoutRef.current = setTimeout(() => {
+      setIsBellFxActive(false);
+      bellFxTimeoutRef.current = null;
+    }, 850);
+  }, []);
+
+  const loadUnreadNotifications = useCallback(async ({ triggerAnimation = true, force = false } = {}) => {
+    if (!canViewNotifications) {
+      setUnreadNotificationIds([]);
+      setPreviousUnreadCount(0);
+      unreadNotificationIdsRef.current = [];
+      return [];
+    }
+
+    const now = Date.now();
+    const cacheIsFresh = now - lastUnreadFetchAtGlobal < UNREAD_FETCH_COOLDOWN_MS;
+
+    if (unreadFetchInFlightGlobal) {
+      return unreadFetchInFlightGlobal;
+    }
+
+    if (cacheIsFresh && !force) {
+      return unreadNotificationIdsRef.current;
+    }
+
+    try {
+      unreadFetchInFlightGlobal = (async () => {
+        const response = await notificacionApiService.obtenerNoLeidas();
+        const unreadNotifications = Array.isArray(response?.data) ? response.data : [];
+        const unreadIds = unreadNotifications
+          .map((item) => item?.id_notificacion ?? item?.id)
+          .filter((id) => id !== undefined && id !== null)
+          .map((id) => String(id));
+
+        unreadNotificationIdsRef.current = unreadIds;
+        setUnreadNotificationIds(unreadIds);
+        setPreviousUnreadCount((previousValue) => {
+          if (triggerAnimation && unreadIds.length > previousValue) {
+            triggerBellFx();
+          }
+          return unreadIds.length;
+        });
+
+        lastUnreadFetchAtGlobal = Date.now();
+        return unreadIds;
+      });
+      return await unreadFetchInFlightGlobal;
+    } catch (error) {
+      console.warn('No se pudieron cargar notificaciones no leidas desde backend:', error);
+      return unreadNotificationIdsRef.current;
+    } finally {
+      unreadFetchInFlightGlobal = null;
+    }
+  }, [canViewNotifications, triggerBellFx]);
+
+  const markUnreadAsReadOnOpen = useCallback(async (idsToMark = unreadNotificationIdsRef.current) => {
+    if (isMarkingRead) return;
+
+    const numericIds = Array.from(
+      new Set(
+        (Array.isArray(idsToMark) ? idsToMark : [])
+          .map((id) => Number.parseInt(id, 10))
+          .filter((id) => Number.isInteger(id) && id > 0)
+      )
+    );
+
+    if (numericIds.length === 0) return;
+
+    try {
+      setIsMarkingRead(true);
+      await notificacionApiService.marcarVariasComoLeidas(numericIds);
+      setUnreadNotificationIds((currentIds) =>
+        {
+          const nextUnreadIds = currentIds.filter((id) => !numericIds.includes(Number.parseInt(id, 10)));
+          unreadNotificationIdsRef.current = nextUnreadIds;
+          return nextUnreadIds;
+        }
+      );
+      setPreviousUnreadCount((currentValue) => Math.max(0, currentValue - numericIds.length));
+    } catch (error) {
+      console.warn('No se pudieron marcar notificaciones como leidas en backend:', error);
+    } finally {
+      setIsMarkingRead(false);
+    }
+  }, [isMarkingRead]);
+
+  useEffect(() => {
+    try {
+      const keys = Object.keys(localStorage).filter((key) => key.startsWith('inmotech_seen_notification_ids_'));
+      keys.forEach((key) => localStorage.removeItem(key));
+    } catch (error) {
+      console.warn('No se pudieron limpiar keys legacy de notificaciones vistas:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!notificationScopeKey) return;
+    loadUnreadNotifications();
+  }, [loadUnreadNotifications, notificationScopeKey]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadUnreadNotifications({ triggerAnimation: false });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadUnreadNotifications]);
+
+  useEffect(() => {
+    if (!canViewNotifications) return undefined;
+
+    const offNotificationChanged = realtimeBus.on('notification.changed', () => {
+      loadUnreadNotifications({ triggerAnimation: true, force: true });
+    });
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', () => {
+      loadUnreadNotifications({ triggerAnimation: false, force: true });
+    });
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', () => {
+      loadUnreadNotifications({ triggerAnimation: false, force: true });
+    });
+
+    return () => {
+      offNotificationChanged();
+      offFallbackTick();
+      offReconcile();
+    };
+  }, [canViewNotifications, loadUnreadNotifications]);
+
+  useEffect(() => {
+    return () => {
+      if (bellFxTimeoutRef.current) {
+        clearTimeout(bellFxTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleAcceptAppointmentRequest = (appointment) => {
     setSelectedAppointment(appointment);
@@ -98,6 +261,19 @@ const Header = () => {
     setSelectedAppointment(appointment);
     setIsViewModalOpen(true);
     setIsNotificationOpen(false);
+  };
+
+  const handleNotificationToggle = async () => {
+    const willOpen = !isNotificationOpen;
+    setIsNotificationOpen(willOpen);
+
+    if (!willOpen) return;
+
+    const shouldRefreshBeforeMark = Date.now() - lastUnreadFetchAtGlobal >= UNREAD_FETCH_COOLDOWN_MS;
+    const latestUnreadIds = shouldRefreshBeforeMark
+      ? await loadUnreadNotifications({ triggerAnimation: false })
+      : unreadNotificationIdsRef.current;
+    await markUnreadAsReadOnOpen(latestUnreadIds);
   };
 
   // Función para obtener el nombre completo del usuario
@@ -228,19 +404,45 @@ const Header = () => {
         <div className="relative">
           <motion.button
             ref={notificationButtonRef}
+            animate={isBellFxActive
+              ? {
+                  rotate: [0, -12, 10, -8, 6, -4, 2, 0],
+                  scale: [1, 1.07, 1]
+                }
+              : { rotate: 0, scale: 1 }
+            }
+            transition={isBellFxActive
+              ? {
+                  duration: 0.8,
+                  ease: 'easeInOut',
+                  times: [0, 0.12, 0.24, 0.36, 0.5, 0.64, 0.78, 1]
+                }
+              : { duration: 0.2 }
+            }
             whileHover={{
               scale: 1.05,
               backgroundColor: 'rgba(59, 130, 246, 0.05)',
               boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)'
             }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+            onClick={handleNotificationToggle}
             className="relative p-2.5 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-300 hover:bg-blue-50/50"
             style={{
               border: '1px solid transparent',
               backgroundColor: 'rgba(255, 255, 255, 0.4)'
             }}
           >
+            <AnimatePresence>
+              {isBellFxActive && (
+                <motion.span
+                  initial={{ opacity: 0.65, scale: 0.75 }}
+                  animate={{ opacity: 0, scale: 1.7 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.85, ease: 'easeOut' }}
+                  className="pointer-events-none absolute inset-0 rounded-xl border-2 border-blue-300/70"
+                />
+              )}
+            </AnimatePresence>
             <MdNotifications size={22} />
             {pendingAppointments.length > 0 && (
               <motion.span

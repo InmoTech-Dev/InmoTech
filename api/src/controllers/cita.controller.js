@@ -4,9 +4,100 @@ const { isSuperAdministrator } = require('../middlewares/auth.middleware');
 const logger = require('../utils/logger');
 const { Persona } = require('../models');
 const emailService = require('../services/email.service');
+const sseService = require('../services/sse.service');
+const realtimeAudienceService = require('../services/realtimeAudience.service');
+const opsConsoleLogger = require('../utils/opsConsoleLogger');
 
 class CitaController {
-  async crearCita(req, res, next) {
+  normalizarIdsUsuarios = (values = []) => {
+    return Array.from(
+      new Set(
+        (Array.isArray(values) ? values : [values])
+          .map((value) => Number.parseInt(value, 10))
+          .filter((value) => Number.isInteger(value) && value > 0)
+      )
+    );
+  }
+
+  extraerIdsUsuariosAfectados = (cita = {}, extras = []) => {
+    const baseIds = [
+      cita?.id_persona,
+      cita?.id_usuario_creador,
+      cita?.id_agente_asignado,
+      ...(Array.isArray(extras) ? extras : []),
+    ];
+    return this.normalizarIdsUsuarios(baseIds);
+  }
+
+  construirResumenCita = (cita = {}, fallbackData = {}) => {
+    const clienteNombre = [
+      cita?.cliente?.nombre_completo,
+      cita?.cliente?.apellido_completo,
+    ].filter(Boolean).join(' ').trim()
+      || [fallbackData?.nombre_completo, fallbackData?.apellido_completo]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+      || 'N/A';
+
+    const fecha = cita?.fecha_cita || fallbackData?.fecha_cita || 'N/A';
+    const horaInicio = cita?.hora_inicio || fallbackData?.hora_inicio || 'N/A';
+    const horaFin = cita?.hora_fin || fallbackData?.hora_fin || 'N/A';
+    const servicio = cita?.servicio?.nombre_servicio || fallbackData?.id_servicio || 'N/A';
+    const estado = cita?.estado?.nombre_estado || cita?.id_estado_cita || fallbackData?.id_estado_cita || 'N/A';
+    const creador = [cita?.creador?.nombre_completo, cita?.creador?.apellido_completo]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || fallbackData?.id_usuario_creador || 'N/A';
+
+    const inmuebleDireccion = cita?.inmueble?.direccion || 'N/A';
+    const inmuebleCiudad = cita?.inmueble?.ciudad || '';
+    const inmuebleRegistro = cita?.inmueble?.registro_inmobiliario || fallbackData?.id_inmueble || 'N/A';
+    const inmueble = `${inmuebleDireccion}${inmuebleCiudad ? ` (${inmuebleCiudad})` : ''}`;
+
+    return [
+      { label: 'id-cita', value: cita?.id_cita || cita?.id || 'N/A' },
+      { label: 'cliente', value: clienteNombre },
+      { label: 'fecha', value: fecha },
+      { label: 'hora-inicio', value: horaInicio },
+      { label: 'hora-fin', value: horaFin },
+      { label: 'inmueble', value: inmueble },
+      { label: 'registro-inmueble', value: inmuebleRegistro },
+      { label: 'servicio', value: servicio },
+      { label: 'estado', value: estado },
+      { label: 'creado-por', value: creador },
+    ];
+  }
+
+  emitirEventosTiempoRealCita = async ({ action, cita = null, appointmentId = null, extraAffectedUserIds = [] }) => {
+    try {
+      const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+      const affectedUserIds = this.extraerIdsUsuariosAfectados(cita || {}, extraAffectedUserIds);
+      const citaId = Number.parseInt(appointmentId || cita?.id_cita || cita?.id, 10);
+
+      sseService.emitAppointmentChanged({
+        action,
+        appointmentId: Number.isInteger(citaId) && citaId > 0 ? citaId : null,
+        affectedUserIds,
+        audienceUserIds: adminIds,
+      });
+
+      if (adminIds.length > 0) {
+        sseService.emitNotificationChanged({
+          userIds: adminIds,
+          scope: 'citas',
+        });
+      }
+    } catch (error) {
+      logger.error('[REALTIME][CITA] No se pudieron emitir eventos SSE', {
+        action,
+        appointmentId,
+        error: error.message,
+      });
+    }
+  }
+
+  crearCita = async (req, res, next) => {
     try {
       const data = req.validatedData ? { ...req.validatedData } : { ...req.body };
 
@@ -27,15 +118,37 @@ class CitaController {
         }
       }
 
+      this.emitirEventosTiempoRealCita({
+        action: 'created',
+        cita: nuevaCita,
+      });
+
+      opsConsoleLogger.eventBlock({
+        scope: 'CITA',
+        action: 'CREATE',
+        outcome: 'OK',
+        fields: this.construirResumenCita(nuevaCita, data),
+        footer: '✅ cita creada exitosamente',
+      });
+
       return res.status(201).json({ success: true, data: nuevaCita });
     } catch (error) {
+      opsConsoleLogger.eventBlock({
+        scope: 'CITA',
+        action: 'CREATE',
+        outcome: 'FAIL',
+        method: 'warn',
+        fields: this.construirResumenCita({}, req.validatedData ? { ...req.validatedData } : { ...req.body }),
+        footer: `❌ cita no creada (${error.message || 'error desconocido'})`,
+      });
+
       if (error.message.includes('Ya existe una cita')) {
         return res.status(400).json({ success: false, message: error.message });
       }
       next(error);
     }
   }
-  async obtenerCitas(req, res, next) {
+  obtenerCitas = async (req, res, next) => {
     try {
       const filtros = {};
 
@@ -57,7 +170,7 @@ class CitaController {
         }
       }
 
-      // ✅ OPTIMIZACIÓN: Agregar paginación para listas grandes con validación
+      // âœ… OPTIMIZACIÃ“N: Agregar paginaciÃ³n para listas grandes con validaciÃ³n
       const pageValue = req.query.page ? parseInt(req.query.page) : 1;
       const limitValue = req.query.limit ? parseInt(req.query.limit) : 50;
       const page = (!isNaN(pageValue) && pageValue > 0) ? pageValue : 1;
@@ -79,16 +192,16 @@ class CitaController {
     }
   }
 
-  async obtenerCitaPorId(req, res, next) {
+  obtenerCitaPorId = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
 
-      // Validar que el ID sea un número válido y no NaN
+      // Validar que el ID sea un nÃºmero vÃ¡lido y no NaN
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
@@ -111,7 +224,7 @@ class CitaController {
     }
   }
 
-  async confirmarCita(req, res, next) {
+  confirmarCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -119,7 +232,7 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
@@ -135,6 +248,12 @@ class CitaController {
         logger.error(`[EMAIL][CITA] No se pudo enviar confirmacion de cita ${parsedId}: ${emailError.message}`);
       }
 
+      this.emitirEventosTiempoRealCita({
+        action: 'confirmed',
+        cita,
+        appointmentId: parsedId,
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Cita confirmada exitosamente',
@@ -145,7 +264,7 @@ class CitaController {
     }
   }
 
-  async cancelarCita(req, res, next) {
+  cancelarCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -153,7 +272,7 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
@@ -167,6 +286,12 @@ class CitaController {
         logger.error(`[EMAIL][CITA] No se pudo enviar cancelacion de cita ${parsedId}: ${emailError.message}`);
       }
 
+      this.emitirEventosTiempoRealCita({
+        action: 'cancelled',
+        cita,
+        appointmentId: parsedId,
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Cita cancelada exitosamente',
@@ -177,7 +302,7 @@ class CitaController {
     }
   }
 
-  async reagendarCita(req, res, next) {
+  reagendarCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -185,7 +310,7 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
@@ -210,6 +335,12 @@ class CitaController {
         logger.error(`[EMAIL][CITA] No se pudo enviar reagendamiento de cita ${parsedId}: ${emailError.message}`);
       }
 
+      this.emitirEventosTiempoRealCita({
+        action: 'rescheduled',
+        cita,
+        appointmentId: parsedId,
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Cita reagendada exitosamente',
@@ -220,7 +351,7 @@ class CitaController {
     }
   }
 
-  async completarCita(req, res, next) {
+  completarCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -228,7 +359,7 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
@@ -244,7 +375,7 @@ class CitaController {
     }
   }
 
-  async actualizarCita(req, res, next) {
+  actualizarCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -252,23 +383,29 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
-      // ✅ Verificar límite de ediciones antes de actualizar
+      // âœ… Verificar lÃ­mite de ediciones antes de actualizar
       const citaExistente = await citaService.obtenerCitaPorId(parsedId);
       if (citaExistente.ediciones_realizadas >= citaExistente.ediciones_maximas) {
         return res.status(400).json({
           success: false,
-          message: `Esta cita ha alcanzado el límite máximo de ${citaExistente.ediciones_maximas} ediciones permitidas`
+          message: `Esta cita ha alcanzado el lÃ­mite mÃ¡ximo de ${citaExistente.ediciones_maximas} ediciones permitidas`
         });
       }
 
-      // ✅ Incrementar contador de ediciones antes de actualizar
-      await citaService.incrementarContadorEdicionesActualizar(parsedId);
+      // âœ… Incrementar contador de ediciones antes de actualizar
+      const cita = await citaService.incrementarContadorEdicionesActualizar(parsedId, req.validatedData);
 
-      const cita = await citaService.actualizarCita(parsedId, req.validatedData);
+
+
+      this.emitirEventosTiempoRealCita({
+        action: 'updated',
+        cita,
+        appointmentId: parsedId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -280,7 +417,7 @@ class CitaController {
     }
   }
 
-  async eliminarCita(req, res, next) {
+  eliminarCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -288,11 +425,17 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
       const cita = await citaService.eliminarCita(parsedId);
+
+      this.emitirEventosTiempoRealCita({
+        action: 'deleted',
+        cita,
+        appointmentId: parsedId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -305,10 +448,10 @@ class CitaController {
   }
 
   /**
-   * ✅ ENDPOINT OPTIMIZADO: Actualizar solo el estado de la cita
+   * âœ… ENDPOINT OPTIMIZADO: Actualizar solo el estado de la cita
    * Reduce el tiempo de respuesta de ~1 segundo a ~50-100ms
    */
-  async actualizarEstadoCita(req, res, next) {
+  actualizarEstadoCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -316,15 +459,28 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
       const { id_estado_cita } = req.validatedData;
 
-      logger.info(`🔄 Actualizando estado de cita ${parsedId} a ${id_estado_cita} (endpoint optimizado)`);
+      logger.info(`ðŸ”„ Actualizando estado de cita ${parsedId} a ${id_estado_cita} (endpoint optimizado)`);
 
       const resultado = await citaService.actualizarEstadoCitaOptimizado(parsedId, id_estado_cita);
+
+      let citaDetallada = null;
+      try {
+        citaDetallada = await citaService.obtenerCitaPorId(parsedId);
+      } catch {
+        citaDetallada = resultado;
+      }
+
+      this.emitirEventosTiempoRealCita({
+        action: 'status_changed',
+        cita: citaDetallada,
+        appointmentId: parsedId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -332,23 +488,23 @@ class CitaController {
         data: resultado
       });
     } catch (error) {
-      logger.error(`❌ Error en actualizarEstadoCita: ${error.message}`);
+      logger.error(`âŒ Error en actualizarEstadoCita: ${error.message}`);
       next(error);
     }
   }
 
-  async buscarPersonaPorDocumento(req, res, next) {
+  buscarPersonaPorDocumento = async (req, res, next) => {
     try {
       const { tipo_documento, numero_documento } = req.query;
 
       if (!tipo_documento || !numero_documento) {
         return res.status(400).json({
           success: false,
-          message: 'Tipo y número de documento son requeridos'
+          message: 'Tipo y nÃºmero de documento son requeridos'
         });
       }
 
-      console.log('🔍 Buscando persona en BD:', {
+      opsConsoleLogger.info('CITA', 'PERSON_LOOKUP', 'QUERY', {
         tipo_documento: tipo_documento.toUpperCase(),
         numero_documento: numero_documento.replace(/[\s\-\.]/g, '')
       });
@@ -360,13 +516,17 @@ class CitaController {
         }
       });
 
-      console.log('📊 Resultado de BD:', persona ? {
-        id: persona.id_persona,
+      opsConsoleLogger.info('CITA', 'PERSON_LOOKUP', 'RESULT', persona ? {
+        found: true,
+        id_persona: persona.id_persona,
         nombre_completo: persona.nombre_completo,
         apellido_completo: persona.apellido_completo,
         telefono: persona.telefono,
         correo: persona.correo
-      } : 'No encontrado');
+      } : {
+        found: false,
+        result: 'No encontrado'
+      });
 
       if (!persona) {
         return res.status(404).json({
@@ -375,7 +535,7 @@ class CitaController {
         });
       }
 
-      // ✅ FORMATEAR RESPUESTA PARA AUTOCOMPLETADO DEL FORMULARIO
+      // âœ… FORMATEAR RESPUESTA PARA AUTOCOMPLETADO DEL FORMULARIO
       // El formulario tiene separados: nombres (primer + segundo), apellidos (primer + segundo)
       const nombresPartes = persona.nombre_completo ? persona.nombre_completo.trim().split(' ') : [];
       const apellidosPartes = persona.apellido_completo ? persona.apellido_completo.trim().split(' ') : [];
@@ -389,14 +549,16 @@ class CitaController {
         correo: persona.correo || ''
       };
 
-      console.log('📤 Enviando respuesta:', responseData);
+      opsConsoleLogger.info('CITA', 'PERSON_LOOKUP', 'RESPONSE', responseData);
 
       res.json({
         success: true,
         data: responseData
       });
     } catch (error) {
-      console.error('❌ Error en buscarPersonaPorDocumento:', error);
+      opsConsoleLogger.error('CITA', 'PERSON_LOOKUP', 'FAIL', {
+        reason: error.message || 'Error desconocido'
+      });
       next(error);
     }
   }
@@ -405,7 +567,7 @@ class CitaController {
    * Asignar agente a una cita
    * Endpoint: POST /api/v1/citas/:id/asignar-agente
    */
-  async asignarAgente(req, res, next) {
+  asignarAgente = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -413,14 +575,14 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
       const { id_agente_nuevo, comentario, motivo_reagendamiento } = req.validatedData;
-      const idUsuarioRealizo = req.user.id; // ✅ Corregido: usar req.user.id en lugar de req.user.id_persona
+      const idUsuarioRealizo = req.user.id; // âœ… Corregido: usar req.user.id en lugar de req.user.id_persona
 
-      // Capturar estado/agente previo para detectar reasignación de cita confirmada
+      // Capturar estado/agente previo para detectar reasignaciÃ³n de cita confirmada
       const citaAntes = await citaService.obtenerCitaPorId(parsedId);
       const esReasignacionConfirmada = Boolean(
         citaAntes &&
@@ -434,7 +596,7 @@ class CitaController {
         !citaAntes.id_agente_asignado
       );
 
-      logger.info(`🔄 Asignando agente ${id_agente_nuevo} a cita ${parsedId} por usuario ${idUsuarioRealizo}`);
+      logger.info(`ðŸ”„ Asignando agente ${id_agente_nuevo} a cita ${parsedId} por usuario ${idUsuarioRealizo}`);
 
       const citaActualizada = await citaService.asignarAgente(
         parsedId,
@@ -457,24 +619,30 @@ class CitaController {
         logger.error(`[EMAIL][CITA] No se pudo notificar asignacion de agente en cita ${parsedId}: ${emailError.message}`);
       }
 
+      this.emitirEventosTiempoRealCita({
+        action: 'assigned',
+        cita: citaActualizada,
+        appointmentId: parsedId,
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Agente asignado exitosamente',
         data: citaActualizada
       });
     } catch (error) {
-      logger.error(`❌ Error asignando agente a cita ${req.params.id}: ${error.message}`);
+      logger.error(`âŒ Error asignando agente a cita ${req.params.id}: ${error.message}`);
       next(error);
     }
   }
 
   /**
-   * Obtener agentes disponibles para asignación
+   * Obtener agentes disponibles para asignaciÃ³n
    * Endpoint: GET /api/v1/citas/agentes-disponibles
    */
-  async obtenerAgentesDisponibles(req, res, next) {
+  obtenerAgentesDisponibles = async (req, res, next) => {
     try {
-      logger.info(`🔍 Obteniendo agentes disponibles`);
+      logger.info(`ðŸ” Obteniendo agentes disponibles`);
 
       const agentes = await citaService.obtenerAgentesDisponibles();
 
@@ -484,7 +652,7 @@ class CitaController {
         data: agentes
       });
     } catch (error) {
-      logger.error(`❌ Error obteniendo agentes disponibles: ${error.message}`);
+      logger.error(`âŒ Error obteniendo agentes disponibles: ${error.message}`);
       next(error);
     }
   }
@@ -493,7 +661,7 @@ class CitaController {
    * Obtener historial de asignaciones de una cita
    * Endpoint: GET /api/v1/citas/:id/historial-asignaciones
    */
-  async obtenerHistorialAsignaciones(req, res, next) {
+  obtenerHistorialAsignaciones = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -501,13 +669,13 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
-      const idUsuario = req.user.id; // ✅ Corregido: usar req.user.id en lugar de req.user.id_persona
+      const idUsuario = req.user.id; // âœ… Corregido: usar req.user.id en lugar de req.user.id_persona
 
-      logger.info(`🔍 Obteniendo historial de asignaciones para cita ${parsedId}`);
+      logger.info(`ðŸ” Obteniendo historial de asignaciones para cita ${parsedId}`);
 
       const historial = await citaService.obtenerHistorialAsignaciones(parsedId);
 
@@ -517,7 +685,7 @@ class CitaController {
         data: historial
       });
     } catch (error) {
-      logger.error(`❌ Error obteniendo historial de cita ${req.params.id}: ${error.message}`);
+      logger.error(`âŒ Error obteniendo historial de cita ${req.params.id}: ${error.message}`);
       next(error);
     }
   }
@@ -526,7 +694,7 @@ class CitaController {
    * Obtener cita con historial completo
    * Endpoint: GET /api/v1/citas/:id/con-historial
    */
-  async obtenerCitaConHistorial(req, res, next) {
+  obtenerCitaConHistorial = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -534,13 +702,13 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
-      const idUsuario = req.user.id; // ✅ Corregido: usar req.user.id en lugar de req.user.id_persona
+      const idUsuario = req.user.id; // âœ… Corregido: usar req.user.id en lugar de req.user.id_persona
 
-      logger.info(`🔍 Obteniendo cita ${parsedId} con historial completo`);
+      logger.info(`ðŸ” Obteniendo cita ${parsedId} con historial completo`);
 
       const cita = await citaService.obtenerCitaConHistorial(parsedId);
 
@@ -550,7 +718,7 @@ class CitaController {
         data: cita
       });
     } catch (error) {
-      logger.error(`❌ Error obteniendo cita con historial ${req.params.id}: ${error.message}`);
+      logger.error(`âŒ Error obteniendo cita con historial ${req.params.id}: ${error.message}`);
       next(error);
     }
   }
@@ -559,12 +727,12 @@ class CitaController {
    * Obtener citas del usuario autenticado como cliente
    * Endpoint: GET /api/v1/citas/mis-citas
    */
-  async obtenerMisCitas(req, res, next) {
+  obtenerMisCitas = async (req, res, next) => {
     try {
       const userId = req.user.id; // ID del usuario autenticado
       const filtros = req.query; // Filtros opcionales de query params
 
-      logger.info(`🔍 Obteniendo citas del cliente ${userId}`);
+      logger.info(`ðŸ” Obteniendo citas del cliente ${userId}`);
 
       const citas = await citaService.obtenerCitasPorCliente(userId, filtros);
 
@@ -574,7 +742,7 @@ class CitaController {
         data: citas
       });
     } catch (error) {
-      logger.error(`❌ Error obteniendo citas del cliente ${req.user.id}: ${error.message}`);
+      logger.error(`âŒ Error obteniendo citas del cliente ${req.user.id}: ${error.message}`);
       next(error);
     }
   }
@@ -583,7 +751,7 @@ class CitaController {
    * Cancelar cita por el usuario (cliente)
    * Endpoint: POST /api/v1/citas/mis-citas/:id/cancelar
    */
-  async cancelarMiCita(req, res, next) {
+  cancelarMiCita = async (req, res, next) => {
     try {
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -592,7 +760,7 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
@@ -607,7 +775,7 @@ class CitaController {
         });
       }
 
-      // Verificar que el estado permita cancelación
+      // Verificar que el estado permita cancelaciÃ³n
       const estadoRaw = typeof cita.estado === 'string'
         ? cita.estado
         : (cita.estado?.nombre_estado || cita.estado?.nombre || '');
@@ -628,13 +796,20 @@ class CitaController {
         logger.error(`[EMAIL][CITA] No se pudo notificar cancelacion de cita ${parsedId} al cliente: ${emailError.message}`);
       }
 
+      this.emitirEventosTiempoRealCita({
+        action: 'cancelled_by_user',
+        cita: citaCancelada,
+        appointmentId: parsedId,
+        extraAffectedUserIds: [userId],
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Cita cancelada exitosamente',
         data: citaCancelada
       });
     } catch (error) {
-      logger.error(`❌ Error cancelando cita ${req.params.id} por usuario ${req.user.id}: ${error.message}`);
+      logger.error(`âŒ Error cancelando cita ${req.params.id} por usuario ${req.user.id}: ${error.message}`);
       next(error);
     }
   }
@@ -643,7 +818,7 @@ class CitaController {
    * Obtener horarios disponibles para reagendamiento (usuario normal)
    * Endpoint: GET /api/v1/citas/mis-citas/horarios-disponibles
    */
-  async obtenerHorariosDisponiblesReagendar(req, res, next) {
+  obtenerHorariosDisponiblesReagendar = async (req, res, next) => {
     try {
       const { fecha_cita, id_servicio } = req.query;
 
@@ -658,15 +833,15 @@ class CitaController {
       if (isNaN(idServicioParsed) || idServicioParsed <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de servicio inválido'
+          message: 'ID de servicio invÃ¡lido'
         });
       }
 
-      logger.info(`🔍 Usuario obteniendo horarios disponibles para reagendamiento: fecha=${fecha_cita}, servicio=${idServicioParsed}`);
+      logger.info(`ðŸ” Usuario obteniendo horarios disponibles para reagendamiento: fecha=${fecha_cita}, servicio=${idServicioParsed}`);
 
-      // 🚨 LÓGICA ESPECIAL: Si es servicio "Visita a Propiedad" (ID 1)
+      // ðŸš¨ LÃ“GICA ESPECIAL: Si es servicio "Visita a Propiedad" (ID 1)
       if (idServicioParsed === 1) {
-        logger.info("🏠 Servicio 'Visita a Propiedad': Aplicando restricciones de bloqueo para reagendamiento");
+        logger.info("ðŸ  Servicio 'Visita a Propiedad': Aplicando restricciones de bloqueo para reagendamiento");
 
         // Obtener citas existentes para esa fecha y servicio de visitas a inmuebles
         // Solo citas confirmadas, programadas o reagendada (no canceladas ni completadas)
@@ -678,7 +853,7 @@ class CitaController {
         const result = await citaService.obtenerTodasLasCitas(filtros);
         const citasExistentes = Array.isArray(result) ? result : (result.citas || []);
 
-        logger.info(`📅 Citas existentes activas para ${fecha_cita}:`, citasExistentes.length);
+        logger.info(`ðŸ“… Citas existentes activas para ${fecha_cita}:`, citasExistentes.length);
 
         // Generar todos los horarios disponibles inicialmente
         const todosHorarios = [];
@@ -699,7 +874,7 @@ class CitaController {
           !horariosOcupados.has(hora)
         );
 
-        logger.info(`✅ Horarios disponibles para reagendamiento: ${horariosDisponibles.length} de ${todosHorarios.length}`);
+        logger.info(`âœ… Horarios disponibles para reagendamiento: ${horariosDisponibles.length} de ${todosHorarios.length}`);
 
         return res.status(200).json({
           success: true,
@@ -708,8 +883,8 @@ class CitaController {
         });
 
       } else {
-        // 🆓 PARA OTROS SERVICIOS: Sin restricciones, todos los horarios disponibles
-        logger.info("🆓 Otro servicio: Sin restricciones de bloqueo para reagendamiento");
+        // ðŸ†“ PARA OTROS SERVICIOS: Sin restricciones, todos los horarios disponibles
+        logger.info("ðŸ†“ Otro servicio: Sin restricciones de bloqueo para reagendamiento");
 
         const defaultHorarios = [];
         for (let hora = 8; hora <= 17; hora++) {
@@ -727,7 +902,7 @@ class CitaController {
       }
 
     } catch (error) {
-      logger.error(`❌ Error obteniendo horarios disponibles para reagendamiento: ${error.message}`);
+      logger.error(`âŒ Error obteniendo horarios disponibles para reagendamiento: ${error.message}`);
       next(error);
     }
   }
@@ -736,9 +911,9 @@ class CitaController {
    * Reagendar cita por el usuario (cliente)
    * Endpoint: PUT /api/v1/citas/user/:id/reagendar
    */
-  async reagendarMiCita(req, res, next) {
+  reagendarMiCita = async (req, res, next) => {
     try {
-      console.log(`🚨🚨🚨 [CONTROLLER] reagendarMiCita EJECUTADO!!! usuario ${req.user?.id} - cita ${req.params?.id}`);
+      console.log(`ðŸš¨ðŸš¨ðŸš¨ [CONTROLLER] reagendarMiCita EJECUTADO!!! usuario ${req.user?.id} - cita ${req.params?.id}`);
 
       const { id } = req.params;
       const parsedId = parseInt(id);
@@ -747,12 +922,12 @@ class CitaController {
       if (!id || isNaN(parsedId) || parsedId <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'ID de cita inválido'
+          message: 'ID de cita invÃ¡lido'
         });
       }
 
       const { fecha_cita, hora_inicio, hora_fin, motivo_reagendamiento, id_servicio, observaciones } = req.validatedData;
-      console.log(`📥 [CONTROLLER] Datos recibidos: fecha=${fecha_cita}, hora=${hora_inicio}, user=${userId}, servicio=${id_servicio || 'sin cambio'}`);
+      console.log(`ðŸ“¥ [CONTROLLER] Datos recibidos: fecha=${fecha_cita}, hora=${hora_inicio}, user=${userId}, servicio=${id_servicio || 'sin cambio'}`);
 
       // Verificar que la cita pertenece al usuario
       const cita = await citaService.obtenerCitaPorId(parsedId);
@@ -763,25 +938,25 @@ class CitaController {
         });
       }
 
-      console.log(`📊 [CONTROLLER] Cita original: fecha=${cita.fecha_cita}, ediciones=${cita.ediciones_realizadas}/${cita.ediciones_maximas}`);
+      console.log(`ðŸ“Š [CONTROLLER] Cita original: fecha=${cita.fecha_cita}, ediciones=${cita.ediciones_realizadas}/${cita.ediciones_maximas}`);
 
-      // ✅ Verificar límite de ediciones realizado
+      // âœ… Verificar lÃ­mite de ediciones realizado
       if (cita.ediciones_realizadas >= cita.ediciones_maximas) {
         return res.status(400).json({
           success: false,
-          message: `Esta cita ha alcanzado el límite máximo de ${cita.ediciones_maximas} ediciones permitidas`
+          message: `Esta cita ha alcanzado el lÃ­mite mÃ¡ximo de ${cita.ediciones_maximas} ediciones permitidas`
         });
       }
 
       // Usar el agente asignado actual o null si no hay
       const idAgenteFinal = cita.id_agente_asignado || null;
-      // Mantener estado 'solicitada' si la cita aún no ha avanzado en el flujo
+      // Mantener estado 'solicitada' si la cita aÃºn no ha avanzado en el flujo
       const estadoFinal = cita.id_estado_cita === 1 ? 1 : 4; // 1 = solicitada, 4 = re agendada
 
-      console.log(`🔄 [CONTROLLER] Llamando método atómico...`);
-      console.log(`🔄 [CONTROLLER] Datos para método atómico:`, {fecha_cita, hora_inicio, hora_fin, idAgenteFinal, userId, id_servicio, estadoFinal});
+      console.log(`ðŸ”„ [CONTROLLER] Llamando mÃ©todo atÃ³mico...`);
+      console.log(`ðŸ”„ [CONTROLLER] Datos para mÃ©todo atÃ³mico:`, { fecha_cita, hora_inicio, hora_fin, idAgenteFinal, userId, id_servicio, estadoFinal });
 
-      // ✅ OPERACIÓN ATÓMICA: Incrementar contador y actualizar cita en una transacción
+      // âœ… OPERACIÃ“N ATÃ“MICA: Incrementar contador y actualizar cita en una transacciÃ³n
       const citaReagendada = await citaService.incrementarContadorEdicionesActualizar(parsedId, {
         fecha_cita,
         hora_inicio,
@@ -794,12 +969,12 @@ class CitaController {
         id_usuario_realizo: userId
       });
 
-      console.log(`✅ [CONTROLLER] Cita reagendada exitosamente! Fecha nueva: ${citaReagendada.fecha_cita}, Ediciones: ${citaReagendada.ediciones_realizadas}`);
+      console.log(`âœ… [CONTROLLER] Cita reagendada exitosamente! Fecha nueva: ${citaReagendada.fecha_cita}, Ediciones: ${citaReagendada.ediciones_realizadas}`);
 
-      // ✅ IMPORTANTE: El objeto citaReagendada YA incluye los includes completos, debe mostrar ediciones=1
-      // Si muestra ediciones=0 es porque el método NO incrementó, pero el método terminó sin error
+      // âœ… IMPORTANTE: El objeto citaReagendada YA incluye los includes completos, debe mostrar ediciones=1
+      // Si muestra ediciones=0 es porque el mÃ©todo NO incrementÃ³, pero el mÃ©todo terminÃ³ sin error
       // Esto es el problema principal
-      console.log(`🔍 [CONTROLLER] DETALLES de respuesta:`, {
+      console.log(`ðŸ” [CONTROLLER] DETALLES de respuesta:`, {
         fecha: citaReagendada.fecha_cita,
         hora: citaReagendada.hora_inicio,
         ediciones: citaReagendada.ediciones_realizadas,
@@ -812,13 +987,20 @@ class CitaController {
         logger.error(`[EMAIL][CITA] No se pudo notificar reagendamiento de cita ${parsedId}: ${emailError.message}`);
       }
 
+      this.emitirEventosTiempoRealCita({
+        action: 'rescheduled_by_user',
+        cita: citaReagendada,
+        appointmentId: parsedId,
+        extraAffectedUserIds: [userId],
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Cita reagendada exitosamente',
         data: citaReagendada
       });
     } catch (error) {
-      logger.error(`❌ Error reagendando cita ${req.params.id} por usuario ${req.user.id}: ${error.message}`);
+      logger.error(`âŒ Error reagendando cita ${req.params.id} por usuario ${req.user.id}: ${error.message}`);
       next(error);
     }
   }

@@ -33,6 +33,41 @@ const Sale = sequelize.define('Sale', {
     allowNull: false,
     field: 'medio_pago'
   },
+  tipo_doc_vendedor: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    field: 'tipo_doc_vendedor'
+  },
+  numero_doc_vendedor: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    field: 'numero_doc_vendedor'
+  },
+  nombre_vendedor: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    field: 'nombre_vendedor'
+  },
+  correo_vendedor: {
+    type: DataTypes.STRING(150),
+    allowNull: true,
+    field: 'correo_vendedor'
+  },
+  telefono_vendedor: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    field: 'telefono_vendedor'
+  },
+  id_estado_venta: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'id_estado_venta'
+  },
+  estado_seguimiento: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    field: 'estado_seguimiento'
+  },
   estado: {
     type: DataTypes.STRING(50),
     allowNull: false,

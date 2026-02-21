@@ -1,10 +1,19 @@
 const Joi = require('joi');
 
-const leaseStatuses = ['Activo', 'Pendiente', 'Finalizado', 'Cancelado'];
+const leaseStatuses = ['Activo', 'Pendiente', 'Debe', 'Finalizado', 'Cancelado', 'Al día', 'Recuperación'];
 
 const createLeaseSchema = Joi.object({
   id_cliente: Joi.number().integer().required(),
   id_inmueble: Joi.number().integer().required(),
+  id_codeudor: Joi.number().integer().optional(),
+  codeudor: Joi.object({
+    tipo_documento: Joi.string().required(),
+    numero_documento: Joi.string().required(),
+    nombre_completo: Joi.string().allow('', null),
+    apellido_completo: Joi.string().allow('', null),
+    correo: Joi.string().email().allow('', null),
+    telefono: Joi.string().allow('', null)
+  }).optional(),
   fecha_inicio: Joi.date().iso().required(),
   fecha_finalizacion: Joi.date().iso().required(),
   valor_mensual: Joi.number().positive().required()
@@ -13,11 +22,26 @@ const createLeaseSchema = Joi.object({
 const updateLeaseSchema = Joi.object({
   id_cliente: Joi.number().integer(),
   id_inmueble: Joi.number().integer(),
+  id_codeudor: Joi.number().integer().allow(null),
+  codeudor: Joi.object({
+    tipo_documento: Joi.string().required(),
+    numero_documento: Joi.string().required(),
+    nombre_completo: Joi.string().allow('', null),
+    apellido_completo: Joi.string().allow('', null),
+    correo: Joi.string().email().allow('', null),
+    telefono: Joi.string().allow('', null)
+  }).optional(),
   fecha_inicio: Joi.date().iso(),
   fecha_finalizacion: Joi.date().iso(),
   valor_mensual: Joi.number().positive(),
   estado: Joi.string().valid(...leaseStatuses)
 }).min(1);
+
+const updateLeaseStatusSchema = Joi.object({
+  estado: Joi.string().valid(...leaseStatuses).required(),
+  comentario: Joi.string().max(500).allow('', null),
+  descripcion: Joi.string().max(500).allow('', null) // alias para compatibilidad con BD
+});
 
 const createPaymentSchema = Joi.object({
   fecha_cobro: Joi.date().iso().required(),
@@ -45,6 +69,7 @@ const createReceiptSchema = Joi.object({
 module.exports = {
   createLeaseSchema,
   updateLeaseSchema,
+  updateLeaseStatusSchema,
   createPaymentSchema,
   updatePaymentSchema,
   createReceiptSchema

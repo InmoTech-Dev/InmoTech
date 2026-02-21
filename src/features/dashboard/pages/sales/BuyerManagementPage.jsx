@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { FaUserPlus, FaEye, FaEdit, FaSearch, FaTrash, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FaUserPlus, FaSearch, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone } from 'lucide-react';
 import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
@@ -32,6 +32,8 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
         montoFinanciado: buyer.montoFinanciado || buyer.compra?.monto_financiado || "",
         observaciones: buyer.observaciones || buyer.compra?.observaciones || "",
         inmueble: buyer.inmueble || buyer.compra?.inmueble || null,
+        ultimaVenta: buyer.ultima_venta || buyer.compra || null,
+        inmueblesComprados: (buyer.inmueble || buyer.compra?.inmueble) ? [buyer.inmueble || buyer.compra?.inmueble] : [],
         formData: buyer.formData || formData,
         compra: buyer.compra || null,
         raw: buyer
@@ -101,7 +103,28 @@ export function BuyersManagementPage() {
     }, [searchTerm, fetchBuyers]);
 
     // --- FILTRO DE BÚSQUEDA ---
-    const filteredBuyers = compradores;
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const filteredBuyers = normalizedSearch
+        ? compradores.filter((buyer) => {
+              const fullName = [
+                  buyer.primerNombre,
+                  buyer.segundoNombre,
+                  buyer.primerApellido,
+                  buyer.segundoApellido,
+              ]
+                  .filter(Boolean)
+                  .join(" ")
+                  .toLowerCase();
+
+              return (
+                  fullName.includes(normalizedSearch) ||
+                  (buyer.documento || "").toLowerCase().includes(normalizedSearch) ||
+                  (buyer.tipoDocumento || "").toLowerCase().includes(normalizedSearch) ||
+                  (buyer.correo || "").toLowerCase().includes(normalizedSearch) ||
+                  (buyer.telefono || "").toLowerCase().includes(normalizedSearch)
+              );
+          })
+        : compradores;
 
     // --- HANDLERS GENERALES ---
     const handleCloseForm = () => {
@@ -387,20 +410,17 @@ export function BuyersManagementPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.3 }}
                 >
-                {/* TABLA CON ESTILO UNIFICADO */}
+                {/* TABLA ESTILO ARRENDATARIOS */}
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Tipo doc</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">#Documento</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Primer nombre</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Segundo nombre</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Primer apellido</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Segundo apellido</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Correo</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Teléfono</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Información Personal</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Documento</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Inmueble Asignado</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
                                     <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
@@ -408,7 +428,7 @@ export function BuyersManagementPage() {
                                     {isLoading ? (
                                         <tr>
                                             <td
-                                                colSpan="9"
+                                                colSpan="6"
                                             className="px-6 py-8 text-center text-slate-500"
                                             >
                                                 <div className="flex items-center justify-center gap-2">
@@ -418,46 +438,62 @@ export function BuyersManagementPage() {
                                             </td>
                                         </tr>
                                     ) : filteredBuyers.length > 0 ? (
-                                        filteredBuyers.map((c) => (
+                                        filteredBuyers.map((c) => {
+                                            const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
+                                            const estado = c.estado || 'Activo';
+                                            const estadoClass =
+                                              estado.toLowerCase() === 'activo'
+                                                ? 'bg-green-100 text-green-700 border-green-200'
+                                                : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                                            return (
                                             <tr
                                                 key={c.id}
                                                 className="hover:bg-slate-50 transition-colors"
                                             >
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.tipoDocumento}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700 font-medium">{c.documento}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.primerNombre}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-500">
-                                                    {c.segundoNombre || "-"}
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="text-sm font-semibold text-slate-800">{nombreCompleto || 'Sin nombre'}</div>
+                                                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                                                        <Mail className="w-3 h-3" />
+                                                        {c.correo || 'Sin correo'}
+                                                    </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.primerApellido}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-500">
-                                                    {c.segundoApellido || "-"}
+                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                    <div className="text-xs text-slate-500">Tipo</div>
+                                                    <div className="font-medium">{c.tipoDocumento || 'N/D'}</div>
+                                                    <div className="text-xs text-slate-500 mt-1">Número</div>
+                                                    <div className="text-sm font-semibold text-slate-800">{c.documento || 'N/D'}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-sm text-slate-600">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <Home className="w-4 h-4 text-slate-400" />
+                                                        <span className="text-xs text-slate-500">
+                                                            {c.inmueble
+                                                                ? (c.inmueble.titulo ||
+                                                                    c.inmueble.registro_inmobiliario ||
+                                                                    c.inmueble.direccion ||
+                                                                    'Inmueble asignado')
+                                                                : 'Sin inmuebles asignados'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Phone className="w-4 h-4 text-slate-400" />
+                                                        <span>{c.telefono || 'Sin teléfono'}</span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <a
-                                                        href={`mailto:${c.correo}`}
-                                                        className="text-blue-600 hover:text-blue-800 transition-colors font-medium"
-                                                    >
-                                                        {c.correo}
-                                                    </a>
+                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${estadoClass}`}>
+                                                        {estado}
+                                                    </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.telefono}</td>
                                                 <td className="px-6 py-4 text-center">
                                                     <div className="flex gap-2 justify-center">
                                                         <motion.button
                                                             whileHover={{ scale: 1.1 }}
                                                             whileTap={{ scale: 0.9 }}
-                                                            aria-label="Editar comprador"
-                                                            className="text-green-600 hover:text-green-800 transition-colors p-1 rounded-lg hover:bg-green-50"
-                                                            onClick={() => handleEditClick(c)}
-                                                        >
-                                                            <Edit className="w-4 h-4" />
-                                                        </motion.button>
-                                                        <motion.button
-                                                            whileHover={{ scale: 1.1 }}
-                                                            whileTap={{ scale: 0.9 }}
                                                             aria-label="Ver comprador"
-                                                            className="text-sky-600 hover:text-sky-800 transition-colors p-1 rounded-lg hover:bg-sky-50"
+                                                            className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
                                                             onClick={() => handleViewClick(c)}
                                                         >
                                                             <Eye className="w-4 h-4" />
@@ -465,8 +501,17 @@ export function BuyersManagementPage() {
                                                         <motion.button
                                                             whileHover={{ scale: 1.1 }}
                                                             whileTap={{ scale: 0.9 }}
+                                                            aria-label="Editar comprador"
+                                                            className="p-2 text-green-600 hover:text-green-800 transition-colors"
+                                                            onClick={() => handleEditClick(c)}
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </motion.button>
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.1 }}
+                                                            whileTap={{ scale: 0.9 }}
                                                             aria-label="Eliminar comprador"
-                                                            className="text-red-600 hover:text-red-800 transition-colors p-1 rounded-lg hover:bg-red-50"
+                                                            className="p-2 text-red-600 hover:text-red-800 transition-colors"
                                                             onClick={() => handleDeleteRequest(c)}
                                                         >
                                                             <Trash2 className="w-4 h-4" />
@@ -474,11 +519,11 @@ export function BuyersManagementPage() {
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))
+                                        )})
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan="9"
+                                                colSpan="6"
                                                 className="px-6 py-8 text-center text-slate-500"
                                             >
                                                 <div className="flex flex-col items-center gap-2">

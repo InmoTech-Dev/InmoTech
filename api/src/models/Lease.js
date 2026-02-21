@@ -54,6 +54,11 @@ const Lease = sequelize.define('Lease', {
     allowNull: true,
     field: 'descripcion_garantia'
   },
+  id_codeudor: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'id_codeudor'
+  },
   estado: {
     type: DataTypes.STRING(50),
     allowNull: false,

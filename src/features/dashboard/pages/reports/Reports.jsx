@@ -14,6 +14,7 @@ import { uploadToCloudinary } from '../../../../shared/services/cloudinary'
 import { Grid3X3, List } from 'lucide-react'
 import * as XLSX from "xlsx";
 import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog'
+import AdminReportsView from './AdminReportsView'
 
 
 const ReportsContent = () => {
@@ -44,19 +45,34 @@ const ReportsContent = () => {
     try {
       const data = await reportesInmobiliariosService.listarReportes()
       const rows = Array.isArray(data) ? data : (data?.data || [])
-      const mapped = rows.map((r) => ({
-        id: `J${String(r.id_reporte ?? r.id ?? '').toString().padStart(3, '0')}`,
-        referencia: r.id_reporte ?? r.id ?? '',
-        ubicacion: r.inmueble_ciudad || '',
-        tipoInmueble: r.inmueble_categoria || '',
-        // Usar el propietario real del inmueble, no quien creó el reporte
-        propietario: r.propietario_nombre || r.propietario || '',
-        // Responsable: quien creó/reportó el reporte
-        responsable: r.reporta_nombre || '',
-        tipoReporte: r.tipo_reporte || '',
-        fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
-        estado: r.estado || 'Pendiente',
-      }))
+      console.log('--- DEBUG: RAW REPORTS FROM API (first row) ---');
+      console.log(JSON.stringify(rows[0], null, 2));
+      const mapped = rows.map((r) => {
+        // Extraer datos del inmueble buscando en varios lugares posibles
+        const inm = r.inmueble || {};
+        const ciudad = r.inmueble_ciudad || inm.ciudad || '';
+        const categoria = r.inmueble_categoria || inm.categoria || '';
+        const titulo = r.inmueble_titulo || inm.titulo || r.titulo || '';
+        const direccion = r.inmueble_direccion || inm.direccion || '';
+
+        return {
+          id: `J${String(r.id_reporte ?? r.id ?? '').toString().padStart(3, '0')}`,
+          id_reporte: r.id_reporte ?? r.id ?? '', // ID numérico real
+          referencia: r.inmueble_referencia || r.registro_inmobiliario || '', // Alfanumérico del inmueble
+          ubicacion: ciudad,
+          tipoInmueble: categoria,
+          nombreInmueble: titulo || `Propiedad Ref: ${r.inmueble_referencia || r.registro_inmobiliario || ''}`,
+          direccionInmueble: direccion,
+          // Usar el propietario real del inmueble, no quien creó el reporte
+          propietario: r.propietario_nombre || r.propietario || '',
+          // Responsable: quien creó/reportó el reporte
+          responsable: r.reporta_nombre || '',
+          prioridad: r.prioridad || 'Media',
+          tipoReporte: (r.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento'),
+          fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
+          estado: r.estado || 'Pendiente',
+        };
+      })
       setDbReports(mapped)
     } catch (err) {
       setDbError(err?.message || 'Error al cargar reportes')
@@ -186,14 +202,14 @@ const ReportsContent = () => {
       detailedReport.tipoInmueble = report.tipoInmueble || detailedReport.inmueble_categoria || ''
       // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
       detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
-      detailedReport.referencia = report.referencia || detailedReport.referencia || reportId
-      detailedReport.tipoReporte = report.tipoReporte || detailedReport.tipo_reporte || ''
+      detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
+      detailedReport.prioridad = report.prioridad || detailedReport.prioridad || 'Media'
       // Responsable: primero del detalle del backend (reportadoPor), luego del shallow report
       detailedReport.responsable =
         detailedReport.reportadoPor?.nombre_completo ||
-        formatResponsableName(detailedReport.reportadoPor) ||
         report.responsable ||
         'No asignado'
       detailedReport.descripcion = detailedReport.descripcion || ''
@@ -255,8 +271,8 @@ const ReportsContent = () => {
       detailedReport.tipoInmueble = report.tipoInmueble || detailedReport.inmueble_categoria || ''
       // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
       detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
-      detailedReport.referencia = report.referencia || detailedReport.referencia || reportId
-      detailedReport.tipoReporte = report.tipoReporte || detailedReport.tipo_reporte || ''
+      detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
       detailedReport.responsable = report.responsable || detailedReport.responsable || 'No asignado'
@@ -1051,37 +1067,49 @@ const ReportsContent = () => {
         onToggleShowCancelled={() => setShowCancelled(v => !v)}
       />
 
-      <div className='flex items-center justify-end gap-3'>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setViewMode(viewMode === 'table' ? 'board' : 'table')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${viewMode === 'board'
-            ? 'bg-green-600 text-white shadow-lg'
-            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-green-300'
-            }`}
-        >
-          {viewMode === 'table' ? <Grid3X3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
-          {viewMode === 'table' ? 'Vista Kanban' : 'Vista Tabla'}
-        </motion.button>
-      </div>
-
-      {viewMode === 'board' ? (
-        <ReportsKanban
-          reports={displayedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onCreate={handleNewReport}
-          onChangeEstado={handleChangeEstadoRequest}
-          showCancelled={showCancelled}
+      {user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r)) ? (
+        <AdminReportsView
+          allReports={dbReports}
+          onViewReport={handleViewReport}
+          onEditReport={handleEditReport}
+          onDownloadPDF={handleDownloadReportPDF}
+          loading={dbLoading}
         />
       ) : (
-        <ReportsTable
-          reports={displayedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onDownloadPDF={handleDownloadReportPDF}
-        />
+        <>
+          <div className='flex items-center justify-end gap-3'>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setViewMode(viewMode === 'table' ? 'board' : 'table')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${viewMode === 'board'
+                ? 'bg-green-600 text-white shadow-lg'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-green-300'
+                }`}
+            >
+              {viewMode === 'table' ? <Grid3X3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
+              {viewMode === 'table' ? 'Vista Kanban' : 'Vista Tabla'}
+            </motion.button>
+          </div>
+
+          {viewMode === 'board' ? (
+            <ReportsKanban
+              reports={displayedReports}
+              onView={handleViewReport}
+              onEdit={handleEditReport}
+              onCreate={handleNewReport}
+              onChangeEstado={handleChangeEstadoRequest}
+              showCancelled={showCancelled}
+            />
+          ) : (
+            <ReportsTable
+              reports={displayedReports}
+              onView={handleViewReport}
+              onEdit={handleEditReport}
+              onDownloadPDF={handleDownloadReportPDF}
+            />
+          )}
+        </>
       )}
 
       {/* Confirmation Dialog for Status Change */}

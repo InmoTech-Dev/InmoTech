@@ -116,7 +116,7 @@ class ReportesInmobiliariosService {
           {
             model: Inmueble,
             as: 'inmueble',
-            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria']
+            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria', 'titulo']
           },
           {
             model: Persona,
@@ -135,7 +135,8 @@ class ReportesInmobiliariosService {
       let propietariosPorInmueble = {};
       if (reportIds.length > 0) {
         const propietariosRows = await sequelize.query(`
-          SELECT pi.id_inmueble, p.nombre_completo AS propietario_nombre
+          SELECT pi.id_inmueble, 
+                 TRIM(ISNULL(p.nombre_completo, '') + ' ' + ISNULL(p.apellido_completo, '')) AS propietario_nombre
           FROM Propiedad_inmueble pi
           LEFT JOIN Personas p ON p.id_persona = pi.id_persona
           WHERE pi.id_inmueble IN (:ids) AND pi.estado = 'Activo'
@@ -158,6 +159,9 @@ class ReportesInmobiliariosService {
         observaciones_resolucion: r.observaciones_resolucion,
         inmueble_ciudad: r.inmueble?.ciudad,
         inmueble_categoria: r.inmueble?.categoria,
+        inmueble_titulo: r.inmueble?.titulo,
+        inmueble_direccion: r.inmueble?.direccion,
+        inmueble_referencia: r.inmueble?.registro_inmobiliario,
         // Propietario real del inmueble (no quien creó el reporte)
         propietario_nombre: propietariosPorInmueble[r.id_inmueble] || '',
         reporta_nombre: r.reportadoPor?.nombre_completo
@@ -178,7 +182,7 @@ class ReportesInmobiliariosService {
           {
             model: Inmueble,
             as: 'inmueble',
-            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria']
+            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria', 'titulo']
           },
           {
             model: Persona,
@@ -472,7 +476,8 @@ class ReportesInmobiliariosService {
     return rows.map(r => ({
       id_inmueble: r.id_inmueble,
       referencia: r.registro_inmobiliario,
-      nombre: r.direccion,
+      nombre: r.titulo || r.direccion,
+      direccion: r.direccion,
       ciudad: r.ciudad,
       categoria: r.categoria,
       propietario: r.propietario || ''

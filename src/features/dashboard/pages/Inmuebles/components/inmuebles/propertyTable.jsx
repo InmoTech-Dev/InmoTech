@@ -3,13 +3,20 @@ import { Building2 } from 'lucide-react';
 import { ActionButtons } from './actionButton';
 import { getEstadoColor, getEstadoDotColor } from '../../utils/helpers';
 
-const ESTADOS_DISPONIBLES = [
-  'Disponible',
-  'Vendido',
-  'Arrendado',
-  'En proceso de venta',
-  'En proceso de arrendamiento'
-];
+const ESTADOS_POR_OPERACION = {
+  Arriendo: ['Disponible', 'En proceso de arrendamiento', 'Arrendado'],
+  Venta: ['Disponible', 'En proceso de venta', 'Vendido'],
+  'Venta y Arriendo': [
+    'Disponible',
+    'En proceso de venta',
+    'Vendido',
+    'En proceso de arrendamiento',
+    'Arrendado'
+  ]
+};
+
+const getEstadosDisponibles = (operacion) =>
+  ESTADOS_POR_OPERACION[operacion] || ESTADOS_POR_OPERACION['Venta y Arriendo'];
 
 export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange, onToggleFeatured }) => {
   return (
@@ -43,6 +50,11 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
               properties.map((property) => {
                 const coverImage = property.imagenes?.[0];
                 const fallback = property.titulo?.[0]?.toUpperCase() || property.tipo?.[0] || 'I';
+                const estadosDisponibles = getEstadosDisponibles(property.operacion);
+                const estadoActual = property.estado || 'Disponible';
+                const selectedEstado = estadosDisponibles.includes(estadoActual)
+                  ? estadoActual
+                  : 'Disponible';
 
                 return (
                   <tr key={property.id} className="hover:bg-slate-50 transition-colors">
@@ -73,10 +85,10 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                       {onStatusChange ? (
                         <select
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7 w-28`}
-                          value={property.estado || 'Disponible'}
+                          value={selectedEstado}
                           onChange={(e) => onStatusChange(property, e.target.value)}
                         >
-                          {ESTADOS_DISPONIBLES.map((estado) => (
+                          {estadosDisponibles.map((estado) => (
                             <option key={estado} value={estado}>
                               {estado}
                             </option>

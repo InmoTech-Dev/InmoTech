@@ -14,6 +14,26 @@ import { VerFichaTecnicaModal } from '../Inmuebles/components/inmuebles/verFicha
 // Hooks
 import { useInmuebles } from '../Inmuebles/hooks/useInmuebles';
 
+const ESTADOS_POR_OPERACION = {
+  Arriendo: ['Disponible', 'En proceso de arrendamiento', 'Arrendado'],
+  Venta: ['Disponible', 'En proceso de venta', 'Vendido'],
+  'Venta y Arriendo': [
+    'Disponible',
+    'En proceso de arrendamiento',
+    'Arrendado',
+    'En proceso de venta',
+    'Vendido'
+  ]
+};
+
+const resolveEstadoFrontend = (operacion, estadoActual) => {
+  const estadosPermitidos = ESTADOS_POR_OPERACION[operacion] || ESTADOS_POR_OPERACION['Venta y Arriendo'];
+  if (estadosPermitidos.includes(estadoActual)) {
+    return estadoActual;
+  }
+  return 'Disponible';
+};
+
 const InmuebleDashboardPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -45,7 +65,12 @@ const InmuebleDashboardPage = () => {
   const handleSaveInmueble = async (inmuebleData, esEdicion) => {
     try {
       if (esEdicion) {
-        await actualizarInmueble(inmuebleData.id, inmuebleData);
+        const estadoActual = inmuebleEditar?.estado || 'Disponible';
+        const estadoFrontend = resolveEstadoFrontend(inmuebleData.operacion, estadoActual);
+        await actualizarInmueble(inmuebleData.id, {
+          ...inmuebleData,
+          estado_frontend: estadoFrontend
+        });
       } else {
         await crearInmueble(inmuebleData);
       }
@@ -84,7 +109,10 @@ const InmuebleDashboardPage = () => {
 
   const handleEstadoChange = async (inmueble, nuevoEstado) => {
     try {
-      await actualizarInmueble(inmueble.id, { ...inmueble, estado: nuevoEstado });
+      await actualizarInmueble(inmueble.id, {
+        operacion: inmueble.operacion,
+        estado_frontend: nuevoEstado
+      });
     } catch (err) {
       console.error('Error actualizando estado del inmueble:', err);
     }

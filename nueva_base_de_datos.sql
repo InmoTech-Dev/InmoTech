@@ -77,7 +77,7 @@ BEGIN
         id_persona INT PRIMARY KEY IDENTITY(1,1),
 
         -- Información de documento (permite identificación sin duplicados)
-        tipo_documento VARCHAR(5) NOT NULL CHECK (tipo_documento IN ('CC', 'CE', 'NIT', 'Pasaporte', 'TI')),
+        tipo_documento VARCHAR(20) NOT NULL CHECK (tipo_documento IN ('CC', 'CE', 'NIT', 'Pasaporte', 'TI')),
         numero_documento VARCHAR(20) NOT NULL,
 
         -- Nombres completos (unificados para simplicidad y mejor ordenamiento)

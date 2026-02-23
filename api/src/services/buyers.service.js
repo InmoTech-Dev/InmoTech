@@ -1,7 +1,6 @@
-const { Op } = require('sequelize');
-const { Buyer, Persona } = require('../models');
+const { Buyer, Persona, Sale, Inmueble } = require('../models');
 const { sequelize } = require('../config/database');
-const { Sequelize } = require('sequelize');
+const { Sequelize, Op } = require('sequelize');
 const logger = require('../utils/logger');
 
 const PERSONA_ATTRS = [
@@ -92,6 +91,40 @@ class BuyerService {
         telefono: personaInstance.telefono
       }
     };
+  }
+
+  async _getLatestSalesByBuyerIds(buyerIds = []) {
+    if (!buyerIds.length) return {};
+
+    const sales = await Sale.findAll({
+      where: { id_comprador: { [Op.in]: buyerIds } },
+      include: [
+        {
+          association: 'inmueble',
+          attributes: [
+            'id_inmueble',
+            'registro_inmobiliario',
+            'titulo',
+            'direccion',
+            'ciudad',
+            'departamento',
+            'categoria',
+            'precio_venta',
+            'precio_arriendo'
+          ]
+        }
+      ],
+      order: [
+        ['id_comprador', 'ASC'],
+        ['fecha_venta', 'DESC'],
+        ['id_venta', 'DESC']
+      ]
+    });
+
+    return sales.reduce((acc, sale) => {
+      if (!acc[sale.id_comprador]) acc[sale.id_comprador] = sale;
+      return acc;
+    }, {});
   }
 
   async upsertPersona(personaData, transaction) {
@@ -243,7 +276,36 @@ class BuyerService {
         '$buyer.id_comprador$': id
       })
     );
-    return this.normalizePersonaRecord(persona);
+    const normalized = this.normalizePersonaRecord(persona);
+    if (!normalized) return null;
+
+    const salesMap = await this._getLatestSalesByBuyerIds([normalized.id_buyer]);
+    const sale = salesMap[normalized.id_buyer];
+
+    return {
+      ...normalized,
+      ultima_venta: sale
+        ? {
+            id_venta: sale.id_venta,
+            fecha_venta: sale.fecha_venta,
+            valor_venta: sale.valor_venta,
+            estado: sale.estado
+          }
+        : null,
+      inmueble: sale?.inmueble
+        ? {
+            id_inmueble: sale.inmueble.id_inmueble,
+            registro_inmobiliario: sale.inmueble.registro_inmobiliario,
+            titulo: sale.inmueble.titulo,
+            direccion: sale.inmueble.direccion,
+            ciudad: sale.inmueble.ciudad,
+            departamento: sale.inmueble.departamento,
+            categoria: sale.inmueble.categoria,
+            precio_venta: sale.inmueble.precio_venta,
+            precio_arriendo: sale.inmueble.precio_arriendo
+          }
+        : null
+    };
   }
 
   async getAllBuyers(filters = {}) {
@@ -272,8 +334,42 @@ class BuyerService {
       ]
     });
 
+    const buyerIds = personas
+      .map((p) => p?.buyer?.id_comprador)
+      .filter(Boolean);
+
+    const salesMap = await this._getLatestSalesByBuyerIds(buyerIds);
+
     return personas
-      .map((p) => this.normalizePersonaRecord(p))
+      .map((p) => {
+        const base = this.normalizePersonaRecord(p);
+        if (!base) return null;
+        const sale = salesMap[base.id_buyer];
+        return {
+          ...base,
+          ultima_venta: sale
+            ? {
+                id_venta: sale.id_venta,
+                fecha_venta: sale.fecha_venta,
+                valor_venta: sale.valor_venta,
+                estado: sale.estado
+              }
+            : null,
+          inmueble: sale?.inmueble
+            ? {
+                id_inmueble: sale.inmueble.id_inmueble,
+                registro_inmobiliario: sale.inmueble.registro_inmobiliario,
+                titulo: sale.inmueble.titulo,
+                direccion: sale.inmueble.direccion,
+                ciudad: sale.inmueble.ciudad,
+                departamento: sale.inmueble.departamento,
+                categoria: sale.inmueble.categoria,
+                precio_venta: sale.inmueble.precio_venta,
+                precio_arriendo: sale.inmueble.precio_arriendo
+              }
+            : null
+        };
+      })
       .filter(Boolean);
   }
 

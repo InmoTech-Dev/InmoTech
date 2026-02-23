@@ -173,9 +173,9 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       prev.map((mod, i) =>
         i === index
           ? {
-            ...mod,
-            permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
-          }
+              ...mod,
+              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
+            }
           : mod
       )
     );

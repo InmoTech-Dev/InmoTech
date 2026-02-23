@@ -154,14 +154,14 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
       prev.map((mod, i) =>
         i === index
           ? {
-            ...mod,
-            enabled: !mod.enabled,
-            permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
-            permissions: mod.permisos.reduce((acc, permiso) => {
-              acc[permiso] = !mod.enabled;
-              return acc;
-            }, {})
-          }
+              ...mod,
+              enabled: !mod.enabled,
+              permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
+              permissions: mod.permisos.reduce((acc, permiso) => {
+                acc[permiso] = !mod.enabled;
+                return acc;
+              }, {})
+            }
           : mod
       )
     );
@@ -173,9 +173,9 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
       prev.map((mod, i) =>
         i === index
           ? {
-            ...mod,
-            permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
-          }
+              ...mod,
+              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
+            }
           : mod
       )
     );
@@ -193,12 +193,12 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
               return acc;
             }, {});
 
-            return {
-              ...mod,
-              permissions: nextPermissions,
-              permisosSeleccionados: nextSelection,
-            };
-          })()
+              return {
+                ...mod,
+                permissions: nextPermissions,
+                permisosSeleccionados: nextSelection,
+              };
+            })()
           : mod
       )
     );

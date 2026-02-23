@@ -68,6 +68,7 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
     montoFinanciado: buyer.montoFinanciado || compra?.monto_financiado || '',
     observaciones: buyer.observaciones || compra?.observaciones || '',
     inmueble: buyer.inmueble || compra?.inmueble || null,
+    ultima_venta: buyer.ultima_venta || buyer.compra || null,
     formData: buyer.formData || formData,
     compra,
     raw: buyer,

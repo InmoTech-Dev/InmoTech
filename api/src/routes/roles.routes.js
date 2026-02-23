@@ -8,16 +8,12 @@ const {
   actualizarRolSchema
 } = require('../validators/roles.validator');
 
-// Aplicar rate limiting menos estricto para operaciones de lectura
-const { generalLimiter } = require('../middlewares/security.middleware');
-
 // ========================================
 // RUTAS PÚBLICAS CON AUTENTICACIÓN BÁSICA
 // ========================================
 
 // Listar roles (solo usuarios administrativos pueden ver roles)
 router.get('/',
-  generalLimiter,
   auth.authenticateToken,
   auth.authorizeRoles(['Super Administrador', 'Administrador']),
   rolesController.listarRoles
@@ -25,7 +21,6 @@ router.get('/',
 
 // Obtener rol por ID (solo Super Admin y Admin)
 router.get('/:id',
-  generalLimiter,
   auth.authenticateToken,
   auth.authorizeRoles(['Super Administrador', 'Administrador']),
   rolesController.obtenerRol
@@ -37,27 +32,24 @@ router.get('/:id',
 
 // Crear rol (solo Super Admin y Admin)
 router.post('/',
-  generalLimiter,
   auth.authenticateToken,
-  auth.authorizeRoles(['Super Administrador', 'Administrador']),
+  auth.authorizeRoles(['Super Administrador']),
   validate(crearRolSchema),
   rolesController.crearRol
 );
 
 // Actualizar rol (solo Super Admin y Admin)
 router.patch('/:id',
-  generalLimiter,
   auth.authenticateToken,
-  auth.authorizeRoles(['Super Administrador', 'Administrador']),
+  auth.authorizeRoles(['Super Administrador']),
   validate(actualizarRolSchema),
   rolesController.actualizarRol
 );
 
 // ✅ CORREGIDO: Eliminar rol (solo Super Admin y Admin)
 router.delete('/:id',
-  generalLimiter,
   auth.authenticateToken,
-  auth.authorizeRoles(['Super Administrador', 'Administrador']),
+  auth.authorizeRoles(['Super Administrador']),
   rolesController.eliminarRol
 );
 
@@ -67,23 +59,20 @@ router.delete('/:id',
 
 // Asignar rol a persona (Admin+)
 router.post('/:idRol/asignar/:idPersona',
-  generalLimiter,
   auth.authenticateToken,
-  auth.authorizeRoles(['Super Administrador', 'Administrador']),
+  auth.authorizeRoles(['Super Administrador']),
   rolesController.asignarRol
 );
 
 // Remover rol de persona (Admin+)
 router.delete('/:idRol/remover/:idPersona',
-  generalLimiter,
   auth.authenticateToken,
-  auth.authorizeRoles(['Super Administrador', 'Administrador']),
+  auth.authorizeRoles(['Super Administrador']),
   rolesController.removerRol
 );
 
 // Listar roles de una persona (Admin+)
 router.get('/persona/:idPersona',
-  generalLimiter,
   auth.authenticateToken,
   auth.authorizeRoles(['Super Administrador', 'Administrador']),
   rolesController.listarRolesDePersona
@@ -91,7 +80,6 @@ router.get('/persona/:idPersona',
 
 // Listar personas con un rol específico (Admin+)
 router.get('/:idRol/personas',
-  generalLimiter,
   auth.authenticateToken,
   auth.authorizeRoles(['Super Administrador', 'Administrador']),
   rolesController.listarPersonasPorRol

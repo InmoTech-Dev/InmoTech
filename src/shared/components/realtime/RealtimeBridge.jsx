@@ -35,6 +35,10 @@ const WATCHDOG_MAX_COOLDOWN_MS = parseIntervalMs(
   import.meta.env.VITE_REALTIME_WATCHDOG_MAX_COOLDOWN_MS,
   300000
 );
+const WATCHDOG_INITIAL_DELAY_MS = parseIntervalMs(
+  import.meta.env.VITE_REALTIME_WATCHDOG_INITIAL_DELAY_MS,
+  15000
+);
 
 const parseRetryAfterMs = (rawValue) => {
   if (!rawValue) return null;
@@ -57,6 +61,7 @@ const RealtimeBridge = () => {
 
   const fallbackIntervalRef = useRef(null);
   const watchdogIntervalRef = useRef(null);
+  const watchdogStartTimeoutRef = useRef(null);
   const forcedLogoutHandledRef = useRef(false);
   const watchdogRequestInFlightRef = useRef(false);
   const watchdogCooldownUntilRef = useRef(0);
@@ -120,6 +125,11 @@ const RealtimeBridge = () => {
   );
 
   const stopSessionWatchdog = useCallback(() => {
+    if (watchdogStartTimeoutRef.current) {
+      clearTimeout(watchdogStartTimeoutRef.current);
+      watchdogStartTimeoutRef.current = null;
+    }
+
     if (watchdogIntervalRef.current) {
       clearInterval(watchdogIntervalRef.current);
       watchdogIntervalRef.current = null;
@@ -222,11 +232,17 @@ const RealtimeBridge = () => {
   }, [handleForcedLogout, isAuthenticated, shouldForceLogoutFromPayload]);
 
   const startSessionWatchdog = useCallback(() => {
-    if (!REALTIME_ENABLED || !isAuthenticated || watchdogIntervalRef.current) return;
+    if (!REALTIME_ENABLED || !isAuthenticated || watchdogIntervalRef.current || watchdogStartTimeoutRef.current) {
+      return;
+    }
 
-    watchdogIntervalRef.current = setInterval(() => {
+    watchdogStartTimeoutRef.current = setTimeout(() => {
+      watchdogStartTimeoutRef.current = null;
       validateSessionWithWatchdog();
-    }, WATCHDOG_INTERVAL_MS);
+      watchdogIntervalRef.current = setInterval(() => {
+        validateSessionWithWatchdog();
+      }, WATCHDOG_INTERVAL_MS);
+    }, WATCHDOG_INITIAL_DELAY_MS);
   }, [isAuthenticated, validateSessionWithWatchdog]);
 
   const listeners = useMemo(
@@ -291,7 +307,6 @@ const RealtimeBridge = () => {
       sseService.resetForcedDisconnect();
       sseService.connect();
       startSessionWatchdog();
-      validateSessionWithWatchdog();
       realtimeBus.emit('realtime.reconcile_requested', {
         source: 'login',
         occurred_at: new Date().toISOString(),

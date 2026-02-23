@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-// Validación para crear persona (password opcional para flujos con invitación)
+// Validacion para crear persona (alta por invitacion administrativa)
 const crearPersonaSchema = Joi.object({
   tipo_documento: Joi.string()
     .valid('CC', 'CE', 'TI', 'NIT', 'PAS')
@@ -37,19 +37,6 @@ const crearPersonaSchema = Joi.object({
     .allow('', null)
     .optional(),
 
-  password: Joi.string()
-    .min(8)
-    .max(100)
-    .optional(),
-
-  confirmPassword: Joi.string()
-    .valid(Joi.ref('password'))
-    .when('password', {
-      is: Joi.exist(),
-      then: Joi.required(),
-      otherwise: Joi.optional()
-    }),
-
   tiene_cuenta: Joi.boolean()
     .optional()
     .default(false),
@@ -78,15 +65,6 @@ const actualizarPersonaSchema = Joi.object({
     .optional(),
   tipo_documento: Joi.string().valid('CC', 'CE', 'TI', 'NIT', 'PAS').optional(),
   numero_documento: Joi.string().min(5).max(20).pattern(/^[0-9A-Z]+$/).optional(),
-
-  password: Joi.string().min(8).max(100).optional(),
-  confirmPassword: Joi.string()
-    .valid(Joi.ref('password'))
-    .when('password', {
-      is: Joi.exist(),
-      then: Joi.required(),
-      otherwise: Joi.optional()
-    }),
 
   estado: Joi.boolean().optional()
 }).min(1);

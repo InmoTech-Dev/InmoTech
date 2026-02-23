@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, UserPlus, LogOut, LayoutDashboard, ChevronDown, Calendar } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, ChevronDown, Calendar } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/use-toast';
 
@@ -185,12 +185,6 @@ const ActionButtons = ({ className = '', onButtonClick }) => {
   }
 
   const buttons = [
-    {
-      to: '/registro',
-      icon: UserPlus,
-      label: 'Crear cuenta',
-      primary: false
-    },
     {
       to: '/login',
       icon: User,

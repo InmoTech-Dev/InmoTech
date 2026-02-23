@@ -1,7 +1,7 @@
-/**
- * @fileoverview Context de React para gestión global de citas
+﻿/**
+ * @fileoverview Context de React para gestiÃ³n global de citas
  * @module shared/contexts/AppointmentContext
- * @description Provee estado y funciones para manejar citas en toda la aplicación
+ * @description Provee estado y funciones para manejar citas en toda la aplicaciÃ³n
  * @author InmoTech Development Team
  * @version 5.0.0 - Adaptado a estructura con id_cita del backend
  */
@@ -20,6 +20,7 @@ import realtimeBus from '../services/realtimeBus';
 
 const AppointmentContext = createContext(undefined);
 const REALTIME_REFRESH_DEBOUNCE_MS = 450;
+const REALTIME_REFRESH_MIN_GAP_MS = 5000;
 
 export const AppointmentProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
@@ -27,27 +28,39 @@ export const AppointmentProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const { isAuthenticated, user, hasPermission } = useAuth();
   const refreshDebounceRef = useRef(null);
+  const loadAppointmentsInFlightRef = useRef(null);
+  const lastRealtimeRefreshAtRef = useRef(0);
 
   /**
    * Carga las citas desde la API
    */
   const loadAppointments = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log("🌐 Cargando citas desde API...");
-      const citas = await citaApiService.obtenerCitas();
-      console.log(`✅ ${citas?.length || 0} citas cargadas desde API`);
-      setAppointments(citas || []);
-    } catch (err) {
-      console.error("❌ Error al cargar citas:", err.message);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (loadAppointmentsInFlightRef.current) {
+      return loadAppointmentsInFlightRef.current;
     }
+
+    const requestPromise = (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const citas = await citaApiService.obtenerCitas();
+        setAppointments(citas || []);
+      } catch (err) {
+        console.error('Error al cargar citas:', err.message);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    loadAppointmentsInFlightRef.current = requestPromise.finally(() => {
+      loadAppointmentsInFlightRef.current = null;
+    });
+
+    return loadAppointmentsInFlightRef.current;
   }, []);
 
-  // Cargar citas solo si hay autenticación y es un administrativo
+  // Cargar citas solo si hay autenticaciÃ³n y es un administrativo
   useEffect(() => {
     if (isAuthenticated && user?.es_administrativo && hasPermission('citas', 'ver')) {
       loadAppointments();
@@ -62,14 +75,14 @@ export const AppointmentProvider = ({ children }) => {
    */
   const createAppointment = async (appointmentData) => {
     try {
-      console.log("➕ Creando nueva cita en el backend...");
+      console.log("âž• Creando nueva cita en el backend...");
       const citaCreada = await citaApiService.crearCita(appointmentData, user?.id);
-      console.log("✅ Cita creada con ID:", citaCreada.id);
+      console.log("âœ… Cita creada con ID:", citaCreada.id);
 
       setAppointments((prev) => [...prev, citaCreada]);
       return citaCreada;
     } catch (err) {
-      console.error("❌ Error al crear cita:", err.message);
+      console.error("âŒ Error al crear cita:", err.message);
       throw err;
     }
   };
@@ -78,11 +91,11 @@ export const AppointmentProvider = ({ children }) => {
    * Agrega una cita ya existente al estado local
    */
   const addExistingAppointment = (appointment) => {
-    // ✅ Aceptar tanto 'id' como 'id_cita'
+    // âœ… Aceptar tanto 'id' como 'id_cita'
     const appointmentId = appointment.id || appointment.id_cita;
 
     if (!appointmentId) {
-      console.error("❌ Error: Se intentó agregar una cita sin ID");
+      console.error("âŒ Error: Se intentÃ³ agregar una cita sin ID");
       throw new Error("La cita debe tener un ID para ser agregada al estado");
     }
 
@@ -91,11 +104,11 @@ export const AppointmentProvider = ({ children }) => {
     );
 
     if (yaExiste) {
-      console.warn("⚠️ La cita con ID", appointmentId, "ya existe en el estado");
+      console.warn("âš ï¸ La cita con ID", appointmentId, "ya existe en el estado");
       return appointment;
     }
 
-    console.log("➕ Agregando cita existente al estado (ID:", appointmentId, ")");
+    console.log("âž• Agregando cita existente al estado (ID:", appointmentId, ")");
     setAppointments((prev) => [...prev, appointment]);
     return appointment;
   };
@@ -132,10 +145,10 @@ export const AppointmentProvider = ({ children }) => {
         })
       );
 
-      console.log("✅ Cita actualizada");
+      console.log("âœ… Cita actualizada");
       return citaActualizada;
     } catch (err) {
-      console.error("❌ Error al actualizar cita:", err.message);
+      console.error("âŒ Error al actualizar cita:", err.message);
       throw err;
     }
   };
@@ -145,18 +158,18 @@ export const AppointmentProvider = ({ children }) => {
    */
   const deleteAppointment = async (id) => {
     try {
-      console.log("🗑️ Cancelando cita:", id);
+      console.log("ðŸ—‘ï¸ Cancelando cita:", id);
       const citaCancelada = await updateAppointmentStatus(id, 6); // 6 = cancelada
-      console.log("✅ Cita cancelada");
+      console.log("âœ… Cita cancelada");
       return citaCancelada;
     } catch (err) {
-      console.error("❌ Error al cancelar cita:", err.message);
+      console.error("âŒ Error al cancelar cita:", err.message);
       throw err;
     }
   };
 
   /**
-   * ✅ CORREGIDO: Cambia el estado de una cita
+   * âœ… CORREGIDO: Cambia el estado de una cita
    */
   const updateAppointmentStatus = async (idCita, idEstadoCita) => {
     try {
@@ -167,14 +180,14 @@ export const AppointmentProvider = ({ children }) => {
 
       console.log("📥 Cita actualizada recibida del backend:", citaActualizada);
 
-      // Verificar que la respuesta sea válida
+      // Verificar que la respuesta sea vÃ¡lida
       if (!citaActualizada || (!citaActualizada.id && !citaActualizada.id_cita)) {
-        throw new Error("La respuesta del servidor no contiene datos válidos");
+        throw new Error("La respuesta del servidor no contiene datos vÃ¡lidos");
       }
 
       // Mapear el ID de estado a nombre de estado
       const nuevoEstado = citaApiService.mapIdToEstado(citaActualizada.id_estado_cita);
-      console.log(`✅ Nuevo estado mapeado: "${nuevoEstado}" (ID: ${citaActualizada.id_estado_cita})`);
+      console.log(`âœ… Nuevo estado mapeado: "${nuevoEstado}" (ID: ${citaActualizada.id_estado_cita})`);
 
       // Actualizar el estado local
       setAppointments(prev => {
@@ -183,7 +196,7 @@ export const AppointmentProvider = ({ children }) => {
           const citaId = citaActualizada.id || citaActualizada.id_cita;
 
           if (appId === citaId) {
-            console.log("🔄 Actualizando cita en el estado local:", {
+            console.log("ðŸ”„ Actualizando cita en el estado local:", {
               antes: app.estado,
               despues: nuevoEstado
             });
@@ -201,10 +214,10 @@ export const AppointmentProvider = ({ children }) => {
         return updated;
       });
 
-      console.log("✅ Estado local actualizado correctamente");
+      console.log("âœ… Estado local actualizado correctamente");
       return citaActualizada;
     } catch (error) {
-      console.error("❌ Error en updateAppointmentStatus:", error);
+      console.error("âŒ Error en updateAppointmentStatus:", error);
       throw error;
     }
   };
@@ -232,6 +245,16 @@ export const AppointmentProvider = ({ children }) => {
     if (!(isAuthenticated && user?.es_administrativo && hasPermission('citas', 'ver'))) {
       return;
     }
+
+    if (loadAppointmentsInFlightRef.current) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastRealtimeRefreshAtRef.current < REALTIME_REFRESH_MIN_GAP_MS) {
+      return;
+    }
+    lastRealtimeRefreshAtRef.current = now;
 
     if (refreshDebounceRef.current) {
       clearTimeout(refreshDebounceRef.current);
@@ -267,6 +290,7 @@ export const AppointmentProvider = ({ children }) => {
         clearTimeout(refreshDebounceRef.current);
         refreshDebounceRef.current = null;
       }
+      loadAppointmentsInFlightRef.current = null;
     };
   }, [hasPermission, isAuthenticated, scheduleRealtimeRefresh, user?.es_administrativo]);
 
@@ -311,4 +335,5 @@ export const useAppointments = () => {
 };
 
 export default AppointmentContext;
+
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { User, UserPlus, LogOut, LayoutDashboard } from 'lucide-react';
+import { User, LogOut, LayoutDashboard } from 'lucide-react';
 import { routes } from '@/routes';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -125,14 +125,6 @@ const MobileMenu = ({ isOpen, onClose }) => {
           ) : (
             /* Authentication Buttons for non-authenticated users */
             <div className="space-y-2">
-              <Link
-                to="/registro"
-                className="flex items-center justify-center space-x-2 w-full px-4 py-3 border border-white text-white bg-transparent rounded-lg hover:bg-white hover:text-[#00457B] transition-all duration-300"
-                onClick={onClose}
-              >
-                <UserPlus className="h-4 w-4" />
-                <span className="text-sm font-medium">Crear cuenta</span>
-              </Link>
               <Link
                 to="/login"
                 className="flex items-center justify-center space-x-2 w-full px-4 py-3 border border-white text-white bg-transparent rounded-lg hover:bg-white hover:text-[#00457B] transition-all duration-300"

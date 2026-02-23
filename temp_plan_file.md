@@ -1,6 +1,0 @@
-- [x] Revisar el código actual de RoleStep.jsx
-- [x] Entender la estructura de roles en la base de datos
-- [x] Analizar cómo se obtienen y filtran los roles
-- [ ] Modificar el filtro en RoleStep.jsx para excluir Super Administrador
-- [ ] Verificar que el filtro funcione correctamente
-- [ ] Probar la implementación

@@ -29,18 +29,33 @@ class InvitacionService {
   async crearInvitacion({
     id_persona,
     creado_por,
-    tipo = INVITE_TYPES.ADMIN,
+    tipo = null,
     reenvios = 0,
     rol_asignado = null,
-    es_administrativo = false,
+    es_administrativo = null,
     deferEmail = false
   }) {
-    const persona = await Persona.findByPk(id_persona);
+    // Obtener la persona con sus roles si no se proporcionó el tipo o es_administrativo
+    const persona = await Persona.findByPk(id_persona, {
+      include: [{ model: Rol, as: 'roles' }]
+    });
     if (!persona) throw new Error('Persona no encontrada');
 
-    // Soporte para múltiples tipos de invitación.
-    const inviteType = tipo || INVITE_TYPES.ADMIN;
-    const esAdminInvite = es_administrativo || inviteType === INVITE_TYPES.ADMIN;
+    // Determinar si es administrativo basado en roles si no se especificó
+    let esAdminInvite = es_administrativo;
+    let inviteType = tipo;
+
+    if (esAdminInvite === null || !inviteType) {
+      const roles = persona.roles || [];
+      const nombreRoles = roles.map(r => r.nombre_rol);
+      const esAdminReal = nombreRoles.some(r => 
+        ['Administrador', 'Super Administrador', 'Empleado', 'Agente', 'Gerente', 'Supervisor'].includes(r)
+      );
+
+      if (esAdminInvite === null) esAdminInvite = esAdminReal;
+      if (!inviteType) inviteType = esAdminReal ? INVITE_TYPES.ADMIN : INVITE_TYPES.USER;
+      if (!rol_asignado) rol_asignado = nombreRoles[0] || (esAdminReal ? 'Administrativo' : 'Usuario');
+    }
 
     const token = this.generarToken();
     const token_hash = this.hashToken(token);
@@ -144,8 +159,9 @@ class InvitacionService {
       include: [{ model: Persona, as: 'persona', attributes: ['id_persona', 'correo', 'nombre_completo', 'estado'] }]
     });
     if (!invitacion) throw new Error('Invitacion no encontrada');
-    if (invitacion.tipo !== INVITE_TYPES.ADMIN) {
-      throw new Error('Tipo de invitacion no soportado');
+    // Permitir reenvío de cualquier tipo soportado (admin y user)
+    if (invitacion.tipo !== INVITE_TYPES.ADMIN && invitacion.tipo !== INVITE_TYPES.USER) {
+      throw new Error('Tipo de invitacion no soportado para reenvio');
     }
 
     const ahora = new Date();
@@ -171,7 +187,7 @@ class InvitacionService {
     return this.crearInvitacion({
       id_persona: invitacion.id_persona,
       creado_por: invitacion.creado_por || null,
-      tipo: INVITE_TYPES.ADMIN,
+      tipo: invitacion.tipo,
       reenvios: siguienteReenvio
     });
   }
@@ -179,7 +195,7 @@ class InvitacionService {
   async validar(token) {
     const token_hash = this.hashToken(token);
     const invitacion = await Invitacion.findOne({
-      where: { token_hash, tipo: INVITE_TYPES.ADMIN },
+      where: { token_hash },
       include: [{ model: Persona, as: 'persona', attributes: ['id_persona', 'correo', 'nombre_completo'] }]
     });
 
@@ -207,7 +223,7 @@ class InvitacionService {
 
   async aceptar({ token, codigo_6d, password, ip, userAgent }) {
     const token_hash = this.hashToken(token);
-    const invitacion = await Invitacion.findOne({ where: { token_hash, tipo: INVITE_TYPES.ADMIN } });
+    const invitacion = await Invitacion.findOne({ where: { token_hash } });
     if (!invitacion) throw new Error('Invitacion no encontrada o token invalido');
     if (invitacion.usado_en) throw new Error('Invitacion ya utilizada');
     if (new Date() > invitacion.expira_en) throw new Error('Invitacion expirada');

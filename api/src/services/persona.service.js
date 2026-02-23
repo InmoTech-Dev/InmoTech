@@ -244,12 +244,18 @@ class PersonaService {
               personaData.correo_verificado = false;
               personaData.tiene_cuenta = false;
               try {
+                // Obtener roles de la persona para determinar el tipo de invitacion
+                const roles = await persona.getRoles({ transaction: t });
+                const nombreRoles = roles.map(r => r.nombre_rol);
+                const esAdmin = nombreRoles.some(r => ['Administrador', 'Super Administrador', 'Empleado', 'Agente'].includes(r));
+
                 await invitacionService.crearInvitacion({
                   id_persona: personaId,
                   creado_por: updatedBy || null,
-                  tipo: 'admin_invite'
+                  tipo: esAdmin ? 'admin_invite' : 'user_invite',
+                  rol_asignado: nombreRoles[0] || (esAdmin ? 'Administrativo' : 'Usuario')
                 });
-                logger.info(`Invitacion administrativa regenerada para persona ${personaId}`);
+                logger.info(`Invitacion [${esAdmin ? 'administrativa' : 'de usuario'}] regenerada por cambio de correo para persona ${personaId}`);
               } catch (inviteError) {
                 logger.warn(`No se pudo regenerar invitacion de persona ${personaId}: ${inviteError.message}`);
               }

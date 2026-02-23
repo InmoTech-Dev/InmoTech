@@ -213,6 +213,7 @@ class SSEService {
     bind('appointment.changed', (data) => this.emit('appointment.changed', data));
     bind('notification.changed', (data) => this.emit('notification.changed', data));
     bind('user.changed', (data) => this.emit('user.changed', data));
+    bind('report.changed', (data) => this.emit('report.changed', data));
 
     bind('heartbeat', (data) => this.emit('heartbeat', data));
   }

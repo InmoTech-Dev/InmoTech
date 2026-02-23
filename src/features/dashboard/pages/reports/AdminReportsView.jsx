@@ -16,6 +16,7 @@ const AdminReportsView = ({
     const [selectedUser, setSelectedUser] = useState(null);
     const [selectedReport, setSelectedReport] = useState(null);
     const [usersLoading, setUsersLoading] = useState(true);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -98,6 +99,8 @@ const AdminReportsView = ({
                 selectedUser={selectedUser}
                 onSelectUser={setSelectedUser}
                 loading={usersLoading}
+                isCollapsed={isSidebarCollapsed}
+                onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             />
 
             {/* Column 2: Selection List */}

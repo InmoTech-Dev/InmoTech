@@ -45,8 +45,6 @@ const ReportsContent = () => {
     try {
       const data = await reportesInmobiliariosService.listarReportes()
       const rows = Array.isArray(data) ? data : (data?.data || [])
-      console.log('--- DEBUG: RAW REPORTS FROM API (first row) ---');
-      console.log(JSON.stringify(rows[0], null, 2));
       const mapped = rows.map((r) => {
         // Extraer datos del inmueble buscando en varios lugares posibles
         const inm = r.inmueble || {};
@@ -66,7 +64,9 @@ const ReportsContent = () => {
           // Usar el propietario real del inmueble, no quien creó el reporte
           propietario: r.propietario_nombre || r.propietario || '',
           // Responsable: quien creó/reportó el reporte
-          responsable: r.reporta_nombre || '',
+          responsable: r.reporta_nombre || formatResponsableName(r.reportado_por) || 'No asignado',
+          id_persona_reporta: Number(r.id_persona_reporta || (r.reportado_por?.id_persona ?? r.reportado_por?.id ?? 0)),
+          reportado_por: r.reportado_por || null,
           prioridad: r.prioridad || 'Media',
           tipoReporte: (r.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento'),
           fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
@@ -195,7 +195,8 @@ const ReportsContent = () => {
         throw new Error('ID de reporte inválido para ver detalles')
       }
 
-      const detailedReport = await reportesInmobiliariosService.obtenerReporte(reportId)
+      const response = await reportesInmobiliariosService.obtenerReporte(reportId)
+      const detailedReport = response.data || response
 
       // Add inmueble fields from shallow report or backend data
       detailedReport.ubicacion = report.ubicacion || detailedReport.inmueble_ciudad || ''
@@ -212,7 +213,10 @@ const ReportsContent = () => {
         detailedReport.reportadoPor?.nombre_completo ||
         report.responsable ||
         'No asignado'
-      detailedReport.descripcion = detailedReport.descripcion || ''
+      detailedReport.id_persona_reporta =
+        report.id_persona_reporta ||
+        (detailedReport.reportadoPor?.id_persona ?? detailedReport.reportadoPor?.id);
+      detailedReport.descripcion = detailedReport.descripcion || detailedReport.descripcion_reporte || ''
       detailedReport.seguimientoGeneral = detailedReport.seguimiento_general || ''
 
       // Fetch rubros and follow-ups
@@ -276,6 +280,9 @@ const ReportsContent = () => {
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
       detailedReport.responsable = report.responsable || detailedReport.responsable || 'No asignado'
+      detailedReport.id_persona_reporta =
+        report.id_persona_reporta ||
+        (detailedReport.reportadoPor?.id_persona ?? detailedReport.reportadoPor?.id);
       detailedReport.descripcion = detailedReport.descripcion || ''
       detailedReport.seguimientoGeneral = detailedReport.seguimiento_general || ''
 
@@ -306,7 +313,7 @@ const ReportsContent = () => {
 
   const handleCreateReport = async (reportData) => {
     try {
-      const personaId = Number(user?.id_persona ?? user?.id)
+      const personaId = reportData.id_persona_reporta || Number(user?.id_persona ?? user?.id)
 
       const payload = {
         id_inmueble: Number(reportData.id_inmueble),
@@ -431,7 +438,8 @@ const ReportsContent = () => {
     const patchPayload = {
       estado: normalizeEstado(reportData.estado),
       descripcion: (reportData.descripcion || '').trim(),
-      seguimiento_general: (reportData.seguimientoGeneral || '').trim()
+      seguimiento_general: (reportData.seguimientoGeneral || '').trim(),
+      id_persona_reporta: reportData.id_persona_reporta
     }
 
     await reportesInmobiliariosService.actualizarReporte(

@@ -12,6 +12,7 @@ import {
     Clock,
     CheckCircle2,
     AlertCircle,
+    FileText,
     User as UserIcon
 } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
@@ -152,15 +153,102 @@ const ReportDetailedView = ({ report, onEdit, onDownload }) => {
                         </div>
                     </div>
 
-                    {/* Detailed Content Placeholder (Style of 'Facturas de pago') */}
-                    <div className="bg-white rounded-[2.5rem] p-16 border border-slate-100 shadow-xl shadow-slate-200/50 flex flex-col items-center justify-center text-center">
-                        <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 transform -rotate-6">
-                            <Inbox className="w-10 h-10 text-indigo-400" />
+                    {/* Detailed Content: Descriptions, Images and Rubros */}
+                    <div className="space-y-8">
+                        {/* 1. Descripción / Observaciones */}
+                        <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
+                            <h4 className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-indigo-400" />
+                                Observaciones Generales
+                            </h4>
+                            <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-50">
+                                <p className="text-[14px] text-slate-600 leading-relaxed font-medium">
+                                    {report.descripcion || "No se han registrado observaciones adicionales para este reporte."}
+                                </p>
+                            </div>
                         </div>
-                        <h4 className="text-[16px] font-bold text-slate-700 mb-2 uppercase">Información extendida</h4>
-                        <p className="text-slate-400 text-sm font-medium max-w-xs mx-auto">
-                            Aquí se visualizarán las fotos, observaciones adicionales y rubros específicos vinculados a la propiedad {report.id}.
-                        </p>
+
+                        {/* 2. Galería de Imágenes */}
+                        {report.imagenes?.length > 0 && (
+                            <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
+                                <h4 className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <Eye className="w-4 h-4 text-indigo-400" />
+                                    Galería de Evidencias ({report.imagenes.length})
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {report.imagenes.map((img, idx) => (
+                                        <div key={idx} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer">
+                                            <img
+                                                src={img.url}
+                                                alt={`Evidencia ${idx + 1}`}
+                                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                            />
+                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <Eye className="w-6 h-6 text-white" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. Rubros de Inspección */}
+                        {report.rubros?.length > 0 && (
+                            <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
+                                <h4 className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                                    Rubros e Inspección Detallada
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {report.rubros.map((rubro, idx) => (
+                                        <div key={idx} className="flex flex-col p-5 bg-slate-50/50 rounded-2xl border border-slate-50 group hover:bg-white hover:border-indigo-100 hover:shadow-sm transition-all">
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div>
+                                                    <h5 className="text-[13px] font-bold text-slate-700 uppercase group-hover:text-indigo-600 transition-colors">
+                                                        {rubro.nombre || rubro.nombre_rubro}
+                                                    </h5>
+                                                    <p className="text-[11px] text-slate-400 font-medium line-clamp-1">
+                                                        {rubro.descripcion || "Sin descripción de rubro"}
+                                                    </p>
+                                                </div>
+                                                <Badge className={cn(
+                                                    "rounded-full px-2 py-0.5 text-[8px] font-bold uppercase",
+                                                    rubro.estado === 'Bueno' ? "bg-emerald-50 text-emerald-600" :
+                                                        rubro.estado === 'Regular' ? "bg-amber-50 text-amber-600" :
+                                                            "bg-red-50 text-red-600"
+                                                )}>
+                                                    {rubro.estado || 'N/A'}
+                                                </Badge>
+                                            </div>
+                                            {/* Progress Bar Si aplica */}
+                                            {rubro.progreso !== undefined && (
+                                                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-indigo-500 transition-all"
+                                                        style={{ width: `${rubro.progreso}%` }}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 4. Seguimiento General */}
+                        {report.seguimientoGeneral && (
+                            <div className="bg-indigo-900 rounded-[2rem] p-8 text-white shadow-xl shadow-indigo-100 flex items-start gap-6">
+                                <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center shrink-0 border border-white/20">
+                                    <FileText className="w-7 h-7 text-indigo-200" />
+                                </div>
+                                <div className="space-y-2">
+                                    <h4 className="text-[11px] font-bold text-indigo-300 uppercase tracking-widest">Seguimiento General Administrativo</h4>
+                                    <p className="text-[14px] leading-relaxed text-slate-50 font-medium italic">
+                                        "{report.seguimientoGeneral}"
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="mt-8 flex justify-end">

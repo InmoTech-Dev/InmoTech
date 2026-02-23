@@ -65,15 +65,30 @@ const AdminReportsView = ({
     // Filter reports for the selected user
     const userReports = allReports.filter(report => {
         if (!selectedUser) return false;
-        const userName = `${selectedUser.nombre_completo} ${selectedUser.apellido_completo}`.toLowerCase().trim();
+
+        // Priority 1: Use ID for reliable filtering
+        const reportUserId = Number(report.id_persona_reporta || 0);
+        const selectedUserId = Number(selectedUser.id_persona || 0);
+
+        if (reportUserId > 0 && selectedUserId > 0) {
+            return reportUserId === selectedUserId;
+        }
+
+        // Priority 2: Fallback to name match if IDs are missing
+        const userName = `${selectedUser.nombre_completo}`.toLowerCase().trim();
         const responsable = (report.responsable || '').toLowerCase().trim();
         return responsable.includes(userName) || userName.includes(responsable);
     });
 
-    // Reset selected report when user changes
+    // Reset selected report when user changes or reports are reloaded
     useEffect(() => {
-        setSelectedReport(null);
-    }, [selectedUser]);
+        if (selectedReport) {
+            const isStillInList = userReports.some(r => r.id === selectedReport.id);
+            if (!isStillInList) {
+                setSelectedReport(null);
+            }
+        }
+    }, [selectedUser, allReports]);
 
     return (
         <div className="flex h-[calc(100vh-160px)] bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-2xl">

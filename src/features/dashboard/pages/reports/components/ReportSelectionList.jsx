@@ -72,63 +72,82 @@ const ReportSelectionList = ({ selectedUser, reports, selectedReport, onSelectRe
                                     key={report.id}
                                     onClick={() => onSelectReport(report)}
                                     className={cn(
-                                        "w-full text-left p-5 rounded-[1.5rem] border-2 transition-all duration-200 group relative overflow-hidden",
+                                        "w-full text-left p-6 rounded-[2.2rem] border-2 transition-all duration-300 group relative overflow-hidden",
                                         isSelected
-                                            ? "border-indigo-100 bg-[#F5F8FF] shadow-sm"
-                                            : "border-[#F1F5F9] hover:border-slate-200 bg-white"
+                                            ? "border-indigo-100 bg-[#F8FAFF] shadow-[0_20px_50px_rgba(79,70,229,0.1)]"
+                                            : "border-slate-50 hover:border-indigo-50 bg-white hover:shadow-xl hover:shadow-slate-200/40 hover:-translate-y-1"
                                     )}
                                 >
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className="flex-1 pr-2">
-                                            <h5 className="text-[13px] font-bold text-slate-800 leading-tight mb-1 truncate">
-                                                {report.nombreInmueble || "Sin título definido"}
+                                    {/* Header Section: Title and Badge */}
+                                    <div className="flex items-start justify-between mb-5">
+                                        <div className="flex-1 min-w-0 pr-3">
+                                            <h5 className="text-[15px] font-extrabold text-[#1E293B] leading-tight mb-1.5 truncate group-hover:text-indigo-600 transition-colors">
+                                                {report.nombreInmueble || "Inmueble sin nombre"}
                                             </h5>
-                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-500 uppercase tracking-wide">
-                                                <Building2 className="w-3 h-3" />
-                                                {report.tipoInmueble || "Propiedad"}
+                                            <div className="flex items-center gap-2">
+                                                <div className="bg-slate-100/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                    <Building2 className="w-2.5 h-2.5 text-indigo-500" />
+                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">
+                                                        {report.tipoInmueble}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <Badge className={cn(
-                                            "rounded-full px-2.5 py-0.5 text-[8px] font-bold uppercase tracking-wider border-none shrink-0",
-                                            report.estado === 'Completado' ? "bg-emerald-50 text-emerald-600" :
-                                                report.estado === 'Pendiente' ? "bg-amber-50 text-amber-600" :
-                                                    "bg-blue-50 text-blue-600"
+                                        <div className={cn(
+                                            "flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shrink-0 transition-all shadow-sm",
+                                            report.estado === 'Completado' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
+                                                report.estado === 'Pendiente' ? "bg-amber-50 text-amber-600 border border-amber-100" :
+                                                    "bg-indigo-50 text-indigo-600 border border-indigo-100"
                                         )}>
+                                            <span className={cn(
+                                                "w-1.5 h-1.5 rounded-full animate-pulse",
+                                                report.estado === 'Completado' ? "bg-emerald-500" :
+                                                    report.estado === 'Pendiente' ? "bg-amber-500" :
+                                                        "bg-indigo-500"
+                                            )} />
                                             {report.estado}
-                                        </Badge>
+                                        </div>
                                     </div>
 
-                                    <div className="space-y-2 mb-4 bg-slate-50/50 rounded-xl p-3 border border-slate-100/50">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shadow-sm">
-                                                <Tag className="w-2.5 h-2.5 text-slate-400" />
+                                    {/* Info Block: Type and Address */}
+                                    <div className="bg-[#F1F5F9]/30 rounded-[1.5rem] p-4 border border-slate-100/50 mb-5 group-hover:bg-white transition-all">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-7 h-7 rounded-xl bg-white flex items-center justify-center shadow-sm border border-slate-50">
+                                                <Tag className="w-3.5 h-3.5 text-indigo-400" />
                                             </div>
-                                            <p className="text-[10px] font-bold text-slate-600 italic">
-                                                {report.tipoReporte}
+                                            <p className="text-[11px] font-bold text-slate-500 italic leading-tight">
+                                                {(report.tipoReporte || '').replace('Mantenimineto', 'Mantenimiento')}
                                             </p>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shadow-sm">
-                                                <MapPin className="w-2.5 h-2.5 text-slate-400" />
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-7 h-7 rounded-xl bg-white flex items-center justify-center shadow-sm border border-slate-50">
+                                                <MapPin className="w-3.5 h-3.5 text-amber-500" />
                                             </div>
-                                            <p className="text-[10px] font-medium text-slate-500 truncate">
-                                                {report.direccionInmueble ? `${report.direccionInmueble}, ${report.ubicacion}` : report.ubicacion}
+                                            <p className="text-[10px] font-bold text-slate-400 truncate">
+                                                {report.direccionInmueble || report.ubicacion}
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between pt-3 border-t border-slate-50/50">
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100/50 px-2 py-0.5 rounded-lg">
-                                            REF: {report.referencia}
-                                        </span>
-                                        <div className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 uppercase tracking-wider group-hover:gap-1.5 transition-all">
-                                            Detalles <ChevronRight className="w-3 h-3" />
+                                    {/* Footer: REF and Details Action */}
+                                    <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] bg-slate-50 px-2 py-0.5 rounded border border-slate-100/50">
+                                                REF: {report.referencia}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 -translate-x-3 group-hover:translate-x-0 transition-all duration-500">
+                                            Detalles <ChevronRight className="w-4 h-4" />
                                         </div>
                                     </div>
 
+                                    {/* Selected Indicator Bar */}
                                     {isSelected && (
-                                        <div className="absolute left-0 top-6 bottom-6 w-1 bg-indigo-600 rounded-r-full" />
+                                        <motion.div
+                                            layoutId="active-bar-list"
+                                            className="absolute left-0 top-8 bottom-8 w-1.5 bg-indigo-600 rounded-r-full shadow-[4px_0_15px_rgba(79,70,229,0.4)]"
+                                        />
                                     )}
                                 </button>
                             );

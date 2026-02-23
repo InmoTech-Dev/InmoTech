@@ -32,6 +32,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../../../shared/contexts/AuthContext.jsx';
+import administrativosApiService from '../../../../shared/services/administrativosApiService';
+import rolesApiService from '../../../../shared/services/rolesApiService';
 
 const CreateReportModal = ({
   isOpen,
@@ -171,7 +173,8 @@ const CreateReportModal = ({
     fechaCreacion: getCurrentDateTime(),
     estado: 'En proceso',
     seguimientoGeneral: '',
-    responsable: '' // Nuevo campo
+    responsable: '',
+    id_persona_reporta: null
   };
 
   // Estados del formulario
@@ -183,6 +186,8 @@ const CreateReportModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPropertyInfo, setShowPropertyInfo] = useState(false);
   const [activeTab, setActiveTab] = useState('cliente');
+  const [eligibleUsers, setEligibleUsers] = useState([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Referencias para los inputs de archivos
   const imageInputRef = useRef(null);
@@ -198,7 +203,17 @@ const CreateReportModal = ({
       const fullName = getUserFullName();
 
       if (initialData) {
-        setFormData({ ...base, responsable: fullName });
+        const responsableId = initialData.id_persona_reporta || initialData.id_responsable ||
+          (initialData.reportado_por?.id_persona ?? initialData.reportado_por?.id ?? initialData.reportadoPor?.id_persona ?? initialData.reportadoPor?.id);
+
+        const responsableName = formatResponsableName(initialData.reportado_por || initialData.reportadoPor) ||
+          (typeof initialData.responsable === 'string' && !/^\d+$/.test(initialData.responsable) ? initialData.responsable : '');
+
+        setFormData({
+          ...base,
+          responsable: responsableName || fullName,
+          id_persona_reporta: responsableId || null
+        });
         // Normalizar rubros y seguimientos para que el flujo de actualización
         // pueda decidir correctamente entre crear/actualizar
         const normalizedRubros = (initialData.rubros || []).map((r) => ({
@@ -234,7 +249,11 @@ const CreateReportModal = ({
           setShowPropertyInfo(true);
         }
       } else {
-        setFormData({ ...defaultFormData, responsable: fullName });
+        setFormData({
+          ...defaultFormData,
+          responsable: fullName,
+          id_persona_reporta: user?.id_persona || user?.id
+        });
         setRubros([]);
         setImagenes([]);
         setArchivos([]);
@@ -244,6 +263,75 @@ const CreateReportModal = ({
       setShowPropertyInfo(false);
     }
   }, [isOpen, initialData, user]);
+
+  // Fetch eligible users for reporting (for Super Admins)
+  useEffect(() => {
+    if (isOpen && user?.roles?.includes('Super Administrador')) {
+      const fetchEligibleUsers = async () => {
+        setIsLoadingUsers(true);
+        try {
+          const [usersResp, rolesResp] = await Promise.all([
+            administrativosApiService.getAdministrativos({ limit: 1000 }),
+            rolesApiService.obtenerRoles()
+          ]);
+
+          const roles = Array.isArray(rolesResp) ? rolesResp : [];
+          // Roles with reportes permissions - More robust filtering
+          const eligibleRoleNames = roles
+            .filter(r => {
+              const roleName = r.nombre_rol || '';
+              // Admins always have access
+              if (['Super Administrador', 'Administrador'].includes(roleName)) return true;
+
+              // Check permissions in any module that mentions "reporte"
+              return Object.entries(r.permisos || {}).some(([moduleKey, perms]) => {
+                const isReportModule = moduleKey.toLowerCase().includes('reporte');
+                if (isReportModule && perms) {
+                  return perms.ver || perms.crear || perms.editar || perms.full || perms.estado;
+                }
+                return false;
+              });
+            })
+            .map(r => r.nombre_rol);
+
+          const rawStaff = usersResp?.data?.data?.administrativos
+            || usersResp?.data?.administrativos
+            || usersResp?.administrativos
+            || usersResp?.data?.data
+            || [];
+
+          const staff = Array.isArray(rawStaff) ? rawStaff : [];
+
+          const filtered = staff.filter(u => {
+            const userRole = u.rol_nombre ?? u.nombre_rol ?? (u.rol ? (typeof u.rol === 'string' ? u.rol : u.rol.nombre_rol) : '');
+            return eligibleRoleNames.includes(userRole);
+          });
+
+          // Fallback: if filtered is empty but we have staff, use all staff (better than empty)
+          const finalStaffList = filtered.length > 0 ? filtered : staff;
+
+          const mapped = finalStaffList.map(u => {
+            const persona = u.persona || u;
+            const firstName = persona.primer_nombre || persona.nombre || u.nombre || '';
+            const lastName = persona.primer_apellido || persona.apellido || u.apellido || '';
+            const fullName = persona.nombre_completo || u.nombre_completo || `${firstName} ${lastName}`.trim();
+
+            return {
+              id_persona: Number(persona.id_persona ?? persona.id ?? u.id_persona ?? u.id_administrativo ?? u.id),
+              nombre_completo: fullName || `ID: ${u.id_persona ?? u.id}`,
+            };
+          }).filter(u => u.id_persona && u.nombre_completo);
+
+          setEligibleUsers(mapped);
+        } catch (error) {
+          console.error('Error fetching eligible users:', error);
+        } finally {
+          setIsLoadingUsers(false);
+        }
+      };
+      fetchEligibleUsers();
+    }
+  }, [isOpen, user]);
 
   // Validar el formulario
   const validateForm = () => {
@@ -530,16 +618,18 @@ const CreateReportModal = ({
       // Obtener seguimientos temporales del hook
       const temporaryFollowUps = getTemporaryFollowUps();
 
-      const reportData = {
+      const dataToSubmit = {
         ...formData,
+        id_inmueble: selectedProperty?.id,
         rubros,
         imagenes,
         archivos,
         // Incluir seguimientos temporales para ser procesados por el servicio
-        seguimientosTemporales: temporaryFollowUps
+        seguimientosTemporales: temporaryFollowUps,
+        id_persona_reporta: formData.id_persona_reporta
       };
 
-      await onSubmit(reportData);
+      await onSubmit(dataToSubmit);
 
       // Limpiar seguimientos temporales después del envío exitoso
       clearTemporaryFollowUps();
@@ -759,12 +849,36 @@ const CreateReportModal = ({
                             Responsable del Reporte
                           </h4>
                         </div>
-                        <Input
-                          value={formData.responsable || getUserFullName()}
-                          readOnly
-                          disabled
-                          className="text-sm bg-gray-50 cursor-not-allowed"
-                        />
+                        {user?.roles?.includes('Super Administrador') ? (
+                          <Select
+                            value={String(formData.responsable || '')}
+                            onValueChange={(value) => {
+                              const selectedUser = eligibleUsers.find(u => u.nombre_completo === value);
+                              handleChange('responsable', value);
+                              if (selectedUser) {
+                                handleChange('id_persona_reporta', selectedUser.id_persona);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-9 text-sm">
+                              <SelectValue placeholder={isLoadingUsers ? "Cargando..." : "Seleccione un responsable"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {eligibleUsers.map((u) => (
+                                <SelectItem key={`${u.id_persona}-${u.nombre_completo}`} value={u.nombre_completo}>
+                                  {u.nombre_completo}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={formData.responsable || getUserFullName()}
+                            readOnly
+                            disabled
+                            className="text-sm bg-gray-50 cursor-not-allowed"
+                          />
+                        )}
                       </div>
                     </div>
 

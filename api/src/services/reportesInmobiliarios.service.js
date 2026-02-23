@@ -164,6 +164,7 @@ class ReportesInmobiliariosService {
         inmueble_referencia: r.inmueble?.registro_inmobiliario,
         // Propietario real del inmueble (no quien creó el reporte)
         propietario_nombre: propietariosPorInmueble[r.id_inmueble] || '',
+        id_persona_reporta: r.id_persona_reporta,
         reporta_nombre: r.reportadoPor?.nombre_completo
       }));
 
@@ -248,13 +249,15 @@ class ReportesInmobiliariosService {
       estado,
       descripcion,
       id_responsable,
+      id_persona_reporta,
       seguimiento_general
     } = data;
 
     const updateData = {};
     if (estado) updateData.estado = estado;
     if (descripcion) updateData.descripcion = descripcion;
-    if (typeof id_responsable === 'number') updateData.id_responsable = id_responsable;
+    const finalResponsableId = id_persona_reporta ?? id_responsable;
+    if (typeof finalResponsableId === 'number') updateData.id_persona_reporta = finalResponsableId;
     if (typeof seguimiento_general === 'string') updateData.seguimiento_general = seguimiento_general;
     updateData.fecha_modificacion = new Date();
 

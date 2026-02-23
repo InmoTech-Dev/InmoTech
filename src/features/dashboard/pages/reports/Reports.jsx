@@ -12,6 +12,7 @@ import authService from '../../../../shared/services/authService'
 import { useToast } from '../../../../shared/hooks/use-toast'
 import { uploadToCloudinary } from '../../../../shared/services/cloudinary'
 import { Grid3X3, List } from 'lucide-react'
+import sseService from '../../../../shared/services/sseService'
 import * as XLSX from "xlsx";
 import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog'
 import AdminReportsView from './AdminReportsView'
@@ -82,9 +83,17 @@ const ReportsContent = () => {
     }
   }
 
-  // Cargar desde la base de datos al montar
+  // Cargar desde la base de datos al montar y suscribirse a SSE
   useEffect(() => {
     fetchReports()
+
+    // Suscribirse a cambios en tiempo real
+    const unsubscribe = sseService.on('report.changed', () => {
+      console.log('--- SSE: Refreshing reports due to real-time event ---');
+      fetchReports();
+    });
+
+    return () => unsubscribe();
   }, [])
 
   // Filtrar reportes (solo los del backend)
@@ -104,9 +113,17 @@ const ReportsContent = () => {
     return 'Pendiente'
   }
 
-  // NUEVO: aplicar filtros combinados (cancelados, estado)
+  // NUEVO: aplicar filtros combinados (cancelados, estado y visibilidad por rol)
   const todayStr = new Date().toLocaleDateString('es-ES')
+  const isSuperAdmin = user?.roles?.includes('Super Administrador')
+  const myPersonaId = Number(user?.id_persona ?? user?.id ?? 0)
+
   const displayedReports = filteredReports
+    .filter(r => {
+      // Si es Super Admin, ve todo. Si no, solo lo suyo.
+      if (isSuperAdmin) return true;
+      return Number(r.id_persona_reporta) === myPersonaId;
+    })
     .filter(r => showCancelled ? true : normalizeEstado(r.estado) !== 'Cancelado')
     .filter(r => statusFilter === 'Todos los estados' ? true : normalizeEstado(r.estado) === statusFilter)
     .filter(r => todayOnly ? (r.fecha === todayStr) : true)
@@ -1057,6 +1074,8 @@ const ReportsContent = () => {
     }
   }
 
+  const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
+
   return (
     <div className='p-6 space-y-6'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
@@ -1073,6 +1092,7 @@ const ReportsContent = () => {
         onStatusChange={setStatusFilter}
         showCancelled={showCancelled}
         onToggleShowCancelled={() => setShowCancelled(v => !v)}
+        hideFilters={isAdminView}
       />
 
       {user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r)) ? (

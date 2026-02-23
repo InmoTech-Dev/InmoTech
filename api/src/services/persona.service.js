@@ -93,8 +93,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
-            attributes: ['id_rol', 'nombre_rol']
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
+            attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true }
           }
         ],
         limit: 10,
@@ -130,8 +134,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
-            attributes: ['id_rol', 'nombre_rol', 'descripcion']
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
+            attributes: ['id_rol', 'nombre_rol', 'descripcion'],
+            where: { estado: true }
           }
         ]
       });
@@ -225,57 +233,38 @@ class PersonaService {
         }
 
         const prevCorreo = (persona.correo || '').trim().toLowerCase();
-        const { password, confirmPassword, ...personaData } = mappedData;
+        const personaData = { ...mappedData };
 
         if (personaData.correo) {
           const nuevoCorreo = personaData.correo.trim().toLowerCase();
-          if (prevCorreo && nuevoCorreo !== prevCorreo) {
-            personaData.correo_verificado = false;
-            personaData.tiene_cuenta = true;
-            persona.correo = nuevoCorreo;
-            try {
-              await invitacionService.crearInvitacion({
-                id_persona: personaId,
-                creado_por: updatedBy || null,
-                tipo: 'signup_verify'
-              });
-              logger.info(`Invitacion de verificacion enviada a nuevo correo de persona ${personaId}`);
-            } catch (inviteError) {
-              logger.warn(`No se pudo enviar invitacion de verificacion a persona ${personaId}: ${inviteError.message}`);
+          if (nuevoCorreo !== prevCorreo) {
+            personaData.correo = nuevoCorreo;
+
+            if (persona.tiene_cuenta === false) {
+              personaData.correo_verificado = false;
+              personaData.tiene_cuenta = false;
+              try {
+                // Obtener roles de la persona para determinar el tipo de invitacion
+                const roles = await persona.getRoles({ transaction: t });
+                const nombreRoles = roles.map(r => r.nombre_rol);
+                const esAdmin = nombreRoles.some(r => ['Administrador', 'Super Administrador', 'Empleado', 'Agente'].includes(r));
+
+                await invitacionService.crearInvitacion({
+                  id_persona: personaId,
+                  creado_por: updatedBy || null,
+                  tipo: esAdmin ? 'admin_invite' : 'user_invite',
+                  rol_asignado: nombreRoles[0] || (esAdmin ? 'Administrativo' : 'Usuario')
+                });
+                logger.info(`Invitacion [${esAdmin ? 'administrativa' : 'de usuario'}] regenerada por cambio de correo para persona ${personaId}`);
+              } catch (inviteError) {
+                logger.warn(`No se pudo regenerar invitacion de persona ${personaId}: ${inviteError.message}`);
+              }
             }
           }
         }
 
         if (Object.keys(personaData).length > 0) {
           await persona.update(personaData, { transaction: t });
-        }
-
-        if (password) {
-          const { Acceso } = require('../models');
-          const bcryptUtilsLocal = require('../utils/bcrypt');
-          if (password !== confirmPassword) {
-            throw new Error('Las contraseñas no coinciden');
-          }
-          const acceso = await Acceso.findOne({
-            where: { id_persona: personaId },
-            transaction: t
-          });
-          const hashedPassword = await bcryptUtilsLocal.hashPassword(password);
-
-          if (acceso) {
-            await acceso.update({
-              contrasena: hashedPassword,
-              ultimo_cambio_password: new Date()
-            }, { transaction: t });
-            logger.info(`Contraseña actualizada para persona ID: ${personaId}`);
-          } else {
-            logger.warn(`No se encontró acceso para persona ID: ${personaId}, creando uno nuevo`);
-            await Acceso.create({
-              id_persona: personaId,
-              contrasena: hashedPassword,
-              ultimo_cambio_password: new Date()
-            }, { transaction: t });
-          }
         }
 
         logger.info(`Perfil actualizado para persona ID: ${personaId}`);
@@ -290,7 +279,9 @@ class PersonaService {
           telefono: personaData.telefono || persona.telefono,
           tiene_cuenta: personaData.tiene_cuenta ?? persona.tiene_cuenta,
           correo_verificado: personaData.correo_verificado ?? persona.correo_verificado,
-          fecha_registro: persona.fecha_registro
+          fecha_registro: persona.fecha_registro,
+          foto_perfil_url: personaData.foto_perfil_url || persona.foto_perfil_url,
+          foto_public_id: personaData.foto_public_id || persona.foto_public_id
         };
       } catch (error) {
         logger.error('Error actualizando perfil:', {
@@ -379,8 +370,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
             attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true },
             required: false
           },
           {
@@ -513,16 +508,16 @@ class PersonaService {
   }
 
   /**
-   * Crea una persona administrativa con posibilidad de crear cuenta de usuario
+   * Crea una persona desde panel administrativo sin acceso directo.
    */
-  async crearPersonaAdmin(personaData, password = null) {
+  async crearPersonaAdmin(personaData) {
     const result = await sequelize.transaction(async (t) => {
       try {
         const datosPersona = {
           ...personaData,
-          tiene_cuenta: !!password,
+          tiene_cuenta: false,
           estado: personaData.estado ?? true,
-          correo_verificado: !!password
+          correo_verificado: false
         };
 
         const persona = await this.crearOActualizar(datosPersona, t);
@@ -547,19 +542,7 @@ class PersonaService {
           }
         }
 
-        if (password) {
-          const hashedPassword = await bcryptUtils.hashPassword(password);
-
-          await Acceso.create({
-            id_persona: persona.id_persona,
-            contrasena: hashedPassword,
-            ultimo_cambio_password: new Date()
-          }, { transaction: t });
-
-          logger.info(`Usuario administrativo creado con acceso: ${persona.correo || persona.nombre_completo}`);
-        } else {
-          logger.info(`Persona administrativa creada (sin cuenta, con rol ${rolDestino}): ${persona.nombre_completo}`);
-        }
+        logger.info(`Persona administrativa creada (pendiente de activacion, con rol ${rolDestino}): ${persona.nombre_completo}`);
 
         return persona;
 
@@ -682,8 +665,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
             attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true },
             required: false
           }
         ]
@@ -734,8 +721,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
             attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true },
             required: false
           }
         ]

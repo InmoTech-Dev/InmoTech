@@ -12,12 +12,30 @@ const extractList = (response) => {
 const splitNames = (fullName = '') => {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   const [first = '', second = ''] = parts;
-  return { first, rest: parts.slice(1).join(' ') || second || '' };
+  const [last = '', secondLast = ''] = parts.length > 2 ? parts.slice(-2) : [parts[1] || '', ''];
+  return {
+    first,
+    rest: parts.slice(1).join(' ') || second || '',
+    last,
+    secondLast,
+  };
 };
 
 const mapRenantFromApi = (record = {}) => {
   const persona = record.persona || record.Persona || record;
   const renant = record.renant || record;
+  const codeudor =
+    record.codeudor ||
+    record.Codeudor ||
+    record.codeudor_persona ||
+    record.codeudorPersona ||
+    (Array.isArray(record.arriendos) && record.arriendos[0]?.codeudor) ||
+    {};
+  const codeudorPersona =
+    codeudor.persona ||
+    codeudor.Persona ||
+    (codeudor.id_persona ? codeudor : {}) ||
+    {};
 
   const { first: primerNombre, rest: segundoNombre } = splitNames(
     persona.nombre_completo || persona.nombres || ''
@@ -25,8 +43,18 @@ const mapRenantFromApi = (record = {}) => {
   const { first: primerApellido, rest: segundoApellido } = splitNames(
     persona.apellido_completo || persona.apellidos || ''
   );
+  const codeudorNombreCompleto = codeudorPersona.nombre_completo || codeudor.nombre_completo || '';
+  const {
+    first: primerNombreCodeudor,
+    rest: segundoNombreCodeudor,
+    last: primerApellidoCodeudor,
+    secondLast: segundoApellidoCodeudor,
+  } = splitNames(codeudorNombreCompleto);
 
-  const inmueblesArrendados = (record.arriendosComoArrendatario || record.arriendos || [])
+  const arriendos = record.arriendosComoArrendatario || record.arriendos || [];
+  const primaryLease = Array.isArray(arriendos) && arriendos.length > 0 ? arriendos[0] : null;
+
+  const inmueblesArrendados = arriendos
     .map((arriendo) => {
       const inmueble = arriendo.Inmueble || arriendo.inmueble;
       if (!inmueble) return null;
@@ -47,6 +75,8 @@ const mapRenantFromApi = (record = {}) => {
     })
     .filter(Boolean);
 
+  const inmueblePrincipal = primaryLease?.Inmueble || primaryLease?.inmueble || inmueblesArrendados[0] || null;
+
   return {
     id: renant.id_arrendatario || renant.id || persona.id_persona,
     personaId: persona.id_persona,
@@ -63,17 +93,56 @@ const mapRenantFromApi = (record = {}) => {
     ciudadResidencia: renant.ciudad_residencia || null,
     direccionAnterior: renant.direccion_anterior || null,
     observaciones: renant.observaciones || null,
-    contactoEmergenciaNombre: renant.contacto_emergencia?.nombre || renant.contacto_emergencia_nombre || '',
-    contactoEmergenciaTelefono: renant.contacto_emergencia?.telefono || renant.contacto_emergencia_telefono || '',
-    contactoEmergenciaParentesco: renant.contacto_emergencia?.parentesco || renant.contacto_emergencia_parentesco || '',
+    contactoEmergenciaNombre:
+      renant.contacto_emergencia?.nombre ||
+      renant.contacto_emergencia_nombre ||
+      codeudorPersona.nombre_completo ||
+      codeudor.nombre_completo ||
+      '',
+    contactoEmergenciaTelefono:
+      renant.contacto_emergencia?.telefono ||
+      renant.contacto_emergencia_telefono ||
+      codeudorPersona.telefono ||
+      codeudor.telefono ||
+      '',
+    contactoEmergenciaParentesco:
+      renant.contacto_emergencia?.parentesco ||
+      renant.contacto_emergencia_parentesco ||
+      (codeudorPersona.nombre_completo || codeudor.nombre_completo ? 'Codeudor' : ''),
+    contactoEmergenciaCorreo:
+      renant.contacto_emergencia?.correo ||
+      renant.contacto_emergencia_correo ||
+      codeudorPersona.correo ||
+      codeudor.correo ||
+      '',
+    rawLease: primaryLease || null,
+    codeudorNombre: codeudorPersona.nombre_completo || codeudor.nombre_completo || '',
+    codeudorTelefono: codeudorPersona.telefono || codeudor.telefono || '',
+    codeudorCorreo: codeudorPersona.correo || codeudor.correo || '',
     // Campos relacionados con contrato (si vienen en la respuesta)
-    fechaInicio: record.fecha_inicio || record.fechaInicio || null,
-    fechaFin: record.fecha_finalizacion || record.fechaFin || null,
-    valorMensual: record.valor_mensual || record.valorMensual || null,
+    fechaInicio: record.fecha_inicio || record.fechaInicio || primaryLease?.fecha_inicio || primaryLease?.fechaInicio || null,
+    fechaFin: record.fecha_finalizacion || record.fechaFin || primaryLease?.fecha_fin || primaryLease?.fechaFinal || null,
+    valorMensual: record.valor_mensual || record.valorMensual || primaryLease?.canon || primaryLease?.valor_mensual || primaryLease?.valorMensual || null,
     tipoGarantia: record.tipoGarantia || null,
     valorGarantia: record.valorGarantia || null,
     descripcionGarantia: record.descripcionGarantia || null,
+    estadoContrato: record.estado || primaryLease?.estado || null,
+    inmueble: inmueblePrincipal,
+    registroInmobiliario: inmueblePrincipal?.registro || inmueblePrincipal?.registro_inmobiliario || null,
+    tipoInmueble: inmueblePrincipal?.categoria || inmueblePrincipal?.tipo || null,
+    nombreInmueble: inmueblePrincipal?.nombre || inmueblePrincipal?.titulo || inmueblePrincipal?.registro_inmobiliario || null,
+    direccion: inmueblePrincipal?.direccion || null,
+    ciudad: inmueblePrincipal?.ciudad || null,
+    departamento: inmueblePrincipal?.departamento || null,
     inmueblesArrendados,
+    // Codeudor detalle
+    codeudorNombre: codeudorNombreCompleto || null,
+    codeudorTelefono: codeudorPersona.telefono || codeudor.telefono || null,
+    codeudorCorreo: codeudorPersona.correo || codeudor.correo || null,
+    primerNombreCodeudor: primerNombreCodeudor || null,
+    segundoNombreCodeudor: segundoNombreCodeudor || null,
+    primerApellidoCodeudor: primerApellidoCodeudor || null,
+    segundoApellidoCodeudor: segundoApellidoCodeudor || null,
     raw: record,
   };
 };

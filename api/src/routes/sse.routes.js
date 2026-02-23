@@ -7,45 +7,19 @@ const express = require('express');
 const router = express.Router();
 const sseService = require('../services/sse.service');
 const { authenticateToken } = require('../middlewares/auth.middleware');
+const { sseConnectLimiter } = require('../middlewares/security.middleware');
 const logger = require('../utils/logger');
 
   /**
    * GET /api/v1/sse/connect
    * Establece una conexion SSE para el usuario autenticado usando cookies httpOnly
    */
-router.get('/connect', authenticateToken, async (req, res) => {
+router.get('/connect', sseConnectLimiter, authenticateToken, async (req, res) => {
   try {
     logger.info('[SSE] Connection initiated from httpOnly cookies', { userId: req.user.id, email: req.user.email });
 
     // El middleware authenticateToken ya valida las cookies y proporciona req.user
     const userId = req.user.id;
-
-    // Verificar que el usuario este activo consultando la BD
-    const { Persona } = require('../models');
-    const persona = await Persona.findOne({
-      where: { id_persona: userId },
-      attributes: ['estado']
-    });
-
-    if (!persona || !persona.estado) {
-      const forcedLogoutData = {
-        reason: 'account_disabled',
-        message: 'Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.',
-        action: 'logout',
-        timestamp: new Date().toISOString()
-      };
-
-      sseService.sendImmediateLogout(userId, forcedLogoutData);
-
-      logger.warn('[SSE] Inactive user detected, forced logout sent', { userId });
-
-      return res.status(423).json({
-        success: false,
-        message: 'Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.',
-        reason: 'account_disabled',
-        forceLogout: true
-      });
-    }
 
     logger.info('[SSE] Connection accepted', { userId, email: req.user.email });
 

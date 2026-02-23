@@ -16,10 +16,8 @@ import ContactPage from './features/contact/pages/ContactPage'
 import AboutPage from './features/about/pages/AboutPage'
 import ServicesPage from './features/services/pages/ServicesPage'
 import LoginPage from './features/auth/pages/LoginPage'
-import RegisterPage from './features/auth/pages/RegisterPage'
 import UserAppointmentsPage from './features/appointments/pages/UserAppointmentsPage'
 import ActivateAccountPage from './features/auth/pages/ActivateAccountPage'
-import VerifyEmailPage from './features/auth/pages/VerifyEmailPage'
 
 // Dashboard pages
 import DashboardPage from './features/dashboard/DashboardPage'
@@ -117,22 +115,8 @@ function App() {
           }
         />
         <Route
-          path="/registro"
-          element={
-            <PublicRoute>
-              <Navbar />
-              <RegisterPage />
-              <Footer />
-            </PublicRoute>
-          }
-        />
-        <Route
           path="/activar"
           element={<ActivateAccountPage />}
-        />
-        <Route
-          path="/verificar-correo"
-          element={<VerifyEmailPage />}
         />
 
         {/* Authenticated user routes with navbar/footer */}

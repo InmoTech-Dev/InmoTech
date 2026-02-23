@@ -1439,9 +1439,15 @@ export function SalesManagementPage() {
 
       let buyerUpdateError = null;
 
+      const buyerIdForUpdate =
+        buyerInfo?.id ||
+        buyerInfo?.compradorId ||
+        buyerInfo?.raw?.id_comprador ||
+        buyerInfo?.personaId;
+
       try {
 
-        await buyersApiService.updatePurchaseData(buyerInfo.personaId, {
+        await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
 
           id_inmueble: payload.id_inmueble,
 

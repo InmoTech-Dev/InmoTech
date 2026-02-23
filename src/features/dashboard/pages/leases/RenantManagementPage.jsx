@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaCalendar, FaDollarSign } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, ListChecks, Trash2, Home, Calendar, DollarSign, X } from 'lucide-react';
+import { Plus, Search, Filter, Eye, ListChecks, Trash2, Home, Calendar, DollarSign, X, AlertCircle } from 'lucide-react';
 import RenantForm from "../../components/leases/RenantForm";
 import ViewRenant from "../../components/leases/ViewRenant"; 
 import "../../../../shared/styles/globals.css";
@@ -235,8 +235,19 @@ export function RenantManagementPage() {
   };
 
   // 🗑️ ELIMINAR
-  const handleDelete = async (id) => {
-    if (!window.confirm("¿Estás seguro de eliminar este registro?")) return;
+  const [rentToDelete, setRentToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteRequest = (rent) => {
+    setRentToDelete(rent);
+  };
+
+  const handleCancelDelete = () => setRentToDelete(null);
+
+  const handleConfirmDelete = async () => {
+    if (!rentToDelete) return;
+    const id = rentToDelete.id;
+    setIsDeleting(true);
     try {
       await arriendoApiService.eliminarArriendo(id);
       setArriendos((prev) => prev.filter((r) => r.id !== id));
@@ -246,9 +257,123 @@ export function RenantManagementPage() {
         type: "error",
         message: error?.response?.data?.message || error?.message || "No se pudo eliminar el arriendo",
       });
+    } finally {
+      setIsDeleting(false);
+      setRentToDelete(null);
     }
   };
 
+const renderDeleteModal = () => {
+  if (!rentToDelete) return null;
+
+  const nombre =
+    rentToDelete?.primerNombreArrendatario ||
+    rentToDelete?.arrendatario?.nombre_completo ||
+    "";
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center">
+      {/* Backdrop estilo formularios */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={handleCancelDelete}
+      />
+
+      {/* Modal card estilo formularios */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.25 }}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 border-b border-slate-200">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
+              <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
+            </div>
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleCancelDelete}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Cerrar"
+          >
+            <X className="w-5 h-5 text-slate-500" />
+          </motion.button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          <p className="text-slate-700">
+            ¿Estás seguro de que deseas eliminar{" "}
+            {nombre ? (
+              <>
+                el arriendo de{" "}
+                <span className="font-semibold text-slate-900">{nombre}</span>
+              </>
+            ) : (
+              <span className="font-semibold text-slate-900">este arriendo</span>
+            )}
+            ? Esta acción no se puede deshacer.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleCancelDelete}
+            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Cancelar
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleConfirmDelete}
+            disabled={isDeleting}
+            className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+              isDeleting
+                ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700 text-white"
+            }`}
+          >
+            {isDeleting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Eliminando...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                Eliminar
+              </>
+            )}
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  return ReactDOM.createPortal(
+    modalContent,
+    document.getElementById("modal-root") || document.body
+  );
+};
   const filteredRents =
     searchTerm.trim() === ""
       ? arriendos
@@ -582,7 +707,7 @@ export function RenantManagementPage() {
                               whileTap={{ scale: 0.9 }}
                               aria-label="Eliminar arriendo"
                               className="text-red-600 hover:text-red-800 transition-colors p-1 rounded-lg hover:bg-red-50"
-                              onClick={() => handleDelete(r.id)}
+                              onClick={() => handleDeleteRequest(r)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </motion.button>
@@ -614,6 +739,7 @@ export function RenantManagementPage() {
       {renderFormModal()}
       {renderViewModal()}
       {renderStatusModal()}
+      {renderDeleteModal()}
     </>
   );
 }

@@ -9,7 +9,7 @@ const Persona = sequelize.define('Personas', {
     field: 'id_persona'
   },
   tipo_documento: {
-    type: DataTypes.STRING(5),
+    type: DataTypes.STRING(20),
     allowNull: false,
     validate: {
       isIn: {

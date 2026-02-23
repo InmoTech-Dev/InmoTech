@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, User, MapPin } from 'lucide-react';
 import AppointmentCard from './AppointmentCard';
 import { useAuth } from '../../../../shared/contexts/AuthContext';
+import citaApiService from '../../../../shared/services/citaApiService';
 
 const DayListModal = ({
   isOpen,
@@ -35,20 +36,52 @@ const DayListModal = ({
     const colors = {
       programada: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       confirmada: 'bg-green-100 text-green-800 border-green-200',
-      completada: 'bg-blue-100 text-blue-800 border-blue-200',
-      cancelada: 'bg-red-100 text-red-800 border-red-200'
+      completada: 'bg-purple-100 text-purple-800 border-purple-200',
+      cancelada: 'bg-red-100 text-red-800 border-red-200',
+      're agendada': 'bg-orange-100 text-orange-800 border-orange-200',
+      solicitada: 'bg-indigo-100 text-indigo-800 border-indigo-200'
     };
-    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+    return colors[status?.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    if (!dateString) return '';
+
+    // Si es formato YYYY-MM-DD, añadir T00:00:00 para tratarlo como hora local
+    let date;
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      date = new Date(dateString + 'T00:00:00');
+    } else {
+      date = new Date(dateString);
+    }
+
+    if (isNaN(date.getTime())) return dateString;
+
     return date.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  // Helper para obtener el nombre del cliente
+  const getClientName = (appointment) => {
+    const cliente = appointment.cliente;
+    if (typeof cliente === 'string') return cliente;
+    if (cliente?.nombre_completo && cliente?.apellido_completo) {
+      return `${cliente.nombre_completo} ${cliente.apellido_completo}`;
+    }
+    return cliente?.nombre_completo || 'Cliente no especificado';
+  };
+
+  // Helper para obtener la dirección/propiedad
+  const getPropertyName = (appointment) => {
+    const inmueble = appointment.inmueble || appointment.propiedad;
+    if (typeof inmueble === 'string') return inmueble;
+    if (inmueble?.titulo) return inmueble.titulo;
+    if (inmueble?.direccion) return inmueble.direccion;
+    return 'Propiedad no especificada';
   };
 
   return ReactDOM.createPortal(
@@ -117,22 +150,22 @@ const DayListModal = ({
                             <div className="flex items-center gap-2 mb-2">
                               <Clock className="w-4 h-4 text-slate-500" />
                               <span className="font-medium text-slate-800">
-                                {appointment.hora}
+                                {citaApiService.formatHoraDesdeAPI(appointment.hora_inicio || appointment.hora)}
                               </span>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.estado)}`}>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(appointment.estado)}`}>
                                 {appointment.estado}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 mb-1">
                               <User className="w-4 h-4 text-slate-500" />
                               <span className="text-sm text-slate-700">
-                                {appointment.cliente}
+                                {getClientName(appointment)}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <MapPin className="w-4 h-4 text-slate-500" />
                               <span className="text-sm text-slate-700">
-                                {appointment.propiedad}
+                                {getPropertyName(appointment)}
                               </span>
                             </div>
                           </div>
@@ -145,13 +178,18 @@ const DayListModal = ({
                               {/* Para citas solicitadas */}
                               {hasPermission("citas", "ver") && (
                                 <button
-                                  onClick={() => onViewAppointment(appointment)}
+                                  onClick={() => {
+                                    onViewAppointment(appointment);
+                                    onClose();
+                                  }}
                                   className="flex-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
                                 >
                                   Ver
                                 </button>
                               )}
-                              {/* Aceptar y Cancelar siempre disponibles para administrativos */}
+                              {/* Aceptar y Cancelar - Se mantienen abiertos para permitir gestionar varias si es necesario, 
+                                  a menos que onAccept o onReject manejen su propio cierre. 
+                                  Pero siguiendo el flujo del usuario: */}
                               <button
                                 onClick={() => onAcceptAppointment && onAcceptAppointment(appointment)}
                                 className="flex-1 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors"
@@ -170,7 +208,10 @@ const DayListModal = ({
                               {/* Para citas confirmadas */}
                               {hasPermission("citas", "ver") && (
                                 <button
-                                  onClick={() => onViewAppointment(appointment)}
+                                  onClick={() => {
+                                    onViewAppointment(appointment);
+                                    onClose();
+                                  }}
                                   className="flex-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
                                 >
                                   Ver
@@ -178,7 +219,10 @@ const DayListModal = ({
                               )}
                               {hasPermission("citas", "editar") && (
                                 <button
-                                  onClick={() => onEditAppointment(appointment)}
+                                  onClick={() => {
+                                    onEditAppointment(appointment);
+                                    onClose();
+                                  }}
                                   className="flex-1 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors"
                                 >
                                   Editar

@@ -1,4 +1,4 @@
-const { Persona } = require('../models');
+﻿const { Persona } = require('../models');
 const { Cita } = require('../models');
 const { Inmueble } = require('../models');
 const { ServicioCita } = require('../models');
@@ -113,7 +113,7 @@ class CitaService {
         dataCita.id_inmueble = idInmueble;
         dataCita.id_servicio = idServicio;
 
-        // ✅ Usar directamente nombre_completo y apellido_completo como vienen del frontend
+        // âœ… Usar directamente nombre_completo y apellido_completo como vienen del frontend
         const nombre_completo = dataCita.nombre_completo || '';
         const apellido_completo = dataCita.apellido_completo || '';
 
@@ -142,7 +142,7 @@ class CitaService {
             if (correoEnUsoPorOtro) {
               // Si el correo lo tiene otro, no lo actualizamos para evitar 409, 
               // pero permitimos que la cita siga con la persona encontrada (por documento)
-              logger.warn(`El correo ${correoPrincipal} ya está en uso por otra persona (ID: ${correoEnUsoPorOtro.id_persona}). No se actualizará en este registro.`);
+              logger.warn(`El correo ${correoPrincipal} ya estÃ¡ en uso por otra persona (ID: ${correoEnUsoPorOtro.id_persona}). No se actualizarÃ¡ en este registro.`);
             } else {
               await persona.update({
                 nombre_completo,
@@ -152,7 +152,7 @@ class CitaService {
               }, { transaction: t });
             }
           } else {
-            // Actualizar solo nombres y teléfono si cambiaron
+            // Actualizar solo nombres y telÃ©fono si cambiaron
             await persona.update({
               nombre_completo,
               apellido_completo,
@@ -169,13 +169,13 @@ class CitaService {
           if (personaPorCorreo) {
             // CONFLICTO: El documento es nuevo pero el correo ya existe.
             // Para evitar errores 409 y duplicados inconsistentes, asumimos que es la misma persona 
-            // pero que tal vez se registró con otro documento antes o hubo un error.
+            // pero que tal vez se registrÃ³ con otro documento antes o hubo un error.
             // Por seguridad en este flujo de citas, usamos la persona encontrada por correo.
             persona = personaPorCorreo;
             logger.info(`Persona encontrada por correo (${correoPrincipal}) aunque el documento es distinto.`);
 
             // Actualizamos el documento si es necesario? Mejor no por seguridad, 
-            // solo actualizamos nombres y teléfono.
+            // solo actualizamos nombres y telÃ©fono.
             await persona.update({
               nombre_completo,
               apellido_completo,
@@ -211,6 +211,35 @@ class CitaService {
           throw asBadRequest('Ya existe una cita con la misma informacion para este usuario');
         }
 
+        // 3.5. Validar límites (3 citas pendientes por usuario y 5 solicitudes por cupo)
+        const citasPendientes = await Cita.count({
+          where: {
+            id_persona: persona.id_persona,
+            id_estado_cita: { [Op.in]: [1, 2, 3, 4] } // Solicitada, Confirmada, Programada, Reagendada
+          },
+          transaction: t
+        });
+
+        if (citasPendientes >= 3) {
+          throw asBadRequest('Has alcanzado el límite máximo de 3 citas pendientes. Por favor completa o cancela alguna antes de agendar una nueva.');
+        }
+
+        if (requiereInmueble) {
+          const solicitudesPorCupo = await Cita.count({
+            where: {
+              id_inmueble: dataCita.id_inmueble,
+              fecha_cita: normalizarFechaCita(dataCita.fecha_cita),
+              hora_inicio: dataCita.hora_inicio,
+              id_estado_cita: 1 // Solicitada
+            },
+            transaction: t
+          });
+
+          if (solicitudesPorCupo >= 5) {
+            throw asBadRequest('Este horario ya ha alcanzado el límite máximo de solicitudes permitidas.');
+          }
+        }
+
         // 4. Crear la cita si no existe duplicado
         const nuevaCita = await Cita.create({
           id_persona: persona.id_persona,
@@ -222,7 +251,7 @@ class CitaService {
           id_estado_cita: dataCita.id_estado_cita || 1, // 1 = Solicitada
           observaciones: dataCita.observaciones || null,
           id_agente_asignado: null,
-          id_usuario_creador: dataCita.id_usuario_creador // ✅ Agregado: quién creó la cita
+          id_usuario_creador: dataCita.id_usuario_creador // âœ… Agregado: quiÃ©n creÃ³ la cita
         }, { transaction: t });
 
         return await this.obtenerCitaPorId(nuevaCita.id_cita, t);
@@ -261,8 +290,8 @@ class CitaService {
 
     if (!cita) throw new Error('Cita no encontrada');
 
-    // ✅ FORZAR VALORES POR DEFECTO PARA CAMPOS NULLABLE
-    // ⚠️ IMPORTANTE: Usar ?? (nullish coalescing) para NO sobrescribir valores válidos (como 0)
+    // âœ… FORZAR VALORES POR DEFECTO PARA CAMPOS NULLABLE
+    // âš ï¸ IMPORTANTE: Usar ?? (nullish coalescing) para NO sobrescribir valores vÃ¡lidos (como 0)
     const citaData = cita.toJSON();
     citaData.ediciones_realizadas = citaData.ediciones_realizadas ?? 0;
     citaData.ediciones_maximas = citaData.ediciones_maximas ?? 2;
@@ -272,9 +301,9 @@ class CitaService {
 
   async obtenerTodasLasCitas(filtros = {}) {
     try {
-      logger.info(`🔍 Consultando citas con filtros: ${JSON.stringify(filtros)}`);
+      logger.info(`ðŸ” Consultando citas con filtros: ${JSON.stringify(filtros)}`);
 
-      // ✅ OPTIMIZACIÓN: Usar Sequelize con includes optimizados y paginación
+      // âœ… OPTIMIZACIÃ“N: Usar Sequelize con includes optimizados y paginaciÃ³n
       const includeOptions = [
         {
           association: 'cliente',
@@ -308,8 +337,10 @@ class CitaService {
       if (filtros.id_estado_cita) whereClause.id_estado_cita = filtros.id_estado_cita;
       if (filtros.fecha_cita) whereClause.fecha_cita = filtros.fecha_cita;
       if (filtros.id_agente_asignado) whereClause.id_agente_asignado = filtros.id_agente_asignado;
+      if (filtros.id_inmueble) whereClause.id_inmueble = filtros.id_inmueble;
+      if (filtros.id_servicio) whereClause.id_servicio = filtros.id_servicio;
 
-      // ✅ OPTIMIZACIÓN: Usar paginación si se especifica
+      // âœ… OPTIMIZACIÃ“N: Usar paginaciÃ³n si se especifica
       const queryOptions = {
         where: whereClause,
         include: includeOptions,
@@ -317,10 +348,10 @@ class CitaService {
           ['fecha_cita', 'DESC'],
           ['hora_inicio', 'ASC']
         ],
-        logging: false // ✅ Deshabilitar logging SQL para mejor rendimiento
+        logging: false // âœ… Deshabilitar logging SQL para mejor rendimiento
       };
 
-      // Aplicar paginación si se especifica
+      // Aplicar paginaciÃ³n si se especifica
       if (filtros.page && filtros.limit) {
         const offset = (filtros.page - 1) * filtros.limit;
         queryOptions.limit = filtros.limit;
@@ -329,7 +360,7 @@ class CitaService {
 
       const { count, rows } = await Cita.findAndCountAll(queryOptions);
 
-      logger.info(`✅ ${rows.length} citas obtenidas exitosamente`);
+      logger.info(`âœ… ${rows.length} citas obtenidas exitosamente`);
 
       // Transformar al formato esperado por el frontend
       const citasFormateadas = rows.map(cita => ({
@@ -386,7 +417,7 @@ class CitaService {
         } : null
       }));
 
-      // ✅ OPTIMIZACIÓN: Retornar con paginación si se aplicó
+      // âœ… OPTIMIZACIÃ“N: Retornar con paginaciÃ³n si se aplicÃ³
       if (filtros.page && filtros.limit) {
         return {
           citas: citasFormateadas,
@@ -397,11 +428,11 @@ class CitaService {
         };
       }
 
-      // Retornar array simple si no hay paginación
+      // Retornar array simple si no hay paginaciÃ³n
       return citasFormateadas;
 
     } catch (error) {
-      logger.error(`❌ Error en obtenerTodasLasCitas: ${error.message}`);
+      logger.error(`âŒ Error en obtenerTodasLasCitas: ${error.message}`);
       throw error;
     }
   }
@@ -440,6 +471,26 @@ class CitaService {
         fecha_confirmacion: new Date()
       });
 
+      // Bloqueo Inteligente: Cancelar otras solicitudes para el mismo espacio
+      if (cita.id_inmueble && cita.id_servicio === 1) { // Solo para Visitas
+        await Cita.update(
+          {
+            id_estado_cita: 6, // Cancelada
+            motivo_cancelacion: 'Lo sentimos, este horario ya fue tomado por otro usuario',
+            fecha_cancelacion: new Date()
+          },
+          {
+            where: {
+              id_inmueble: cita.id_inmueble,
+              fecha_cita: cita.fecha_cita,
+              hora_inicio: cita.hora_inicio,
+              id_estado_cita: { [Op.in]: [1, 4] }, // Solicitada o Reagendada
+              id_cita: { [Op.ne]: id }
+            }
+          }
+        );
+      }
+
       // Retornar la cita con includes completos
       return await this.obtenerCitaPorId(id);
     } catch (error) {
@@ -470,7 +521,7 @@ class CitaService {
   async reagendarCita(id, nuevosDatos) {
     const result = await sequelize.transaction(async (t) => {
       try {
-        logger.info(`🔄 Reagendando cita ${id} con datos: ${JSON.stringify(nuevosDatos)}`);
+        logger.info(`ðŸ”„ Reagendando cita ${id} con datos: ${JSON.stringify(nuevosDatos)}`);
 
         // Tomar instancia de Sequelize (no JSON) para poder usar update
         const citaModel = await Cita.findByPk(id, { transaction: t });
@@ -494,7 +545,7 @@ class CitaService {
 
         await citaModel.update(datosActualizados, { transaction: t });
 
-        // Si se cambió el agente, registrar en historial de asignaciones
+        // Si se cambiÃ³ el agente, registrar en historial de asignaciones
         if (idAgenteAnterior !== nuevosDatos.id_agente_asignado) {
           const { HistorialAsignacionAgente } = require('../models');
           await HistorialAsignacionAgente.create({
@@ -508,11 +559,11 @@ class CitaService {
           }, { transaction: t });
         }
 
-        logger.info(`✅ Cita ${id} reagendada exitosamente`);
+        logger.info(`âœ… Cita ${id} reagendada exitosamente`);
         return await this.obtenerCitaPorId(id, t);
 
       } catch (error) {
-        logger.error(`❌ Error reagendando cita ${id}: ${error.message}`);
+        logger.error(`âŒ Error reagendando cita ${id}: ${error.message}`);
         throw error;
       }
     });
@@ -601,6 +652,27 @@ class CitaService {
             id_estado_cita: 2, // Confirmada
             fecha_confirmacion: new Date()
           }, { transaction: t });
+
+          // Bloqueo Inteligente: Cancelar otras solicitudes para el mismo espacio
+          if (cita.id_inmueble && cita.id_servicio === 1) { // Solo para Visitas
+            await Cita.update(
+              {
+                id_estado_cita: 6, // Cancelada
+                motivo_cancelacion: 'Lo sentimos, este horario ya fue tomado por otro usuario',
+                fecha_cancelacion: new Date()
+              },
+              {
+                where: {
+                  id_inmueble: cita.id_inmueble,
+                  fecha_cita: cita.fecha_cita,
+                  hora_inicio: cita.hora_inicio,
+                  id_estado_cita: 1, // Solicitada
+                  id_cita: { [Op.ne]: idCita }
+                },
+                transaction: t
+              }
+            );
+          }
         }
 
         const { HistorialAsignacionAgente } = require('../models');
@@ -755,7 +827,7 @@ class CitaService {
       return historialFormateado;
 
     } catch (error) {
-      logger.error(`❌ Error obteniendo historial: ${error.message}`);
+      logger.error(`âŒ Error obteniendo historial: ${error.message}`);
       throw error;
     }
   }
@@ -763,7 +835,7 @@ class CitaService {
   /**
    * Obtener cita con historial de asignaciones completo
    * @param {number} idCita - ID de la cita
-   * @param {Object} transaction - Transacción opcional
+   * @param {Object} transaction - TransacciÃ³n opcional
    * @returns {Promise<Object>} Cita con historial
    */
   async obtenerCitaConHistorial(idCita, transaction = null) {
@@ -777,18 +849,18 @@ class CitaService {
       };
 
     } catch (error) {
-      logger.error(`❌ Error obteniendo cita con historial: ${error.message}`);
+      logger.error(`âŒ Error obteniendo cita con historial: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * ✅ MÉTODO OPTIMIZADO: Actualizar solo el estado de la cita sin cargar asociaciones
+   * âœ… MÃ‰TODO OPTIMIZADO: Actualizar solo el estado de la cita sin cargar asociaciones
    * Reduce el tiempo de respuesta de ~1 segundo a ~50-100ms
    */
   async actualizarEstadoCitaOptimizado(idCita, idEstadoCita) {
     try {
-      logger.info(`🔄 Actualizando estado de cita ${idCita} a ${idEstadoCita} (optimizado)`);
+      logger.info(`ðŸ”„ Actualizando estado de cita ${idCita} a ${idEstadoCita} (optimizado)`);
 
       // Validar que la cita existe
       const citaExiste = await Cita.findByPk(idCita, {
@@ -815,16 +887,16 @@ class CitaService {
         throw new Error('No se pudo actualizar el estado de la cita');
       }
 
-      logger.info(`✅ Estado de cita ${idCita} actualizado a ${idEstadoCita} (optimizado)`);
+      logger.info(`âœ… Estado de cita ${idCita} actualizado a ${idEstadoCita} (optimizado)`);
 
-      // Retornar solo los datos mínimos necesarios para la actualización optimista
+      // Retornar solo los datos mÃ­nimos necesarios para la actualizaciÃ³n optimista
       return {
         id_cita: idCita,
         id_estado_cita: idEstadoCita,
         fecha_actualizacion: new Date()
       };
     } catch (error) {
-      logger.error(`❌ Error en actualizarEstadoCitaOptimizado: ${error.message}`);
+      logger.error(`âŒ Error en actualizarEstadoCitaOptimizado: ${error.message}`);
       throw error;
     }
   }
@@ -837,7 +909,7 @@ class CitaService {
    */
   async obtenerCitasPorUsuario(userId, filtros = {}) {
     try {
-      logger.info(`🔍 Consultando citas para usuario ${userId} con filtros: ${JSON.stringify(filtros)}`);
+      logger.info(`ðŸ” Consultando citas para usuario ${userId} con filtros: ${JSON.stringify(filtros)}`);
 
       // Verificar roles del usuario
       const { Persona, Rol } = require('../models');
@@ -863,7 +935,7 @@ class CitaService {
 
       let whereClause = {};
 
-      // Aplicar filtros básicos
+      // Aplicar filtros bÃ¡sicos
       if (filtros.id_estado_cita) whereClause.id_estado_cita = filtros.id_estado_cita;
       if (filtros.fecha_cita) whereClause.fecha_cita = filtros.fecha_cita;
       if (filtros.id_agente_asignado) whereClause.id_agente_asignado = filtros.id_agente_asignado;
@@ -878,7 +950,7 @@ class CitaService {
       }
       // Si es super admin o admin, no filtra adicional (ve todas)
 
-      logger.info(`📋 WHERE clause para usuario ${userId}: ${JSON.stringify(whereClause)}`);
+      logger.info(`ðŸ“‹ WHERE clause para usuario ${userId}: ${JSON.stringify(whereClause)}`);
 
       const citas = await Cita.findAll({
         where: whereClause,
@@ -970,33 +1042,33 @@ class CitaService {
         } : null
       }));
 
-      logger.info(`✅ ${citasFormateadas.length} citas obtenidas para usuario ${userId} (${roles.join(', ')})`);
+      logger.info(`âœ… ${citasFormateadas.length} citas obtenidas para usuario ${userId} (${roles.join(', ')})`);
       return citasFormateadas;
 
     } catch (error) {
-      logger.error(`❌ Error en obtenerCitasPorUsuario: ${error.message}`);
+      logger.error(`âŒ Error en obtenerCitasPorUsuario: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * Obtener citas del usuario como cliente (citas que agendó para sí mismo)
+   * Obtener citas del usuario como cliente (citas que agendÃ³ para sÃ­ mismo)
    * @param {number} userId - ID del usuario (cliente)
    * @param {Object} filtros - Filtros adicionales (estado, fecha, etc.)
    * @returns {Promise<Array>} Lista de citas del usuario como cliente
    */
   async obtenerCitasPorCliente(userId, filtros = {}) {
     try {
-      logger.info(`🔍 Consultando citas como cliente para usuario ${userId} con filtros: ${JSON.stringify(filtros)}`);
+      logger.info(`ðŸ” Consultando citas como cliente para usuario ${userId} con filtros: ${JSON.stringify(filtros)}`);
 
       let whereClause = { id_persona: userId };
 
-      // Aplicar filtros básicos
+      // Aplicar filtros bÃ¡sicos
       if (filtros.id_estado_cita) whereClause.id_estado_cita = filtros.id_estado_cita;
       if (filtros.fecha_cita) whereClause.fecha_cita = filtros.fecha_cita;
       if (filtros.id_servicio) whereClause.id_servicio = filtros.id_servicio;
 
-      logger.info(`📋 WHERE clause para cliente ${userId}: ${JSON.stringify(whereClause)}`);
+      logger.info(`ðŸ“‹ WHERE clause para cliente ${userId}: ${JSON.stringify(whereClause)}`);
 
       const citas = await Cita.findAll({
         where: whereClause,
@@ -1081,11 +1153,11 @@ class CitaService {
         } : null
       }));
 
-      logger.info(`✅ ${citasFormateadas.length} citas obtenidas para cliente ${userId}`);
+      logger.info(`âœ… ${citasFormateadas.length} citas obtenidas para cliente ${userId}`);
       return citasFormateadas;
 
     } catch (error) {
-      logger.error(`❌ Error en obtenerCitasPorCliente: ${error.message}`);
+      logger.error(`âŒ Error en obtenerCitasPorCliente: ${error.message}`);
       throw error;
     }
   }
@@ -1093,11 +1165,11 @@ class CitaService {
   /**
    * Incrementar el contador de ediciones realizadas sobre una cita
    * @param {number} idCita - ID de la cita
-   * @returns {Promise<boolean>} True si se incrementó exitosamente
+   * @returns {Promise<boolean>} True si se incrementÃ³ exitosamente
    */
   async incrementarContadorEdiciones(idCita) {
     try {
-      logger.info(`🔢 Incrementando contador de ediciones para cita ${idCita}`);
+      logger.info(`ðŸ”¢ Incrementando contador de ediciones para cita ${idCita}`);
 
       const [affectedRows] = await Cita.increment('ediciones_realizadas', {
         where: { id_cita: idCita },
@@ -1108,31 +1180,27 @@ class CitaService {
         throw new Error('No se pudo incrementar el contador de ediciones');
       }
 
-      logger.info(`✅ Contador de ediciones incrementado para cita ${idCita}`);
+      logger.info(`âœ… Contador de ediciones incrementado para cita ${idCita}`);
       return true;
 
     } catch (error) {
-      logger.error(`❌ Error incrementando contador de ediciones para cita ${idCita}: ${error.message}`);
+      logger.error(`âŒ Error incrementando contador de ediciones para cita ${idCita}: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * ✅ MÉTODO COMBINADO: Incrementar contador + Actualizar cita en una transacción atómica
+   * âœ… MÃ‰TODO COMBINADO: Incrementar contador + Actualizar cita en una transacciÃ³n atÃ³mica
    * @param {number} idCita - ID de la cita
    * @param {Object} nuevosDatos - Datos para actualizar
    * @returns {Promise<Object>} Cita actualizada con contador incrementado
    */
   async incrementarContadorEdicionesActualizar(idCita, nuevosDatos = {}) {
-    console.log(`🚨🚨🚨 [SERVICE] incrementarContadorEdicionesActualizar llamado para cita ${idCita}`);
-    console.log(`🚨🚨🚨 [SERVICE] Datos recibidos:`, nuevosDatos);
 
     const result = await sequelize.transaction(async (t) => {
       try {
-        console.log(`🔢🔄 [DEBUG] Entrando a transacción para cita ${idCita}`);
-        console.log(`🔢🔄 [DEBUG] Datos recibidos en try: ${JSON.stringify(nuevosDatos)}`);
-        logger.info(`🔢🔄 [DEBUG] Incrementando contador Y actualizando cita ${idCita} atómicamente`);
-        logger.info(`🔢🔄 [DEBUG] Datos recibidos: ${JSON.stringify(nuevosDatos)}`);
+        logger.info(`ðŸ”¢ðŸ”„ [DEBUG] Incrementando contador Y actualizando cita ${idCita} atÃ³micamente`);
+        logger.info(`ðŸ”¢ðŸ”„ [DEBUG] Datos recibidos: ${JSON.stringify(nuevosDatos)}`);
 
         // Verificar cita original antes de actualizar
         const citaOriginal = await Cita.findByPk(idCita, {
@@ -1159,9 +1227,9 @@ class CitaService {
         }
 
         const edicionesMaximas = citaOriginal.ediciones_maximas ?? 2;
-        logger.info(`🔢🔄 [DEBUG] Cita original antes: fecha=${citaOriginal.fecha_cita}, ediciones=${citaOriginal.ediciones_realizadas}/${edicionesMaximas}`);
+        logger.info(`ðŸ”¢ðŸ”„ [DEBUG] Cita original antes: fecha=${citaOriginal.fecha_cita}, ediciones=${citaOriginal.ediciones_realizadas}/${edicionesMaximas}`);
 
-        // Obtener el valor actual del contador y actualizar todo en una sola operación
+        // Obtener el valor actual del contador y actualizar todo en una sola operaciÃ³n
         const citaActual = await Cita.findByPk(idCita, {
           attributes: ['id_cita', 'ediciones_realizadas'],
           transaction: t
@@ -1336,15 +1404,15 @@ class CitaService {
           fecha_actualizacion: new Date()
         };
 
-        logger.info(`🔢🔄 [DEBUG] ACTUALIZACIÓN FINAL - Datos: ${JSON.stringify(datosCompletos)}`);
+        logger.info(`ðŸ”¢ðŸ”„ [DEBUG] ACTUALIZACIÃ“N FINAL - Datos: ${JSON.stringify(datosCompletos)}`);
 
-        // Usar Sequelize update con todos los campos en una sola operación atómica
+        // Usar Sequelize update con todos los campos en una sola operaciÃ³n atÃ³mica
         const [affectedRows] = await Cita.update(datosCompletos, {
           where: { id_cita: idCita },
           transaction: t
         });
 
-        logger.info(`✅ [DEBUG] UPDATE-Sequelize ejecutado. Filas afectadas: ${affectedRows}`);
+        logger.info(`âœ… [DEBUG] UPDATE-Sequelize ejecutado. Filas afectadas: ${affectedRows}`);
 
         if (affectedRows === 0) {
           throw new Error('No se pudo actualizar la cita');
@@ -1352,12 +1420,33 @@ class CitaService {
 
         // Verificar que realmente se guardó en la base de datos y retornar con includes completos
         const citaFinal = await this.obtenerCitaPorId(idCita, t);
-        logger.info(`🔢🔄 [DEBUG] VERIFICACIÓN POST-UPDATE: fecha=${citaFinal.fecha_cita}, ediciones=${citaFinal.ediciones_realizadas}/${citaFinal.ediciones_maximas}`);
-        logger.info(`🔢🔄 [DEBUG] Cita final retornada con EDICIONES: ${citaFinal.ediciones_realizadas}`);
+
+        // Bloqueo Inteligente: Si el nuevo estado es 'Reagendada' (4), cancelar otras solicitudes en el mismo slot
+        if (dataUpdate.id_estado_cita === 4 && citaFinal.id_inmueble && citaFinal.id_servicio === 1) {
+          await Cita.update(
+            {
+              id_estado_cita: 6, // Cancelada
+              motivo_cancelacion: 'Lo sentimos, este horario ya fue tomado por otro usuario',
+              fecha_cancelacion: new Date()
+            },
+            {
+              where: {
+                id_inmueble: citaFinal.id_inmueble,
+                fecha_cita: citaFinal.fecha_cita,
+                hora_inicio: citaFinal.hora_inicio,
+                id_estado_cita: { [Op.in]: [1, 4] }, // Solicitada o Reagendada
+                id_cita: { [Op.ne]: idCita }
+              },
+              transaction: t
+            }
+          );
+          logger.info(`ðŸ”¢ðŸ”„ [DEBUG] Bloqueo Inteligente ejecutado para reagendamiento de cita ${idCita}`);
+        }
+
         return citaFinal;
 
       } catch (error) {
-        logger.error(`❌ Error en operación atómica para cita ${idCita}: ${error.message}`);
+        logger.error(`âŒ Error en operaciÃ³n atÃ³mica para cita ${idCita}: ${error.message}`);
         throw error;
       }
     });

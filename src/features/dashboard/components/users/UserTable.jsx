@@ -20,31 +20,20 @@ const UserTable = ({
 }) => {
   const renderInvitationStatus = (user) => {
     const isDisabled = user.estado === false;
-    const isVerified = user.correo_verificado === true;
-    const hasAccount = user.tiene_cuenta === true;
-    const rawText = (user.invitacion_estado || '').toLowerCase();
+    const hasAccount = user.tiene_cuenta === true || user.tiene_cuenta === 1;
 
-    let shortLabel = 'Cuenta activa';
+    let shortLabel = user.invitacion_estado || 'Cuenta activa';
     let variant = { bg: 'bg-green-100/60', text: 'text-green-800', border: 'border border-green-200' };
 
     if (isDisabled) {
       shortLabel = 'Cuenta deshabilitada';
       variant = { bg: 'bg-red-100/70', text: 'text-red-800', border: 'border border-red-200' };
-    } else if (isVerified) {
-      shortLabel = 'Cuenta activa';
-      variant = { bg: 'bg-green-100/60', text: 'text-green-800', border: 'border border-green-200' };
-    } else if (rawText.includes('verificacion')) {
-      shortLabel = 'Verificacion pendiente';
-      variant = { bg: 'bg-amber-100/60', text: 'text-amber-800', border: 'border border-amber-200' };
-    } else if (hasAccount && rawText.includes('pendiente')) {
-      shortLabel = 'Verificacion pendiente';
-      variant = { bg: 'bg-amber-100/60', text: 'text-amber-800', border: 'border border-amber-200' };
-    } else if (hasAccount) {
-      shortLabel = 'Verificacion pendiente';
-      variant = { bg: 'bg-amber-100/60', text: 'text-amber-800', border: 'border border-amber-200' };
-    } else if (rawText.includes('activacion') || rawText.includes('pendiente')) {
+    } else if (!hasAccount) {
       shortLabel = 'Activacion pendiente';
       variant = { bg: 'bg-blue-100/60', text: 'text-blue-800', border: 'border border-blue-200' };
+    } else {
+      shortLabel = 'Cuenta activa';
+      variant = { bg: 'bg-green-100/60', text: 'text-green-800', border: 'border border-green-200' };
     }
 
     return (
@@ -98,12 +87,42 @@ const UserTable = ({
   };
 
   const shouldShowResend = (user) => {
-    return user && user.estado !== false && user.correo_verificado !== true;
+    return user && user.estado !== false && user.tiene_cuenta !== true;
+  };
+
+  // Helper para obtener el objeto de rol protegido activo con prioridad
+  const getProtectedRole = (user) => {
+    const roles = user.roles || [];
+    if (!Array.isArray(roles)) return null;
+
+    const priority = {
+      'super administrador': 1,
+      'administrador': 2,
+      'admin': 3
+    };
+
+    let bestRole = null;
+    let bestPriority = Infinity;
+
+    roles.forEach(rol => {
+      const nombre = (rol.nombre_rol || rol.nombre || rol.name || '').trim().toLowerCase();
+      const isActive = rol.PersonasRol ? !!rol.PersonasRol.estado :
+        rol.through ? !!rol.through.estado : true;
+
+      if (isActive && priority[nombre] < bestPriority) {
+        bestPriority = priority[nombre];
+        bestRole = rol;
+      }
+    });
+
+    return bestRole;
   };
 
   // Componente para vista móvil
   const MobileUserCard = ({ user }) => {
     const isDisabled = user.estado === false;
+    const protectedRole = getProtectedRole(user);
+    const isProtected = !!protectedRole;
 
     return (
       <motion.div
@@ -114,12 +133,17 @@ const UserTable = ({
         <div className="flex justify-between items-start mb-3">
           <div>
             <h3 className="font-medium text-slate-800">{getFullName(user)}</h3>
-            <p className="text-sm text-slate-600">{getDocument(user)}</p>
+            {isProtected ? (
+              <p className="text-sm font-semibold text-blue-600">{protectedRole.nombre_rol}</p>
+            ) : (
+              <p className="text-sm text-slate-600">{getDocument(user)}</p>
+            )}
           </div>
           <UserStatusSelector
             value={user.estado}
             onChange={(newStatus) => onStatusChange(user, newStatus)}
             loading={loadingStatusChanges.has(user.id_persona)}
+            disabled={isProtected}
             className="w-[150px]"
           />
         </div>
@@ -220,15 +244,17 @@ const UserTable = ({
                 <tbody className="divide-y divide-slate-200">
                   {users.map((user, index) => {
                     const isDisabled = user.estado === false;
+                    const protectedRole = getProtectedRole(user);
+                    const isProtected = !!protectedRole;
 
                     return (
                       <motion.tr
                         key={user.id_persona || `user-${index}`}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`hover:bg-slate-50 transition-colors ${isDisabled ? 'opacity-60' : ''}`}
+                        className={`hover:bg-slate-50 transition-colors ${isDisabled || isProtected ? 'opacity-60' : ''}`}
                       >
-                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle">
                           <div className="flex items-start gap-3 min-w-0">
                             <div className="flex-shrink-0 h-11 w-11">
                               <div className="h-11 w-11 rounded-full bg-slate-200 flex items-center justify-center">
@@ -237,16 +263,20 @@ const UserTable = ({
                             </div>
                             <div className="min-w-0 space-y-0.5">
                               <div className="text-sm font-medium text-slate-900 truncate" title={getFullName(user)}>{getFullName(user)}</div>
-                              <div className="2xl:hidden text-xs text-slate-500 truncate" title={getDocument(user)}>
-                                {getDocument(user)}
-                              </div>
+                              {isProtected ? (
+                                <div className="text-xs font-semibold text-blue-600">{protectedRole.nombre_rol}</div>
+                              ) : (
+                                <div className="2xl:hidden text-xs text-slate-500 truncate" title={getDocument(user)}>
+                                  {getDocument(user)}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
-                        <td className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                        <td className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-5 align-middle">
                           <div className="text-sm text-slate-900 truncate" title={getDocument(user)}>{getDocument(user)}</div>
                         </td>
-                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle">
                           <div className="flex items-start gap-2 min-w-0">
                             <Mail className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
                             <span className="text-sm text-slate-900 truncate" title={getEmail(user)}>{getEmail(user)}</span>
@@ -256,24 +286,25 @@ const UserTable = ({
                             <span className="text-sm text-slate-500 truncate" title={formatPhoneNumber(getPhone(user))}>{formatPhoneNumber(getPhone(user))}</span>
                           </div>
                         </td>
-                        <td className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                        <td className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-5 align-middle">
                           {renderInvitationStatus(user)}
                         </td>
-                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle">
                           <UserStatusSelector
                             value={user.estado}
                             onChange={(newStatus) => onStatusChange(user, newStatus)}
                             loading={loadingStatusChanges.has(user.id_persona)}
+                            disabled={isProtected}
                             className="w-full max-w-[150px]"
                           />
                         </td>
-                        <td className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                        <td className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-5 align-middle">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
                             <span className="text-sm text-slate-900 truncate" title={getRegistrationDate(user)}>{getRegistrationDate(user)}</span>
                           </div>
                         </td>
-                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle text-sm font-medium">
+                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle text-sm font-medium">
                           <div className="flex items-center gap-1 flex-nowrap">
                             <motion.button
                               key={`view-${user.id_persona}`}
@@ -287,23 +318,24 @@ const UserTable = ({
                             </motion.button>
                             <motion.button
                               key={`edit-${user.id_persona}`}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => onEdit(user)}
-                              className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
-                              title="Editar usuario"
+                              whileHover={isProtected ? {} : { scale: 1.05 }}
+                              whileTap={isProtected ? {} : { scale: 0.95 }}
+                              onClick={() => !isProtected && onEdit(user)}
+                              disabled={isProtected}
+                              className={`p-2 rounded-lg transition-colors ${isProtected ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-50'}`}
+                              title={isProtected ? "No se puede editar" : "Editar usuario"}
                             >
                               <Edit className="w-4 h-4" />
                             </motion.button>
                             {shouldShowResend(user) && (
                               <motion.button
                                 key={`resend-${user.id_persona}`}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => onResendInvitation && onResendInvitation(user)}
-                                disabled={loadingResend.has(user.id_persona)}
-                                className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-60"
-                                title="Reenviar invitación"
+                                whileHover={isProtected ? {} : { scale: 1.05 }}
+                                whileTap={isProtected ? {} : { scale: 0.95 }}
+                                onClick={() => !isProtected && onResendInvitation && onResendInvitation(user)}
+                                disabled={loadingResend.has(user.id_persona) || isProtected}
+                                className={`p-2 rounded-lg transition-colors ${isProtected ? 'text-slate-300 cursor-not-allowed' : 'text-amber-600 hover:bg-amber-50'} disabled:opacity-60`}
+                                title={isProtected ? "No se puede reenviar" : "Reenviar invitación"}
                               >
                                 {loadingResend.has(user.id_persona) ? (
                                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">

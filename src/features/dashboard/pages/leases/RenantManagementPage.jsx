@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { FaUserPlus, FaEye, FaEdit, FaTrash, FaSearch, FaHome, FaCalendar, FaDollarSign } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Home, Calendar, DollarSign, Users } from 'lucide-react';
+import { FaUserPlus, FaSearch, FaHome, FaCalendar, FaDollarSign } from "react-icons/fa";
+import { Plus, Search, Filter, Eye, ListChecks, Trash2, Home, Calendar, DollarSign, X } from 'lucide-react';
 import RenantForm from "../../components/leases/RenantForm";
-import EditRenantForm from "../../components/leases/EditRenantForm";
 import ViewRenant from "../../components/leases/ViewRenant"; 
 import "../../../../shared/styles/globals.css";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
@@ -19,8 +18,19 @@ const mapApiArriendoToRow = (arriendo = {}) => {
   const inmueble = arriendo.Inmueble || arriendo.inmueble || {};
   const arrendatario = arriendo.arrendatario || arriendo.Arrendatario || {};
   const persona = arrendatario.persona || arrendatario.Persona || {};
-  const codeudor = arriendo.codeudor || arriendo.Codeudor || {};
-  const codeudorPersona = codeudor.persona || codeudor.Persona || {};
+  const codeudor =
+    arriendo.codeudor ||
+    arriendo.Codeudor ||
+    arriendo.codeudor_persona ||
+    arriendo.codeudorPersona ||
+    {};
+
+  const codeudorPersona =
+    codeudor.persona ||
+    codeudor.Persona ||
+    arriendo.codeudor_persona ||
+    arriendo.codeudorPersona ||
+    (codeudor.id_persona ? codeudor : {});
 
   const nombreCompletoBase = arrendatario.nombre_completo || persona.nombre_completo || "";
   const apellidosBase = arrendatario.apellido_completo || persona.apellido_completo || "";
@@ -33,15 +43,77 @@ const mapApiArriendoToRow = (arriendo = {}) => {
   const [primerNombreCod = "", segundoNombreCod = ""] = nombreCompletoCod.split(" ");
   const [primerApellidoCod = "", segundoApellidoCod = ""] = apellidosCod.split(" ");
 
-  const valor = arriendo.valor_mensual || arriendo.valor_arriendo || arriendo.valor_arriendo_mensual || 0;
-  const fechaInicio = arriendo.fecha_inicio || "";
+  const valor = arriendo.valor_mensual || arriendo.valor_arriendo || arriendo.valor_arriendo_mensual || arriendo.precio_arriendo || 0;
+  const fechaInicio = arriendo.fecha_inicio || arriendo.fechaInicio || "";
   const fechaFin = arriendo.fecha_finalizacion || arriendo.fecha_fin || "";
+  const cobros = arriendo.Cobros || arriendo.cobros || [];
+  const cobroOrdenado = cobros
+    .slice()
+    .sort((a, b) => new Date(a.fecha_cobro) - new Date(b.fecha_cobro))[0];
+
+  const fechaCobroRaw =
+    (cobroOrdenado && cobroOrdenado.fecha_cobro) ||
+    arriendo.fecha_cobro ||
+    arriendo.fechaCobro ||
+    fechaInicio;
+  const fechaCobroDate = fechaCobroRaw ? new Date(fechaCobroRaw) : null;
+  const fechaCobroStr =
+    fechaCobroDate && !Number.isNaN(fechaCobroDate.getTime())
+      ? fechaCobroDate.toISOString().slice(0, 10).replace(/-/g, '/')
+      : "";
+
+  // Extraer comodidades para habitaciones y baÃ±os
+  const comodidades = inmueble.comodidades || [];
+  const habCom = comodidades.find(c => c.nombre === "Habitaciones");
+  const banCom = comodidades.find(c => c.nombre === "BaÃ±os" || c.nombre === "BaÃƒÂ±os");
+  const habCantidad = habCom?.Inmueble_Comodidades?.cantidad || habCom?.Inmueble_Comodidad?.cantidad || habCom?.cantidad || "";
+  const banCantidad = banCom?.Inmueble_Comodidades?.cantidad || banCom?.Inmueble_Comodidad?.cantidad || banCom?.cantidad || "";
+
+  const ultimoEstado =
+    arriendo.ultimo_seguimiento_estado ||
+    arriendo.ultimoSeguimientoEstado ||
+    arriendo.seguimientos?.[0]?.estado ||
+    "";
+
+  const ultimoComentario =
+    arriendo.ultimo_seguimiento_comentario ||
+    arriendo.ultimoSeguimientoComentario ||
+    arriendo.ultimo_seguimiento_descripcion ||
+    arriendo.ultimoSeguimientoDescripcion ||
+    arriendo.comentario ||
+    arriendo.seguimientos?.[0]?.descripcion ||
+    arriendo.seguimientos?.[0]?.comentario ||
+    "";
+  const ultimoDescripcion =
+    arriendo.ultimo_seguimiento_descripcion ||
+    arriendo.ultimoSeguimientoDescripcion ||
+    arriendo.seguimientos?.[0]?.descripcion ||
+    arriendo.comentario ||
+    ultimoComentario;
+  const descripcionContrato =
+    arriendo.descripcion_contrato ||
+    arriendo.descripcionContrato ||
+    arriendo.descripcion ||
+    arriendo.descripcion_garantia ||
+    arriendo.observaciones ||
+    arriendo.descripcionInmueble ||
+    arriendo.descripcion_arriendo ||
+    arriendo.descripcion_inmueble ||
+    "";
+
+  const ultimoFechaRaw =
+    arriendo.ultimo_seguimiento_fecha ||
+    arriendo.ultimoSeguimientoFecha ||
+    arriendo.seguimientos?.[0]?.fecha_creacion ||
+    "";
+  const totalSeguimientos = arriendo.total_seguimientos ?? arriendo.totalSeguimientos ?? 0;
 
   return {
     id: arriendo.id_arrendamiento || arriendo.id_arriendo || arriendo.id || Date.now(),
     arrendatarioId: arrendatario.id_arrendatario || arrendatario.id,
     arrendatarioPersona: persona,
     arrendatarioRaw: arrendatario,
+    codeudor, // para que ViewRenant lo tenga directo
     codeudorPersona,
     codeudorRaw: codeudor,
     tipoDocArrendatario: arrendatario.tipo_documento || persona.tipo_documento || "",
@@ -63,9 +135,9 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     tipoInmueble: inmueble.categoria || inmueble.tipo || "",
     registroInmobiliario: inmueble.registro_inmobiliario || inmueble.registro || "",
     nombreInmueble: inmueble.nombre || inmueble.titulo || "",
-    area: inmueble.area_construida || inmueble.m2 || "",
-    habitaciones: inmueble.habitaciones || "",
-    banos: inmueble.banos || "",
+    area: inmueble.area_construida || inmueble.area_terreno || inmueble.m2 || "",
+    habitaciones: habCantidad || inmueble.habitaciones || "",
+    banos: banCantidad || inmueble.banos || "",
     departamento: inmueble.departamento || "",
     ciudad: inmueble.ciudad || "",
     barrio: inmueble.barrio || "",
@@ -74,11 +146,18 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     precioInmueble: formatCurrency(inmueble.precio_arriendo || inmueble.precio || valor),
     fechaInicio: fechaInicio ? String(fechaInicio).slice(0, 10) : "",
     fechaFinal: fechaFin ? String(fechaFin).slice(0, 10) : "",
-    fechaCobro: "",
+    fechaCobro: fechaCobroStr || "No especificada",
     precio: formatCurrency(valor),
+    descripcion: descripcionContrato,
+    descripcionContrato,
     estado: arriendo.estado || "Pendiente",
     fechaLimite: "",
     valorMensual: formatCurrency(valor),
+    ultimoSeguimientoEstado: ultimoEstado,
+    ultimoSeguimientoComentario: ultimoComentario,
+    ultimoSeguimientoDescripcion: ultimoDescripcion,
+    ultimoSeguimientoFecha: ultimoFechaRaw ? String(ultimoFechaRaw).slice(0, 10) : "",
+    totalSeguimientos,
   };
 };
 
@@ -88,8 +167,8 @@ export function RenantManagementPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [editingRent, setEditingRent] = useState(null);
   const [viewingRent, setViewingRent] = useState(null);
+  const [statusRent, setStatusRent] = useState(null); // arriendo en seguimiento (solo estado)
   const [statusMessage, setStatusMessage] = useState(null);
   const fetchArriendos = useCallback(async () => {
     setIsLoading(true);
@@ -122,29 +201,52 @@ export function RenantManagementPage() {
     // Solo refrescamos desde API; crear arrendatario no debe agregar a la lista de arriendos
     fetchArriendos();
     setShowForm(false);
-    setEditingRent(null);
     setStatusMessage({ type: "success", message: "Arriendo sincronizado con la API" });
   };
 
-  // EDITAR EXISTENTE
-  const handleEditSave = (updatedRent) => {
-    // Refrescamos desde API para evitar datos locales desfasados
-    fetchArriendos();
-    setShowForm(false);
-    setEditingRent(null);
+  const openStatusModal = (rent) => {
+    setStatusRent({
+      ...rent,
+      nuevoEstado: rent.estado || "Activo",
+      comentario: "",
+    });
   };
 
-  const handleEditClick = (rent) => {
-    setEditingRent(rent);
-    setShowForm(true);
+  const closeStatusModal = () => setStatusRent(null);
+
+  const handleStatusSave = async () => {
+    if (!statusRent) return;
+    const { id, nuevoEstado, comentario } = statusRent;
+    try {
+      setStatusMessage(null);
+      await arriendoApiService.actualizarEstado(id, {
+        estado: nuevoEstado,
+        comentario: comentario?.trim() || undefined,
+      });
+      await fetchArriendos();
+      closeStatusModal();
+      setStatusMessage({ type: "success", message: "Estado del arriendo actualizado" });
+    } catch (error) {
+      setStatusMessage({
+        type: "error",
+        message: error?.response?.data?.message || error?.message || "No se pudo actualizar el estado",
+      });
+    }
   };
 
   // 🗑️ ELIMINAR
   const handleDelete = async (id) => {
-    // No hay endpoint de borrado de arriendos en uso; removemos local y refrescamos
     if (!window.confirm("¿Estás seguro de eliminar este registro?")) return;
-    setArriendos((prev) => prev.filter((r) => r.id !== id));
-    setStatusMessage({ type: "info", message: "Arriendo removido de la lista local. Refresca si persiste." });
+    try {
+      await arriendoApiService.eliminarArriendo(id);
+      setArriendos((prev) => prev.filter((r) => r.id !== id));
+      setStatusMessage({ type: "success", message: "Arriendo eliminado correctamente" });
+    } catch (error) {
+      setStatusMessage({
+        type: "error",
+        message: error?.response?.data?.message || error?.message || "No se pudo eliminar el arriendo",
+      });
+    }
   };
 
   const filteredRents =
@@ -181,7 +283,7 @@ export function RenantManagementPage() {
     }
   };
 
-  // Calcular estadísticas
+  // Calcular estadÃ­sticas
   const stats = {
     total: filteredRents.length,
     activos: filteredRents.filter(r => r.estado === 'Pagado' || r.estado === 'Activo').length,
@@ -192,26 +294,15 @@ export function RenantManagementPage() {
     }, 0)
   };
 
-  // 🔑 --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
+  // ðŸ”‘ --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
   const renderFormModal = () => {
     if (!showForm) return null;
 
-    const modalContent = editingRent ? (
-      <EditRenantForm
-        isOpen={showForm}
-        onClose={() => {
-          setShowForm(false);
-          setEditingRent(null);
-        }}
-        onSubmit={handleEditSave}
-        initialData={editingRent}
-      />
-    ) : (
+    const modalContent = (
       <RenantForm
         isOpen={showForm}
         onClose={() => {
           setShowForm(false);
-          setEditingRent(null);
         }}
         onSubmit={handleNewRent}
       />
@@ -228,6 +319,94 @@ export function RenantManagementPage() {
 
     const modalContent = (
       <ViewRenant renant={viewingRent} onClose={() => setViewingRent(null)} />
+    );
+
+    return ReactDOM.createPortal(
+      modalContent,
+      document.getElementById('modal-root') || document.body
+    );
+  };
+
+  const renderStatusModal = () => {
+    if (!statusRent) return null;
+    const estados = ["Activo", "Al día", "Pendiente", "Recuperación", "Finalizado", "Cancelado"];
+
+    const modalContent = (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Seguimiento de Arriendo</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Cambia únicamente el estado del contrato. Los demás datos son de solo lectura.
+              </p>
+            </div>
+            <button
+              onClick={closeStatusModal}
+              className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
+              aria-label="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm text-slate-700 space-y-1">
+            <div className="flex justify-between">
+              <span className="font-semibold">Arrendatario:</span>
+              <span>{statusRent.primerNombreArrendatario} {statusRent.primerApellidoArrendatario}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-semibold">Inmueble:</span>
+              <span>{statusRent.tipoInmueble} · {statusRent.registroInmobiliario}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-semibold">Periodo:</span>
+              <span>{statusRent.fechaInicio} – {statusRent.fechaFinal}</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-slate-700">
+              Estado del arriendo
+              <select
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={statusRent.nuevoEstado}
+                onChange={(e) => setStatusRent((prev) => ({ ...prev, nuevoEstado: e.target.value }))}
+              >
+                {estados.map((estado) => (
+                  <option key={estado} value={estado}>{estado}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm font-medium text-slate-700">
+              Descripción (opcional)
+              <textarea
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Ej: Pago recibido, se cambia a 'Al día'"
+                value={statusRent.comentario}
+                onChange={(e) => setStatusRent((prev) => ({ ...prev, comentario: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              onClick={closeStatusModal}
+            >
+              Cancelar
+            </button>
+            <button
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md"
+              onClick={handleStatusSave}
+            >
+              Guardar estado
+            </button>
+          </div>
+        </div>
+      </div>
     );
 
     return ReactDOM.createPortal(
@@ -254,7 +433,6 @@ export function RenantManagementPage() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => {
-              setEditingRent(null);
               setStatusMessage(null);
               setShowForm(true);
             }}
@@ -347,14 +525,9 @@ export function RenantManagementPage() {
                       >
                         {/* ARRENDATARIO */}
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-3 justify-center">
-                            <div className="bg-blue-100 rounded-lg p-2">
-                              <Users className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div className="text-center">
-                              <strong className="text-slate-800 block">{r.primerNombreArrendatario} {r.primerApellidoArrendatario}</strong>
-                              <p className="text-sm text-slate-500">{r.correoArrendatario}</p>
-                            </div>
+                          <div className="text-center">
+                            <strong className="text-slate-800 block">{r.primerNombreArrendatario} {r.primerApellidoArrendatario}</strong>
+                            <p className="text-sm text-slate-500">{r.correoArrendatario}</p>
                           </div>
                         </td>
                         
@@ -389,20 +562,20 @@ export function RenantManagementPage() {
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              aria-label="Editar arriendo"
-                              className="text-green-600 hover:text-green-800 transition-colors p-1 rounded-lg hover:bg-green-50"
-                              onClick={() => handleEditClick(r)}
+                              aria-label="Ver arriendo"
+                              className="text-blue-600 hover:text-blue-800 transition-colors p-1 rounded-lg hover:bg-blue-50"
+                              onClick={() => setViewingRent(r)}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </motion.button>
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              aria-label="Ver arriendo"
-                              className="text-sky-600 hover:text-sky-800 transition-colors p-1 rounded-lg hover:bg-sky-50"
-                              onClick={() => setViewingRent(r)}
+                              aria-label="Seguimiento de arriendo"
+                              className="text-amber-600 hover:text-amber-800 transition-colors p-1 rounded-lg hover:bg-amber-50"
+                              onClick={() => openStatusModal(r)}
                             >
-                              <Eye className="w-4 h-4" />
+                              <ListChecks className="w-4 h-4" />
                             </motion.button>
                             <motion.button
                               whileHover={{ scale: 1.1 }}
@@ -440,6 +613,8 @@ export function RenantManagementPage() {
       {/* MODALES CON PORTAL */}
       {renderFormModal()}
       {renderViewModal()}
+      {renderStatusModal()}
     </>
   );
 }
+

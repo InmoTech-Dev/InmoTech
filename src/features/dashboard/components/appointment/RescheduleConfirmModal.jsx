@@ -220,7 +220,6 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
         return `${hours12}:${String(minutes).padStart(2, '0')} ${isPM ? 'pm' : 'am'}`;
       }
     }
-
     // Clean multiple AM/PM suffixes for display safety
     let cleanedTime = timeString;
     const amMatches = timeString.match(/\b(am|AM)\b/g);
@@ -231,13 +230,11 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
       const lastAM = amMatches && amMatches.length > 0 ? amMatches[amMatches.length - 1] : null;
       const lastPM = pmMatches && pmMatches.length > 0 ? pmMatches[pmMatches.length - 1] : null;
       cleanedTime = timeString.replace(/\s*\b(am|pm)\b/gi, '');
-
       if (lastPM) {
         cleanedTime += ' ' + lastPM.toLowerCase();
       } else if (lastAM) {
         cleanedTime += ' ' + lastAM.toLowerCase();
       }
-
       cleanedTime = cleanedTime.trim();
     }
 
@@ -269,7 +266,6 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
   const clienteTelefono = cliente.telefono || 'No especificado';
   const servicioNombre = servicio.nombre_servicio || 'Servicio no especificado';
   const inmuebleInfo = inmueble.direccion || 'Propiedad no especificada';
-
   // ✅ CORREGIDO: Usar fecha_cita en lugar de fecha
   const fechaActual = appointment.fecha_cita || appointment.fecha;
   const horaActual = formatTime(appointment.hora_inicio || appointment.hora || '');

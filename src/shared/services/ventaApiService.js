@@ -19,17 +19,45 @@ export const ventaApiService = {
     return apiClient.get(`/sales/${id}`);
   },
 
+  async obtenerCatalogoEstados() {
+    return apiClient.get('/sales/statuses/catalog');
+  },
+
   async actualizarVenta(id, payload) {
     return apiClient.patch(`/sales/${id}`, payload);
   },
 
+  async cambiarEstado(id, payload) {
+    try {
+      return await apiClient.patch(`/sales/${id}/status`, payload);
+    } catch (error) {
+      // Compatibilidad: si la ruta no existe en el backend actual, usar el endpoint antiguo de tracking
+      if (error.status === 404) {
+        return apiClient.post(`/sales/${id}/tracking`, payload);
+      }
+      throw error;
+    }
+  },
+
   async agregarTracking(id, payload) {
-    console.log("se camibio estado");
+    // Ruta antigua; se mantiene por compatibilidad pero la lógica nueva usa cambiarEstado
     return apiClient.post(`/sales/${id}/tracking`, payload);
   },
 
   async crearVenta(payload) {
     return apiClient.post('/sales', payload);
+  },
+
+  async subirAdjunto(idVenta, file, tipo) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tipo', tipo);
+    // No enviar cabecera headers anidada; fetch infiere multipart con FormData
+    return apiClient.post(`/sales/${idVenta}/attachments`, formData);
+  },
+
+  async listarAdjuntos(idVenta) {
+    return apiClient.get(`/sales/${idVenta}/attachments`);
   },
 };
 

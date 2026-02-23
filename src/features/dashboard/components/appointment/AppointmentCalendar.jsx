@@ -62,9 +62,8 @@ const NavigationZone = ({ id, direction, onNavigate }) => {
   return (
     <div
       ref={setNodeRef}
-      className={`absolute inset-0 pointer-events-auto transition-all duration-200 ${
-        isOver ? 'bg-blue-100 bg-opacity-20' : ''
-      }`}
+      className={`absolute inset-0 pointer-events-auto transition-all duration-200 ${isOver ? 'bg-blue-100 bg-opacity-20' : ''
+        }`}
       style={{ background: 'transparent' }}
     />
   );
@@ -247,22 +246,22 @@ const AppointmentCalendar = ({
   const getAppointmentsForDate = (day) => {
     if (!day) return [];
     const dateString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
+
     // ✅ CORREGIDO: Usar fecha_cita en lugar de fecha
     const originalAppointments = citas.filter(cita => cita.fecha_cita === dateString || cita.fecha === dateString);
-    
+
     // Include appointments temporarily rescheduled to this date
     const tempAppointments = Object.entries(tempRescheduledAppointments)
       .filter(([_, newDate]) => newDate === dateString)
-      .map(([id, _]) => citas.find(cita => 
+      .map(([id, _]) => citas.find(cita =>
         (cita.id_cita?.toString() === id) || (cita.id?.toString() === id)
       ))
       .filter(Boolean);
-    
+
     const result = [...originalAppointments, ...tempAppointments];
     return result;
   };
-  
+
   // Navigate months
   const navigateMonth = (direction) => {
     setCurrentDate(prev => {
@@ -413,7 +412,7 @@ const AppointmentCalendar = ({
     }
     setRescheduleConfirm({ isOpen: false, appointment: null, newDate: null });
   };
-  
+
   const handleRescheduleCancel = () => {
     // Remove from temp reschedules to revert visual change
     if (rescheduleConfirm.appointment) {
@@ -427,7 +426,7 @@ const AppointmentCalendar = ({
     }
     setRescheduleConfirm({ isOpen: false, appointment: null, newDate: null });
   };
-  
+
   const handleAppointmentClick = (appointment, event) => {
     setPopoverState({
       isOpen: true,
@@ -447,7 +446,7 @@ const AppointmentCalendar = ({
     const date = appointments[0]?.fecha_cita || appointments[0]?.fecha;
     setDayListModal({ isOpen: true, date, appointments });
   };
-  
+
   const closePopover = () => {
     setPopoverState({ isOpen: false, position: null, appointment: null, date: null, referenceElement: null });
   };
@@ -527,7 +526,7 @@ const AppointmentCalendar = ({
 
           {/* Calendar Grid - Consistent 6 rows for every month */}
           <div className="flex-1 min-h-0 relative">
-            <div 
+            <div
               className="grid grid-cols-7 gap-0.5 h-full absolute inset-0"
               style={{ gridTemplateRows: 'repeat(6, 1fr)' }}
             >
@@ -535,8 +534,8 @@ const AppointmentCalendar = ({
               {days.map((day, index) => {
                 const dayAppointments = getAppointmentsForDate(day);
                 const isToday = day === new Date().getDate() &&
-                               currentDate.getMonth() === new Date().getMonth() &&
-                               currentDate.getFullYear() === new Date().getFullYear();
+                  currentDate.getMonth() === new Date().getMonth() &&
+                  currentDate.getFullYear() === new Date().getFullYear();
                 const isActive = activeDay === day && (userMode || hasPermission("citas", "crear"));
 
                 return (

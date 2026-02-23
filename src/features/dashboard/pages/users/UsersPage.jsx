@@ -36,7 +36,7 @@ const UsersPage = () => {
     endDate: ''
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(6);
+  const [itemsPerPage] = useState(5);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -77,11 +77,11 @@ const UsersPage = () => {
   // Estado de acceso combinado
   const getAccessState = (user) => {
     const isDisabled = user?.estado === false;
-    const isVerified = user?.correo_verificado === true;
+    const hasAccount = user?.tiene_cuenta === true || user?.tiene_cuenta === 1;
 
     if (isDisabled) return 'Cuenta deshabilitada';
-    if (isVerified && user?.estado === true) return 'Cuenta activa';
-    return 'Verificación pendiente';
+    if (hasAccount) return 'Cuenta activa';
+    return 'Pendiente de activacion';
   };
 
   // Filtrar usuarios
@@ -96,8 +96,8 @@ const UsersPage = () => {
         const numeroDocumento = (user.numero_documento || '').toLowerCase();
 
         return fullName.includes(searchTerm.toLowerCase()) ||
-               email.includes(searchTerm.toLowerCase()) ||
-               numeroDocumento.includes(searchTerm.toLowerCase());
+          email.includes(searchTerm.toLowerCase()) ||
+          numeroDocumento.includes(searchTerm.toLowerCase());
       });
     }
 
@@ -150,7 +150,7 @@ const UsersPage = () => {
   };
   const accessStats = {
     activa: usersArray.filter(u => getAccessState(u) === 'Cuenta activa').length,
-    verificacion: usersArray.filter(u => getAccessState(u) === 'Verificación pendiente').length,
+    verificacion: usersArray.filter(u => getAccessState(u) === 'Pendiente de activacion').length,
     deshabilitada: usersArray.filter(u => getAccessState(u) === 'Cuenta deshabilitada').length,
   };
 
@@ -262,38 +262,38 @@ const UsersPage = () => {
 
     setIsChangingUserStatus(true);
     try {
-        const nuevoEstado = pendingStatusChange.newStatus; // boolean
-        await changeUserStatus(selectedUser.id_persona, nuevoEstado);
+      const nuevoEstado = pendingStatusChange.newStatus; // boolean
+      await changeUserStatus(selectedUser.id_persona, nuevoEstado);
 
-        setLoadingStatusChanges(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(pendingStatusChange.userId);
-          return newSet;
-        });
+      setLoadingStatusChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pendingStatusChange.userId);
+        return newSet;
+      });
 
-        setIsStatusChangeModalOpen(false);
-        setSelectedUser(null);
-        setPendingStatusChange(null);
+      setIsStatusChangeModalOpen(false);
+      setSelectedUser(null);
+      setPendingStatusChange(null);
 
-        const fullName = `${selectedUser.nombre_completo || ''} ${selectedUser.apellido_completo || ''}`.trim();
-        const estadoText = nuevoEstado ? 'habilitado' : 'deshabilitado';
-        toast({
-          title: "¡Estado actualizado exitosamente!",
-          description: `El usuario ${fullName} ha sido ${estadoText}.`,
-          variant: "default"
-        });
+      const fullName = `${selectedUser.nombre_completo || ''} ${selectedUser.apellido_completo || ''}`.trim();
+      const estadoText = nuevoEstado ? 'habilitado' : 'deshabilitado';
+      toast({
+        title: "¡Estado actualizado exitosamente!",
+        description: `El usuario ${fullName} ha sido ${estadoText}.`,
+        variant: "default"
+      });
     } catch (error) {
-        setLoadingStatusChanges(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(pendingStatusChange.userId);
-          return newSet;
-        });
+      setLoadingStatusChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pendingStatusChange.userId);
+        return newSet;
+      });
 
-        toast({
-          title: "Error",
-          description: "No se pudo cambiar el estado del usuario",
-          variant: "destructive"
-        });
+      toast({
+        title: "Error",
+        description: "No se pudo cambiar el estado del usuario",
+        variant: "destructive"
+      });
     } finally {
       setIsChangingUserStatus(false);
     }
@@ -330,7 +330,7 @@ const UsersPage = () => {
         >
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m0 4v-4m0 0V5m0 8h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m0 4v-4m0 0V5m0 8h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Acceso Denegado</h2>
@@ -420,7 +420,7 @@ const UsersPage = () => {
           bgColor="bg-emerald-50"
         />
         <StatsCard
-          title="Verificación pendiente"
+          title="Pendiente activacion"
           value={accessStats.verificacion}
           icon={AlertTriangle}
           color="bg-gradient-to-r from-amber-500 to-amber-600"
@@ -463,7 +463,7 @@ const UsersPage = () => {
             onValueChange={setStatusFilter}
           >
             <SelectTrigger className="h-10 w-full sm:w-[136px]">
-              <SelectValue placeholder="Estado"/>
+              <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todos</SelectItem>
@@ -484,15 +484,15 @@ const UsersPage = () => {
             onValueChange={setAccessFilter}
           >
             <SelectTrigger className="h-10 w-full sm:w-[180px]">
-              <SelectValue placeholder="Estado de acceso"/>
+              <SelectValue placeholder="Estado de acceso" />
             </SelectTrigger>
             <SelectContent>
-            <SelectItem value="Todos">Todos</SelectItem>
-            <SelectItem value="Cuenta activa">Cuenta activa</SelectItem>
-            <SelectItem value="Verificación pendiente">Verificación pendiente</SelectItem>
-            <SelectItem value="Cuenta deshabilitada">Cuenta deshabilitada</SelectItem>
-          </SelectContent>
-        </Select>
+              <SelectItem value="Todos">Todos</SelectItem>
+              <SelectItem value="Cuenta activa">Cuenta activa</SelectItem>
+              <SelectItem value="Pendiente de activacion">Pendiente de activacion</SelectItem>
+              <SelectItem value="Cuenta deshabilitada">Cuenta deshabilitada</SelectItem>
+            </SelectContent>
+          </Select>
         </motion.div>
 
         <motion.div
@@ -506,7 +506,7 @@ const UsersPage = () => {
             onValueChange={setDateFilter}
           >
             <SelectTrigger className="h-10 w-full sm:w-[170px]">
-              <SelectValue placeholder="Fecha de registro"/>
+              <SelectValue placeholder="Fecha de registro" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos los periodos">Todos los periodos</SelectItem>
@@ -611,10 +611,10 @@ const UsersPage = () => {
         userInfo={
           selectedUser
             ? {
-                nombre: `${selectedUser.nombre_completo || ''} ${selectedUser.apellido_completo || ''}`.trim(),
-                documento: `${selectedUser.tipo_documento} ${selectedUser.numero_documento}`,
-                email: selectedUser.correo
-              }
+              nombre: `${selectedUser.nombre_completo || ''} ${selectedUser.apellido_completo || ''}`.trim(),
+              documento: `${selectedUser.tipo_documento} ${selectedUser.numero_documento}`,
+              email: selectedUser.correo
+            }
             : null
         }
       />

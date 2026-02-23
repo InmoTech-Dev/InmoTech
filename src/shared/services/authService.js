@@ -31,35 +31,6 @@ class AuthService {
   }
 
   /**
-   * Register new user
-   * @param {Object} userData
-   * @returns {Promise<Object>}
-   */
-  async register(userData) {
-    try {
-      console.log('[AUTH] Sending register request for:', userData.email);
-
-      const payload = {
-        tipo_documento: userData.tipo_documento,
-        numero_documento: userData.numero_documento,
-        nombre_completo: userData.nombre_completo,
-        apellido_completo: userData.apellido_completo,
-        email: userData.email.trim().toLowerCase(),
-        telefono: userData.telefono,
-        password: userData.password,
-        confirmPassword: userData.confirmPassword
-      };
-
-      const response = await apiClient.post('/auth/register', payload);
-      console.log('[AUTH] Register success');
-      return response;
-    } catch (error) {
-      console.error('[AUTH] Register error:', error.message);
-      throw error;
-    }
-  }
-
-  /**
    * Refresh access session from refresh cookie
    * @returns {Promise<Object>}
    */
@@ -216,61 +187,6 @@ class AuthService {
     }
   }
 
-  /**
-   * Verify email token from invitation link
-   * @param {string} token
-   * @returns {Promise<Object>}
-   */
-  async verifyEmailToken(token) {
-    try {
-      const normalizedToken = (token || '').trim();
-      console.log('[AUTH] Verifying email token...');
-      return await apiClient.get('/auth/verify-email', {
-        params: { token: normalizedToken },
-        skipAuth: true,
-      });
-    } catch (error) {
-      console.error('[AUTH] Verify email token error:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Verify signup email code
-   * @param {string} email
-   * @param {string} codigo
-   * @returns {Promise<Object>}
-   */
-  async verifyEmailCode(email, codigo) {
-    try {
-      const normalizedEmail = (email || '').trim().toLowerCase();
-      const normalizedCode = String(codigo || '').trim();
-      return await apiClient.post('/auth/verify-code', {
-        email: normalizedEmail,
-        codigo: normalizedCode,
-      });
-    } catch (error) {
-      console.error('[AUTH] Verify email code error:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Resend signup verification code
-   * @param {string} email
-   * @returns {Promise<Object>}
-   */
-  async resendVerificationCode(email) {
-    try {
-      const normalizedEmail = (email || '').trim().toLowerCase();
-      return await apiClient.post('/auth/resend-code', {
-        email: normalizedEmail,
-      });
-    } catch (error) {
-      console.error('[AUTH] Resend verification code error:', error.message);
-      throw error;
-    }
-  }
   /**
    * Check email availability
    * @param {string} email

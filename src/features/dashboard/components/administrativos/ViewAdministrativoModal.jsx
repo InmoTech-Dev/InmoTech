@@ -8,10 +8,37 @@ const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
 
   const getRolNombre = (administrativo) => {
     const roles = administrativo?.persona?.roles;
-    if (!roles || roles.length === 0) {
+    if (!roles || !Array.isArray(roles) || roles.length === 0) {
       return 'Sin rol asignado';
     }
-    return roles[0].nombre_rol;
+
+    // 1. Intentar encontrar el rol de Administrador o Super Administrador activo (Case Insensitive & Robust)
+    const protectedRole = roles.find(rol => {
+      const nombre = (rol.nombre_rol || rol.nombre || rol.name || '').trim().toLowerCase();
+      // Si el rol está presente, lo consideramos activo a menos que PersonasRol.estado sea explícitamente false
+      const isActive = rol.PersonasRol ? !!rol.PersonasRol.estado :
+        rol.through ? !!rol.through.estado : true;
+
+      return (nombre === 'super administrador' || nombre === 'administrador' || nombre === 'admin') && isActive;
+    });
+
+    if (protectedRole) return protectedRole.nombre_rol;
+
+    // 2. Si no hay admin, buscar cualquier otro rol activo
+    const activeRol = roles.find(rol => {
+      const isActive = rol.PersonasRol ? !!rol.PersonasRol.estado :
+        rol.through ? !!rol.through.estado : true;
+      return isActive;
+    });
+    return activeRol ? activeRol.nombre_rol : roles[0].nombre_rol;
+  };
+
+  const getFullName = (persona) => {
+    if (!persona) return '';
+    if (persona.nombre_completo && persona.nombre_completo !== 'undefined') {
+      return `${persona.nombre_completo} ${persona.apellido_completo || ''}`.trim();
+    }
+    return 'Sin nombre';
   };
 
   const formatDate = (dateString) => {
@@ -47,7 +74,7 @@ const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">
-                  {administrativo.persona?.nombre_completo} {administrativo.persona?.apellido_completo}
+                  {getFullName(administrativo.persona)}
                 </h2>
                 <p className="text-slate-600 mt-1">Detalles del administrativo</p>
               </div>
@@ -125,7 +152,11 @@ const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
                     <Shield className="w-4 h-4 text-slate-500" />
                     <div>
                       <p className="text-xs text-slate-500 uppercase tracking-wide">Código Empleado</p>
-                      <p className="text-sm font-medium text-slate-800">{administrativo.codigo_empleado}</p>
+                      <p className="text-sm font-medium text-slate-800">
+                        {getRolNombre(administrativo) === 'Administrador' || getRolNombre(administrativo) === 'Super Administrador'
+                          ? getRolNombre(administrativo)
+                          : administrativo.codigo_empleado}
+                      </p>
                     </div>
                   </div>
 
@@ -153,12 +184,11 @@ const ViewAdministrativoModal = ({ isOpen, onClose, administrativo }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      administrativo.estado_laboral === 'Activo' ? 'bg-green-500' :
+                    <div className={`w-3 h-3 rounded-full ${administrativo.estado_laboral === 'Activo' ? 'bg-green-500' :
                       administrativo.estado_laboral === 'Inactivo' ? 'bg-yellow-500' :
-                      administrativo.estado_laboral === 'Suspendido' ? 'bg-red-500' :
-                      'bg-gray-500'
-                    }`} />
+                        administrativo.estado_laboral === 'Suspendido' ? 'bg-red-500' :
+                          'bg-gray-500'
+                      }`} />
                     <span className="text-sm font-medium text-slate-700">Estado Laboral</span>
                   </div>
                   <p className="text-lg font-semibold text-slate-800">{administrativo.estado_laboral}</p>

@@ -111,30 +111,6 @@ const resolveClientIp = (req) => {
 };
 
 class AuthController {
-  async registrarUsuario(req, res, next) {
-    try {
-      const userData = req.validatedData;
-      const result = await authService.registrarUsuario(userData);
-
-      return res.status(201).json({
-        success: true,
-        message: 'Registro recibido. Revisa tu correo y confirma tu cuenta en las proximas 24 horas.',
-        data: { user: result.user, verification: result.verification, meta: result.meta },
-      });
-    } catch (error) {
-      logger.error('Error en registro de usuario:', error);
-      if (error.status) {
-        return res.status(error.status).json({
-          success: false,
-          message: error.message,
-          reason: error.code || null,
-          data: error.meta || null,
-        });
-      }
-      next(error);
-    }
-  }
-
   async iniciarSesion(req, res, next) {
     const { email, password } = req.validatedData;
     const clientIp = resolveClientIp(req);
@@ -207,14 +183,6 @@ class AuthController {
           reason: 'admin_access_revoked',
         });
       }
-      if (error.code === 'EMAIL_NOT_VERIFIED' || error.code === 'EMAIL_VERIFICATION_LIMIT') {
-        return res.status(error.status || 403).json({
-          success: false,
-          message: error.message,
-          reason: error.code,
-          data: error.meta || null,
-        });
-      }
       if (error.code === 'INVALID_CREDENTIALS') {
         return res.status(error.status || 401).json({
           success: false,
@@ -273,64 +241,6 @@ class AuthController {
         message: error.message || 'Token de refresco invalido o expirado',
         reason: normalizedReason,
         forceLogout: normalizedReason === 'account_disabled' || normalizedReason === 'admin_access_revoked',
-      });
-    }
-  }
-
-  async verificarCodigo(req, res, next) {
-    try {
-      const { email, codigo } = req.validatedData;
-      const data = await authService.verificarCodigoCorreo(email, codigo, { ip: req.ip, userAgent: req.get('user-agent') });
-      return res.status(200).json({
-        success: true,
-        message: data?.ya_verificado ? 'Tu correo ya estaba verificado' : 'Correo verificado exitosamente',
-        data,
-      });
-    } catch (error) {
-      logger.warn('Verificacion de codigo fallida:', error.message);
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
-  async reenviarCodigo(req, res, next) {
-    try {
-      const { email } = req.validatedData;
-      const roles = req.user?.roles || [];
-      const isAdmin = roles.includes('Super Administrador') || roles.includes('Administrador');
-
-      const data = await authService.reenviarCodigoVerificacion(email, { ignoreLimits: isAdmin });
-      return res.status(200).json({
-        success: true,
-        message: 'Hemos enviado un nuevo codigo a tu correo',
-        data,
-      });
-    } catch (error) {
-      logger.warn('Error reenviando codigo de verificacion:', error.message);
-      return res.status(error.code === 'VERIFICATION_LIMIT' ? 429 : 400).json({
-        success: false,
-        message: error.message,
-        reason: error.code || null,
-      });
-    }
-  }
-
-  async verificarCorreo(req, res, next) {
-    try {
-      const { token } = req.validatedQuery;
-      const data = await authService.verificarCorreo(token, { ip: req.ip, userAgent: req.get('user-agent') });
-      return res.status(200).json({
-        success: true,
-        message: 'Correo verificado exitosamente',
-        data,
-      });
-    } catch (error) {
-      logger.warn('Verificacion de correo fallida:', error.message);
-      return res.status(400).json({
-        success: false,
-        message: error.message,
       });
     }
   }

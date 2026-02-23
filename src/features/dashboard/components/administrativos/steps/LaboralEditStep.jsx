@@ -4,6 +4,8 @@ import { Briefcase } from 'lucide-react';
 import rolesApiService from '../../../../../shared/services/rolesApiService';
 import { Select, SelectTrigger, SelectContent, SelectItem } from '../../../../../shared/components/ui/select';
 
+const NON_ASSIGNABLE_ROLES = ['Super Administrador', 'Administrador'];
+
 const LaboralEditStep = ({ formData, errors, updateFormData, administrativo }) => {
   const [roles, setRoles] = useState([]);
 
@@ -11,7 +13,17 @@ const LaboralEditStep = ({ formData, errors, updateFormData, administrativo }) =
     const fetchRoles = async () => {
       try {
         const data = await rolesApiService.obtenerRoles();
-        setRoles(data.map((rol) => ({ value: rol.id, label: rol.nombre })));
+        const filtrados = (data || [])
+          .filter((rol) => rol.estado !== false)
+          .filter((rol) => rol.es_rol_administrativo === true)
+          .filter((rol) => !NON_ASSIGNABLE_ROLES.includes(rol.nombre_rol))
+          .sort((a, b) => (a.nombre_rol || '').localeCompare(b.nombre_rol || ''))
+          .map((rol) => ({
+            value: String(rol.id_rol || rol.id),
+            label: rol.nombre_rol || rol.nombre,
+          }));
+
+        setRoles(filtrados);
       } catch (error) {
         console.error('Error al cargar los roles:', error);
       }
@@ -20,7 +32,8 @@ const LaboralEditStep = ({ formData, errors, updateFormData, administrativo }) =
     fetchRoles();
   }, []);
 
-  const selectedRolLabel = roles.find((rol) => rol.value === formData.rol)?.label;
+  const selectedRolValue = formData.rol != null ? String(formData.rol) : '';
+  const selectedRolLabel = roles.find((rol) => rol.value === selectedRolValue)?.label;
 
   return (
     <div className="h-full flex flex-col gap-4">
@@ -33,7 +46,7 @@ const LaboralEditStep = ({ formData, errors, updateFormData, administrativo }) =
         <Label htmlFor="rol" className="text-sm font-medium text-slate-700">
           Rol *
         </Label>
-        <Select value={formData.rol} onValueChange={(value) => updateFormData('rol', value)}>
+        <Select value={selectedRolValue} onValueChange={(value) => updateFormData('rol', value)}>
           <SelectTrigger className={`${errors.rol ? 'border-red-500' : ''}`}>
             <span className="block truncate">{selectedRolLabel || 'Selecciona un rol'}</span>
           </SelectTrigger>

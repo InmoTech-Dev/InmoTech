@@ -233,7 +233,7 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, user }) => {
                 <p className="text-sm text-slate-700">¿Seguro que deseas guardar los cambios de este usuario?</p>
                 {emailChanged && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 text-sm">
-                    Cambiar el correo enviar&aacute; una nueva verificaci&oacute;n al correo actualizado. El usuario deber&aacute; verificarlo y definir una nueva contrase&ntilde;a; hasta entonces no podr&aacute; iniciar sesi&oacute;n y quedar&aacute; en estado "Verificaci&oacute;n pendiente".
+                    Si la cuenta aun no esta activada, cambiar el correo enviara una nueva invitacion al correo actualizado. Si ya esta activa, solo se actualizara el correo.
                   </div>
                 )}
               </div>

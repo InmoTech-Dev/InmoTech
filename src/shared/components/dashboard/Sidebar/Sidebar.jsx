@@ -114,8 +114,8 @@ const Sidebar = React.forwardRef(({
                 animate="float"
                 className="logo-container flex items-center justify-center"
               >
-              <img src="/images/logo-matriz-sin-fondo.png" alt="Logo" className="w-42 h-42 movable-logo" />
-               </motion.div>
+                <img src="/images/logo-matriz-sin-fondo.png" alt="Logo" className="w-42 h-42 movable-logo" />
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

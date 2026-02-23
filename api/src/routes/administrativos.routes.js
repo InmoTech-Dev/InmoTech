@@ -2,12 +2,7 @@ const express = require('express');
 const router = express.Router();
 const administrativosController = require('../controllers/administrativos.controller');
 const { authenticateToken, authorizeRoles } = require('../middlewares/auth.middleware');  // ← AGREGAR authorizeRoles
-const { validarAccesoAdmin } = require('../middlewares/admin.middleware');
 const { validarRegistroAdmin, validarActualizacionAdmin, validarCambioEstado } = require('../validators/administrativos.validator');
-const { generalLimiter } = require('../middlewares/security.middleware');
-
-// Aplicar rate limiting a rutas de lectura
-router.use(['/'], generalLimiter);
 
 // ✅ CRÍTICO: Primero autenticar con JWT, LUEGO verificar roles específicos
 router.use(authenticateToken);  // ← PRIMERO: Verificar token JWT

@@ -225,9 +225,8 @@ export default function PropertyDetailPage() {
                   {viewModel.images.map((image, index) => (
                     <CarouselItem key={index} className="basis-1/4 md:basis-1/5">
                       <div
-                        className={`relative h-24 rounded-lg overflow-hidden cursor-pointer border ${
-                          index === activeImageIndex ? "border-blue-500" : "border-transparent"
-                        }`}
+                        className={`relative h-24 rounded-lg overflow-hidden cursor-pointer border ${index === activeImageIndex ? "border-blue-500" : "border-transparent"
+                          }`}
                         onClick={() => setActiveImageIndex(index)}
                       >
                         <img

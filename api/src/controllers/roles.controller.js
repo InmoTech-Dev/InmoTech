@@ -188,7 +188,11 @@ class RolesController {
         message: 'Personas con rol listadas exitosamente',
         data: personas.map(persona => ({
           id_persona: persona.id_persona,
-          nombre_completo: `${persona.primer_nombre} ${persona.primer_apellido}`,
+          primer_nombre: persona.primer_nombre,
+          segundo_nombre: persona.segundo_nombre,
+          primer_apellido: persona.primer_apellido,
+          segundo_apellido: persona.segundo_apellido,
+          nombre_completo: persona.nombre_completo || `${persona.primer_nombre || ''} ${persona.segundo_nombre || ''} ${persona.primer_apellido || ''} ${persona.segundo_apellido || ''}`.replace(/\s+/g, ' ').trim(),
           correo: persona.correo,
           telefono: persona.telefono
         }))

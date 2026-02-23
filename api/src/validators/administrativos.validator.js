@@ -123,6 +123,11 @@ const validarActualizacionAdmin = [
     .isObject()
     .withMessage('Los datos administrativos deben ser un objeto'),
 
+  body('rolId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('El rol especificado no es válido'),
+
   handleValidationErrors
 ];
 

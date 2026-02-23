@@ -89,9 +89,9 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
   if (!isOpen) return null;
 
   // Detectar si es Super Admin
-  const isSuperAdmin = rol?.nombre?.toLowerCase().includes('super admin') || 
-                       rol?.nombre?.toLowerCase().includes('superadmin') ||
-                       rol?.id === "01";
+  const isSuperAdmin = rol?.nombre?.toLowerCase().includes('super admin') ||
+    rol?.nombre?.toLowerCase().includes('superadmin') ||
+    rol?.id === "01";
 
   // Helper to check if a permission is granted
   const hasPermiso = (groupKey, actionKey) => {
@@ -120,11 +120,11 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
   // Vista completa para Super Admin
   if (isSuperAdmin) {
     const totalModulos = modulesData.length;
-    const modulosConPermisos = modulesData.filter(modulo => 
+    const modulosConPermisos = modulesData.filter(modulo =>
       getPermisosGrupo(modulo.key).length > 0
     ).length;
     const totalPermisosPosibles = modulesData.length * 4;
-    const totalPermisosActivos = modulesData.reduce((total, modulo) => 
+    const totalPermisosActivos = modulesData.reduce((total, modulo) =>
       total + getPermisosGrupo(modulo.key).length, 0
     );
 
@@ -132,6 +132,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
       <AnimatePresence>
         {/* Backdrop */}
         <motion.div
+          key="super-modal-backdrop"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -141,6 +142,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
 
         {/* Modal */}
         <motion.div
+          key="super-modal-content"
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -193,7 +195,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
                     <span>{rol?.nombre || "Super Admin"}</span>
                   </div>
                 </div>
-                
+
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
                   <label className="block text-sm font-medium text-green-700 mb-2">Estado</label>
                   <div className="flex items-center space-x-2">
@@ -238,7 +240,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {modulesData.map((modulo) => {
                     const Icon = modulo.icon;
-                    
+
                     return (
                       <div
                         key={modulo.key}
@@ -311,7 +313,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
 
   // Vista mejorada para roles normales - SOLO MÓDULOS CON PERMISOS
   const modulosConPermisos = getModulosConPermisos();
-  const totalPermisosActivos = modulosConPermisos.reduce((total, modulo) => 
+  const totalPermisosActivos = modulosConPermisos.reduce((total, modulo) =>
     total + modulo.permisosActivos.length, 0
   );
 
@@ -319,6 +321,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
     <AnimatePresence>
       {/* Backdrop */}
       <motion.div
+        key="normal-modal-backdrop"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -328,6 +331,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
 
       {/* Modal */}
       <motion.div
+        key="normal-modal-content"
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -372,7 +376,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
                   <span>{rol?.nombre || "Sin nombre"}</span>
                 </div>
               </div>
-              
+
               <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
                 <label className="block text-sm font-medium text-green-700 mb-2">Estado</label>
                 <div className="flex items-center space-x-2">
@@ -448,7 +452,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {modulosConPermisos.map((modulo) => {
                       const Icon = modulo.icon;
-                      
+
                       return (
                         <div
                           key={modulo.key}
@@ -470,31 +474,31 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
 
                           {/* Permisos activos del módulo */}
                           <div className="grid grid-cols-2 gap-3">
-                          {modulo.permisosActivos
-                            .filter(permiso => permiso && permiso.trim() !== '')
-                            .map((permiso, index) => {
-                              const config = permissionConfig[permiso];
-                              const PermisoIcon = config?.icon || Eye;
+                            {modulo.permisosActivos
+                              .filter(permiso => permiso && permiso.trim() !== '')
+                              .map((permiso, index) => {
+                                const config = permissionConfig[permiso];
+                                const PermisoIcon = config?.icon || Eye;
 
-                              return (
-                                <div
-                                  key={`permiso-normal-${modulo.key}-${permiso}-${index}`}
-                                  className="flex items-center space-x-3 p-3 rounded-lg border bg-white shadow-sm"
-                                >
-                                  <div className={`p-2 rounded-md ${config?.bg || 'bg-slate-50'}`}>
-                                    <PermisoIcon className={`h-4 w-4 ${config?.color || 'text-slate-600'}`} />
+                                return (
+                                  <div
+                                    key={`permiso-normal-${modulo.key}-${permiso}-${index}`}
+                                    className="flex items-center space-x-3 p-3 rounded-lg border bg-white shadow-sm"
+                                  >
+                                    <div className={`p-2 rounded-md ${config?.bg || 'bg-slate-50'}`}>
+                                      <PermisoIcon className={`h-4 w-4 ${config?.color || 'text-slate-600'}`} />
+                                    </div>
+                                    <div className="flex-1">
+                                      <span className="text-sm font-medium text-slate-900 capitalize">
+                                        {permiso}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                    </div>
                                   </div>
-                                  <div className="flex-1">
-                                    <span className="text-sm font-medium text-slate-900 capitalize">
-                                      {permiso}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              })}
                           </div>
                         </div>
                       );

@@ -59,30 +59,29 @@ class UsersApiService {
       return String(value).trim();
     };
 
-      return personas
-        .filter(p => p && typeof p === 'object')
-        .map(persona => ({
-          id_persona: persona.id_persona,
-          estado: persona.estado === true || persona.estado === 1 || persona.estado === 'true',
-          correo_verificado: persona.correo_verificado ?? persona.tiene_cuenta ?? false,
-          nombre_completo: safeString(persona.nombre_completo) || safeString(persona.nombres) || safeString(persona.primer_nombre),
-          apellido_completo: safeString(persona.apellido_completo) || safeString(persona.apellidos) || safeString(persona.primer_apellido),
-          correo: safeString(persona.correo) || safeString(persona.email),
-          telefono: this.normalizeTelefonoParaUI(safeString(persona.telefono) || safeString(persona.phone)),
-          tipo_documento: safeString(persona.tipo_documento) || safeString(persona.tipoDocumento),
+    return personas
+      .filter(p => p && typeof p === 'object')
+      .map(persona => ({
+        id_persona: persona.id_persona,
+        estado: persona.estado === true || persona.estado === 1 || persona.estado === 'true',
+        correo_verificado: persona.correo_verificado ?? persona.tiene_cuenta ?? false,
+        nombre_completo: safeString(persona.nombre_completo) || safeString(persona.nombres) || safeString(persona.primer_nombre),
+        apellido_completo: safeString(persona.apellido_completo) || safeString(persona.apellidos) || safeString(persona.primer_apellido),
+        correo: safeString(persona.correo) || safeString(persona.email),
+        telefono: this.normalizeTelefonoParaUI(safeString(persona.telefono) || safeString(persona.phone)),
+        tipo_documento: safeString(persona.tipo_documento) || safeString(persona.tipoDocumento),
         numero_documento: safeString(persona.numero_documento) || safeString(persona.numeroDocumento),
         fecha_registro: persona.fecha_registro || persona.createdAt || persona.fecha_creacion || null,
         updatedAt: persona.updatedAt || null,
         roles: persona.roles || [],
         administrativo: persona.administrativo || null,
+        tiene_cuenta: persona.tiene_cuenta === true || persona.tiene_cuenta === 1 || !!persona.password,
         invitacion_estado: persona.estado === false
           ? 'Cuenta deshabilitada'
-          : (persona.correo_verificado ?? persona.tiene_cuenta ?? false) === false
-            ? 'Verificacion de correo pendiente'
-            : persona.tiene_cuenta === false
-              ? 'Pendiente de activacion (sin contrasena)'
-              : 'Cuenta activa'
-        }));
+          : (persona.tiene_cuenta === true || persona.tiene_cuenta === 1 || !!persona.password) === false
+            ? 'Pendiente de activacion (sin contrasena)'
+            : 'Cuenta activa'
+      }));
   }
 
   /**
@@ -141,8 +140,6 @@ class UsersApiService {
         apellido_completo: userData.apellido_completo,
         correo: userData.correo,
         telefono: this.normalizeTelefonoParaApi(userData.telefono),
-        password: userData.password,
-        confirmPassword: userData.confirmPassword
       };
 
       return await apiClient.post('/personas', payload);
@@ -226,7 +223,7 @@ class UsersApiService {
   formatFecha(fechaString) {
     if (!fechaString) return '-';
 
-      try {
+    try {
       const date = new Date(fechaString);
       if (isNaN(date.getTime())) return fechaString;
 

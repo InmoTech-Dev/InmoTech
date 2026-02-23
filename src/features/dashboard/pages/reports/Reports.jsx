@@ -1074,6 +1074,8 @@ const ReportsContent = () => {
     }
   }
 
+  const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
+
   return (
     <div className='p-6 space-y-6'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
@@ -1090,6 +1092,7 @@ const ReportsContent = () => {
         onStatusChange={setStatusFilter}
         showCancelled={showCancelled}
         onToggleShowCancelled={() => setShowCancelled(v => !v)}
+        hideFilters={isAdminView}
       />
 
       {user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r)) ? (

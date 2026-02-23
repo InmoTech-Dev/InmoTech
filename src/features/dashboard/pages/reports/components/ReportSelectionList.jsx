@@ -8,7 +8,7 @@ import { cn } from '@/shared/utils/cn';
 const ReportSelectionList = ({ selectedUser, reports, selectedReport, onSelectReport, loading }) => {
     if (!selectedUser) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center bg-white p-8 text-center border-r border-slate-100">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-transparent">
                 <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
                     <UserIcon className="w-8 h-8 text-slate-300" />
                 </div>
@@ -20,7 +20,7 @@ const ReportSelectionList = ({ selectedUser, reports, selectedReport, onSelectRe
     const initials = `${selectedUser.nombre_completo?.[0] || ''}${selectedUser.apellido_completo?.[0] || ''}`.toUpperCase();
 
     return (
-        <div className="flex flex-col h-full bg-white border-r border-slate-100 w-[360px] min-w-[320px] shrink-0">
+        <div className="flex flex-col h-full bg-transparent w-[380px] min-w-[320px] shrink-0">
             {/* User Header Section */}
             <div className="p-5 border-b border-slate-50 bg-[#F8FAFC]/50">
                 <div className="flex items-center gap-3.5 mb-5">
@@ -53,7 +53,7 @@ const ReportSelectionList = ({ selectedUser, reports, selectedReport, onSelectRe
             </div>
 
             {/* List Section */}
-            <div className="flex-1 overflow-y-auto p-5 bg-white custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-5 bg-transparent custom-scrollbar">
                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">
                     Lista de Reportes
                 </h4>

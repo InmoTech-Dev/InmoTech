@@ -21,29 +21,27 @@ import { cn } from '@/shared/utils/cn';
 const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
     if (loading) {
         return (
-            <div className="flex-1 h-full overflow-y-auto bg-[#F8FAFC] p-8 space-y-8 animate-pulse">
-                <div className="max-w-4xl mx-auto">
-                    <div className="h-10 bg-slate-200 rounded-xl w-1/2 mb-4" />
-                    <div className="h-12 bg-slate-100 rounded-2xl w-3/4 mb-10" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                        <div className="h-40 bg-white rounded-3xl border border-slate-100" />
-                        <div className="h-40 bg-white rounded-3xl border border-slate-100" />
-                        <div className="h-40 bg-white rounded-3xl border border-slate-100" />
-                    </div>
-                    <div className="h-64 bg-white rounded-3xl border border-slate-100" />
+            <div className="flex-1 h-full overflow-y-auto p-8 space-y-8 animate-pulse">
+                <div className="h-10 bg-slate-200 rounded-xl w-1/2 mb-4" />
+                <div className="h-12 bg-slate-100 rounded-2xl w-3/4 mb-10" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    <div className="h-40 bg-slate-50 rounded-3xl border border-slate-100" />
+                    <div className="h-40 bg-slate-50 rounded-3xl border border-slate-100" />
+                    <div className="h-40 bg-slate-50 rounded-3xl border border-slate-100" />
                 </div>
+                <div className="h-64 bg-slate-50 rounded-3xl border border-slate-100" />
             </div>
         );
     }
 
     if (!report) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] p-12 text-center">
-                <div className="w-32 h-32 bg-white rounded-[3rem] shadow-2xl shadow-indigo-100 flex items-center justify-center mb-10 transform rotate-6 border border-slate-50">
-                    <Inbox className="w-14 h-14 text-indigo-100" />
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+                <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] shadow-xl shadow-slate-100 flex items-center justify-center mb-8 transform rotate-6 border border-slate-100">
+                    <Inbox className="w-10 h-10 text-slate-200" />
                 </div>
-                <h3 className="text-2xl font-black text-slate-800 mb-4 uppercase tracking-tight">Detalles del Reporte</h3>
-                <p className="text-slate-400 max-w-md font-bold text-base leading-relaxed">
+                <h3 className="text-xl font-black text-slate-800 mb-3 uppercase tracking-tight">Detalles del Reporte</h3>
+                <p className="text-slate-400 max-w-[280px] font-bold text-sm leading-relaxed">
                     Selecciona un reporte de la lista central para ver toda su información detallada.
                 </p>
             </div>
@@ -62,32 +60,32 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
     const status = getStatusInfo(report.estado);
 
     return (
-        <div className="flex-1 h-full overflow-y-auto bg-[#F8FAFC] custom-scrollbar">
+        <div className="flex-1 h-full overflow-y-auto custom-scrollbar">
             <AnimatePresence mode="wait">
                 <motion.div
                     key={report.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="p-6 max-w-4xl mx-auto"
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    className="p-8"
                 >
                     {/* Header Section */}
                     <header className="mb-8">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="h-8 w-1.5 bg-indigo-600 rounded-full" />
-                            <h2 className="text-xl md:text-2xl font-black text-[#1E293B] uppercase tracking-tight">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="h-6 w-1.5 bg-indigo-600 rounded-full" />
+                            <h2 className="text-lg font-black text-[#1E293B] uppercase tracking-tight">
                                 {report.tipoReporte} <span className="text-indigo-600">/</span> {report.tipoInmueble}
                             </h2>
                         </div>
-                        <div className="flex flex-col md:flex-row md:items-center gap-y-2 gap-x-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.15em] bg-white w-fit px-5 py-3 rounded-2xl border border-slate-100 shadow-sm ml-4.5">
-                            <div className="flex items-center gap-2.5">
-                                <span className="text-slate-400 opacity-60">PROPIETARIO:</span>
-                                <span className="text-[#1E293B]">{report.propietario}</span>
+                        <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 w-fit px-4 py-2.5 rounded-xl border border-slate-100 shadow-inner-sm">
+                            <div className="flex items-center gap-2">
+                                <span className="opacity-50">PROPIETARIO:</span>
+                                <span className="text-[#1E293B] tracking-normal">{report.propietario}</span>
                             </div>
-                            <span className="hidden md:block opacity-10 font-thin scale-150">|</span>
-                            <div className="flex items-center gap-2.5">
-                                <span className="text-slate-400 opacity-60">UBICACIÓN:</span>
-                                <span className="text-[#1E293B]">{report.ubicacion}</span>
+                            <span className="opacity-10">|</span>
+                            <div className="flex items-center gap-2">
+                                <span className="opacity-50">UBICACIÓN:</span>
+                                <span className="text-[#1E293B] tracking-normal">{report.ubicacion}</span>
                             </div>
                         </div>
                     </header>
@@ -95,7 +93,7 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                     {/* Stats/Info Grid - Compact and Balanced Layout */}
                     <div className="flex flex-col md:flex-row gap-5 mb-10">
                         {/* Estado */}
-                        <div className="md:w-[26%] bg-white rounded-[1.5rem] p-4 border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center min-h-[170px]">
+                        <div className="md:w-[26%] bg-slate-50/50 rounded-[1.5rem] p-4 border border-slate-100 flex flex-col items-center justify-center text-center min-h-[170px]">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-4 opacity-70">Estado</p>
                             <div className="flex flex-col items-center gap-3">
                                 <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shadow-md", status.bg)}>
@@ -108,7 +106,7 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                         </div>
 
                         {/* Propiedad */}
-                        <div className="md:flex-1 bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[170px]">
+                        <div className="md:flex-1 bg-slate-50/50 rounded-[1.5rem] p-5 border border-slate-100 relative overflow-hidden flex flex-col justify-between min-h-[170px]">
                             <div className="absolute -top-3 -right-3 opacity-[0.03]">
                                 <Building className="w-24 h-24 text-slate-600" />
                             </div>
@@ -118,14 +116,14 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                                     {report.nombreInmueble}
                                 </p>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-black text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg uppercase tracking-widest shadow-sm">
+                                    <span className="text-[9px] font-black text-slate-500 bg-white border border-slate-100 px-2 py-1 rounded-lg uppercase tracking-widest shadow-sm">
                                         ID: {report.referencia}
                                     </span>
                                     <span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg uppercase tracking-widest shadow-sm">
                                         {report.tipoInmueble}
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-2 text-slate-400 mt-1 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50 w-fit max-w-full">
+                                <div className="flex items-center gap-2 text-slate-400 mt-1 bg-white p-2 rounded-lg border border-slate-100/50 w-fit max-w-full">
                                     <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                     <p className="text-[10px] font-bold truncate tracking-tight uppercase">
                                         {report.direccionInmueble || report.ubicacion}
@@ -135,14 +133,14 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                         </div>
 
                         {/* Responsable */}
-                        <div className="md:flex-1 bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-sm flex flex-col relative overflow-hidden min-h-[170px]">
+                        <div className="md:flex-1 bg-slate-50/50 rounded-[1.5rem] p-5 border border-slate-100 flex flex-col relative overflow-hidden min-h-[170px]">
                             <div className="absolute -top-3 -right-3 opacity-[0.03]">
                                 <ShieldCheck className="w-24 h-24 text-slate-600" />
                             </div>
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-4 opacity-70">Responsable</p>
                             <div className="flex-1 flex flex-col justify-center">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center border border-white shadow-lg shrink-0">
+                                    <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center border border-white shadow-lg shrink-0">
                                         <UserIcon className="w-5.5 h-5.5 text-indigo-500" />
                                     </div>
                                     <div className="min-w-0">
@@ -151,7 +149,7 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 text-slate-500 bg-slate-50 w-fit px-3 py-1.5 rounded-lg border border-slate-100 shadow-sm ml-auto">
+                                <div className="flex items-center gap-2 text-slate-500 bg-white w-fit px-3 py-1.5 rounded-lg border border-slate-100 shadow-sm ml-auto">
                                     <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                                     <p className="text-[9px] font-black uppercase tracking-[0.1em]">
                                         {report.fecha}
@@ -189,14 +187,14 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                     {/* Detailed Content: Descriptions, Images and Rubros */}
                     <div className="space-y-8">
                         {/* 1. Descripción / Observaciones */}
-                        <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
+                        <div className="bg-slate-50/30 rounded-[2rem] p-8 border border-slate-100">
                             <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-3 opacity-80">
-                                <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-slate-100 shadow-sm">
                                     <FileText className="w-4.5 h-4.5 text-indigo-500" />
                                 </div>
                                 Observaciones Generales
                             </h4>
-                            <div className="bg-slate-50/80 rounded-2xl p-7 border border-slate-100">
+                            <div className="bg-white rounded-2xl p-7 border border-slate-50 shadow-inner-sm">
                                 <p className="text-base text-slate-600 leading-relaxed font-bold">
                                     {report.descripcion || "No se han registrado observaciones adicionales para este reporte."}
                                 </p>
@@ -205,9 +203,9 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
 
                         {/* 2. Galería de Imágenes */}
                         {report.imagenes?.length > 0 && (
-                            <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-lg shadow-slate-100/50">
+                            <div className="bg-slate-50/30 rounded-[2.5rem] p-10 border border-slate-100">
                                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.25em] mb-8 flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-slate-100 shadow-sm">
                                         <Eye className="w-5 h-5 text-amber-500" />
                                     </div>
                                     Galería de Evidencias <span className="text-indigo-600 font-black">({report.imagenes.length})</span>
@@ -231,9 +229,9 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
 
                         {/* 3. Rubros de Inspección */}
                         {report.rubros?.length > 0 && (
-                            <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-lg shadow-slate-100/50">
+                            <div className="bg-slate-50/30 rounded-[2.5rem] p-10 border border-slate-100">
                                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.25em] mb-8 flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-slate-100 shadow-sm">
                                         <ShieldCheck className="w-5 h-5 text-emerald-500" />
                                     </div>
                                     Inspección Detallada por Rubros

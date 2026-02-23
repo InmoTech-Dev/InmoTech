@@ -4,6 +4,7 @@ import ReportSelectionList from './components/ReportSelectionList';
 import ReportDetailedView from './components/ReportDetailedView';
 import administrativosApiService from '@/shared/services/administrativosApiService';
 import reportesInmobiliariosService from '@/features/dashboard/services/reportesInmobiliarios.service';
+import AdminFilterBar from './components/AdminFilterBar';
 import { useToast } from '@/shared/hooks/use-toast';
 
 const AdminReportsView = ({
@@ -19,6 +20,7 @@ const AdminReportsView = ({
     const [usersLoading, setUsersLoading] = useState(true);
     const [detailedLoading, setDetailedLoading] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [filters, setFilters] = useState({ year: '', month: '', city: '' });
     const { toast } = useToast();
 
     useEffect(() => {
@@ -65,11 +67,62 @@ const AdminReportsView = ({
         fetchUsers();
     }, []);
 
-    // Filter reports for the selected user
-    const userReports = allReports.filter(report => {
+    // Calculate dynamic filter options
+    const filterOptions = React.useMemo(() => {
+        const cities = [...new Set(allReports.map(r => r.ubicacion).filter(Boolean))].sort();
+        const years = [...new Set(allReports.map(r => {
+            const parts = r.fecha?.split('/');
+            return parts?.[2];
+        }).filter(Boolean))].sort((a, b) => b - a);
+
+        return { cities, years };
+    }, [allReports]);
+
+    // Apply filters to ALL reports first to determine which users have matching reports
+    const filteredReportsGlobal = React.useMemo(() => {
+        return allReports.filter(report => {
+            // City filter
+            if (filters.city && report.ubicacion !== filters.city) return false;
+
+            // Date parsing (expected format D/M/YYYY or DD/MM/YYYY)
+            const dateParts = report.fecha?.split('/');
+            if (dateParts?.length === 3) {
+                const [day, month, year] = dateParts;
+                if (filters.year && year !== filters.year) return false;
+                if (filters.month && Number(month) !== Number(filters.month)) return false;
+            } else if (filters.year || filters.month) {
+                return false; // Cannot filter if date is missing/invalid
+            }
+
+            return true;
+        });
+    }, [allReports, filters]);
+
+    // Filter users list based on global filtered reports
+    const filteredUsers = React.useMemo(() => {
+        if (!filters.year && !filters.month && !filters.city) return users;
+
+        const activeUserIds = new Set(filteredReportsGlobal.map(r => Number(r.id_persona_reporta)));
+        return users.filter(user => activeUserIds.has(Number(user.id_persona)));
+    }, [users, filteredReportsGlobal, filters]);
+
+    // Auto-select first user if selection is lost due to filtering
+    useEffect(() => {
+        if (selectedUser && !filteredUsers.some(u => u.id_persona === selectedUser.id_persona)) {
+            if (filteredUsers.length > 0) {
+                setSelectedUser(filteredUsers[0]);
+            } else {
+                setSelectedUser(null);
+            }
+        } else if (!selectedUser && filteredUsers.length > 0) {
+            setSelectedUser(filteredUsers[0]);
+        }
+    }, [filteredUsers]);
+
+    // Filter reports for the selected user among the filtered reports
+    const userReports = filteredReportsGlobal.filter(report => {
         if (!selectedUser) return false;
 
-        // Priority 1: Use ID for reliable filtering
         const reportUserId = Number(report.id_persona_reporta || 0);
         const selectedUserId = Number(selectedUser.id_persona || 0);
 
@@ -77,7 +130,6 @@ const AdminReportsView = ({
             return reportUserId === selectedUserId;
         }
 
-        // Priority 2: Fallback to name match if IDs are missing
         const userName = `${selectedUser.nombre_completo}`.toLowerCase().trim();
         const responsable = (report.responsable || '').toLowerCase().trim();
         return responsable.includes(userName) || userName.includes(responsable);
@@ -166,10 +218,10 @@ const AdminReportsView = ({
     }, [selectedUser, allReports]);
 
     return (
-        <div className="flex h-[calc(100vh-160px)] bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-2xl">
-            {/* Column 1: User List */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden flex h-[calc(100vh-180px)] min-h-[600px]">
+            {/* Column 1: User List (Sidebar) */}
             <UserSidebar
-                users={users}
+                users={filteredUsers}
                 selectedUser={selectedUser}
                 onSelectUser={setSelectedUser}
                 loading={usersLoading}
@@ -177,22 +229,32 @@ const AdminReportsView = ({
                 onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             />
 
-            {/* Column 2: Selection List */}
-            <ReportSelectionList
-                selectedUser={selectedUser}
-                reports={userReports}
-                selectedReport={selectedReport}
-                onSelectReport={handleSelectReport}
-                loading={reportsLoading}
-            />
+            {/* Column 2: Selection List (Center) */}
+            <div className="w-[380px] min-w-[320px] shrink-0 flex flex-col border-l border-slate-50 bg-[#FBFDFF]/10">
+                <AdminFilterBar
+                    filters={filters}
+                    setFilters={setFilters}
+                    options={filterOptions}
+                    onClear={() => setFilters({ year: '', month: '', city: '' })}
+                />
+                <ReportSelectionList
+                    selectedUser={selectedUser}
+                    reports={userReports}
+                    selectedReport={selectedReport}
+                    onSelectReport={handleSelectReport}
+                    loading={reportsLoading}
+                />
+            </div>
 
-            {/* Column 3: Detailed View */}
-            <ReportDetailedView
-                report={selectedReport}
-                onEdit={onEditReport}
-                onDownload={onDownloadPDF}
-                loading={detailedLoading}
-            />
+            {/* Column 3: Detailed View (Right) */}
+            <div className="flex-1 flex flex-col border-l border-slate-50 min-w-0">
+                <ReportDetailedView
+                    report={selectedReport}
+                    onEdit={onEditReport}
+                    onDownload={onDownloadPDF}
+                    loading={detailedLoading}
+                />
+            </div>
         </div>
     );
 };

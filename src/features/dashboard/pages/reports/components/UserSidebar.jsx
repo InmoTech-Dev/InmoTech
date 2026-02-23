@@ -15,7 +15,7 @@ const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, 
 
     return (
         <div className={cn(
-            "flex flex-col h-full bg-white border-r border-slate-200 transition-all duration-300 relative",
+            "flex flex-col h-full bg-transparent border-r border-slate-100/50 transition-all duration-300 relative",
             isCollapsed ? "w-20 min-w-[80px]" : "w-72 min-w-[260px]"
         )}>
             {/* Toggle Button */}

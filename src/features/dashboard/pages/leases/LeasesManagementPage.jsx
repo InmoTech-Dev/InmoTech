@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaPhone, FaEnvelope } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Home, Phone, Mail } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Trash2, Home, Phone, Mail, X } from 'lucide-react';
 import "../../../../shared/styles/globals.css";
 import LeasesPersonForm from "../../components/leases/TenantForm";
 import ViewTenantModal from "../../components/leases/ViewTenantForm";
 import { renantsApiService } from "../../../../shared/services/arrendatarioApiService";
+import arriendoApiService from "../../../../shared/services/arriendoApiService";
 
 export function LeasesManagementPage() {
   const [arrendatarios, setArrendatarios] = useState([]);
@@ -18,12 +19,94 @@ export function LeasesManagementPage() {
   const [tenantToEdit, setTenantToEdit] = useState(null);
   const [tenantToView, setTenantToView] = useState(null);
   const [tenantToDelete, setTenantToDelete] = useState(null);
+  const handleViewTenant = async (tenant) => {
+    if (!tenant) return;
+    // Optimistic show basic data
+    setTenantToView(tenant);
+    try {
+      const full = await renantsApiService.getById(tenant.id || tenant.id_arrendatario || tenant.personaId);
+      const merged = {
+        ...tenant,
+        ...full,
+      };
+      // Conservar inmueble y codeudor si el detalle no los trae
+      if (!merged.inmueble && tenant.inmueble) merged.inmueble = tenant.inmueble;
+      if ((!merged.inmueblesArrendados || merged.inmueblesArrendados.length === 0) && tenant.inmueblesArrendados) {
+        merged.inmueblesArrendados = tenant.inmueblesArrendados;
+      }
+      merged.codeudorNombre = merged.codeudorNombre || tenant.codeudorNombre;
+      merged.codeudorTelefono = merged.codeudorTelefono || tenant.codeudorTelefono;
+      merged.codeudorCorreo = merged.codeudorCorreo || tenant.codeudorCorreo;
+      merged.primerNombreCodeudor = merged.primerNombreCodeudor || tenant.primerNombreCodeudor;
+      merged.segundoNombreCodeudor = merged.segundoNombreCodeudor || tenant.segundoNombreCodeudor;
+      merged.primerApellidoCodeudor = merged.primerApellidoCodeudor || tenant.primerApellidoCodeudor;
+      merged.segundoApellidoCodeudor = merged.segundoApellidoCodeudor || tenant.segundoApellidoCodeudor;
+      merged.telefonoCodeudor = merged.telefonoCodeudor || tenant.telefonoCodeudor;
+      merged.correoCodeudor = merged.correoCodeudor || tenant.correoCodeudor;
+      setTenantToView(merged);
+    } catch (error) {
+      console.error("No se pudo cargar el detalle del arrendatario", error);
+      // Keep basic tenant data already set
+    }
+  };
+
+  const mapArriendoToLeaseData = (arriendo = {}) => {
+    const inmueble = arriendo.Inmueble || arriendo.inmueble || {};
+    const codeudor = arriendo.codeudor || arriendo.Codeudor || {};
+    const codeudorPersona = codeudor.persona || codeudor.Persona || codeudor;
+    return {
+      inmueble,
+      registroInmobiliario: inmueble.registro_inmobiliario || inmueble.registro || null,
+      tipoInmueble: inmueble.categoria || inmueble.tipo || null,
+      nombreInmueble: inmueble.nombre || inmueble.titulo || inmueble.registro_inmobiliario || null,
+      direccion: inmueble.direccion || null,
+      ciudad: inmueble.ciudad || null,
+      departamento: inmueble.departamento || null,
+      valorMensual: arriendo.valor_mensual || arriendo.valor_arriendo || arriendo.precio_arriendo || null,
+      fechaInicio: arriendo.fecha_inicio || arriendo.fechaInicio || null,
+      fechaFin: arriendo.fecha_finalizacion || arriendo.fecha_fin || arriendo.fechaFin || null,
+      estadoContrato: arriendo.estado || null,
+      tipoGarantia: arriendo.tipo_garantia || arriendo.tipoGarantia || null,
+      valorGarantia: arriendo.valor_garantia || arriendo.valorGarantia || null,
+      descripcionGarantia: arriendo.descripcion_garantia || arriendo.descripcionGarantia || arriendo.descripcion || null,
+      codeudorNombre: codeudorPersona.nombre_completo || null,
+      codeudorTelefono: codeudorPersona.telefono || null,
+      codeudorCorreo: codeudorPersona.correo || null,
+      primerNombreCodeudor: codeudorPersona.primer_nombre || null,
+      segundoNombreCodeudor: codeudorPersona.segundo_nombre || null,
+      primerApellidoCodeudor: codeudorPersona.primer_apellido || null,
+      segundoApellidoCodeudor: codeudorPersona.segundo_apellido || null,
+      rawLease: arriendo,
+    };
+  };
 
   const fetchTenants = async () => {
     try {
       setIsLoading(true);
-      const tenants = await renantsApiService.getAll();
-      setArrendatarios(tenants);
+      const [tenants, arriendosResp] = await Promise.all([
+        renantsApiService.getAll(),
+        arriendoApiService.obtenerArriendos().catch(() => ({ data: { data: [] } }))
+      ]);
+
+      const arriendosList = arriendosResp?.data?.data || arriendosResp?.data || arriendosResp || [];
+
+      const merged = tenants.map((t) => {
+        const tenantId = t.id || t.personaId;
+        const match = arriendosList.find((a) => {
+          const arrendatario = a.arrendatario || a.Arrendatario || {};
+          const persona = arrendatario.persona || arrendatario.Persona || {};
+          return (
+            arrendatario.id_arrendatario === tenantId ||
+            arrendatario.id === tenantId ||
+            persona.id_persona === tenantId
+          );
+        });
+        if (!match) return t;
+        const leaseData = mapArriendoToLeaseData(match);
+        return { ...t, ...leaseData, rawLease: match };
+      });
+
+      setArrendatarios(merged);
     } catch (error) {
       setStatusMessage({
         type: "error",
@@ -150,50 +233,93 @@ export function LeasesManagementPage() {
     );
   };
 
-  const renderDeleteModal = () => {
-    if (!tenantToDelete) return null;
+const renderDeleteModal = () => {
+  if (!tenantToDelete) return null;
 
-    const modalContent = (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm transition-opacity duration-300">
-        <div className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-100 opacity-100">
-          <h3 className="text-2xl font-bold text-red-700 mb-4 flex items-center gap-2">
-            <Trash2 className="w-5 h-5" /> Eliminar Arrendatario
-          </h3>
-          <p className="mb-6 text-gray-700">
-            ¿Confirma que desea eliminar a{" "}
-            <span className="font-extrabold text-purple-700">
+  const modalContent = (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={() => setTenantToDelete(null)}
+      />
+
+      {/* Card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.25 }}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 border-b border-slate-200">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
+              <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
+            </div>
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setTenantToDelete(null)}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Cerrar"
+          >
+            <X className="w-5 h-5 text-slate-500" />
+          </motion.button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          <p className="text-slate-700">
+            ¿Estás seguro de que deseas eliminar a{" "}
+            <span className="font-semibold text-slate-900">
               {tenantToDelete.primerNombre} {tenantToDelete.primerApellido}
             </span>
-            ? Esta acción es irreversible.
+            ? Esta acción no se puede deshacer.
           </p>
-          <div className="flex justify-end gap-3 pt-3 border-t">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setTenantToDelete(null)}
-              className="bg-gray-300 text-gray-800 px-5 py-2 rounded-xl font-semibold hover:bg-gray-400 transition duration-150"
-            >
-              Cancelar
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleDeleteTenant}
-              className="bg-red-600 text-white px-5 py-2 rounded-xl font-semibold transition duration-150 shadow-md flex items-center gap-2 hover:bg-red-700"
-            >
-              <Trash2 className="w-4 h-4" />
-              Eliminar
-            </motion.button>
-          </div>
         </div>
-      </div>
-    );
 
-    return ReactDOM.createPortal(
-      modalContent,
-      document.getElementById('modal-root') || document.body 
-    );
-  };
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setTenantToDelete(null)}
+            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Cancelar
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleDeleteTenant}
+            className="flex items-center gap-2 px-6 py-2 rounded-lg transition-colors bg-red-600 hover:bg-red-700 text-white"
+          >
+            <Trash2 className="w-4 h-4" />
+            Eliminar
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  return ReactDOM.createPortal(
+    modalContent,
+    document.getElementById("modal-root") || document.body
+  );
+};
 
   return (
     <>
@@ -396,7 +522,7 @@ export function LeasesManagementPage() {
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              onClick={() => setTenantToView(tenant)}
+                              onClick={() => handleViewTenant(tenant)}
                               className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
                               aria-label="Ver arrendatario"
                             >

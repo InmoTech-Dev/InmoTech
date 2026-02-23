@@ -290,7 +290,9 @@ class PersonaService {
           telefono: personaData.telefono || persona.telefono,
           tiene_cuenta: personaData.tiene_cuenta ?? persona.tiene_cuenta,
           correo_verificado: personaData.correo_verificado ?? persona.correo_verificado,
-          fecha_registro: persona.fecha_registro
+          fecha_registro: persona.fecha_registro,
+          foto_perfil_url: personaData.foto_perfil_url || persona.foto_perfil_url,
+          foto_public_id: personaData.foto_public_id || persona.foto_public_id
         };
       } catch (error) {
         logger.error('Error actualizando perfil:', {

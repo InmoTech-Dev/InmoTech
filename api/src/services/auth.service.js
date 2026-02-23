@@ -20,7 +20,11 @@ const BASIC_PERSONA_ATTRIBUTES = [
   'correo',
   'estado',
   'nombre_completo',
-  'apellido_completo'
+  'apellido_completo',
+  'telefono',
+  'foto_perfil_url',
+  'foto_public_id',
+  'fecha_registro'
 ];
 
 const BASIC_ACCESO_ATTRIBUTES = ['id_persona', 'contrasena'];
@@ -117,6 +121,10 @@ const buildAuthUser = (persona) => {
     correo: persona.correo,
     nombre_completo: persona.nombre_completo,
     apellido_completo: persona.apellido_completo,
+    telefono: persona.telefono,
+    foto_perfil_url: persona.foto_perfil_url,
+    foto_public_id: persona.foto_public_id,
+    fecha_registro: persona.fecha_registro,
     roles,
     es_administrativo,
     permisos

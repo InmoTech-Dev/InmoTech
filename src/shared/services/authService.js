@@ -100,23 +100,19 @@ class AuthService {
     try {
       console.log('[AUTH] Updating profile...');
 
-      const payload = {};
-
-      if (profileData.nombre) {
-        const nombreParts = profileData.nombre.trim().split(' ');
-        payload.primer_nombre = nombreParts[0] || '';
-        payload.segundo_nombre = nombreParts.slice(1, -1).join(' ') || null;
-      }
-
-      if (profileData.apellidos) {
-        const apellidoParts = profileData.apellidos.trim().split(' ');
-        payload.primer_apellido = apellidoParts[0] || '';
-        payload.segundo_apellido = apellidoParts.slice(1).join(' ') || null;
-      }
-
-      if (profileData.telefono) {
-        payload.telefono = profileData.telefono.replace(/\D/g, '');
-      }
+      const payload = {
+        ...(profileData.nombre_completo
+          ? { nombre_completo: profileData.nombre_completo.trim() }
+          : {}),
+        ...(profileData.apellido_completo
+          ? { apellido_completo: profileData.apellido_completo.trim() }
+          : {}),
+        ...(profileData.telefono
+          ? { telefono: String(profileData.telefono).replace(/\D/g, '') }
+          : {}),
+        ...(profileData.foto_perfil_url ? { foto_perfil_url: profileData.foto_perfil_url } : {}),
+        ...(profileData.foto_public_id ? { foto_public_id: profileData.foto_public_id } : {})
+      };
 
       const response = await apiClient.patch('/auth/me', payload);
       console.log('[AUTH] Profile updated');

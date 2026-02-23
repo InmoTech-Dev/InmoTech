@@ -170,17 +170,37 @@ export default function HomePage() {
     return { label: operacion || "Disponible" };
   };
 
-  const findAmenityAmount = (property, targets = []) => {
+  const findAmenityAmount = (property, targets = [], fallbackFields = []) => {
     const normalize = (text = "") =>
-      text
+      String(text || "")
+        .replace(/Ã±/g, "n")
+        .replace(/Ã/g, "a")
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
         .trim();
 
+    const parseValidNumber = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
+
     const targetSet = targets.map(normalize);
-    const match = property.comodidades?.find?.((c) => targetSet.includes(normalize(c.nombre || "")));
-    return match?.cantidad ?? "N/D";
+    const amenities = Array.isArray(property?.comodidades) ? property.comodidades : [];
+    const selectedAmenities = amenities.filter((item) => item?.seleccionada !== false);
+    const searchPool = selectedAmenities.length ? selectedAmenities : amenities;
+
+    const match = searchPool.find((c) => targetSet.includes(normalize(c?.nombre || "")));
+    const qty = parseValidNumber(match?.cantidad);
+    if (qty !== null) return qty;
+
+    const raw = property?.metadata?.raw || {};
+    for (const field of fallbackFields) {
+      const value = parseValidNumber(property?.[field] ?? raw?.[field]);
+      if (value !== null) return value;
+    }
+
+    return "N/D";
   };
 
   const featuredCards = useMemo(() => {
@@ -206,8 +226,16 @@ export default function HomePage() {
           property.locationLabel ||
           [property.barrio, property.ciudad, property.departamento].filter(Boolean).join(", "),
         area: property.area_construida ? `${property.area_construida} m²` : "N/D",
-        bedrooms: findAmenityAmount(property, ["habitaciones", "cuartos", "dormitorios"]),
-        bathrooms: findAmenityAmount(property, ["banos", "baños", "bano", "baño"]),
+        bedrooms: findAmenityAmount(
+          property,
+          ["habitaciones", "cuartos", "dormitorios", "alcobas"],
+          ["habitaciones", "habitacion", "cuartos", "dormitorios", "alcobas"]
+        ),
+        bathrooms: findAmenityAmount(
+          property,
+          ["banos", "baños", "bano", "baño", "wc"],
+          ["banos", "bano", "baños", "baño", "wc"]
+        ),
         image: property.mainImage || property.image || property.imagenes?.[0] || "/images/hero-inmuebles.jpg",
         status: operation.label,
         featured: property.featured || property.destacado

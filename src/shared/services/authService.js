@@ -221,6 +221,28 @@ class AuthService {
   }
 
   /**
+   * Validate reset-password token
+   * @param {string} token
+   * @returns {Promise<Object>}
+   */
+  async validateResetToken(token) {
+    try {
+      const normalizedToken = String(token || '').trim();
+      if (!normalizedToken) {
+        throw new Error('Token de recuperacion invalido');
+      }
+
+      return await apiClient.get('/auth/reset-password', {
+        params: { token: normalizedToken },
+        skipAuth: true,
+      });
+    } catch (error) {
+      console.error('[AUTH] Validate reset token error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Verify email token from invitation link
    * @param {string} token
    * @returns {Promise<Object>}

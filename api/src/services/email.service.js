@@ -4,6 +4,51 @@ const logger = require("../utils/logger");
 const EMAIL_SEND_RETRY_ATTEMPTS = Math.max(1, Number(process.env.EMAIL_SEND_RETRY_ATTEMPTS || 3));
 const EMAIL_SEND_RETRY_BASE_DELAY_MS = Math.max(0, Number(process.env.EMAIL_SEND_RETRY_BASE_DELAY_MS || 2000));
 
+const normalizeBaseUrl = (value = "") => String(value || "").trim().replace(/\/+$/, "");
+
+const resolveAppBaseUrl = () => {
+  const explicitAppBase = normalizeBaseUrl(process.env.APP_BASE_URL);
+  if (explicitAppBase) return explicitAppBase;
+
+  const resetPasswordBase = normalizeBaseUrl(process.env.RESET_PASSWORD_URL_BASE);
+  if (resetPasswordBase) {
+    try {
+      const parsed = new URL(resetPasswordBase);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  const invitationBase = normalizeBaseUrl(process.env.INVITATION_URL_BASE);
+  if (invitationBase) {
+    try {
+      const parsed = new URL(invitationBase);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  const emailVerificationBase = normalizeBaseUrl(process.env.EMAIL_VERIFICATION_URL_BASE);
+  if (emailVerificationBase) {
+    try {
+      const parsed = new URL(emailVerificationBase);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  return "http://localhost:5173";
+};
+
+const resolveResetPasswordBase = () => {
+  const explicitReset = normalizeBaseUrl(process.env.RESET_PASSWORD_URL_BASE);
+  if (explicitReset) return explicitReset;
+  return `${resolveAppBaseUrl()}/reset-password`;
+};
+
 class EmailService {
   constructor() {
     const port = Number(process.env.EMAIL_PORT) || 587;
@@ -153,6 +198,50 @@ class EmailService {
     } catch (error) {
       logger.error('Error enviando email de verificacion:', {
         email: data?.email || null,
+        code: error?.code || null,
+        intentos_envio: error?.intentos_envio || null,
+        error
+      });
+      throw error;
+    }
+  }
+
+  async sendPasswordResetEmail({ to, token } = {}) {
+    try {
+      const recipient = String(to || '').trim().toLowerCase();
+      const resetToken = String(token || '').trim();
+
+      if (!recipient || !resetToken) {
+        const error = new Error('Datos incompletos para enviar el correo de recuperacion');
+        error.status = 400;
+        throw error;
+      }
+
+      const resetPasswordBase = resolveResetPasswordBase();
+      const resetLink = `${resetPasswordBase}?token=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(recipient)}`;
+
+      const mailOptions = {
+        from: `"Matriz Inmobiliaria" <${process.env.EMAIL_FROM}>`,
+        to: recipient,
+        subject: 'Restablece tu contrasena',
+        html: this.generarTemplateRecuperacionContrasena({ resetLink })
+      };
+
+      const { info, intentos_envio } = await this._enviarConReintentos(mailOptions, {
+        logContext: 'PASSWORD_RESET',
+        metadata: { to: recipient }
+      });
+
+      logger.info('[EMAIL][PASSWORD_RESET] Correo de recuperacion enviado', {
+        to: recipient,
+        messageId: info.messageId,
+        intentos_envio
+      });
+
+      return { success: true, messageId: info.messageId, intentos_envio };
+    } catch (error) {
+      logger.error('[EMAIL][PASSWORD_RESET] Error enviando correo de recuperacion:', {
+        to: to || null,
         code: error?.code || null,
         intentos_envio: error?.intentos_envio || null,
         error
@@ -960,6 +1049,58 @@ class EmailService {
             <div class="footer">
               <div>¿Necesitas ayuda? Escríbenos a <a href="mailto:hola@matrizinmobiliaria.com">hola@matrizinmobiliaria.com</a></div>
               <div style="margin-top:8px;">&copy; 2025 Matriz Inmobiliaria. Todos los derechos reservados.</div>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  generarTemplateRecuperacionContrasena({ resetLink } = {}) {
+    const logoUrl = process.env.EMAIL_LOGO_URL || "https://matrizinmobiliaria.com/images/logo-matriz-sin-fondo.png";
+
+    return `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Recuperar contrasena</title>
+        <style>
+          body { margin:0; padding:0; background:#f5f7fb; font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif; color:#1f2d3d; }
+          .wrapper { width:100%; padding:24px 0; }
+          .container { max-width:620px; margin:0 auto; background:#ffffff; border-radius:14px; overflow:hidden; box-shadow:0 18px 46px rgba(15,43,70,0.12); }
+          .header { padding:28px; background:linear-gradient(135deg,#0f2b46,#1b5f8c); color:#fff; }
+          .logo { width:180px; max-width:70%; }
+          .content { padding:30px 26px 34px; }
+          h1 { margin:0 0 12px; font-size:24px; color:#0f2b46; }
+          p { margin:0 0 14px; line-height:1.6; color:#4a5566; }
+          .cta { display:inline-block; padding:14px 24px; background:linear-gradient(135deg,#2cb67d,#38d996); color:#0f1f33; font-weight:800; text-decoration:none; border-radius:12px; box-shadow:0 12px 26px rgba(44,182,125,0.35); margin:14px 0; }
+          .help-link { word-break:break-all; color:#0f2b46; font-size:13px; }
+          .footer { background:#0f2034; color:#c9d5e5; text-align:center; padding:18px; font-size:13px; }
+          .footer a { color:#c9d5e5; text-decoration:none; }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          <div class="container">
+            <div class="header">
+              <img class="logo" src="${logoUrl}" alt="Matriz Inmobiliaria" />
+              <p style="margin:12px 0 0; opacity:0.95; color:#f7f9ff; font-weight:700;">Solicitud de recuperacion de contrasena</p>
+            </div>
+            <div class="content">
+              <h1>Restablece tu contrasena</h1>
+              <p>Recibimos una solicitud para cambiar la contrasena de tu cuenta.</p>
+              <p>Haz clic en el siguiente boton para continuar:</p>
+              <a class="cta" href="${resetLink}">Restablecer contrasena</a>
+              <p>Si el boton no abre, copia y pega este enlace en tu navegador:</p>
+              <p class="help-link">${resetLink}</p>
+              <p style="font-size:13px; color:#6b7280;">Si no solicitaste este cambio, ignora este mensaje. Tu contrasena actual seguira igual.</p>
+            </div>
+            <div class="footer">
+              <div>Necesitas ayuda? Escribenos a <a href="mailto:hola@matrizinmobiliaria.com">hola@matrizinmobiliaria.com</a></div>
+              <div style="margin-top:8px;">&copy; 2026 Matriz Inmobiliaria. Todos los derechos reservados.</div>
             </div>
           </div>
         </div>

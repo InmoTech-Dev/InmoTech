@@ -30,6 +30,13 @@ const propietarioSchema = Joi.object({
   documento: Joi.string().allow('', null).optional()
 }).optional();
 
+const CATEGORIAS_MIN_COMODIDADES = new Set(['casa', 'apartamento']);
+
+const contarComodidadesSeleccionadas = (comodidades = []) =>
+  Array.isArray(comodidades)
+    ? comodidades.filter((item) => item && item.seleccionada !== false && (item.nombre || item.id_comodidad)).length
+    : 0;
+
 // Validación para crear inmueble
 const crearInmuebleSchema = Joi.object({
   registro_inmobiliario: Joi.string()
@@ -217,7 +224,25 @@ const crearInmuebleSchema = Joi.object({
   destacado: Joi.boolean()
     .optional()
     .default(false)
-}).unknown(true);
+})
+  .custom((value, helpers) => {
+    const categoria = String(value?.categoria || '').trim().toLowerCase();
+    if (!CATEGORIAS_MIN_COMODIDADES.has(categoria)) {
+      return value;
+    }
+
+    const totalSeleccionadas = contarComodidadesSeleccionadas(value?.comodidades);
+    if (totalSeleccionadas < 2) {
+      return helpers.error('any.custom', {
+        message: 'Casa y Apartamento requieren minimo 2 comodidades seleccionadas.'
+      });
+    }
+    return value;
+  })
+  .messages({
+    'any.custom': '{{#message}}'
+  })
+  .unknown(true);
 
 // Validación para actualizar inmueble
 const actualizarInmuebleSchema = Joi.object({

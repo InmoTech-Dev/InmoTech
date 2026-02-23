@@ -277,6 +277,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const validateResetToken = async (token) => {
+    try {
+      setError(null);
+      return await authService.validateResetToken(token);
+    } catch (err) {
+      setError(err.message || 'Error validando enlace de recuperacion');
+      throw err;
+    }
+  };
+
   const hasRole = useCallback((roles) => {
     if (!user || !user.roles) return false;
     const userRoles = user.roles;
@@ -354,7 +364,9 @@ export const AuthProvider = ({ children }) => {
     updateProfile,
     changePassword,
     requestPasswordReset,
+    forgotPassword: requestPasswordReset,
     resetPassword: resetPasswordWithToken,
+    validateResetToken,
     hasRole,
     hasAccess,
     hasPermission,

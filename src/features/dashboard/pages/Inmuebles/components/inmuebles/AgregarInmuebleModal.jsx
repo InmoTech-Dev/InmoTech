@@ -8,16 +8,18 @@ import { uploadToCloudinary } from '../../../../../../shared/services/cloudinary
 
 const PROPERTY_TYPES = ['Casa', 'Apartamento', 'Local', 'Oficina', 'Bodega', 'Lote', 'Finca', 'Otro'];
 const OPERATION_OPTIONS = ['Venta', 'Arriendo', 'Venta y Arriendo'];
+const MIN_AMENITIES_REQUIRED_TYPES = new Set(['Casa', 'Apartamento']);
+const DEFAULT_AMENITIES = ['Habitaciones', 'Banos', 'Parqueaderos', 'Balcon', 'Cuarto util', 'Cocina'];
 
 const AMENITIES_BY_TYPE = {
-  Casa: ['Habitaciones', 'Baños', 'Parqueaderos', 'Jardín', 'Patio cubierto'],
-  Apartamento: ['Habitaciones', 'Baños', 'Parqueaderos', 'Balcón', 'Depósito', 'Coworking'],
-  Local: ['Baños', 'Zona de carga', 'Depósito'],
-  Oficina: ['Baños', 'Salas de reunión', 'Parqueaderos', 'Recepción'],
-  Bodega: ['Área de carga', 'Oficinas internas'],
-  Lote: ['Área verde', 'Servicios públicos'],
-  Finca: ['Habitaciones', 'Baños', 'Piscina', 'Casa mayordomo'],
-  Otro: ['Habitaciones', 'Baños']
+  Casa: DEFAULT_AMENITIES,
+  Apartamento: DEFAULT_AMENITIES,
+  Local: ['Banos', 'Zona de carga', 'Deposito'],
+  Oficina: ['Banos', 'Salas de reunion', 'Parqueaderos', 'Recepcion'],
+  Bodega: ['Area de carga', 'Oficinas internas'],
+  Lote: ['Area verde', 'Servicios publicos'],
+  Finca: ['Habitaciones', 'Banos', 'Piscina', 'Casa mayordomo'],
+  Otro: DEFAULT_AMENITIES
 };
 
 const MAX_IMAGE_SIZE_MB = 5;
@@ -81,6 +83,18 @@ const buildAmenitiesForType = (type, current = []) => {
   return [...mapped, ...customs];
 };
 
+const getSelectedAmenitiesSignature = (items = []) => {
+  const normalized = items
+    .filter((item) => item?.seleccionada)
+    .map((item) => ({
+      nombre: String(item?.nombre || '').trim().toLowerCase(),
+      cantidad: Number(item?.cantidad) > 0 ? Number(item.cantidad) : 1
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  return JSON.stringify(normalized);
+};
+
 const formatOwnerSummary = (owner) => {
   if (!owner) return null;
   return {
@@ -106,6 +120,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
   const [saving, setSaving] = useState(false);
   const [checkingRegistro, setCheckingRegistro] = useState(false);
   const [registroDisponible, setRegistroDisponible] = useState(true);
+  const [descripcionCambioComodidades, setDescripcionCambioComodidades] = useState('');
   const lastFocusedRef = useRef(null);
   const lastFocusInfo = useRef({ name: null, selectionStart: null, selectionEnd: null });
 
@@ -153,6 +168,22 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     () => owners.find((owner) => String(owner.id) === String(selectedOwnerId)),
     [owners, selectedOwnerId]
   );
+  const amenitiesChangedInEdit = useMemo(() => {
+    if (!inmuebleEditar) return false;
+    const currentSignature = getSelectedAmenitiesSignature(amenities);
+    const initialSignature = getSelectedAmenitiesSignature(inmuebleEditar.comodidades || []);
+    return currentSignature !== initialSignature;
+  }, [amenities, inmuebleEditar]);
+
+  useEffect(() => {
+    if (!amenitiesChangedInEdit && errors.descripcionCambioComodidades) {
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated.descripcionCambioComodidades;
+        return updated;
+      });
+    }
+  }, [amenitiesChangedInEdit, errors.descripcionCambioComodidades]);
 
   const loadOwners = async () => {
     try {
@@ -199,6 +230,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       setSelectedOwnerId('');
       setOwnerModalOpen(false);
       setCustomAmenity({ nombre: '', cantidad: 1 });
+      setDescripcionCambioComodidades('');
       setErrors({});
       setActiveStep(0);
       return;
@@ -233,11 +265,13 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (inmuebleEditar.propietario?.id) {
         setSelectedOwnerId(inmuebleEditar.propietario.id);
       }
+      setDescripcionCambioComodidades('');
     } else {
       setForm(INITIAL_FORM);
       setAmenities(buildAmenitiesForType(INITIAL_FORM.tipo));
       setImagenes([]);
       setSelectedOwnerId('');
+      setDescripcionCambioComodidades('');
     }
     setActiveStep(0);
   }, [inmuebleEditar, isOpen]);
@@ -247,6 +281,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === 'tipo') {
       setAmenities((prev) => buildAmenitiesForType(value, prev));
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated.comodidades;
+        return updated;
+      });
     }
   };
 
@@ -316,6 +355,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         amenity.id === amenityId ? { ...amenity, seleccionada: !amenity.seleccionada } : amenity
       )
     );
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated.comodidades;
+      return updated;
+    });
   };
 
   const handleAmenityQuantity = (amenityId, quantity) => {
@@ -324,6 +368,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         amenity.id === amenityId ? { ...amenity, cantidad: Number(quantity) || 0 } : amenity
       )
     );
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated.comodidades;
+      return updated;
+    });
   };
 
   const handleAddCustomAmenity = () => {
@@ -339,6 +388,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       }
     ]);
     setCustomAmenity({ nombre: '', cantidad: 1 });
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated.comodidades;
+      return updated;
+    });
   };
 
   const handleImageUpload = async (event) => {
@@ -416,6 +470,14 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (!form.direccion.trim()) validationErrors.direccion = 'La dirección es obligatoria';
       if (!form.ciudad.trim()) validationErrors.ciudad = 'La ciudad es obligatoria';
       if (!form.departamento.trim()) validationErrors.departamento = 'El departamento es obligatorio';
+    } else if (stepIndex === 2) {
+      const selectedAmenitiesCount = amenities.filter((amenity) => amenity.seleccionada).length;
+      if (MIN_AMENITIES_REQUIRED_TYPES.has(form.tipo) && selectedAmenitiesCount < 2) {
+        validationErrors.comodidades = 'Casa y Apartamento requieren minimo 2 comodidades.';
+      }
+      if (inmuebleEditar && amenitiesChangedInEdit && !descripcionCambioComodidades.trim()) {
+        validationErrors.descripcionCambioComodidades = 'Describe el cambio en comodidades';
+      }
     } else if (stepIndex === 3) {
       if (!selectedOwnerId) {
         validationErrors.propietario = 'Selecciona un propietario';
@@ -490,7 +552,9 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         comodidades: selectedAmenities,
         imagenes: uploadedImages,
         propietario: ownerSummary || null,
-        propietarioId: ownerSummary?.id
+        propietarioId: ownerSummary?.id,
+        descripcion_cambio_comodidades:
+          inmuebleEditar && amenitiesChangedInEdit ? descripcionCambioComodidades.trim() : ''
       };
 
       await onSave(payload, Boolean(inmuebleEditar));
@@ -754,8 +818,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
               className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100"
             />
           </label>
-        ))}
+          ))}
         </div>
+        {errors.comodidades && (
+          <p className="text-xs text-red-500">{errors.comodidades}</p>
+        )}
 
         <div className="rounded-2xl border border-dashed border-slate-300 p-4 bg-slate-50">
           <p className="text-sm font-semibold text-slate-700 mb-3">Característica personalizada</p>
@@ -782,6 +849,33 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             </button>
           </div>
         </div>
+
+        {inmuebleEditar && amenitiesChangedInEdit && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <label className="text-sm text-slate-700 flex justify-between font-semibold">
+              Descripcion del cambio en comodidades
+              {errors.descripcionCambioComodidades && (
+                <span className="text-xs text-red-500">{errors.descripcionCambioComodidades}</span>
+              )}
+            </label>
+            <textarea
+              value={descripcionCambioComodidades}
+              onChange={(event) => {
+                setDescripcionCambioComodidades(event.target.value);
+                if (errors.descripcionCambioComodidades) {
+                  setErrors((prev) => {
+                    const updated = { ...prev };
+                    delete updated.descripcionCambioComodidades;
+                    return updated;
+                  });
+                }
+              }}
+              rows={3}
+              placeholder="Ej: Se agregó 1 baño social y se retiró 1 parqueadero."
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard title="Galería del inmueble" subtitle="Paso 3">

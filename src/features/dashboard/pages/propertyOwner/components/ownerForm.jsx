@@ -17,7 +17,7 @@ const INITIAL_FORM = {
   telefono: ''
 };
 
-const STEPS = ['Datos y asignación', 'Confirmación'];
+const STEPS = ['Datos y asignacion', 'Confirmacion'];
 
 const SectionCard = ({ title, subtitle, children }) => (
   <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_16px_35px_rgba(15,23,42,0.04)] space-y-3">
@@ -45,6 +45,13 @@ const normalizeInmuebleForSelection = (inmueble = {}) => ({
   operacion: inmueble.operacion
 });
 
+const hasValue = (value) => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+};
+
 const OwnerSummary = ({ owner, inmuebles }) => {
   const nombres =
     owner.nombres ||
@@ -53,42 +60,35 @@ const OwnerSummary = ({ owner, inmuebles }) => {
     owner.apellidos ||
     [owner.primerApellido, owner.segundoApellido].filter(Boolean).join(' ');
 
+  const fullName = [nombres, apellidos].filter(Boolean).join(' ').trim();
+  const documentText = [owner.tipoDocumento, owner.numeroDocumento].filter(Boolean).join(' ').trim();
+
+  const fields = [
+    { label: 'Nombre completo', value: fullName },
+    { label: 'Documento', value: documentText },
+    { label: 'Correo', value: owner.email },
+    { label: 'Telefono', value: owner.telefono },
+    { label: 'Inmuebles asignados', value: String(inmuebles.length) }
+  ].filter((field) => hasValue(field.value));
+
   return (
     <div className="grid gap-3 md:grid-cols-2 text-xs text-slate-600">
-      <div>
-        <p className="text-[10px] text-slate-400 mb-0.5">Documento</p>
-        <p className="font-semibold text-slate-800">
-          {owner.tipoDocumento} {owner.numeroDocumento}
-        </p>
-      </div>
-      <div>
-        <p className="text-[10px] text-slate-400 mb-0.5">Nombre completo</p>
-        <p className="font-semibold text-slate-800">
-          {nombres} {apellidos}
-        </p>
-      </div>
-      <div>
-        <p className="text-[10px] text-slate-400 mb-0.5">Correo</p>
-        <p>{owner.email || 'Sin correo'}</p>
-      </div>
-      <div>
-        <p className="text-[10px] text-slate-400 mb-0.5">Teléfono</p>
-        <p>{owner.telefono || 'Sin teléfono'}</p>
-      </div>
-      <div>
-        <p className="text-[10px] text-slate-400 mb-0.5">Inmuebles asignados</p>
-        <p>{inmuebles.length}</p>
-      </div>
+      {fields.map((field) => (
+        <div key={field.label} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <p className="text-[10px] text-slate-400 mb-0.5">{field.label}</p>
+          <p className="font-semibold text-slate-800">{field.value}</p>
+        </div>
+      ))}
     </div>
   );
 };
 
 const OwnerView = ({ owner, inmuebles }) => (
   <div className="space-y-4">
-    <SectionCard title="Información general" subtitle="Resumen">
+    <SectionCard title="Informacion general" subtitle="Resumen">
       <OwnerSummary owner={owner} inmuebles={inmuebles} />
     </SectionCard>
-        <SectionCard title="Inmuebles asociados" subtitle="Detalle">
+    <SectionCard title="Inmuebles asociados" subtitle="Detalle">
       {inmuebles.length === 0 && (
         <p className="text-xs text-slate-500">No hay inmuebles asociados.</p>
       )}
@@ -101,24 +101,28 @@ const OwnerView = ({ owner, inmuebles }) => (
             <div className="flex items-center gap-2 mb-1">
               <Building2 className="w-3.5 h-3.5 text-blue-500" />
               <p className="font-semibold text-slate-900">
-                {inmueble.titulo || inmueble.registro_inmobiliario || inmueble.direccion || 'Sin t�tulo'}
+                {inmueble.titulo || inmueble.registro_inmobiliario || inmueble.direccion || 'Sin titulo'}
               </p>
             </div>
-            <p className="text-[11px] text-slate-600">
-              {inmueble.direccion || 'Sin direcci�n'}
-            </p>
-            <p className="text-[11px] text-slate-600">
-              {[inmueble.ciudad, inmueble.departamento, inmueble.pais].filter(Boolean).join(' � ') || 'Ubicaci�n no especificada'}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Operaci�n: {inmueble.operacion || 'No definida'}
-            </p>
-            {(inmueble.precio_venta || inmueble.precio_arriendo) && (
-              <p className="text-[11px] text-slate-500">
-                Precio venta: {inmueble.precio_venta || '�'} � Canon: {inmueble.precio_arriendo || '�'}
+            {hasValue(inmueble.direccion) && (
+              <p className="text-[11px] text-slate-600">{inmueble.direccion}</p>
+            )}
+            {hasValue([inmueble.ciudad, inmueble.departamento, inmueble.pais].filter(Boolean).join(' - ')) && (
+              <p className="text-[11px] text-slate-600">
+                {[inmueble.ciudad, inmueble.departamento, inmueble.pais].filter(Boolean).join(' - ')}
               </p>
             )}
-            {inmueble.estado && (
+            {hasValue(inmueble.operacion) && (
+              <p className="text-[11px] text-slate-500 mt-1">Operacion: {inmueble.operacion}</p>
+            )}
+            {(inmueble.precio_venta || inmueble.precio_arriendo) && (
+              <p className="text-[11px] text-slate-500">
+                {inmueble.precio_venta ? `Precio venta: ${inmueble.precio_venta}` : ''}
+                {inmueble.precio_venta && inmueble.precio_arriendo ? ' - ' : ''}
+                {inmueble.precio_arriendo ? `Canon: ${inmueble.precio_arriendo}` : ''}
+              </p>
+            )}
+            {hasValue(inmueble.estado) && (
               <p className="text-[10px] text-slate-400 mt-1">Estado: {inmueble.estado}</p>
             )}
           </div>
@@ -127,7 +131,6 @@ const OwnerView = ({ owner, inmuebles }) => (
     </SectionCard>
   </div>
 );
-
 const OwnerForm = ({
   isOpen,
   mode,
@@ -161,7 +164,7 @@ const OwnerForm = ({
       return;
     }
 
-    if (mode === 'edit' && selectedOwner) {
+    if ((mode === 'edit' || mode === 'view') && selectedOwner) {
       const cleanDoc =
         documentoBase || selectedOwner.documento?.split(' ')?.pop() || '';
       const [primerNombre = '', segundoNombre = ''] =
@@ -204,7 +207,7 @@ const OwnerForm = ({
       setSelectedInmuebles([]);
       setActiveStep(0);
     }
-  }, [isOpen, mode, selectedOwner, documentoBase]);
+  }, [isOpen, mode, selectedOwner, documentoBase, availableInmuebles]);
 
   const toggleInmuebleSelection = (inmueble) => {
     setSelectedInmuebles((prev) => {

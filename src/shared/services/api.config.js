@@ -15,6 +15,20 @@ const API_CONFIG = {
   CSRF_HEADER_NAME: import.meta.env.VITE_CSRF_HEADER_NAME || 'X-CSRF-Token',
 };
 
+const parseRetryAfterMs = (rawValue) => {
+  if (!rawValue) return null;
+
+  const seconds = Number.parseInt(rawValue, 10);
+  if (Number.isInteger(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+
+  const retryAt = Date.parse(rawValue);
+  if (!Number.isFinite(retryAt)) return null;
+
+  return Math.max(0, retryAt - Date.now());
+};
+
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const REFRESH_ENDPOINT = '/auth/refresh';
 const LOGOUT_ENDPOINT = '/auth/logout';
@@ -34,6 +48,7 @@ class ApiClient {
     this.onUnauthorized = null;
     this.refreshPromise = null;
     this.isHandlingUnauthorized = false;
+    this.rateLimitUntil = 0;
   }
 
   registerUnauthorizedCallback(callback) {
@@ -185,6 +200,18 @@ class ApiClient {
   }
 
   async request(endpoint, options = {}, retryCount = 0) {
+    if (Date.now() < this.rateLimitUntil) {
+      const remainingMs = this.rateLimitUntil - Date.now();
+      const retryInSec = Math.max(1, Math.ceil(remainingMs / 1000));
+      const error = new Error(`Demasiadas peticiones. Reintenta en ${retryInSec}s.`);
+      error.status = 429;
+      error.data = {
+        success: false,
+        message: error.message,
+      };
+      throw error;
+    }
+
     const normalizedEndpoint = this.normalizeEndpoint(endpoint);
     const isRetryAfterRefresh = options.__isRetryAfterRefresh === true;
     const skipAuthRefresh = options.skipAuthRefresh === true || options.skipAuth === true;
@@ -262,12 +289,18 @@ class ApiClient {
       }
 
       if (response.status === 429) {
-        if (retryCount < API_CONFIG.RETRY_ATTEMPTS + 2) {
-          const waitTime = API_CONFIG.RETRY_DELAY * (retryCount + 1);
-          await this.delay(waitTime);
-          return this.request(normalizedEndpoint, options, retryCount + 1);
-        }
-        throw new Error('Demasiadas peticiones. Por favor, espera e intenta nuevamente.');
+        const payload = await this.parseResponsePayload(response);
+        const retryAfterHeader = response.headers.get('retry-after');
+        const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+        const defaultCooldownMs = 15000;
+        const cooldownMs = Math.max(defaultCooldownMs, retryAfterMs || 0);
+
+        this.rateLimitUntil = Date.now() + cooldownMs;
+        throw this.buildError(
+          429,
+          payload || { success: false, message: 'Demasiadas peticiones. Por favor, espera e intenta nuevamente.' },
+          'Demasiadas peticiones. Por favor, espera e intenta nuevamente.'
+        );
       }
 
       if (!response.ok) {

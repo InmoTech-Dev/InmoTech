@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, CheckCircle2, AlertTriangle, Eye, EyeOff, RotateCcw } from 'lucide-react';
-import { useAuth } from './../../shared/contexts/AuthContext';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();

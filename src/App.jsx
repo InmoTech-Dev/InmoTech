@@ -17,6 +17,7 @@ import AboutPage from './features/about/pages/AboutPage'
 import ServicesPage from './features/services/pages/ServicesPage'
 import LoginPage from './features/auth/pages/LoginPage'
 import RegisterPage from './features/auth/pages/RegisterPage'
+import ResetPasswordPage from './features/auth/pages/ResetPasswordPage'
 import UserAppointmentsPage from './features/appointments/pages/UserAppointmentsPage'
 import MyPropertiesPage from './features/properties/pages/MyPropertiesPage'
 import ActivateAccountPage from './features/auth/pages/ActivateAccountPage'
@@ -147,6 +148,14 @@ function App() {
         <Route
           path="/verificar-correo"
           element={<VerifyEmailPage />}
+        />
+        <Route
+          path="/reset-password"
+          element={<ResetPasswordPage />}
+        />
+        <Route
+          path="/recuperar-contrasena"
+          element={<ResetPasswordPage />}
         />
 
         {/* Authenticated user routes with navbar/footer */}

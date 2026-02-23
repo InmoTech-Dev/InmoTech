@@ -18,7 +18,24 @@ import {
 import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
 
-const ReportDetailedView = ({ report, onEdit, onDownload }) => {
+const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
+    if (loading) {
+        return (
+            <div className="flex-1 h-full overflow-y-auto bg-[#F8FAFC] p-8 space-y-8 animate-pulse">
+                <div className="max-w-4xl mx-auto">
+                    <div className="h-10 bg-slate-200 rounded-xl w-1/2 mb-4" />
+                    <div className="h-12 bg-slate-100 rounded-2xl w-3/4 mb-10" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                        <div className="h-40 bg-white rounded-3xl border border-slate-100" />
+                        <div className="h-40 bg-white rounded-3xl border border-slate-100" />
+                        <div className="h-40 bg-white rounded-3xl border border-slate-100" />
+                    </div>
+                    <div className="h-64 bg-white rounded-3xl border border-slate-100" />
+                </div>
+            </div>
+        );
+    }
+
     if (!report) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] p-12 text-center">
@@ -221,34 +238,112 @@ const ReportDetailedView = ({ report, onEdit, onDownload }) => {
                                     </div>
                                     Inspección Detallada por Rubros
                                 </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-6">
                                     {report.rubros.map((rubro, idx) => (
-                                        <div key={idx} className="flex flex-col p-7 bg-slate-50/50 rounded-3xl border-2 border-transparent group hover:bg-white hover:border-indigo-100 hover:shadow-xl hover:shadow-indigo-50/50 transition-all cursor-default">
-                                            <div className="flex items-start justify-between mb-5">
-                                                <div className="flex-1 pr-4">
-                                                    <h5 className="text-[15px] font-black text-slate-800 uppercase tracking-tight group-hover:text-indigo-600 transition-colors mb-1">
-                                                        {rubro.nombre || rubro.nombre_rubro}
-                                                    </h5>
-                                                    <p className="text-xs text-slate-400 font-bold line-clamp-2 leading-relaxed">
-                                                        {rubro.descripcion || "Sin descripción de rubro disponible para esta inspección."}
-                                                    </p>
+                                        <div key={idx} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden group hover:shadow-xl hover:shadow-indigo-50/50 transition-all duration-500">
+                                            {/* Rubro Header */}
+                                            <div className="p-6 border-b border-slate-50 bg-[#FBFDFF]/50">
+                                                <div className="flex items-start justify-between gap-4 mb-4">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h5 className="text-[14px] font-black text-[#1E293B] uppercase tracking-tight mb-1 truncate group-hover:text-indigo-600 transition-colors">
+                                                            {rubro.nombre || rubro.nombre_rubro || "RUBRO SIN NOMBRE"}
+                                                        </h5>
+                                                        <p className="text-[11px] font-bold text-slate-400 leading-relaxed italic line-clamp-2">
+                                                            {rubro.descripcion || "Sin descripción disponible para esta inspección."}
+                                                        </p>
+                                                    </div>
+                                                    <Badge className={cn(
+                                                        "rounded-full px-4 py-1 text-[9px] font-black uppercase tracking-widest shadow-sm shrink-0",
+                                                        rubro.estado === 'Bueno' ? "bg-emerald-500 text-white" :
+                                                            rubro.estado === 'Regular' ? "bg-amber-500 text-white" :
+                                                                rubro.estado === 'Malo' ? "bg-rose-500 text-white" :
+                                                                    "bg-slate-500 text-white"
+                                                    )}>
+                                                        {rubro.estado || 'PENDIENTE'}
+                                                    </Badge>
                                                 </div>
-                                                <Badge className={cn(
-                                                    "rounded-xl px-4 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm",
-                                                    rubro.estado === 'Bueno' ? "bg-emerald-500 text-white" :
-                                                        rubro.estado === 'Regular' ? "bg-amber-500 text-white" :
-                                                            "bg-red-500 text-white"
-                                                )}>
-                                                    {rubro.estado || 'N/A'}
-                                                </Badge>
+
+                                                {/* Progress Indicator */}
+                                                {rubro.progreso !== undefined && (
+                                                    <div className="bg-white rounded-xl p-3 border border-slate-100/80 shadow-inner-sm">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-1 h-1 rounded-full bg-indigo-400" />
+                                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Nivel de Progreso</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-indigo-600 font-mono tracking-tighter">{rubro.progreso}%</span>
+                                                        </div>
+                                                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                            <motion.div
+                                                                initial={{ width: 0 }}
+                                                                animate={{ width: `${rubro.progreso}%` }}
+                                                                transition={{ duration: 1, ease: "circOut" }}
+                                                                className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {/* Progress Bar Si aplica */}
-                                            {rubro.progreso !== undefined && (
-                                                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-indigo-500 transition-all"
-                                                        style={{ width: `${rubro.progreso}%` }}
-                                                    />
+
+                                            {/* Follow-ups Timeline Section */}
+                                            {rubro.seguimientos?.length > 0 ? (
+                                                <div className="p-6 bg-white relative">
+                                                    <div className="flex items-center gap-2 mb-6">
+                                                        <Clock className="w-3.5 h-3.5 text-indigo-300" />
+                                                        <h6 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Historial de Seguimientos</h6>
+                                                    </div>
+
+                                                    <div className="space-y-6 relative">
+                                                        {/* Vertical Timeline Line */}
+                                                        <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-slate-100" />
+
+                                                        {rubro.seguimientos.map((seg, sIdx) => (
+                                                            <div key={sIdx} className="relative pl-10 group/item">
+                                                                {/* Timeline Dot */}
+                                                                <div className={cn(
+                                                                    "absolute left-0 top-1 w-6 h-6 rounded-lg flex items-center justify-center shadow-sm z-10 transition-transform group-hover/item:scale-110 border-2 border-white",
+                                                                    seg.estado === 'Completado' ? "bg-emerald-50 text-emerald-500" :
+                                                                        seg.estado === 'En proceso' ? "bg-blue-50 text-blue-500" :
+                                                                            "bg-slate-50 text-slate-400"
+                                                                )}>
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                                                                </div>
+
+                                                                <div className="bg-[#F8FAFC]/50 group-hover/item:bg-white p-4 rounded-2xl border border-slate-50 group-hover/item:border-indigo-100 group-hover/item:shadow-lg group-hover/item:shadow-indigo-50/30 transition-all duration-300">
+                                                                    <div className="flex items-start justify-between gap-4 mb-3">
+                                                                        <p className="text-[12px] font-bold text-slate-700 leading-snug">
+                                                                            {seg.descripcion}
+                                                                        </p>
+                                                                        <Badge variant="outline" className={cn(
+                                                                            "rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-widest shrink-0 border-0 shadow-sm",
+                                                                            seg.estado === 'Completado' ? "bg-emerald-50 text-emerald-600" :
+                                                                                seg.estado === 'En proceso' ? "bg-blue-50 text-blue-600" :
+                                                                                    "bg-slate-100 text-slate-400"
+                                                                        )}>
+                                                                            {seg.estado}
+                                                                        </Badge>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-4 text-[9px] font-black text-slate-300 uppercase tracking-wider mt-2 border-t border-slate-100/50 pt-3">
+                                                                        <div className="flex items-center gap-1.5 group-hover/item:text-slate-400 transition-colors">
+                                                                            <UserIcon className="w-3 h-3 opacity-50" />
+                                                                            {seg.responsable || "SISTEMA"}
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1.5 ml-auto opacity-70">
+                                                                            <Calendar className="w-3 h-3" />
+                                                                            {seg.fecha || "PENDIENTE"}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="px-6 py-8 text-center bg-slate-50/30 border-t border-slate-50">
+                                                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic">
+                                                        No hay seguimientos registrados aún
+                                                    </p>
                                                 </div>
                                             )}
                                         </div>
@@ -278,9 +373,9 @@ const ReportDetailedView = ({ report, onEdit, onDownload }) => {
                             Última actualización: {report.fecha}
                         </p>
                     </div>
-                </motion.div>
-            </AnimatePresence>
-        </div>
+                </motion.div >
+            </AnimatePresence >
+        </div >
     );
 };
 

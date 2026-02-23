@@ -3,6 +3,7 @@ import UserSidebar from './components/UserSidebar';
 import ReportSelectionList from './components/ReportSelectionList';
 import ReportDetailedView from './components/ReportDetailedView';
 import administrativosApiService from '@/shared/services/administrativosApiService';
+import reportesInmobiliariosService from '@/features/dashboard/services/reportesInmobiliarios.service';
 import { useToast } from '@/shared/hooks/use-toast';
 
 const AdminReportsView = ({
@@ -16,6 +17,7 @@ const AdminReportsView = ({
     const [selectedUser, setSelectedUser] = useState(null);
     const [selectedReport, setSelectedReport] = useState(null);
     const [usersLoading, setUsersLoading] = useState(true);
+    const [detailedLoading, setDetailedLoading] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const { toast } = useToast();
 
@@ -81,6 +83,78 @@ const AdminReportsView = ({
         return responsable.includes(userName) || userName.includes(responsable);
     });
 
+    const formatResponsableName = (r) => {
+        if (!r) return '';
+        if (typeof r === 'string') return r.trim();
+        if (r?.nombre_completo) return String(r.nombre_completo).replace(/\s+/g, ' ').trim();
+        const nombres = [r?.primer_nombre, r?.segundo_nombre, r?.nombres, r?.nombre].filter(Boolean).join(' ');
+        const apellidos = [r?.primer_apellido, r?.segundo_apellido, r?.apellidos, r?.apellido, r?.apellido_completo].filter(Boolean).join(' ');
+        const full = [nombres, apellidos].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+        return full || r?.correo || r?.email || '';
+    };
+
+    const handleSelectReport = async (report) => {
+        if (!report) {
+            setSelectedReport(null);
+            return;
+        }
+
+        setDetailedLoading(true);
+        try {
+            const reportId = Number(report.id_reporte ?? report.referencia ?? (report.id || '').toString().replace(/\D/g, ''));
+            if (!reportId) throw new Error('ID de reporte inválido');
+
+            // 1) Fetch basic details
+            const response = await reportesInmobiliariosService.obtenerReporte(reportId);
+            const detailedReport = response.data || response;
+
+            // 2) Fetch rubros and follow-ups
+            const rubros = await reportesInmobiliariosService.listarRubros(reportId);
+            const rubrosConSeguimientos = await Promise.all(
+                rubros.map(async (rubro) => {
+                    const seguimientosRaw = await reportesInmobiliariosService.listarSeguimientosRubro(reportId, rubro.id_rubro ?? rubro.id);
+                    const seguimientos = (seguimientosRaw || []).map(s => ({
+                        ...s,
+                        responsable: formatResponsableName(s.responsable)
+                    }));
+                    return { ...rubro, seguimientos };
+                })
+            );
+
+            // 3) Merge and enrich data (consistent with handleViewReport in Reports.jsx)
+            const enrichedReport = {
+                ...detailedReport,
+                ubicacion: report.ubicacion || detailedReport.inmueble_ciudad || '',
+                tipoInmueble: report.tipoInmueble || detailedReport.inmueble_categoria || '',
+                propietario: report.propietario || detailedReport.propietario_nombre || '',
+                referencia: report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || '',
+                tipoReporte: (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento'),
+                estado: report.estado || detailedReport.estado || 'Pendiente',
+                fecha: report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : ''),
+                prioridad: report.prioridad || detailedReport.prioridad || 'Media',
+                responsable: detailedReport.reportadoPor?.nombre_completo || report.responsable || 'No asignado',
+                descripcion: detailedReport.descripcion || detailedReport.descripcion_reporte || '',
+                seguimientoGeneral: detailedReport.seguimiento_general || '',
+                rubros: rubrosConSeguimientos,
+                // Ensure ID is consistent for selection comparison
+                id: report.id
+            };
+
+            setSelectedReport(enrichedReport);
+        } catch (error) {
+            console.error('Error fetching full report details:', error);
+            toast({
+                title: 'Error de carga',
+                description: 'No se pudieron obtener todos los detalles del reporte.',
+                variant: 'error',
+            });
+            // Fallback to shallow report if fetch fails
+            setSelectedReport(report);
+        } finally {
+            setDetailedLoading(false);
+        }
+    };
+
     // Reset selected report when user changes or reports are reloaded
     useEffect(() => {
         if (selectedReport) {
@@ -108,7 +182,7 @@ const AdminReportsView = ({
                 selectedUser={selectedUser}
                 reports={userReports}
                 selectedReport={selectedReport}
-                onSelectReport={setSelectedReport}
+                onSelectReport={handleSelectReport}
                 loading={reportsLoading}
             />
 
@@ -117,6 +191,7 @@ const AdminReportsView = ({
                 report={selectedReport}
                 onEdit={onEditReport}
                 onDownload={onDownloadPDF}
+                loading={detailedLoading}
             />
         </div>
     );

@@ -96,7 +96,7 @@ class CitaApiService {
       console.log("ð¤ Enviando nueva cita al backend:", payload);
 
       const response = await apiClient.post("/citas", payload);
-      
+
       console.log("ð¥ Respuesta del backend al crear:", response.data);
 
       // Manejar estructura: { success, message, data: {...} }
@@ -137,12 +137,12 @@ class CitaApiService {
       console.log("ð¤ Enviando actualizaciÃ³n al backend:", { id, payload });
 
       const response = await apiClient.put(`/citas/${id}`, payload);
-      
+
       console.log("ð¥ Respuesta del backend:", response.data);
 
       // Estructura: { success, message, data: {...} }
       const citaActualizada = response.data.data || response.data;
-      
+
       // â CORRECCIÃN CRÃTICA: usar id_cita en lugar de id
       if (!citaActualizada || (!citaActualizada.id_cita && !citaActualizada.id)) {
         console.error("â Respuesta invÃ¡lida del backend:", response.data);
@@ -549,19 +549,19 @@ class CitaApiService {
       // â Usar id_cita del backend, pero tambiÃ©n crear alias 'id' para el frontend
       id: citaAPI.id_cita || citaAPI.id,
       id_cita: citaAPI.id_cita || citaAPI.id,
-      
+
       // Estado
-      estado: citaAPI.estado?.nombre_estado?.toLowerCase() || 
-              this.mapIdToEstado(citaAPI.id_estado_cita),
+      estado: citaAPI.estado?.nombre_estado?.toLowerCase() ||
+        this.mapIdToEstado(citaAPI.id_estado_cita),
       id_estado_cita: citaAPI.id_estado_cita,
-      
+
       // IDs de relaciones
       id_persona: citaAPI.id_persona,
       id_inmueble: citaAPI.id_inmueble,
       id_servicio: citaAPI.id_servicio,
       id_agente_asignado: citaAPI.id_agente_asignado,
       id_cita_original: citaAPI.id_cita_original,
-      
+
       // Datos de la cita
       fecha_cita: citaAPI.fecha_cita,
       hora_inicio: citaAPI.hora_inicio,
@@ -571,11 +571,11 @@ class CitaApiService {
       motivo_reagendamiento: citaAPI.motivo_reagendamiento || citaAPI.motivoReagendamiento || null,
       comentario_edicion: citaAPI.comentario_edicion || citaAPI.comentario,
       comentario: citaAPI.comentario,
-      
+
       // Fechas de auditorÃ­a
       fecha_creacion: citaAPI.fecha_creacion,
       fecha_actualizacion: citaAPI.fecha_actualizacion,
-      
+
       // Contador de ediciones
       ediciones_realizadas: citaAPI.ediciones_realizadas || 0,
       ediciones_maximas: citaAPI.ediciones_maximas || 2,
@@ -604,7 +604,7 @@ class CitaApiService {
       if (!Array.isArray(agentes)) {
         throw new Error("Formato de respuesta invÃ¡lido para agentes disponibles");
       }
-      
+
       console.log(`â ${agentes.length} agentes disponibles obtenidos`);
       return agentes;
     } catch (error) {
@@ -729,22 +729,32 @@ class CitaApiService {
         }
 
         // Filtrar horarios que NO estÃ¡n ocupados por citas confirmadas/programadas
+        // Filtrar horarios que NO están ocupados por citas confirmadas/programadas
         const citasActivas = citasExistentes.filter(cita =>
           ['confirmada', 'programada'].includes(cita.estado) &&
           cita.fecha_cita === data.fecha_cita
         );
 
-        console.log(`Citas activas bloqueando horarios:`, citasActivas.length);
-
-        // Extraer horarios ocupados
+        // Extraer horarios ocupados por citas definitivas
         const horariosOcupados = new Set(
           citasActivas.map(cita => cita.hora_inicio)
         );
 
-        // Filtrar horarios disponibles (no ocupados)
-        const horariosDisponibles = todosHorarios.filter(hora =>
-          !horariosOcupados.has(hora)
-        );
+        // Contar solicitudes por horario
+        const conteoSolicitudes = {};
+        citasExistentes
+          .filter(cita => cita.estado === 'solicitada' && cita.fecha_cita === data.fecha_cita)
+          .forEach(cita => {
+            const hora = cita.hora_inicio;
+            conteoSolicitudes[hora] = (conteoSolicitudes[hora] || 0) + 1;
+          });
+
+        // Filtrar horarios disponibles: no ocupados Y con menos de 5 solicitudes
+        const horariosDisponibles = todosHorarios.filter(hora => {
+          const estaOcupado = horariosOcupados.has(hora);
+          const tieneDemasiadasSolicitudes = (conteoSolicitudes[hora] || 0) >= 5;
+          return !estaOcupado && !tieneDemasiadasSolicitudes;
+        });
 
         console.log(`Horarios disponibles para visitas:`, horariosDisponibles.length, 'de', todosHorarios.length);
 
@@ -808,6 +818,44 @@ class CitaApiService {
       console.error("Error en obtenerHorariosDisponiblesUsuario:", error);
 
       // Fallback: retornar horarios predeterminados
+      const defaultHorarios = [];
+      for (let hora = 8; hora <= 17; hora++) {
+        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+        if (hora < 17) {
+          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+        }
+      }
+      return defaultHorarios;
+    }
+  }
+
+  /**
+   * Obtener horarios disponibles para visitantes (PÚBLICO)
+   * @param {Object} data - Objeto con fecha_cita, id_servicio
+   * @returns {Promise<Array>} Array de horarios disponibles en formato HH:mm
+   */
+  async obtenerHorariosDisponiblesPublico(data) {
+    try {
+      console.log(`Consulta PÚBLICA de horarios disponibles:`, data);
+
+      const params = new URLSearchParams();
+      params.append("fecha_cita", data.fecha_cita);
+      params.append("id_servicio", data.id_servicio);
+      if (data.id_inmueble) params.append("id_inmueble", data.id_inmueble);
+
+      const response = await apiClient.get(`/citas/horarios-disponibles-publico?${params.toString()}`);
+      const result = response.data.data || response.data;
+
+      if (!Array.isArray(result)) {
+        console.error("Formato de respuesta inválido del servidor para horarios públicos:", response.data);
+        return [];
+      }
+
+      console.log(`Horarios públicos obtenidos: ${result.length}`);
+      return result;
+
+    } catch (error) {
+      console.error("Error en obtenerHorariosDisponiblesPublico:", error);
       const defaultHorarios = [];
       for (let hora = 8; hora <= 17; hora++) {
         defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
@@ -924,7 +972,7 @@ export default citaApiService;
 export const actualizarEstadoCita = async (idCita, idEstadoCita) => {
   try {
     console.log(` Actualizando estado de cita ${idCita} a estado ${idEstadoCita} (endpoint optimizado)`);
-    
+
     const response = await apiClient.patch(`/citas/${idCita}/estado`, {
       id_estado_cita: idEstadoCita
     });
@@ -933,7 +981,7 @@ export const actualizarEstadoCita = async (idCita, idEstadoCita) => {
 
     // Estructura: { success, message, data: {...} }
     const citaActualizada = response.data.data || response.data;
-    
+
     if (!citaActualizada || (!citaActualizada.id_cita && !citaActualizada.id)) {
       throw new Error("El servidor no retornÃ³ datos vÃ¡lidos de la cita actualizada");
     }

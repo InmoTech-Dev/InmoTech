@@ -296,6 +296,20 @@ Consulta `.env.example` para ver todas las variables disponibles.
   - `POST /api/v1/invitaciones` (admin autenticado)
   - Body: `{ "id_persona": <id_persona_del_administrativo> }`
 
+### Politica de acceso de usuarios finales
+
+- No existe auto-registro publico.
+- El alta de cuenta se realiza solo desde panel administrativo.
+- Endpoints de registro/verificacion por signup eliminados:
+  - `POST /api/v1/auth/register`
+  - `GET /api/v1/auth/verify-email`
+  - `POST /api/v1/auth/verify-code`
+  - `POST /api/v1/auth/resend-code`
+- Primer acceso oficial por invitacion administrativa:
+  - `GET /api/v1/invitaciones/validar`
+  - `POST /api/v1/invitaciones/aceptar`
+  - `POST /api/v1/invitaciones/reenviar`
+
 ## Mejores Prácticas Implementadas
 
 1. **Arquitectura en capas**: Separación de responsabilidades

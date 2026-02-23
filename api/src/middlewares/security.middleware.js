@@ -1,107 +1,103 @@
 const rateLimit = require('express-rate-limit');
 
-const generalLimiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 60 * 1000, // 1 hour for development
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // Increased for development
-  message: {
-    success: false,
-    message: 'Demasiadas solicitudes desde esta IP, por favor intenta de nuevo más tarde'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+const toPositiveInt = (rawValue, fallbackValue) => {
+  const parsed = Number.parseInt(rawValue, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackValue;
+};
+
+const createJsonLimiter = ({ windowMs, max, message }) =>
+  rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+      res.set('Retry-After', String(Math.ceil(windowMs / 1000)));
+      return res.status(429).json({
+        success: false,
+        message,
+      });
+    },
+  });
+
+const generalWindowMs = toPositiveInt(
+  process.env.RATE_LIMIT_GENERAL_WINDOW_MS || process.env.RATE_LIMIT_WINDOW_MS,
+  15 * 60 * 1000
+);
+const generalMaxRequests = toPositiveInt(
+  process.env.RATE_LIMIT_GENERAL_MAX_REQUESTS || process.env.RATE_LIMIT_MAX_REQUESTS,
+  600
+);
+
+const generalLimiter = createJsonLimiter({
+  windowMs: generalWindowMs,
+  max: generalMaxRequests,
+  message: 'Demasiadas solicitudes desde esta IP, por favor intenta de nuevo mas tarde',
 });
 
-const strictLimiter = rateLimit({
+const strictLimiter = createJsonLimiter({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  message: {
-    success: false,
-    message: 'Límite de solicitudes excedido para esta operación'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Limite de solicitudes excedido para esta operacion',
 });
 
-const createLimiter = rateLimit({
+const createLimiter = createJsonLimiter({
   windowMs: 60 * 60 * 1000,
   max: 20,
-  message: {
-    success: false,
-    message: 'Has alcanzado el límite de citas que puedes crear por hora'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Has alcanzado el limite de citas que puedes crear por hora',
 });
 
 // Limita intentos de login y operaciones sensibles de invitaciones
-const loginLimiter = rateLimit({
+const loginLimiter = createJsonLimiter({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: {
-    success: false,
-    message: 'Demasiados intentos. Intenta de nuevo en unos minutos.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Demasiados intentos. Intenta de nuevo en unos minutos.',
 });
 
-const invitationLimiter = rateLimit({
+const invitationLimiter = createJsonLimiter({
   windowMs: 60 * 60 * 1000,
   max: 15,
-  message: {
-    success: false,
-    message: 'Demasiadas solicitudes. Intenta nuevamente más tarde.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Demasiadas solicitudes. Intenta nuevamente mas tarde.',
 });
 
-const forgotPasswordLimiter = rateLimit({
+const forgotPasswordLimiter = createJsonLimiter({
   windowMs: 15 * 60 * 1000,
   max: 8,
-  message: {
-    success: false,
-    message: 'Demasiadas solicitudes de recuperacion. Intenta nuevamente mas tarde.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Demasiadas solicitudes de recuperacion. Intenta nuevamente mas tarde.',
 });
 
-const identityLookupLimiter = rateLimit({
+const identityLookupLimiter = createJsonLimiter({
   windowMs: 15 * 60 * 1000,
   max: 40,
-  message: {
-    success: false,
-    message: 'Demasiadas consultas de documento. Intenta nuevamente en unos minutos.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Demasiadas consultas de documento. Intenta nuevamente en unos minutos.',
 });
 
-const uploadLimiter = rateLimit({
+const uploadLimiter = createJsonLimiter({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  message: {
-    success: false,
-    message: 'Demasiadas cargas de archivos. Intenta nuevamente mas tarde.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Demasiadas cargas de archivos. Intenta nuevamente mas tarde.',
 });
 
-const setupLimiter = rateLimit({
+const setupLimiter = createJsonLimiter({
   windowMs: 60 * 60 * 1000,
   max: 5,
-  message: {
-    success: false,
-    message: 'Limite de solicitudes de setup excedido. Intenta nuevamente mas tarde.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: 'Limite de solicitudes de setup excedido. Intenta nuevamente mas tarde.',
+});
+
+const authMeLimiter = createJsonLimiter({
+  windowMs: toPositiveInt(process.env.RATE_LIMIT_AUTH_ME_WINDOW_MS, 15 * 60 * 1000),
+  max: toPositiveInt(process.env.RATE_LIMIT_AUTH_ME_MAX_REQUESTS, 300),
+  message: 'Demasiadas solicitudes de perfil. Intenta nuevamente en unos minutos.',
+});
+
+const sseConnectLimiter = createJsonLimiter({
+  windowMs: toPositiveInt(process.env.RATE_LIMIT_SSE_CONNECT_WINDOW_MS, 5 * 60 * 1000),
+  max: toPositiveInt(process.env.RATE_LIMIT_SSE_CONNECT_MAX_REQUESTS, 40),
+  message: 'Demasiados intentos de reconexion en tiempo real. Intenta nuevamente en unos minutos.',
 });
 
 const sanitizeInput = (req, res, next) => {
-  // Permitir saltar sanitización si está marcada
+  // Permitir saltar sanitizacion si esta marcada
   if (req.skipSanitize) {
     return next();
   }
@@ -111,7 +107,7 @@ const sanitizeInput = (req, res, next) => {
       return obj.trim().replace(/[<>]/g, '');
     }
     if (typeof obj === 'object' && obj !== null) {
-      Object.keys(obj).forEach(key => {
+      Object.keys(obj).forEach((key) => {
         obj[key] = sanitize(obj[key]);
       });
     }
@@ -133,6 +129,8 @@ const sanitizeInput = (req, res, next) => {
 
 module.exports = {
   generalLimiter,
+  authMeLimiter,
+  sseConnectLimiter,
   strictLimiter,
   createLimiter,
   loginLimiter,
@@ -141,5 +139,5 @@ module.exports = {
   identityLookupLimiter,
   uploadLimiter,
   setupLimiter,
-  sanitizeInput
+  sanitizeInput,
 };

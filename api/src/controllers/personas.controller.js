@@ -156,21 +156,18 @@ class PersonasController {
   async crearPersona(req, res, next) {
     try {
       const personaData = req.validatedData;
-      const { password, confirmPassword, ...personaDataSinPassword } = personaData;
+      const persona = await personasService.crearPersonaAdmin(personaData);
 
-      const persona = await personasService.crearPersonaAdmin(personaDataSinPassword, password);
-
-      // Si no se proporcionó contraseña, generar invitación administrativa para que cree su acceso
-      if (!password) {
-        try {
-          await invitacionService.crearInvitacion({
-            id_persona: persona.id_persona,
-            creado_por: req.user?.id || null,
-            tipo: 'admin_invite'
-          });
-        } catch (inviteError) {
-          logger.warn('No se pudo enviar invitación al crear persona:', inviteError.message);
-        }
+      try {
+        await invitacionService.crearInvitacion({
+          id_persona: persona.id_persona,
+          creado_por: req.user?.id || null,
+          tipo: (personaData.rol === 'Administrador' || personaData.rol === 'Super Administrador')
+            ? 'admin_invite'
+            : 'user_invite'
+        });
+      } catch (inviteError) {
+        logger.warn('No se pudo enviar invitacion al crear persona:', inviteError.message);
       }
 
       return res.status(201).json({

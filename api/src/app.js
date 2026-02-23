@@ -21,6 +21,23 @@ const parsePositiveInteger = (rawValue, fallbackValue) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackValue;
 };
 
+const parseTrustProxy = (rawValue) => {
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return false;
+  }
+
+  const normalized = String(rawValue).trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+
+  const hops = Number.parseInt(normalized, 10);
+  if (Number.isInteger(hops) && hops >= 0) {
+    return hops;
+  }
+
+  return rawValue;
+};
+
 const HTTP_LOG_STYLE = String(process.env.HTTP_LOG_STYLE || "ascii").toLowerCase();
 const HTTP_LOG_SUPPRESS_AUTH_ME_304 =
   String(process.env.HTTP_LOG_SUPPRESS_AUTH_ME_304 || "true").toLowerCase() !== "false";
@@ -132,6 +149,8 @@ if (HTTP_LOG_SUPPRESS_AUTH_ME_304) {
     summaryInterval.unref();
   }
 }
+
+app.set("trust proxy", parseTrustProxy(process.env.TRUST_PROXY));
 
 app.use(
   helmet({

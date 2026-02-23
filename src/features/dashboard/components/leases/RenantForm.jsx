@@ -1095,14 +1095,21 @@ export default function RentForm({ onClose, onSubmit }) {
 
     return (
         // 🔑 Fondo del modal con desenfoque - CAMBIO PRINCIPAL
-        <div 
+        <motion.div 
             className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4"
             onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
         >
             {/* Contenido principal del modal */}
-            <div 
+            <motion.div 
                 className="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 relative max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                transition={{ duration: 0.25 }}
             >
                 
                 {/* Header con estilo del banner */}
@@ -1112,14 +1119,16 @@ export default function RentForm({ onClose, onSubmit }) {
                 </div>
 
                 {/* Botón cerrar con estilo azul */}
-                <button
+                <motion.button
                     onClick={onClose}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 transition duration-150 p-1 rounded-full"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
-                </button>
+                </motion.button>
 
                 {/* Barra de progreso */}
                 <div className="mb-6">
@@ -1256,42 +1265,48 @@ export default function RentForm({ onClose, onSubmit }) {
                     {/* Controles de navegación */}
                     <div className="flex justify-between pt-6 mt-6">
                         {step > 1 && (
-                            <button 
+                            <motion.button 
                                 type="button" 
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={prevStep} 
                                 className="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-400 transition duration-150 transform hover:scale-[1.02]"
                             >
                                 Anterior
-                            </button>
+                            </motion.button>
                         )}
 
                         {step < totalSteps && (
-                            <button
+                            <motion.button
                                 type="button"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={handleNextStep}
                                 className={`px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02] ${step > 1 ? "ml-auto" : "w-full"}`}
                             >
                                 Siguiente
-                            </button>
+                            </motion.button>
                         )}
 
                         {step === totalSteps && (
-                            <button 
+                            <motion.button 
                                 type="submit"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 disabled={submissionState.isSubmitting}
                                 className={`px-6 py-2 rounded-lg shadow-lg shadow-green-400/50 ml-auto font-semibold transition duration-150 transform hover:scale-[1.02]
                                     ${submissionState.isSubmitting ? "bg-green-500 opacity-80 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}
                                     text-white`}
                             >
                                 {submissionState.isSubmitting ? "Creando..." : "Crear Arriendo"}
-                            </button>
+                            </motion.button>
                         )}
                     </div>
                     {submissionState.error && (
                         <p className="mt-3 text-sm text-red-600">{submissionState.error}</p>
                     )}
                 </form>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     );
 }

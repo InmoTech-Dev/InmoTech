@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
+import { X, User, Phone, Mail, FileText, CheckCircle } from 'lucide-react';
 
-const DEFAULT_FORM = {
+const defaultFormData = {
   id: null,
-  tipoDocumento: "CC",
+  tipoDocumento: "",
   documento: "",
   primerNombre: "",
   segundoNombre: "",
@@ -10,9 +12,10 @@ const DEFAULT_FORM = {
   segundoApellido: "",
   correo: "",
   telefono: "",
+  observaciones: ""
 };
 
-const REQUIRED = ["documento", "primerNombre", "primerApellido", "correo", "telefono"];
+const requiredFields = ["tipoDocumento", "documento", "primerNombre", "primerApellido", "correo", "telefono"];
 
 const DOC_OPTIONS = [
   { value: "CC", label: "Cédula de Ciudadanía (CC)" },
@@ -29,117 +32,231 @@ export default function BuyerForm({
   initialData,
   isSubmitting = false,
 }) {
-  const [formData, setFormData] = useState({ ...DEFAULT_FORM, id: nextId });
   const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState(null);
+
+  // Refs estilo TenantForm para evitar bloqueos al tipear
+  const valuesRef = useRef({ ...defaultFormData, id: nextId });
+  const displayValuesRef = useRef({ ...defaultFormData, id: nextId });
+  const elRefs = useRef({});
 
   const isEditing = Boolean(initialData);
   const formTitle = isEditing ? "Editar Comprador" : "Registro de Comprador";
   const buttonText = isEditing ? "Actualizar Comprador" : "Guardar Comprador";
 
+  // campos por tipo
+  const nameFields = ["primerNombre", "segundoNombre", "primerApellido", "segundoApellido"];
+  const docFields = ["documento"];
+  const phoneFields = ["telefono"];
+  const emailFields = ["correo"];
+
   useEffect(() => {
-    setFormData({ ...DEFAULT_FORM, id: initialData?.id ?? nextId, ...initialData });
+    const newData = {
+      ...defaultFormData,
+      id: initialData?.id ?? nextId,
+      ...initialData
+    };
+    valuesRef.current = newData;
+    displayValuesRef.current = newData;
     setErrors({});
+    setSubmitError(null);
   }, [initialData, nextId]);
 
-  const validateName = (value, required) => {
-    if (required && !value.trim()) return "Este campo es obligatorio.";
-    if (!value.trim()) return "";
-    if (!/^[a-zA-ZÁÉÍÓÚÜáéíóúüñÑ'\\s]*$/.test(value)) {
-      return "Solo se permiten letras y espacios.";
-    }
-    return "";
-  };
-
-  const validateField = (name, value) => {
-    if (REQUIRED.includes(name) && !value.trim()) return "Este campo es obligatorio.";
-
-    switch (name) {
-      case "documento":
-        if (value && !/^[0-9]+$/.test(value)) return "Solo números.";
-        if (value && value.length < 5) return "Debe tener al menos 5 dígitos.";
+  // Validación por tipo de documento (igual TenantForm)
+  const validateDocument = (tipoDocumento, numeroDocumento) => {
+    const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
+    switch (tipoDocumento) {
+      case 'CC':
+        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
         break;
-      case "primerNombre":
-      case "segundoNombre":
-      case "primerApellido":
-      case "segundoApellido":
-        return validateName(value, name === "primerNombre" || name === "primerApellido");
-      case "correo":
-        if (value) {
-          const trimmedEmail = value.trim().toLowerCase();
-          if (!/^[\w.!#$%&'*+/=?`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/i.test(trimmedEmail)) {
-            return "Correo inválido.";
-          }
-        }
+      case 'CE':
+        if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
         break;
-      case "telefono":
-        if (value && !/^[0-9]+$/.test(value)) return "Solo números.";
-        if (value && value.length < 7) return "Debe tener al menos 7 dígitos.";
+      case 'NIT':
+        if (!/^[0-9]{9,10}$/.test(numeroLimpio)) return 'El NIT debe tener 9 o 10 dígitos';
+        break;
+      case 'PASAPORTE':
+        if (numeroLimpio.length < 6 || numeroLimpio.length > 20) return 'El pasaporte debe tener entre 6 y 20 caracteres';
+        if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) return 'El pasaporte solo puede contener letras y números';
+        break;
+      case 'TI':
+        if (!/^[0-9]{10,11}$/.test(numeroLimpio)) return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
         break;
       default:
-        break;
+        return 'Tipo de documento no válido';
     }
-    return "";
+    return '';
   };
 
-  const handleChange = (e) => {
+  const isValidName = (value) => /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]*$/.test(value);
+  const isValidNumeric = (value) => /^\d*$/.test(value);
+  const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
+
+  const setElRef = (name) => (el) => {
+    if (!el) return;
+    elRefs.current[name] = el;
+    if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
+      valuesRef.current[name] = defaultFormData[name] ?? "";
+    }
+    displayValuesRef.current[name] = valuesRef.current[name];
+    if (el.type === "checkbox") {
+      el.checked = !!valuesRef.current[name];
+    } else if (displayValuesRef.current[name] !== undefined) {
+      try { el.value = displayValuesRef.current[name]; } catch (err) {}
+    }
+  };
+
+  const handleInputChange = (e) => {
     const { name, value } = e.target;
-    const cleanValue = name === "documento" || name === "telefono" ? value.replace(/[^0-9]/g, "") : value;
-    setFormData((prev) => ({ ...prev, [name]: cleanValue }));
+    let cleanValue = value;
+    if (docFields.includes(name) || phoneFields.includes(name)) {
+      cleanValue = value.replace(/[^0-9]/g, '');
+      displayValuesRef.current[name] = value; // mantiene visual
+    } else {
+      displayValuesRef.current[name] = value;
+    }
+    valuesRef.current[name] = cleanValue;
 
     if (errors[name]) {
       setErrors((prev) => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
+        const n = { ...prev };
+        delete n[name];
+        return n;
       });
     }
   };
 
+  const handleInputBlur = (e) => {
+    const { name } = e.target;
+    const value = valuesRef.current[name] || "";
+    const isRequired = requiredFields.includes(name);
+    let errorMessage = "";
+
+    if (isRequired && !value.trim()) {
+      errorMessage = "Este campo es obligatorio.";
+    }
+
+    if (!errorMessage && value.trim()) {
+      if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
+        errorMessage = "Solo se permiten letras y espacios.";
+      } else if (docFields.includes(name)) {
+        const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
+        if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
+          errorMessage = "Solo se permiten letras, números, espacios, puntos y guiones";
+        } else {
+          errorMessage = validateDocument(tipoDocumento, value);
+        }
+      } else if (phoneFields.includes(name)) {
+        if (!isValidNumeric(value)) errorMessage = "Solo se permiten números.";
+        else if (value.length < 10) errorMessage = "El teléfono debe tener al menos 10 dígitos";
+      } else if (emailFields.includes(name)) {
+        if (!value.includes("@")) {
+          errorMessage = "El correo debe contener @.";
+        } else if (!isValidEmail(value)) {
+          errorMessage = "El correo electrónico debe ser válido.";
+        }
+      }
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: errorMessage,
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const nextErrors = {};
-    Object.keys(formData).forEach((key) => {
-      const message = validateField(key, formData[key] ?? "");
-      if (message) nextErrors[key] = message;
+
+    // Validar requeridos
+    requiredFields.forEach((field) => {
+      if (!String(valuesRef.current[field] || "").trim()) {
+        nextErrors[field] = "Este campo es obligatorio.";
+      }
     });
 
-    if (Object.keys(nextErrors).length) {
+    // Validar en bloque con las mismas reglas que blur
+    nameFields.forEach((name) => {
+      const v = valuesRef.current[name] || "";
+      if (v && !isValidName(displayValuesRef.current[name])) {
+        nextErrors[name] = "Solo se permiten letras y espacios.";
+      }
+    });
+
+    const docVal = valuesRef.current.documento || "";
+    if (!nextErrors.documento && docVal) {
+      const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
+      if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current.documento)) {
+        nextErrors.documento = "Solo se permiten letras, números, espacios, puntos y guiones";
+      } else {
+        const msg = validateDocument(tipoDocumento, docVal);
+        if (msg) nextErrors.documento = msg;
+      }
+    }
+
+    const telVal = valuesRef.current.telefono || "";
+    if (!nextErrors.telefono && telVal) {
+      if (!isValidNumeric(telVal)) nextErrors.telefono = "Solo se permiten números.";
+      else if (telVal.length < 7) nextErrors.telefono = "El teléfono debe tener al menos 7 dígitos";
+    }
+
+    const emailVal = valuesRef.current.correo || "";
+    if (!nextErrors.correo && emailVal && !isValidEmail(emailVal)) {
+      nextErrors.correo = "El correo electrónico debe ser válido.";
+    }
+
+    if (Object.values(nextErrors).some(Boolean)) {
       setErrors(nextErrors);
       return;
     }
 
     const sanitizedData = {
-      ...formData,
-      correo: formData.correo?.trim().toLowerCase() || "",
-      documento: formData.documento?.trim() || "",
-      telefono: formData.telefono?.trim() || "",
-      primerNombre: formData.primerNombre?.trim() || "",
-      segundoNombre: formData.segundoNombre?.trim() || "",
-      primerApellido: formData.primerApellido?.trim() || "",
-      segundoApellido: formData.segundoApellido?.trim() || "",
+      ...valuesRef.current,
+      correo: (valuesRef.current.correo || "").trim().toLowerCase(),
+      documento: (valuesRef.current.documento || "").trim(),
+      telefono: (valuesRef.current.telefono || "").trim(),
+      primerNombre: (valuesRef.current.primerNombre || "").trim(),
+      segundoNombre: (valuesRef.current.segundoNombre || "").trim(),
+      primerApellido: (valuesRef.current.primerApellido || "").trim(),
+      segundoApellido: (valuesRef.current.segundoApellido || "").trim(),
     };
 
-    await onSubmit(sanitizedData);
+    try {
+      await onSubmit(sanitizedData);
+    } catch (err) {
+      setSubmitError(err?.message || "No se pudo guardar el comprador.");
+    }
   };
 
-  const Field = ({ label, name, type = "text", as = "input", options = [] }) => {
+  const getFieldClass = useCallback((fieldName) => {
+    const baseClass = "w-full px-3 py-2 border rounded-lg focus:outline-none transition-colors";
+    const errorClass = errors[fieldName]
+      ? "border-red-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+      : "border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+    return `${baseClass} ${errorClass}`;
+  }, [errors]);
+
+  // Solo visual (label/errores/layout). Inputs y handlers quedan iguales.
+  const Field = ({ name, placeholder, type = "text", as = "input", options = [], icon: Icon, required }) => {
     const error = errors[name];
-    const required = REQUIRED.includes(name);
+    const isRequired = required || requiredFields.includes(name);
+
+    const Label = (
+      <label className="block text-sm font-medium text-slate-700 mb-2">
+        {getLabel(name)} {isRequired && <span className="text-red-500">*</span>}
+      </label>
+    );
 
     if (as === "select") {
       return (
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-slate-700">
-            {label} {required && <span className="text-red-500">*</span>}
-          </label>
+        <div>
+          {Label}
           <select
             name={name}
-            value={formData[name] ?? ""}
-            onChange={handleChange}
-            className={`w-full border rounded-lg px-3 py-2 ${
-              error ? "border-red-500 ring-1 ring-red-500" : "border-slate-300 focus:ring-2 focus:ring-blue-500"
-            }`}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
+            ref={setElRef(name)}
+            className={getFieldClass(name)}
           >
             <option value="">Seleccione...</option>
             {options.map((opt) => (
@@ -148,80 +265,173 @@ export default function BuyerForm({
               </option>
             ))}
           </select>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-red-500 text-sm mt-1 font-medium">{error}</p>}
         </div>
       );
     }
 
+    const InputComponent = as === "textarea" ? "textarea" : "input";
+
     return (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-semibold text-slate-700">
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <input
-          type={type}
-          name={name}
-          value={formData[name] ?? ""}
-          onChange={handleChange}
-          className={`w-full border rounded-lg px-3 py-2 ${
-            error ? "border-red-500 ring-1 ring-red-500" : "border-slate-300 focus:ring-2 focus:ring-blue-500"
-          }`}
-          placeholder={label}
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <div>
+        {Label}
+        <div className="relative">
+          {Icon && (
+            <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          )}
+          <InputComponent
+            name={name}
+            type={type}
+            placeholder={placeholder || getLabel(name)}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
+            ref={setElRef(name)}
+            className={`${getFieldClass(name)} ${Icon ? "pl-10" : ""} ${as === "textarea" ? "resize-none min-h-[100px]" : ""}`}
+          />
+        </div>
+        {error && <p className="text-red-500 text-sm mt-1 font-medium">{error}</p>}
       </div>
     );
   };
 
+  const getLabel = (name) => {
+    const labels = {
+      tipoDocumento: "Tipo de Documento",
+      documento: "Número de Documento",
+      primerNombre: "Primer Nombre",
+      segundoNombre: "Segundo Nombre",
+      primerApellido: "Primer Apellido",
+      segundoApellido: "Segundo Apellido",
+      correo: "Correo Electrónico",
+      telefono: "Teléfono",
+      observaciones: "Observaciones"
+    };
+    return labels[name] ?? name;
+  };
+
+  const isButtonDisabled =
+    isSubmitting ||
+    Object.values(errors).some(Boolean) ||
+    requiredFields.some((field) => !String(valuesRef.current[field] ?? "").trim());
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      {/* Backdrop (animado) */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+        {/* Modal (animado) */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >        
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">{formTitle}</h2>
-            <p className="text-slate-500 text-sm">
-              Completa los datos del comprador para guardarlo en el sistema.
+            <p className="text-slate-600 mt-1">
+              {isEditing
+                ? "Actualice la información del comprador"
+                : "Complete la información requerida para registrar un nuevo comprador"}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-700 text-xl">
-            ×
-          </button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-slate-500" />
+          </motion.button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field as="select" label="Tipo de documento" name="tipoDocumento" options={DOC_OPTIONS} />
-            <Field label="Número de documento" name="documento" />
-            <Field label="Primer nombre" name="primerNombre" />
-            <Field label="Segundo nombre" name="segundoNombre" />
-            <Field label="Primer apellido" name="primerApellido" />
-            <Field label="Segundo apellido" name="segundoApellido" />
-            <Field label="Correo" name="correo" type="email" />
-            <Field label="Teléfono" name="telefono" />
-          </div>
+        {/* Content */}
+        <div className="flex-1 p-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-slate-800">Datos del Comprador</h3>
+              </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`px-5 py-2 rounded-lg text-white font-semibold ${
-                isSubmitting
-                  ? "bg-slate-400 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 shadow-md"
-              }`}
-            >
-              {isSubmitting ? "Guardando..." : buttonText}
-            </button>
-          </div>
-        </form>
-      </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Field as="select" name="tipoDocumento" options={DOC_OPTIONS} />
+                <div className="md:col-span-2">
+                  <Field name="documento" placeholder="Ej: 1234567890" icon={FileText} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field name="primerNombre" placeholder="Ej: María" icon={User} />
+                <Field name="segundoNombre" placeholder="Opcional" icon={User} />
+                <Field name="primerApellido" placeholder="Ej: García" icon={User} />
+                <Field name="segundoApellido" placeholder="Opcional" icon={User} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field name="correo" type="email" placeholder="ejemplo@dominio.com" icon={Mail} />
+                <Field name="telefono" placeholder="Ej: 3001234567" icon={Phone} />
+              </div>
+
+              {/* Observaciones existe en tu data; si lo usas luego, ya queda con el mismo look:
+              <Field as="textarea" name="observaciones" placeholder="Opcional" />
+              */}
+            </section>
+
+            {/* Error Message (TenantForm) */}
+            {submitError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm font-medium">{submitError}</p>
+              </div>
+            )}
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 flex-shrink-0">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="button"
+            onClick={onClose}
+            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Cancelar
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="submit"
+            onClick={handleSubmit}
+            disabled={isButtonDisabled}
+            className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+              isButtonDisabled
+                ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+            }`}
+          >
+            {isSubmitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="w-4 h-4" />
+                {buttonText}
+              </>
+            )}
+          </motion.button>
+        </div>
+      </motion.div>
     </div>
   );
 }

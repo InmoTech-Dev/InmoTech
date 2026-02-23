@@ -160,6 +160,9 @@ export const buyersApiService = {
   },
 
   async updatePurchaseData(buyerId, purchaseData = {}) {
+    if (!buyerId) {
+      throw new Error('Falta id del comprador para actualizar sus datos de compra.');
+    }
     await apiClient.patch(`/sales/buyers/${buyerId}`, {
       ...purchaseData,
       tipo_comprador: purchaseData.tipo_compra || purchaseData.tipo_comprador || 'Potencial',

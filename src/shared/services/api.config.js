@@ -183,10 +183,18 @@ class ApiClient {
   }
 
   buildRequestHeaders(endpoint, options = {}) {
+    const isFormData = options?.body instanceof FormData;
+
     const headers = {
       ...API_CONFIG.HEADERS,
       ...(options.headers || {}),
     };
+
+    // Evitar forzar Content-Type cuando se envía FormData (el navegador agrega boundary)
+    if (isFormData) {
+      delete headers['Content-Type'];
+      delete headers['content-type'];
+    }
 
     const method = options.method || 'GET';
     if (this.isMutatingMethod(method)) {
@@ -398,26 +406,29 @@ class ApiClient {
   }
 
   async post(endpoint, body = {}, headers = {}) {
+    const isFormData = body instanceof FormData;
     return this.request(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
   }
 
   async put(endpoint, body = {}, headers = {}) {
+    const isFormData = body instanceof FormData;
     return this.request(endpoint, {
       method: 'PUT',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
   }
 
   async patch(endpoint, body = {}, headers = {}) {
+    const isFormData = body instanceof FormData;
     return this.request(endpoint, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
   }
 

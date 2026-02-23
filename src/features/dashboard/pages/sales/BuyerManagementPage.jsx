@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone, X } from 'lucide-react';
 import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
@@ -271,61 +271,109 @@ export function BuyersManagementPage() {
         );
     };
 
-    // --- FUNCIÓN INTERNA PARA RENDERIZAR EL MODAL DE ELIMINACIÓN ---
     const renderDeleteModal = () => {
         if (!buyerToDelete) return null;
 
         const modalContent = (
-            <div 
-                className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm transition-opacity duration-300"
-                onClick={handleCancelDelete} 
+            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            {/* Backdrop estilo formularios */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={handleCancelDelete}
+            />
+
+            {/* Modal card estilo formularios */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.25 }}
+                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
             >
-                <div
-                    className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-100 opacity-100"
-                    onClick={(e) => e.stopPropagation()} 
-                >
-                    <h3 className="text-2xl font-bold text-red-700 mb-4 flex items-center gap-2">
-                        <Trash2 className="w-5 h-5" /> Confirmar Eliminación
-                    </h3>
-                    <p className="mb-6 text-gray-700">
-                        ¿Estás seguro de que deseas eliminar a
-                        <span className="font-extrabold text-purple-700"> {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}</span>
-                        ? Esta acción es irreversible.
-                    </p>
-                    
-                    <div className="flex justify-end gap-3 pt-3 border-t">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleCancelDelete}
-                            className="bg-gray-300 text-gray-800 px-5 py-2 rounded-xl font-semibold hover:bg-gray-400 transition duration-150"
-                        >
-                            Cancelar
-                        </motion.button>
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleConfirmDelete}
-                            disabled={isDeleting}
-                            className={`bg-red-600 text-white px-5 py-2 rounded-xl font-semibold transition duration-150 shadow-md flex items-center gap-2 ${
-                                isDeleting ? "opacity-70 cursor-not-allowed" : "hover:bg-red-700"
-                            }`}
-                        >
-                            {!isDeleting && <Trash2 className="w-4 h-4" />}
-                            {isDeleting ? "Eliminando..." : "Eliminar"}
-                        </motion.button>
+                {/* Header */}
+                <div className="flex items-start justify-between p-6 border-b border-slate-200">
+                <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
+                    <Trash2 className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                    <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
+                    <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
                     </div>
                 </div>
+
+                <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleCancelDelete}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    aria-label="Cerrar"
+                >
+                    <X className="w-5 h-5 text-slate-500" />
+                </motion.button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6">
+                <p className="text-slate-700">
+                    ¿Estás seguro de que deseas eliminar a{" "}
+                    <span className="font-semibold text-slate-900">
+                    {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}
+                    </span>
+                    ? Esta acción no se puede deshacer.
+                </p>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCancelDelete}
+                    className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                    Cancelar
+                </motion.button>
+
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleConfirmDelete}
+                    disabled={isDeleting}
+                    className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+                    isDeleting
+                        ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700 text-white"
+                    }`}
+                >
+                    {isDeleting ? (
+                    <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Eliminando...
+                    </>
+                    ) : (
+                    <>
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar
+                    </>
+                    )}
+                </motion.button>
+                </div>
+            </motion.div>
             </div>
         );
 
         return ReactDOM.createPortal(
             modalContent,
-            document.getElementById('modal-root') || document.body 
+            document.getElementById("modal-root") || document.body
         );
-    };
+        };
 
-    // Calcular estadísticas
+// Calcular estadísticas
     const stats = {
         total: filteredBuyers.length,
         activos: filteredBuyers.filter(b => b.estado === 'activo').length,

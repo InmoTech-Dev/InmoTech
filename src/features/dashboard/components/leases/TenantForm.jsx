@@ -4,18 +4,17 @@ import { X, User, Phone, Mail, FileText, CheckCircle } from 'lucide-react';
 
 const defaultFormData = {
   id: null,
-  tipoDocumento: "CC",
+  tipoDocumento: "",
   documento: "",
   primerNombre: "",
   segundoNombre: "",
   primerApellido: "",
   segundoApellido: "",
   correo: "",
-  telefono: "",
-  observaciones: ""
+  telefono: ""
 };
 
-const requiredFields = ["documento", "primerNombre", "primerApellido", "correo", "telefono"];
+const requiredFields = ["tipoDocumento", "documento", "primerNombre", "primerApellido", "correo", "telefono"];
 
 // Opciones de documentos
 const DOCUMENT_OPTIONS = [
@@ -211,8 +210,12 @@ export default function TenantForm({
             errorMessage = `El teléfono debe tener al menos 10 dígitos`;
           }
         } 
-        else if (emailFields.includes(name) && !isValidEmail(value)) {
-          errorMessage = `El correo electrónico debe ser válido.`;
+        else if (emailFields.includes(name)) {
+          if (!value.includes("@")) {
+            errorMessage = `El correo debe contener @.`;
+          } else if (!isValidEmail(value)) {
+            errorMessage = `El correo electrónico debe ser válido.`;
+          }
         }
       }
 
@@ -432,7 +435,7 @@ export default function TenantForm({
       segundoApellido: "Segundo Apellido",
       correo: "Correo Electrónico",
       telefono: "Teléfono",
-      observaciones: "Observaciones"
+      // observaciones: "Observaciones"
     };
     return labels[name] ?? name;
   };
@@ -460,7 +463,7 @@ export default function TenantForm({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.3 }}
-          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col"
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -484,7 +487,7 @@ export default function TenantForm({
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 min-h-0 p-6">
+          <div className="flex-1 p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Datos Personales Section */}
               <section className="space-y-4">
@@ -553,19 +556,7 @@ export default function TenantForm({
                 </div>
               </section>
 
-              {/* Observaciones Section */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-slate-800">Observaciones</h3>
-                </div>
-                <Field
-                  name="observaciones"
-                  as="textarea"
-                  placeholder="Notas adicionales sobre el arrendatario..."
-                  className=""
-                />
-              </section>
+              {/* Observaciones Section - removed */}
 
               {/* Error Message */}
               {submitError && (

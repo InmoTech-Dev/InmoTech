@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 
@@ -41,12 +42,12 @@ const BUYER_AUTOFILL_FIELDS = [
 
 // Estado inicial
 const initial = {
-    vendedorTipoDocumento: "CC",
+    vendedorTipoDocumento: "",
     vendedorDocumento: "",
     vendedorNombreCompleto: "",
     vendedorCorreo: "",
     vendedorTelefono: "",
-    compradorTipoDocumento: "CC",
+    compradorTipoDocumento: "",
     compradorDocumento: "",
     compradorPersonaId: "",
     compradorNombreCompleto: "",
@@ -85,7 +86,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     const selectedBuyerRef = useRef(null);
     const manuallyEditedBuyerFieldsRef = useRef(new Set());
     const buyerDocumentSnapshotRef = useRef({
-        tipo: "CC",
+        tipo: "",
         numero: "",
     });
     const [buyerLookupState, setBuyerLookupState] = useState({
@@ -1151,20 +1152,28 @@ export default function SalesForm({ onClose, onSubmit }) {
     const formattedPrice = formatNumberWithThousandsSeparator(valuesRef.current.inmueblePrecio || 0);
 
     return (
-        <div 
-            className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4 overflow-y-auto"
-            onClick={onClose}
-        >
-            <div 
-                className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 relative my-8 transform transition-all duration-300 max-h-[90vh] overflow-y-auto"
+        <AnimatePresence>
+            <motion.div 
+                className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4 overflow-y-auto"
+                onClick={onClose}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+            >
+            <motion.div 
+                className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 relative my-8 max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                transition={{ duration: 0.25 }}
             >
 
-                <button onClick={onClose} className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 p-1 rounded-full transition duration-150" aria-label="Cerrar">
+                <motion.button onClick={onClose} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 p-1 rounded-full transition duration-150" aria-label="Cerrar">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
-                </button>
+                </motion.button>
 
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Nueva venta</h2>
@@ -1339,38 +1348,44 @@ export default function SalesForm({ onClose, onSubmit }) {
 
                     <div className="pt-4 border-t mt-6 flex justify-between">
                         {step > 1 && (
-                            <button
+                            <motion.button
                                 type="button"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={prevStep}
                                 className="px-5 py-2 text-sm bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-150"
                             >
                                 Atrás
-                            </button>
+                            </motion.button>
                         )}
                         {step === 1 && <div />}
 
                         {step < totalSteps && (
-                            <button
+                            <motion.button
                                 type="button"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={handleNextStep}
                                 className="px-6 py-2 text-sm bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02]"
                             >
                                 Siguiente
-                            </button>
+                            </motion.button>
                         )}
 
                         {step === totalSteps && (
-                            <button
+                            <motion.button
                                 type="submit"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 className="px-6 py-2 text-sm bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02]"
                             >
                                 Registrar Venta
-                            </button>
+                            </motion.button>
                         )}
                     </div>
                 </form>
-            </div>
-        </div>
+            </motion.div>
+            </motion.div>
+        </AnimatePresence>
     );
 }
-

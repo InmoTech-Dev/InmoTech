@@ -35,7 +35,7 @@ export default function BackToTopButton() {
         // If footer is visible in viewport, button might be over it
         // We consider "over footer" if the button's bottom position would overlap with footer
         // Button is fixed bottom-6 (24px)
-        const buttonBottom = windowHeight - 24 
+        const buttonBottom = windowHeight - 24
         if (footerRect.top <= buttonBottom) {
           setIsOverFooter(true)
         } else {
@@ -67,12 +67,12 @@ export default function BackToTopButton() {
         // Base styles
         "flex items-center justify-center p-0",
         // Visibility animation
-        isVisible 
-          ? "translate-y-0 opacity-100 scale-100" 
+        isVisible
+          ? "translate-y-0 opacity-100 scale-100"
           : "pointer-events-none translate-y-12 opacity-0 scale-75",
         // Contextual styles (normal vs over footer)
-        isOverFooter 
-          ? "bg-[#00457B] border-2 border-white text-white hover:bg-white hover:text-[#00457B]" 
+        isOverFooter
+          ? "bg-[#00457B] border-2 border-white text-white hover:bg-white hover:text-[#00457B]"
           : "bg-[#00457B] text-white hover:bg-[#003b69] border-2 border-transparent"
       )}
     >

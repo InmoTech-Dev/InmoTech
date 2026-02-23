@@ -1,10 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const StatsCard = ({ 
-  title, 
-  value, 
-  icon: Icon, 
+const StatsCard = ({
+  title,
+  value,
+  icon: Icon,
   color = "bg-gradient-to-r from-blue-500 to-blue-600",
   textColor = "text-blue-600",
   bgColor = "bg-blue-50"

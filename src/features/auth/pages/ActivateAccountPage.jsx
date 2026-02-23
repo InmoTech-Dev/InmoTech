@@ -131,23 +131,23 @@ export default function ActivateAccountPage() {
         } else {
           const rawMsg = res?.message || 'Invitacion invalida o expirada';
           if (isUsedOrInvalid(rawMsg)) {
-            setMensaje('Esta invitacion ya fue utilizada. Redirigiendo...');
-            setEstado('redirect');
-            setCanResend(false);
-            setTimeout(() => navigate('/'), 800);
-            return;
-          }
-          setEstado('error');
-          setMensaje(rawMsg);
-          setCanResend(true);
+          setMensaje('Esta invitacion ya fue utilizada o es inexistente. Volviendo al inicio...');
+          setEstado('redirect');
+          setCanResend(false);
+          setTimeout(() => navigate('/'), 2500);
+          return;
+        }
+        setEstado('error');
+        setMensaje(rawMsg);
+        setCanResend(true);
         }
       } catch (err) {
         const rawMsg = err?.data?.message || err.message || 'No se pudo validar la invitacion';
         if (isUsedOrInvalid(rawMsg)) {
-          setMensaje('Esta invitacion ya fue utilizada. Redirigiendo...');
+            setMensaje('Esta invitacion ya fue utilizada o es inexistente. Volviendo al inicio...');
           setEstado('redirect');
           setCanResend(false);
-          setTimeout(() => navigate('/'), 800);
+          setTimeout(() => navigate('/'), 2500);
           return;
         }
         setEstado('error');
@@ -186,8 +186,8 @@ export default function ActivateAccountPage() {
         const rawMsg = res?.message || 'No se pudo completar la activacion';
         if (isUsedOrInvalid(rawMsg)) {
           setEstado('redirect');
-          setMensaje('Esta invitacion ya fue utilizada. Redirigiendo...');
-          setTimeout(() => navigate('/'), 800);
+          setMensaje('Esta invitacion ya fue utilizada. Volviendo al inicio...');
+          setTimeout(() => navigate('/'), 2500);
           return;
         }
 
@@ -202,8 +202,8 @@ export default function ActivateAccountPage() {
       const rawMsg = err?.data?.message || err.message || 'No se pudo completar la activacion';
       if (isUsedOrInvalid(rawMsg)) {
         setEstado('redirect');
-        setMensaje('Esta invitacion ya fue utilizada. Redirigiendo...');
-        setTimeout(() => navigate('/'), 800);
+        setMensaje('Esta invitacion ya fue utilizada. Volviendo al inicio...');
+        setTimeout(() => navigate('/'), 2500);
         return;
       }
 

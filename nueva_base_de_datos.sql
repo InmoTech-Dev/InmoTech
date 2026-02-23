@@ -1,4 +1,4 @@
--- =====================================================================================================================
+﻿-- =====================================================================================================================
 -- BASE DE DATOS INMOBILIARIA INMOTECH
 -- =====================================================================================================================
 -- Motor:           Microsoft SQL Server 2016+
@@ -77,7 +77,7 @@ BEGIN
         id_persona INT PRIMARY KEY IDENTITY(1,1),
 
         -- Información de documento (permite identificación sin duplicados)
-        tipo_documento VARCHAR(5) NOT NULL CHECK (tipo_documento IN ('CC', 'CE', 'NIT', 'Pasaporte', 'TI')),
+        tipo_documento VARCHAR(20) NOT NULL CHECK (tipo_documento IN ('CC', 'CE', 'NIT', 'Pasaporte', 'TI')),
         numero_documento VARCHAR(20) NOT NULL,
 
         -- Nombres completos (unificados para simplicidad y mejor ordenamiento)
@@ -1199,6 +1199,9 @@ BEGIN
     CREATE TABLE Ventas (
         id_venta INT PRIMARY KEY IDENTITY(1,1),
         id_comprador INT NOT NULL,
+        id_vendedor INT NULL,
+        id_estado_venta INT NULL,
+        estado_seguimiento VARCHAR(50) NULL,
         id_inmueble INT NOT NULL,
         fecha_venta DATE NOT NULL,
         valor_venta DECIMAL(15,2) NOT NULL,
@@ -1208,10 +1211,17 @@ BEGIN
         entidad_financiera VARCHAR(100) NULL,
         numero_credito VARCHAR(50) NULL,
         monto_financiado DECIMAL(15,2) NULL,
+        -- Datos "congelados" del vendedor al momento de la venta
+        tipo_doc_vendedor VARCHAR(20) NULL,
+        numero_doc_vendedor VARCHAR(50) NULL,
+        nombre_vendedor VARCHAR(200) NULL,
+        correo_vendedor VARCHAR(150) NULL,
+        telefono_vendedor VARCHAR(50) NULL,
         estado VARCHAR(50) NOT NULL DEFAULT 'Activa' CHECK (estado IN ('Activa', 'Cancelada', 'Finalizada')),
         fecha_creacion DATETIME2(3) NOT NULL DEFAULT GETDATE(),
         
         CONSTRAINT FK_Ventas_Comprador FOREIGN KEY (id_comprador) REFERENCES Compradores(id_comprador),
+        CONSTRAINT FK_Ventas_Vendedor FOREIGN KEY (id_vendedor) REFERENCES Personas(id_persona),
         CONSTRAINT FK_Ventas_Inmueble FOREIGN KEY (id_inmueble) REFERENCES Inmuebles(id_inmueble),
         CONSTRAINT CHK_Ventas_Valor CHECK (valor_venta > 0),
         CONSTRAINT CHK_Ventas_Fecha CHECK (fecha_venta <= CAST(GETDATE() AS DATE))
@@ -1233,6 +1243,27 @@ BEGIN
         PRINT '? Columna id_comprador agregada a Ventas';
     END
 
+    -- Agregar id_vendedor si no existe
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'id_vendedor')
+    BEGIN
+        ALTER TABLE Ventas ADD id_vendedor INT NULL;
+        PRINT '? Columna id_vendedor agregada a Ventas';
+    END
+
+    -- Agregar id_estado_venta si no existe
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'id_estado_venta')
+    BEGIN
+        ALTER TABLE Ventas ADD id_estado_venta INT NULL;
+        PRINT '? Columna id_estado_venta agregada a Ventas';
+    END
+
+    -- Agregar estado_seguimiento si no existe
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'estado_seguimiento')
+    BEGIN
+        ALTER TABLE Ventas ADD estado_seguimiento VARCHAR(50) NULL;
+        PRINT '? Columna estado_seguimiento agregada a Ventas';
+    END
+
     -- Agregar campos de financiación si no existen
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'tipo_compra')
     BEGIN
@@ -1250,12 +1281,30 @@ BEGIN
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'monto_financiado')
         ALTER TABLE Ventas ADD monto_financiado DECIMAL(15,2) NULL;
 
+    -- Agregar campos congelados del vendedor si no existen
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'tipo_doc_vendedor')
+        ALTER TABLE Ventas ADD tipo_doc_vendedor VARCHAR(20) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'numero_doc_vendedor')
+        ALTER TABLE Ventas ADD numero_doc_vendedor VARCHAR(50) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'nombre_vendedor')
+        ALTER TABLE Ventas ADD nombre_vendedor VARCHAR(200) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'correo_vendedor')
+        ALTER TABLE Ventas ADD correo_vendedor VARCHAR(150) NULL;
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'telefono_vendedor')
+        ALTER TABLE Ventas ADD telefono_vendedor VARCHAR(50) NULL;
+
     -- Agregar FK si no existe
     IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_Ventas_Comprador')
     BEGIN
         ALTER TABLE Ventas 
         ADD CONSTRAINT FK_Ventas_Comprador FOREIGN KEY (id_comprador) 
         REFERENCES Compradores(id_comprador);
+    END
+
+    IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_Ventas_Vendedor')
+    BEGIN
+        ALTER TABLE Ventas WITH CHECK
+        ADD CONSTRAINT FK_Ventas_Vendedor FOREIGN KEY (id_vendedor) REFERENCES Personas(id_persona);
     END
 
     PRINT '? Estructura de Ventas actualizada';
@@ -1271,6 +1320,12 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_Inmueble' AND o
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_Fecha' AND object_id = OBJECT_ID('Ventas'))
     CREATE NONCLUSTERED INDEX IX_Ventas_Fecha ON Ventas(fecha_venta DESC);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_Vendedor' AND object_id = OBJECT_ID('Ventas'))
+    CREATE NONCLUSTERED INDEX IX_Ventas_Vendedor ON Ventas(id_vendedor);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_EstadoSeguimiento' AND object_id = OBJECT_ID('Ventas'))
+    CREATE NONCLUSTERED INDEX IX_Ventas_EstadoSeguimiento ON Ventas(estado_seguimiento);
 
 PRINT '? Índices para Ventas creados';
 GO
@@ -2514,15 +2569,79 @@ GO
 IF NOT EXISTS (SELECT 1 FROM Estados_venta WHERE nombre_estado = 'Iniciada')
 BEGIN
     INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final) VALUES
-    ('Iniciada', 'Proceso de venta iniciado', 1, 0),
-    ('En negociación', 'En proceso de negociación con el cliente', 2, 0),
-    ('Reservada', 'Inmueble reservado con seña', 3, 0),
-    ('Contrato firmado', 'Contrato de compraventa firmado', 4, 0),
-    ('Finalizada', 'Venta completada exitosamente', 5, 1),
-    ('Cancelada', 'Venta cancelada', 6, 1);
+    ('Pagado', 'Pago completado', 1, 1),
+    ('Debe', 'Pago pendiente', 2, 0),
+    ('En espera', 'Esperando confirmación/pago', 3, 0),
+    ('Cancelado', 'Proceso cancelado', 4, 1),
+    ('En negociación', 'En negociación con el cliente', 5, 0),
+    ('Completada', 'Venta completada exitosamente', 6, 1);
     
     PRINT '? Estados de venta insertados (6 estados)';
 END
+GO
+
+-- Sincronizar estados de ventas existentes con tabla Estados_venta
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'id_estado_venta')
+   AND EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID('Estados_venta') AND type = 'U')
+BEGIN
+    ;WITH EstadoMap AS (
+        SELECT id_estado_venta, nombre_estado
+        FROM Estados_venta
+    )
+    UPDATE V
+    SET V.id_estado_venta = EM.id_estado_venta
+    FROM Ventas V
+    CROSS APPLY (
+        SELECT TOP 1 em.id_estado_venta
+        FROM EstadoMap em
+        WHERE
+            (V.estado = 'Finalizada'  AND em.nombre_estado IN ('Pagado','Completada'))
+            OR (V.estado = 'Cancelada' AND em.nombre_estado = 'Cancelado')
+            OR (V.estado = 'Activa'    AND em.nombre_estado IN ('En espera','En negociación'))
+        ORDER BY em.id_estado_venta
+    ) EM
+    WHERE V.id_estado_venta IS NULL;
+END
+GO
+
+-- Sincronizar estado_seguimiento con el último seguimiento registrado
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Ventas') AND name = 'estado_seguimiento')
+   AND EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID('Seguimiento_venta') AND type = 'U')
+BEGIN
+    ;WITH UltimoSeg AS (
+        SELECT
+            v.id_venta,
+            ev.nombre_estado AS estado_texto,
+            ROW_NUMBER() OVER (PARTITION BY v.id_venta ORDER BY s.fecha_estado_seguimiento DESC, s.id_seguimiento_venta DESC) AS rn
+        FROM Ventas v
+        LEFT JOIN Seguimiento_venta s ON s.id_venta = v.id_venta
+        LEFT JOIN Estados_venta ev ON ev.id_estado_venta = s.id_estado_venta
+    )
+    UPDATE V
+    SET estado_seguimiento = COALESCE(U.estado_texto, V.estado_seguimiento, V.estado)
+    FROM Ventas V
+    LEFT JOIN UltimoSeg U ON V.id_venta = U.id_venta AND U.rn = 1
+    WHERE V.estado_seguimiento IS NULL;
+END
+GO
+
+-- Agregar FK para estado de venta si no existe
+IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_Ventas_EstadoVenta')
+BEGIN
+    ALTER TABLE Ventas
+    ADD CONSTRAINT FK_Ventas_EstadoVenta
+        FOREIGN KEY (id_estado_venta) REFERENCES Estados_venta(id_estado_venta);
+    PRINT 'FK_Ventas_EstadoVenta creada';
+END
+GO
+
+-- Índice para consultas por estado de venta
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Ventas_EstadoVenta' AND object_id = OBJECT_ID('Ventas'))
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_Ventas_EstadoVenta ON Ventas(id_estado_venta);
+    PRINT 'Índice IX_Ventas_EstadoVenta creado';
+END
+GO
 
 -- Comodidades
 IF NOT EXISTS (SELECT 1 FROM Comodidades WHERE nombre = 'Habitaciones')
@@ -2931,65 +3050,266 @@ PRINT '=========================================================================
 GO
 
 
--- Añadir la FK al vendedor (tabla Personas)
-IF NOT EXISTS (
-    SELECT 1 FROM sys.columns WHERE Name = N'id_vendedor' AND Object_ID = Object_ID(N'Ventas')
-)
+
+USE InmobiliariaDB;
+GO
+
+------------------------------------------------------------
+-- 1) Columna de descripción de pago mixto (idempotente)
+------------------------------------------------------------
+IF COL_LENGTH('Ventas', 'medio_pago_descripcion') IS NULL
 BEGIN
-    ALTER TABLE Ventas ADD id_vendedor INT NULL;
+    ALTER TABLE Ventas ADD medio_pago_descripcion VARCHAR(500) NULL;
 END
 GO
 
+------------------------------------------------------------
+-- 2) Procedimiento sp_CrearVentaCompleta
+--    - exige descripción cuando medio_pago = 'mixto'
+------------------------------------------------------------
+IF OBJECT_ID('dbo.sp_CrearVentaCompleta', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_CrearVentaCompleta;
+GO
+
+CREATE PROCEDURE dbo.sp_CrearVentaCompleta
+    @id_comprador INT,
+    @id_inmueble INT,
+    @fecha_venta DATE,
+    @valor_venta DECIMAL(15,2),
+    @medio_pago VARCHAR(50) = 'efectivo',
+    @medio_pago_descripcion VARCHAR(500) = NULL,
+    @tipo_compra VARCHAR(50) = 'Directa',
+    @entidad_financiera VARCHAR(100) = NULL,
+    @numero_credito VARCHAR(50) = NULL,
+    @monto_financiado DECIMAL(15,2) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        IF NOT EXISTS (SELECT 1 FROM Compradores WHERE id_comprador = @id_comprador AND estado = 'Activo')
+        BEGIN RAISERROR('El comprador especificado no existe o no está activo',16,1); RETURN; END
+
+        IF NOT EXISTS (SELECT 1 FROM Inmuebles WHERE id_inmueble = @id_inmueble)
+        BEGIN RAISERROR('El inmueble especificado no existe',16,1); RETURN; END
+
+        IF @valor_venta <= 0
+        BEGIN RAISERROR('El valor de venta debe ser mayor a cero',16,1); RETURN; END
+
+        IF @fecha_venta > CAST(GETDATE() AS DATE)
+        BEGIN RAISERROR('La fecha de venta no puede ser futura',16,1); RETURN; END
+
+        IF @tipo_compra NOT IN ('Directa', 'Financiada', 'Mixta')
+        BEGIN RAISERROR('El tipo de compra especificado no es válido',16,1); RETURN; END
+
+        IF LOWER(@medio_pago) = 'mixto'
+           AND (NULLIF(LTRIM(RTRIM(@medio_pago_descripcion)),'') IS NULL)
+        BEGIN RAISERROR('Debe ingresar una descripción para justificar el pago mixto',16,1); RETURN; END
+
+        INSERT INTO Ventas (
+            id_comprador, id_inmueble, fecha_venta, valor_venta,
+            medio_pago, medio_pago_descripcion, tipo_compra, entidad_financiera,
+            numero_credito, monto_financiado, estado
+        )
+        VALUES (
+            @id_comprador, @id_inmueble, @fecha_venta, @valor_venta,
+            @medio_pago, @medio_pago_descripcion, @tipo_compra, @entidad_financiera,
+            @numero_credito, @monto_financiado, 'Activa'
+        );
+
+        UPDATE Compradores
+        SET tipo_comprador = 'Finalizado', fecha_actualizacion = GETDATE()
+        WHERE id_comprador = @id_comprador;
+
+        UPDATE Inmuebles
+        SET estado_frontend = 'Vendido', estado = 'Vendido', fecha_actualizacion = GETDATE()
+        WHERE id_inmueble = @id_inmueble;
+
+        COMMIT TRANSACTION;
+        SELECT SCOPE_IDENTITY() AS id_venta;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(),
+                @ErrSev INT = ERROR_SEVERITY(),
+                @ErrSta INT = ERROR_STATE();
+        RAISERROR(@ErrMsg, @ErrSev, @ErrSta);
+    END CATCH
+END;
+GO
+
+------------------------------------------------------------
+-- 3) Vista vw_Ventas_Completo (incluye la descripción)
+------------------------------------------------------------
+IF OBJECT_ID('dbo.vw_Ventas_Completo', 'V') IS NOT NULL
+    DROP VIEW dbo.vw_Ventas_Completo;
+GO
+
+CREATE VIEW dbo.vw_Ventas_Completo AS
+SELECT 
+    v.id_venta,
+    v.fecha_venta,
+    v.valor_venta,
+    v.tipo_compra,
+    v.medio_pago,
+    v.medio_pago_descripcion,
+    v.entidad_financiera,
+    v.numero_credito,
+    v.monto_financiado,
+    v.estado AS estado_venta,
+    c.id_comprador,
+    c.registro_comprador,
+    p.id_persona,
+    p.tipo_documento,
+    p.numero_documento,
+    CONCAT(p.nombre_completo, ' ', p.apellido_completo) AS nombre_comprador,
+    p.correo AS email_comprador,
+    p.telefono AS telefono_comprador,
+    i.id_inmueble,
+    i.registro_inmobiliario,
+    i.titulo AS titulo_inmueble,
+    i.direccion AS direccion_inmueble,
+    i.ciudad AS ciudad_inmueble,
+    i.categoria AS tipo_inmueble,
+    v.fecha_creacion
+FROM Ventas v
+JOIN Compradores c ON v.id_comprador = c.id_comprador
+JOIN Personas p    ON c.id_persona   = p.id_persona
+JOIN Inmuebles i   ON v.id_inmueble  = i.id_inmueble;
+GO
+
+
+CREATE TABLE Seguimiento_arrendamiento (
+  id_seguimiento INT IDENTITY(1,1) PRIMARY KEY,
+  id_arrendamiento INT NOT NULL,
+  estado VARCHAR(50) NOT NULL,
+  comentario VARCHAR(500) NULL,
+  id_persona INT NULL,            -- quién hizo el cambio
+  fecha_creacion DATETIME2(3) NOT NULL DEFAULT GETDATE(),
+  CONSTRAINT FK_SegArr_Arr FOREIGN KEY (id_arrendamiento) REFERENCES Arrendamientos(id_arrendamiento) ON DELETE CASCADE,
+  CONSTRAINT FK_SegArr_Persona FOREIGN KEY (id_persona) REFERENCES Personas(id_persona)
+);
+
+
+-- Índice útil para ordenar/filtrar por arriendo y fecha
 IF NOT EXISTS (
-    SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Ventas_Vendedor' AND parent_object_id = OBJECT_ID(N'Ventas')
+    SELECT * FROM sys.indexes 
+    WHERE name = 'IX_SegArr_Arr_Fec' AND object_id = OBJECT_ID('Seguimiento_arrendamiento')
 )
 BEGIN
-    ALTER TABLE Ventas WITH CHECK
-    ADD CONSTRAINT FK_Ventas_Vendedor
-        FOREIGN KEY (id_vendedor) REFERENCES Personas(id_persona);
+    CREATE NONCLUSTERED INDEX IX_SegArr_Arr_Fec
+        ON Seguimiento_arrendamiento (id_arrendamiento, fecha_creacion DESC);
 END
 GO
 
-IF NOT EXISTS (
-    SELECT 1 FROM sys.indexes WHERE name = N'IX_Ventas_Vendedor' AND object_id = OBJECT_ID(N'Ventas')
-)
+-- Vista actualizada con el último seguimiento
+IF OBJECT_ID('dbo.vw_Arrendamientos_Completo', 'V') IS NOT NULL
+    DROP VIEW dbo.vw_Arrendamientos_Completo;
+GO
+
+CREATE VIEW dbo.vw_Arrendamientos_Completo AS
+SELECT 
+    ar.id_arrendamiento,
+    ar.fecha_inicio,
+    ar.fecha_finalizacion,
+    ar.valor_mensual,
+    ar.tipo_garantia,
+    ar.valor_garantia,
+    ar.descripcion_garantia,
+    ar.estado AS estado_arrendamiento,
+    ar.duracion_meses,
+
+    -- Último seguimiento (para el modal)
+    ult.estado         AS ultimo_seguimiento_estado,
+    ult.comentario     AS ultimo_seguimiento_comentario,
+    ult.fecha_creacion AS ultimo_seguimiento_fecha,
+    COALESCE(seg.total_seguimientos, 0) AS total_seguimientos,
+
+    -- Datos del arrendatario
+    a.id_arrendatario,
+    a.registro_arrendatario,
+    a.tipo_arrendatario,
+    a.estado AS estado_arrendatario,
+    p.id_persona,
+    p.tipo_documento,
+    p.numero_documento,
+    CONCAT(p.nombre_completo, ' ', p.apellido_completo) AS nombre_arrendatario,
+    p.correo AS email_arrendatario,
+    p.telefono AS telefono_arrendatario,
+
+    -- Datos del inmueble
+    i.id_inmueble,
+    i.registro_inmobiliario,
+    i.titulo AS titulo_inmueble,
+    i.direccion AS direccion_inmueble,
+    i.ciudad AS ciudad_inmueble,
+    i.categoria AS tipo_inmueble,
+
+    ar.fecha_creacion
+FROM Arrendamientos ar
+INNER JOIN Arrendatarios a ON ar.id_arrendatario = a.id_arrendatario
+INNER JOIN Personas p      ON a.id_persona      = p.id_persona
+INNER JOIN Inmuebles i     ON ar.id_inmueble    = i.id_inmueble
+OUTER APPLY (
+    SELECT TOP 1 estado, comentario, fecha_creacion
+    FROM Seguimiento_arrendamiento s
+    WHERE s.id_arrendamiento = ar.id_arrendamiento
+    ORDER BY s.fecha_creacion DESC, s.id_seguimiento DESC
+) ult
+OUTER APPLY (
+    SELECT COUNT(*) AS total_seguimientos
+    FROM Seguimiento_arrendamiento s
+    WHERE s.id_arrendamiento = ar.id_arrendamiento
+) seg;
+GO
+
+
+ALTER TABLE Personas ADD id_codeudor INT NULL;
+ALTER TABLE Personas ADD CONSTRAINT FK_Personas_Codeudor
+  FOREIGN KEY (id_codeudor) REFERENCES Personas(id_persona);
+
+ALTER TABLE Arrendamientos
+DROP CONSTRAINT IF EXISTS CK_Arrendamientos_Estado; -- si el constraint tiene otro nombre, usa ese
+
+ALTER TABLE Arrendamientos
+ADD CONSTRAINT CK_Arrendamientos_Estado
+CHECK (estado IN ('Activo', 'Al día', 'Pendiente', 'Debe', 'Recuperación', 'Finalizado', 'Cancelado'));
+
+
+
+
+USE InmobiliariaDB;
+GO
+
+-- 1) Elimina el CHECK actual de estado
+ALTER TABLE Arrendamientos DROP CONSTRAINT CK_Arrendamientos_Estado;
+GO
+
+-- 2) Crea el CHECK con el valor 'Debe' incluido
+ALTER TABLE Arrendamientos
+ADD CONSTRAINT CK_Arrendamientos_Estado
+CHECK (estado IN ('Activo','Al día','Pendiente','Debe','Recuperación','Finalizado','Cancelado'));
+GO
+
+ALTER TABLE Ventas
+  ADD medio_pago_efectivo DECIMAL(15,2) NULL,
+      medio_pago_transferencia DECIMAL(15,2) NULL;
+
+
+      -- Adjuntos de venta (comprobantes y contrato)
+IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE name='VentaAdjuntos' AND type='U')
 BEGIN
-    CREATE NONCLUSTERED INDEX IX_Ventas_Vendedor ON Ventas(id_vendedor);
-END
-GO
-
--- Campos “congelados” del vendedor al momento de la venta (opcional, pero útiles para mostrar detalle)
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'tipo_doc_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD tipo_doc_vendedor VARCHAR(20) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'numero_doc_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD numero_doc_vendedor VARCHAR(50) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'nombre_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD nombre_vendedor VARCHAR(200) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'correo_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD correo_vendedor VARCHAR(150) NULL;
-IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'telefono_vendedor' AND Object_ID = Object_ID(N'Ventas'))
-    ALTER TABLE Ventas ADD telefono_vendedor VARCHAR(50) NULL;
-GO
-
---Estos son los nuevos estados de ventas 
-
-BEGIN TRAN;
-
--- Limpia la tabla
-DELETE FROM Estados_venta;
-DBCC CHECKIDENT('Estados_venta', RESEED, 0);
-GO
-
--- Inserta los estados solicitados
-INSERT INTO Estados_venta (nombre_estado, descripcion, orden, es_estado_final, estado)
-VALUES
-  ('Pagado',         'Pago completado',                  1, 1, 1),
-  ('Debe',           'Pago pendiente',                   2, 0, 1),
-  ('En espera',      'Esperando confirmación/pago',      3, 0, 1),
-  ('Cancelado',      'Proceso cancelado',                4, 1, 1),
-  ('Iniciada',       'Proceso de venta iniciado',        5, 0, 1),
-  ('En negociación', 'En negociación con el cliente',    6, 0, 1),
-  ('Completada',     'Venta completada exitosamente',    7, 1, 1)
-
-COMMIT;
-GO
+  CREATE TABLE VentaAdjuntos (
+    id_adjunto INT IDENTITY(1,1) PRIMARY KEY,
+    id_venta INT NOT NULL,
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('comprobante','contrato')),
+    nombre_archivo VARCHAR(255) NOT NULL,
+    url VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(100) NULL,
+    tamano_bytes BIGINT NULL,
+    fecha_creacion DATETIME2(3) NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT FK_VentaAdjuntos_Venta FOREIGN KEY (id_venta) REFERENCES Ventas(id_venta) ON DELETE CASCADE
+  );
+  CREATE NONCLUSTERED INDEX IX_VentaAdjuntos_Venta ON VentaAdjuntos(id_venta, tipo);
+END;

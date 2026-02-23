@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { dashboardRoutes } from './routes/index'
 import Navbar from './shared/components/Navbar'
 import Footer from './shared/components/Footer'
@@ -16,12 +16,8 @@ import ContactPage from './features/contact/pages/ContactPage'
 import AboutPage from './features/about/pages/AboutPage'
 import ServicesPage from './features/services/pages/ServicesPage'
 import LoginPage from './features/auth/pages/LoginPage'
-import RegisterPage from './features/auth/pages/RegisterPage'
-import ResetPasswordPage from './features/auth/pages/ResetPasswordPage'
 import UserAppointmentsPage from './features/appointments/pages/UserAppointmentsPage'
-import MyPropertiesPage from './features/properties/pages/MyPropertiesPage'
 import ActivateAccountPage from './features/auth/pages/ActivateAccountPage'
-import VerifyEmailPage from './features/auth/pages/VerifyEmailPage'
 
 // Dashboard pages
 import DashboardPage from './features/dashboard/DashboardPage'
@@ -37,19 +33,6 @@ import OwnerDashboardPage from './features/dashboard/pages/propertyOwner/OwnerDa
 import AdministrativosPage from './features/dashboard/pages/administrativos/AdministrativosPage'
 import UsersPage from './features/dashboard/pages/users/UsersPage'
 import ProfilePage from './features/dashboard/pages/Profile/ProfilePage'
-import OwnerPortfolioPage from './features/dashboard/pages/propertyOwner/OwnerPortfolioPage'
-import { useAuth } from './shared/contexts/AuthContext'
-
-function DashboardLanding() {
-  const { user } = useAuth();
-  const isOwner = user?.roles?.includes('Propietario');
-
-  if (isOwner) {
-    return <Navigate to={dashboardRoutes.ownerMyProperties} replace />;
-  }
-
-  return <DashboardPage />;
-}
 
 function App() {
   return (
@@ -132,30 +115,8 @@ function App() {
           }
         />
         <Route
-          path="/registro"
-          element={
-            <PublicRoute>
-              <Navbar />
-              <RegisterPage />
-              <Footer />
-            </PublicRoute>
-          }
-        />
-        <Route
           path="/activar"
           element={<ActivateAccountPage />}
-        />
-        <Route
-          path="/verificar-correo"
-          element={<VerifyEmailPage />}
-        />
-        <Route
-          path="/reset-password"
-          element={<ResetPasswordPage />}
-        />
-        <Route
-          path="/recuperar-contrasena"
-          element={<ResetPasswordPage />}
         />
 
         {/* Authenticated user routes with navbar/footer */}
@@ -169,16 +130,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/mis-inmuebles"
-          element={
-            <ProtectedRoute>
-              <Navbar />
-              <MyPropertiesPage />
-              <Footer />
-            </ProtectedRoute>
-          }
-        />
 
         {/* Dashboard routes with sidebar layout */}
         <Route
@@ -186,27 +137,7 @@ function App() {
           element={
             <DashboardRoute>
               <DashboardLayout>
-                <DashboardLanding />
-              </DashboardLayout>
-            </DashboardRoute>
-          }
-        />
-        <Route
-          path={dashboardRoutes.ownerMyProperties}
-          element={
-            <DashboardRoute>
-              <DashboardLayout>
-                <OwnerPortfolioPage />
-              </DashboardLayout>
-            </DashboardRoute>
-          }
-        />
-        <Route
-          path={dashboardRoutes.ownerMyLeases}
-          element={
-            <DashboardRoute>
-              <DashboardLayout>
-                <Navigate to={dashboardRoutes.ownerMyProperties} replace />
+                <DashboardPage />
               </DashboardLayout>
             </DashboardRoute>
           }

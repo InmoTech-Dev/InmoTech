@@ -109,13 +109,14 @@ class ReportesInmobiliariosService {
     if (id_inmueble) where.id_inmueble = id_inmueble
 
     try {
+      // Consulta con JOIN para obtener el propietario real del inmueble
       const { rows: reports, count: total } = await Reporte.findAndCountAll({
         where,
         include: [
           {
             model: Inmueble,
             as: 'inmueble',
-            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria']
+            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria', 'titulo']
           },
           {
             model: Persona,
@@ -128,6 +129,22 @@ class ReportesInmobiliariosService {
         offset,
         distinct: true
       });
+
+      // Para cada reporte, obtener el propietario del inmueble via Propiedad_inmueble
+      const reportIds = reports.map(r => r.id_inmueble).filter(Boolean);
+      let propietariosPorInmueble = {};
+      if (reportIds.length > 0) {
+        const propietariosRows = await sequelize.query(`
+          SELECT pi.id_inmueble, 
+                 TRIM(ISNULL(p.nombre_completo, '') + ' ' + ISNULL(p.apellido_completo, '')) AS propietario_nombre
+          FROM Propiedad_inmueble pi
+          LEFT JOIN Personas p ON p.id_persona = pi.id_persona
+          WHERE pi.id_inmueble IN (:ids) AND pi.estado = 'Activo'
+        `, { replacements: { ids: reportIds }, type: sequelize.QueryTypes.SELECT });
+        propietariosRows.forEach(row => {
+          propietariosPorInmueble[row.id_inmueble] = row.propietario_nombre || '';
+        });
+      }
 
       const mapped = reports.map(r => ({
         id_reporte: r.id_reporte,
@@ -142,6 +159,12 @@ class ReportesInmobiliariosService {
         observaciones_resolucion: r.observaciones_resolucion,
         inmueble_ciudad: r.inmueble?.ciudad,
         inmueble_categoria: r.inmueble?.categoria,
+        inmueble_titulo: r.inmueble?.titulo,
+        inmueble_direccion: r.inmueble?.direccion,
+        inmueble_referencia: r.inmueble?.registro_inmobiliario,
+        // Propietario real del inmueble (no quien creó el reporte)
+        propietario_nombre: propietariosPorInmueble[r.id_inmueble] || '',
+        id_persona_reporta: r.id_persona_reporta,
         reporta_nombre: r.reportadoPor?.nombre_completo
       }));
 
@@ -160,7 +183,7 @@ class ReportesInmobiliariosService {
           {
             model: Inmueble,
             as: 'inmueble',
-            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria']
+            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria', 'titulo']
           },
           {
             model: Persona,
@@ -226,13 +249,15 @@ class ReportesInmobiliariosService {
       estado,
       descripcion,
       id_responsable,
+      id_persona_reporta,
       seguimiento_general
     } = data;
 
     const updateData = {};
     if (estado) updateData.estado = estado;
     if (descripcion) updateData.descripcion = descripcion;
-    if (typeof id_responsable === 'number') updateData.id_responsable = id_responsable;
+    const finalResponsableId = id_persona_reporta ?? id_responsable;
+    if (typeof finalResponsableId === 'number') updateData.id_persona_reporta = finalResponsableId;
     if (typeof seguimiento_general === 'string') updateData.seguimiento_general = seguimiento_general;
     updateData.fecha_modificacion = new Date();
 
@@ -423,17 +448,17 @@ class ReportesInmobiliariosService {
 
   // Buscar inmuebles (autocompletado) usando SQL Server
   async buscarInmueblesAutocomplete(q, limit = 10) {
-      const term = (q || '').toString().trim();
-      const safeLimit = Math.max(1, Math.min(50, parseInt(limit, 10) || 10));
-      const pattern = `%${term}%`;
-      const where = term ? `
+    const term = (q || '').toString().trim();
+    const safeLimit = Math.max(1, Math.min(50, parseInt(limit, 10) || 10));
+    const pattern = `%${term}%`;
+    const where = term ? `
         WHERE (
           i.registro_inmobiliario LIKE :pattern
           OR i.direccion LIKE :pattern
         )
       ` : '';
 
-      const [rows] = await sequelize.query(`
+    const [rows] = await sequelize.query(`
         SELECT TOP (${safeLimit})
           i.id_inmueble,
           i.registro_inmobiliario,
@@ -451,38 +476,39 @@ class ReportesInmobiliariosService {
         ORDER BY i.registro_inmobiliario
       `, term ? { replacements: { pattern } } : undefined);
 
-      return rows.map(r => ({
-        id_inmueble: r.id_inmueble,
-        referencia: r.registro_inmobiliario,
-        nombre: r.direccion,
-        ciudad: r.ciudad,
-        categoria: r.categoria,
-        propietario: r.propietario || ''
-      }));
+    return rows.map(r => ({
+      id_inmueble: r.id_inmueble,
+      referencia: r.registro_inmobiliario,
+      nombre: r.titulo || r.direccion,
+      direccion: r.direccion,
+      ciudad: r.ciudad,
+      categoria: r.categoria,
+      propietario: r.propietario || ''
+    }));
   }
 
   // Crear inmueble básico y (opcional) asociar propietario actual
   async crearInmuebleBasico(data, userId) {
-      const t = await sequelize.transaction();
-      try {
-          const {
-            registro_inmobiliario,
-            pais,
-            departamento,
-            ciudad,
-            direccion,
-            barrio = null,
-            categoria = null,
-            precio_venta = null,
-            precio_arriendo = null,
-            area_construida = null,
-            area_terreno = null,
-            descripcion = null,
-            estado = 'Disponible',
-            id_persona_propietario
-          } = data;
-  
-          const [row] = await sequelize.query(`
+    const t = await sequelize.transaction();
+    try {
+      const {
+        registro_inmobiliario,
+        pais,
+        departamento,
+        ciudad,
+        direccion,
+        barrio = null,
+        categoria = null,
+        precio_venta = null,
+        precio_arriendo = null,
+        area_construida = null,
+        area_terreno = null,
+        descripcion = null,
+        estado = 'Disponible',
+        id_persona_propietario
+      } = data;
+
+      const [row] = await sequelize.query(`
             INSERT INTO Inmuebles (
               registro_inmobiliario, pais, departamento, ciudad, barrio, direccion,
               categoria, precio_venta, precio_arriendo, area_construida, area_terreno,
@@ -495,29 +521,29 @@ class ReportesInmobiliariosService {
             );
             SELECT SCOPE_IDENTITY() AS id_inmueble;
           `, {
-            transaction: t,
-            replacements: {
-              registro_inmobiliario, pais, departamento, ciudad, barrio, direccion,
-              categoria, precio_venta, precio_arriendo, area_construida, area_terreno,
-              descripcion, estado
-            }
-          });
-  
-          const id_inmueble = row[0]?.id_inmueble || row?.id_inmueble;
-  
-          if (id_persona_propietario) {
-            await sequelize.query(`
+        transaction: t,
+        replacements: {
+          registro_inmobiliario, pais, departamento, ciudad, barrio, direccion,
+          categoria, precio_venta, precio_arriendo, area_construida, area_terreno,
+          descripcion, estado
+        }
+      });
+
+      const id_inmueble = row[0]?.id_inmueble || row?.id_inmueble;
+
+      if (id_persona_propietario) {
+        await sequelize.query(`
               INSERT INTO Propiedad_inmueble (id_inmueble, id_persona, fecha_inicio, fecha_final, estado)
               VALUES (:id_inmueble, :id_persona_propietario, CONVERT(date, GETDATE()), NULL, 'Activo')
             `, {
-              transaction: t,
-              replacements: { id_inmueble, id_persona_propietario }
-            });
-          }
-  
-          await t.commit();
-  
-          const [inmueble] = await sequelize.query(`
+          transaction: t,
+          replacements: { id_inmueble, id_persona_propietario }
+        });
+      }
+
+      await t.commit();
+
+      const [inmueble] = await sequelize.query(`
             SELECT 
               i.id_inmueble, i.registro_inmobiliario, i.pais, i.departamento, i.ciudad, i.barrio, i.direccion,
               i.categoria, i.precio_venta, i.precio_arriendo, i.area_construida, i.area_terreno,
@@ -525,21 +551,21 @@ class ReportesInmobiliariosService {
             FROM Inmuebles i
             WHERE i.id_inmueble = :id_inmueble
           `, { replacements: { id_inmueble } });
-  
-          return { success: true, data: (Array.isArray(inmueble) ? inmueble[0] : inmueble) };
-      } catch (err) {
-          await t.rollback();
-          if (err?.original?.number === 2601 || err?.original?.number === 2627) {
-            return { success: false, message: 'El registro inmobiliario ya existe' };
-          }
-          logger.error('Error crearInmuebleBasico', err);
-          throw err;
+
+      return { success: true, data: (Array.isArray(inmueble) ? inmueble[0] : inmueble) };
+    } catch (err) {
+      await t.rollback();
+      if (err?.original?.number === 2601 || err?.original?.number === 2627) {
+        return { success: false, message: 'El registro inmobiliario ya existe' };
       }
+      logger.error('Error crearInmuebleBasico', err);
+      throw err;
+    }
   }
 
   // Obtener datos básicos de un inmueble
   async obtenerInmuebleBasico(id_inmueble) {
-      const [rows] = await sequelize.query(`
+    const [rows] = await sequelize.query(`
         SELECT 
           i.id_inmueble,
           i.registro_inmobiliario,
@@ -552,10 +578,10 @@ class ReportesInmobiliariosService {
         FROM Inmuebles i
         WHERE i.id_inmueble = :id
       `, { replacements: { id: id_inmueble } });
-      if (!rows || rows.length === 0) {
-        return { success: false, message: 'Inmueble no encontrado' };
-      }
-      return { success: true, data: rows[0] };
+    if (!rows || rows.length === 0) {
+      return { success: false, message: 'Inmueble no encontrado' };
+    }
+    return { success: true, data: rows[0] };
   }
 }
 

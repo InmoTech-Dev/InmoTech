@@ -1,13 +1,101 @@
 const { Op } = require('sequelize');
-const { Lease } = require('../models');
-const { Payment } = require('../models');
-const { Receipt } = require('../models');
-const { Inmueble } = require('../models');
-const { Persona, Renant } = require('../models');
+const {
+  Lease,
+  Payment,
+  Receipt,
+  Inmueble,
+  Persona,
+  Renant,
+  SeguimientoArrendamiento
+} = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
 
 class LeaseService {
+  // Recalcula el estado del arrendamiento según cobros pendientes/vencidos.
+  async syncLeaseStateFromPayments(leaseId, transaction = null) {
+    const pendingCount = await Payment.count({
+      where: {
+        id_arrendamiento: leaseId,
+        estado: { [Op.in]: ['Pendiente', 'Vencido'] }
+      },
+      transaction
+    });
+
+    const lease = await this.getLeaseById(leaseId, transaction);
+    if (!lease) return null;
+
+    if (pendingCount === 0) {
+      await lease.update({ estado: 'Al día' }, { transaction });
+      await this.logSeguimiento({
+        id_arrendamiento: leaseId,
+        estado: 'Al día',
+        comentario: 'Todos los cobros pagados',
+        transaction
+      });
+      return 'Al día';
+    }
+
+    await lease.update({ estado: 'Debe' }, { transaction });
+    await this.logSeguimiento({
+      id_arrendamiento: leaseId,
+      estado: 'Debe',
+      comentario: 'Cobros pendientes o vencidos',
+      transaction
+    });
+    return 'Debe';
+  }
+
+  async logSeguimiento({ id_arrendamiento, estado, comentario = null, id_persona = null, transaction = null }) {
+    try {
+      await SeguimientoArrendamiento.create({
+        id_arrendamiento,
+        estado,
+        comentario,
+        id_persona
+      }, { transaction });
+    } catch (error) {
+      logger.error(`❌ No se pudo registrar seguimiento de arrendamiento ${id_arrendamiento}: ${error.message}`);
+    }
+  }
+
+  async resolveCodeudor(codeudorPayload, transaction) {
+    if (!codeudorPayload) return null;
+    const { tipo_documento, numero_documento, nombre_completo, apellido_completo, correo, telefono } = codeudorPayload;
+    if (!tipo_documento || !numero_documento) {
+      throw new Error('Faltan datos del codeudor (tipo o número de documento)');
+    }
+
+    // Buscar si ya existe
+    let persona = await Persona.findOne({
+      where: { tipo_documento, numero_documento },
+      transaction
+    });
+
+    if (!persona) {
+      persona = await Persona.create({
+        tipo_documento,
+        numero_documento,
+        nombre_completo: nombre_completo || '',
+        apellido_completo: apellido_completo || '',
+        correo: correo || `${numero_documento}@placeholder.com`,
+        telefono: telefono || null,
+        tiene_cuenta: false,
+        estado: true
+      }, { transaction });
+    } else {
+      // Actualizar datos básicos si vienen
+      await persona.update({
+        nombre_completo: nombre_completo || persona.nombre_completo,
+        apellido_completo: apellido_completo || persona.apellido_completo,
+        correo: correo || persona.correo,
+        telefono: telefono || persona.telefono
+      }, { transaction });
+    }
+
+    return persona.id_persona;
+  }
+
   async createLease(leaseData) {
     const result = await sequelize.transaction(async (t) => {
       try {
@@ -59,13 +147,20 @@ class LeaseService {
         }
 
         // 2.1. Resolver codeudor (Persona) si viene en el payload
-        // Nota: la tabla Arrendamientos no tiene columna de codeudor; omitimos esta lógica por ahora
         let codeudorId = null;
+        if (leaseData.id_codeudor) {
+          const codeudor = await Persona.findByPk(leaseData.id_codeudor, { transaction: t });
+          if (!codeudor) throw new Error('Codeudor no encontrado');
+          codeudorId = leaseData.id_codeudor;
+        } else if (leaseData.codeudor) {
+          codeudorId = await this.resolveCodeudor(leaseData.codeudor, t);
+        }
 
         // 3. Crear el arrendamiento
         const newLease = await Lease.create({
           id_cliente: leaseData.id_cliente,
           id_inmueble: leaseData.id_inmueble,
+          id_codeudor: codeudorId,
           fecha_inicio: leaseData.fecha_inicio,
           fecha_finalizacion: leaseData.fecha_finalizacion,
           valor_mensual: leaseData.valor_mensual,
@@ -129,10 +224,35 @@ class LeaseService {
 
   async getLeaseById(id, transaction = null) {
     const lease = await Lease.findByPk(id, {
+      attributes: {
+        include: [
+          [
+            sequelize.literal(`(SELECT COUNT(*) FROM Seguimiento_arrendamiento sa WHERE sa.id_arrendamiento = Lease.id_arrendamiento)`),
+            'total_seguimientos'
+          ]
+        ]
+      },
       include: [
         {
           association: 'inmueble',
-          attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'departamento', 'categoria']
+          attributes: [
+            'id_inmueble',
+            'registro_inmobiliario',
+            'direccion',
+            'ciudad',
+            'departamento',
+            'categoria',
+            'area_construida',
+            'area_terreno',
+            'precio_arriendo'
+          ],
+          include: [
+            {
+              association: 'comodidades',
+              attributes: ['id_comodidad', 'nombre'],
+              through: { attributes: ['cantidad'] }
+            }
+          ]
         },
         {
           association: 'arrendatario',
@@ -143,6 +263,17 @@ class LeaseService {
               attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'tipo_documento', 'numero_documento']
             }
           ]
+        },
+        {
+          association: 'codeudor',
+          attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'tipo_documento', 'numero_documento']
+        },
+        {
+          association: 'seguimientos',
+          separate: true,
+          limit: 1,
+          order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
+          attributes: ['id_seguimiento', 'estado', 'comentario', 'fecha_creacion', 'id_persona']
         }
       ],
       transaction
@@ -157,10 +288,36 @@ class LeaseService {
     try {
       logger.info(`🔍 Consultando arrendamientos con filtros: ${JSON.stringify(filters)}`);
 
+      const attributes = {
+        include: [
+          [
+            sequelize.literal(`(SELECT COUNT(*) FROM Seguimiento_arrendamiento sa WHERE sa.id_arrendamiento = Lease.id_arrendamiento)`),
+            'total_seguimientos'
+          ]
+        ]
+      };
+
       const includeOptions = [
         {
           association: 'inmueble',
-          attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'departamento', 'categoria']
+          attributes: [
+            'id_inmueble',
+            'registro_inmobiliario',
+            'direccion',
+            'ciudad',
+            'departamento',
+            'categoria',
+            'area_construida',
+            'area_terreno',
+            'precio_arriendo'
+          ],
+          include: [
+            {
+              association: 'comodidades',
+              attributes: ['id_comodidad', 'nombre'],
+              through: { attributes: ['cantidad'] }
+            }
+          ]
         },
         {
           association: 'arrendatario',
@@ -172,7 +329,17 @@ class LeaseService {
             }
           ]
         },
-        // Sin codeudor: la columna no existe en la tabla
+        {
+          association: 'codeudor',
+          attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'tipo_documento', 'numero_documento']
+        },
+        {
+          association: 'seguimientos',
+          separate: true,
+          limit: 1,
+          order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
+          attributes: ['id_seguimiento', 'estado', 'comentario', 'fecha_creacion', 'id_persona']
+        },
       ];
 
       const whereClause = {};
@@ -187,6 +354,7 @@ class LeaseService {
 
         const leases = await Lease.findAll({
           where: whereClause,
+          attributes,
           include: includeOptions,
           order: [['fecha_inicio', 'DESC']],
           logging: false
@@ -197,6 +365,7 @@ class LeaseService {
       return leases.map(lease => ({
         id_arrendamiento: lease.id_arrendamiento,
         id_arrendatario: lease.id_cliente, // columna id_arrendatario en BD, mapeada como id_cliente en el modelo
+        id_codeudor: lease.id_codeudor,
         fecha_inicio: lease.fecha_inicio,
         fecha_finalizacion: lease.fecha_finalizacion,
         valor_mensual: lease.valor_mensual,
@@ -209,7 +378,11 @@ class LeaseService {
           direccion: lease.inmueble.direccion,
           ciudad: lease.inmueble.ciudad,
           departamento: lease.inmueble.departamento,
-          categoria: lease.inmueble.categoria
+          categoria: lease.inmueble.categoria,
+          area_construida: lease.inmueble.area_construida,
+          area_terreno: lease.inmueble.area_terreno,
+          precio_arriendo: lease.inmueble.precio_arriendo,
+          comodidades: lease.inmueble.comodidades || []
         } : null,
         arrendatario: lease.arrendatario ? {
           id_arrendatario: lease.arrendatario.id_arrendatario,
@@ -223,7 +396,20 @@ class LeaseService {
             numero_documento: lease.arrendatario.persona.numero_documento
           } : null
         } : null,
-        codeudor: null
+        codeudor: lease.codeudor ? {
+          id_persona: lease.codeudor.id_persona,
+          nombre_completo: lease.codeudor.nombre_completo,
+          apellido_completo: lease.codeudor.apellido_completo,
+          correo: lease.codeudor.correo,
+          telefono: lease.codeudor.telefono,
+          tipo_documento: lease.codeudor.tipo_documento,
+          numero_documento: lease.codeudor.numero_documento
+        } : null,
+        ultimo_seguimiento_estado: lease.seguimientos?.[0]?.estado || null,
+        ultimo_seguimiento_comentario: lease.seguimientos?.[0]?.comentario ?? lease.seguimientos?.[0]?.descripcion ?? null,
+        ultimo_seguimiento_descripcion: lease.seguimientos?.[0]?.descripcion ?? lease.seguimientos?.[0]?.comentario ?? null,
+        ultimo_seguimiento_fecha: lease.seguimientos?.[0]?.fecha_creacion || null,
+        total_seguimientos: Number(lease.get('total_seguimientos')) || 0
       }));
 
     } catch (error) {
@@ -240,7 +426,54 @@ class LeaseService {
         throw new Error('Arrendamiento no encontrado');
       }
 
-      await lease.update(updateData);
+      // Validar codeudor si viene
+      const payload = { ...updateData };
+      if (updateData.id_codeudor) {
+        const codeudor = await Persona.findByPk(updateData.id_codeudor);
+        if (!codeudor) throw new Error('Codeudor no encontrado');
+      } else if (updateData.codeudor) {
+        const codeudorId = await this.resolveCodeudor(updateData.codeudor);
+        payload.id_codeudor = codeudorId;
+      }
+
+      await lease.update(payload);
+
+      return await this.getLeaseById(id);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async updateLeaseStatus(id, estado, comentario = null, userId = null) {
+    try {
+      const allowedStatuses = ['Activo', 'Al día', 'Pendiente', 'Recuperación', 'Finalizado', 'Cancelado'];
+      if (!allowedStatuses.includes(estado)) {
+        throw new Error('Estado de arrendamiento no válido');
+      }
+
+      let updatedLease;
+
+      // Reutilizar lógicas existentes para estados terminales
+      if (estado === 'Cancelado') {
+        updatedLease = await this.cancelLease(id);
+      } else if (estado === 'Finalizado') {
+        updatedLease = await this.finalizeLease(id);
+      } else {
+        const lease = await this.getLeaseById(id);
+        if (!lease) throw new Error('Arrendamiento no encontrado');
+        await lease.update({ estado });
+        updatedLease = await this.getLeaseById(id);
+      }
+
+      await this.logSeguimiento({
+        id_arrendamiento: id,
+        estado,
+        comentario,
+        id_persona: userId
+      });
+
+      // Nota: No tenemos tabla de historial; solo registramos en logs
+      logger.info(`Estado de arrendamiento ${id} actualizado a ${estado}${comentario ? ` (comentario: ${comentario})` : ''}`);
 
       return await this.getLeaseById(id);
     } catch (error) {
@@ -378,15 +611,10 @@ class LeaseService {
 
       await payment.update(updateData);
 
-      // Si se marca como pagado, actualizar estado del arrendamiento a "Al día"
-      if (status === 'Pagado') {
-        const lease = await this.getLeaseById(payment.id_arrendamiento);
-        if (lease.estado === 'Pendiente') {
-          await lease.update({ estado: 'Al día' });
-        }
-      }
+      // Recalcular estado general del arrendamiento según cobros pendientes/vencidos
+      const leaseState = await this.syncLeaseStateFromPayments(payment.id_arrendamiento);
 
-      return payment;
+      return { ...payment.get({ plain: true }), lease_estado: leaseState };
     } catch (error) {
       throw error;
     }

@@ -240,10 +240,7 @@ export default function LoginPage() {
 
           <div className="text-center space-y-4">
             <p className="text-gray-600">
-              No tienes una cuenta?{" "}
-              <a href="/registro" className="text-[#00457B] font-semibold hover:text-[#003b69] transition-colors">
-                Registrate gratis
-              </a>
+              El acceso se habilita por invitacion administrativa enviada a tu correo.
             </p>
           </div>
         </div>

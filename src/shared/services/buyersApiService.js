@@ -68,6 +68,7 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
     montoFinanciado: buyer.montoFinanciado || compra?.monto_financiado || '',
     observaciones: buyer.observaciones || compra?.observaciones || '',
     inmueble: buyer.inmueble || compra?.inmueble || null,
+    ultima_venta: buyer.ultima_venta || buyer.compra || null,
     formData: buyer.formData || formData,
     compra,
     raw: buyer,
@@ -159,6 +160,9 @@ export const buyersApiService = {
   },
 
   async updatePurchaseData(buyerId, purchaseData = {}) {
+    if (!buyerId) {
+      throw new Error('Falta id del comprador para actualizar sus datos de compra.');
+    }
     await apiClient.patch(`/sales/buyers/${buyerId}`, {
       ...purchaseData,
       tipo_comprador: purchaseData.tipo_compra || purchaseData.tipo_comprador || 'Potencial',

@@ -4,6 +4,7 @@ import { Eye, Edit, Trash2, Plus, Shield, ShieldCheck, Loader2, XCircle } from '
 import CrearRolModal from "./CrearRolModal";
 import EditarRolModal from "./EditarRolModal";
 import VerRolModal from "./VerRolModal";
+import AdminHolderCard from "./AdminHolderCard";
 import DeleteConfirmModal from "../../../../shared/components/modals/DeleteConfirmModal";
 import ConfirmationDialog from "../../../../shared/components/ui/ConfirmationDialog";
 import rolesApiService from "../../../../shared/services/rolesApiService";
@@ -15,6 +16,10 @@ import "./Switch.css";
 const RolesContent = () => {
   const { isAuthenticated, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const isSuperAdmin = userRoles.includes('Super Administrador');
+  const isAdmin = userRoles.includes('Administrador');
+  const canManageRoles = isSuperAdmin;
 
   // Roles del sistema que no se pueden eliminar (todos los predefinidos)
   const rolesNoEliminar = ['Super Administrador', 'Administrador', 'Empleado', 'Usuario', 'Propietario'];
@@ -22,9 +27,10 @@ const RolesContent = () => {
   // Roles protegidos que no se pueden editar ni cambiar estado (solo Super Admin y Admin)
   const rolesProtegidos = ['Super Administrador', 'Administrador'];
 
-  const cannotDeleteRol = (rol) => rolesNoEliminar.includes(rol.nombre);
-  const cannotEditRol = (rol) => rolesProtegidos.includes(rol.nombre);
-  const cannotChangeStatusRol = (rol) => rolesProtegidos.includes(rol.nombre);
+  const isProtectedRol = (rol) => rolesProtegidos.includes(rol.nombre);
+  const cannotDeleteRol = (rol) => !canManageRoles || rolesNoEliminar.includes(rol.nombre);
+  const cannotEditRol = (rol) => !canManageRoles || isProtectedRol(rol);
+  const cannotChangeStatusRol = (rol) => !canManageRoles || isProtectedRol(rol);
 
   const [roles, setRoles] = useState([]);
   const [rolesFiltrados, setRolesFiltrados] = useState([]);
@@ -50,7 +56,7 @@ const RolesContent = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔐 Cargando roles para usuario administrativo:', user?.email);
+      console.log('Cargando roles para usuario administrativo:', user?.email);
       const rolesData = await rolesApiService.obtenerRoles();
       // Orden especial: Super Administrador (ID 1) y Administrador (ID 2) primero, luego el resto por ID
       const rolesSorted = (rolesData || []).sort((a, b) => {
@@ -67,7 +73,7 @@ const RolesContent = () => {
       });
       setRoles(rolesSorted);
     } catch (err) {
-      console.error('❌ Error al cargar roles:', err);
+      console.error('Error al cargar roles:', err);
       setError('Error al cargar los roles desde el servidor.');
       toast({
         title: "Error al cargar roles",
@@ -92,9 +98,9 @@ const RolesContent = () => {
     let filtrados = roles;
 
     if (filtroEstado === 'activo') {
-      filtrados = roles.filter(rol => cannotChangeStatusRol(rol) || rol.estado);
+      filtrados = roles.filter((rol) => rol.estado);
     } else if (filtroEstado === 'inactivo') {
-      filtrados = roles.filter(rol => !cannotChangeStatusRol(rol) && !rol.estado);
+      filtrados = roles.filter((rol) => !rol.estado);
     }
     // Si filtroEstado === 'todos', no filtrar
 
@@ -107,23 +113,32 @@ const RolesContent = () => {
       return;
     }
 
-    const userIsAdmin = isAuthenticated && user?.es_administrativo;
-    setIsAuthorized(userIsAdmin);
+    const userCanViewRoles = isAuthenticated && (isSuperAdmin || isAdmin);
+    setIsAuthorized(userCanViewRoles);
 
-    if (userIsAdmin) {
+    if (userCanViewRoles) {
       cargarRoles();
     } else {
-      console.log('🚫 Acceso denegado: el usuario no es administrativo.');
+      console.log('Acceso denegado: el usuario no es administrativo.');
       setLoading(false);
       setRoles([]);
     }
-  }, [isAuthenticated, user, authLoading]);
+  }, [isAuthenticated, authLoading, isSuperAdmin, isAdmin]);
   
 
   
   const handleCrearRol = async (nuevoRol) => {
+    if (!canManageRoles) {
+      toast({
+        title: "Operacion no permitida",
+        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      console.log('➕ Creando nuevo rol:', nuevoRol);
+      console.log('Creando nuevo rol:', nuevoRol);
       const rolCreado = await rolesApiService.crearRol(nuevoRol);
       await cargarRoles();
       toast({
@@ -132,7 +147,7 @@ const RolesContent = () => {
       });
       setModalOpen(false);
     } catch (error) {
-      console.error('❌ Error al crear rol:', error);
+      console.error('Error al crear rol:', error);
       toast({
         title: "Error al crear rol",
         description: error.message || "No se pudo crear el rol.",
@@ -143,8 +158,17 @@ const RolesContent = () => {
   };
 
   const handleActualizarRol = async (rolEditado) => {
+    if (!canManageRoles) {
+      toast({
+        title: "Operacion no permitida",
+        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      console.log('✏️ Actualizando rol:', {id: rolEditado.id, nombre_rol: rolEditado.nombre_rol});
+      console.log('Actualizando rol:', {id: rolEditado.id, nombre_rol: rolEditado.nombre_rol});
 
       const datosActualizados = {
         nombre_rol: rolEditado.nombre_rol,
@@ -161,7 +185,7 @@ const RolesContent = () => {
       setEditarModalOpen(false);
       setRolSeleccionado(null);
     } catch (error) {
-      console.error('❌ Error al actualizar rol:', error);
+      console.error('Error al actualizar rol:', error);
       toast({
         title: "Error al actualizar",
         description: error.message || "No se pudo actualizar el rol.",
@@ -173,9 +197,18 @@ const RolesContent = () => {
 
 
   const handleToggleEstadoRequest = (rol) => {
+    if (!canManageRoles) {
+      toast({
+        title: "Operacion no permitida",
+        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (cannotChangeStatusRol(rol)) {
       toast({
-        title: "Acción no permitida",
+        title: "Accion no permitida",
         description: "No se puede cambiar el estado de un rol protegido.",
         variant: "destructive",
       });
@@ -187,6 +220,14 @@ const RolesContent = () => {
 
   const handleConfirmStatusChange = async () => {
     if (isChangingRolStatus || !rolSeleccionado) return;
+    if (!canManageRoles) {
+      toast({
+        title: "Operacion no permitida",
+        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const rolActual = rolSeleccionado;
     const nuevoEstado = !rolActual.estado;
@@ -214,6 +255,17 @@ const RolesContent = () => {
   };
 
   const handleEditar = (rol) => {
+    if (cannotEditRol(rol)) {
+      toast({
+        title: "Operacion no permitida",
+        description: !canManageRoles
+          ? "Administrador tiene acceso de solo lectura en el modulo de roles."
+          : "No se puede editar un rol protegido.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setRolSeleccionado(rol);
     setEditarModalOpen(true);
   };
@@ -226,8 +278,10 @@ const RolesContent = () => {
   const handleDeleteClick = (rol) => {
     if (cannotDeleteRol(rol)) {
       toast({
-        title: "Acción no permitida",
-        description: "No se puede eliminar un rol protegido.",
+        title: "Operacion no permitida",
+        description: !canManageRoles
+          ? "Administrador tiene acceso de solo lectura en el modulo de roles."
+          : "No se puede eliminar un rol protegido.",
         variant: "destructive",
       });
       return;
@@ -238,7 +292,14 @@ const RolesContent = () => {
 
   const handleConfirmEliminar = async () => {
     if (isDeletingRol || !rolSeleccionado) return;
-
+    if (!canManageRoles) {
+      toast({
+        title: "Operacion no permitida",
+        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsDeletingRol(true);
     try {
       await rolesApiService.eliminarRol(rolSeleccionado.id);
@@ -288,7 +349,7 @@ const RolesContent = () => {
         <div className="px-6 py-8 text-center">
           <XCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
           <p className="text-red-600 font-medium mb-2">Acceso no autorizado</p>
-          <p className="text-slate-500">No tienes los permisos necesarios para ver esta sección.</p>
+          <p className="text-slate-500">No tienes los permisos necesarios para ver esta seccion.</p>
         </div>
       );
     }
@@ -331,10 +392,10 @@ const RolesContent = () => {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {rolesFiltrados.map((rol) => (
-                  <motion.tr key={rol.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`hover:bg-slate-50 transition-colors ${cannotChangeStatusRol(rol) ? "bg-blue-50 hover:bg-blue-100" : ""}`}>
+                  <motion.tr key={rol.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`hover:bg-slate-50 transition-colors ${isProtectedRol(rol) ? "bg-blue-50 hover:bg-blue-100" : ""}`}>
                     <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-slate-900">{rol.id}</div></td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {cannotChangeStatusRol(rol) ? (
+                      {isProtectedRol(rol) ? (
                         <div className="flex items-center">
                           <Shield className="w-4 h-4 text-blue-600 mr-2" />
                           <span className="text-sm font-medium text-slate-900">{rol.nombre}</span>
@@ -346,11 +407,11 @@ const RolesContent = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <span className={`text-sm font-medium ${ cannotChangeStatusRol(rol) || rol.estado ? "text-green-600" : "text-red-600" }`}>
-                          {cannotChangeStatusRol(rol) || rol.estado ? "Activo" : "Inactivo"}
+                        <span className={`text-sm font-medium ${rol.estado ? "text-green-600" : "text-red-600"}`}>
+                          {rol.estado ? "Activo" : "Inactivo"}
                         </span>
                         <label className="switch-container relative">
-                          <input type="checkbox" checked={cannotChangeStatusRol(rol) ? true : rol.estado} disabled={cannotChangeStatusRol(rol)} readOnly />
+                          <input type="checkbox" checked={!!rol.estado} disabled={cannotChangeStatusRol(rol)} readOnly />
                           <span className="switch-slider"></span>
                           { !cannotChangeStatusRol(rol) && (
                             <div
@@ -394,10 +455,10 @@ const RolesContent = () => {
         {/* Mobile Cards */}
         <div className="md:hidden p-6">
           {rolesFiltrados.map((rol) => (
-            <motion.div key={rol.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`bg-white rounded-lg border border-slate-200 p-4 mb-4 ${cannotChangeStatusRol(rol) ? "bg-blue-50 border-blue-200" : ""}`}>
+            <motion.div key={rol.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`bg-white rounded-lg border border-slate-200 p-4 mb-4 ${isProtectedRol(rol) ? "bg-blue-50 border-blue-200" : ""}`}>
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  {cannotChangeStatusRol(rol) ? (
+                  {isProtectedRol(rol) ? (
                     <div className="flex items-center mb-1">
                       <Shield className="w-4 h-4 text-blue-600 mr-2" />
                       <h3 className="font-medium text-slate-800">{rol.nombre}</h3>
@@ -409,11 +470,11 @@ const RolesContent = () => {
                   <p className="text-sm text-slate-600">ID: {rol.id}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-sm font-medium ${cannotChangeStatusRol(rol) || rol.estado ? "text-green-600" : "text-red-600"}`}>
-                    {cannotChangeStatusRol(rol) || rol.estado ? "Activo" : "Inactivo"}
+                  <span className={`text-sm font-medium ${rol.estado ? "text-green-600" : "text-red-600"}`}>
+                    {rol.estado ? "Activo" : "Inactivo"}
                   </span>
                   <label className="switch-container relative">
-                    <input type="checkbox" checked={cannotChangeStatusRol(rol) ? true : rol.estado} disabled={cannotChangeStatusRol(rol)} readOnly />
+                    <input type="checkbox" checked={!!rol.estado} disabled={cannotChangeStatusRol(rol)} readOnly />
                     <span className="switch-slider"></span>
                     { !cannotChangeStatusRol(rol) && (
                       <div
@@ -452,24 +513,33 @@ const RolesContent = () => {
         <div className="flex items-center">
           <div className="py-1"><ShieldCheck className="h-6 w-6 text-blue-500 mr-4" /></div>
           <div>
-            <p className="font-bold">Vista de Super Administrador</p>
-            <p className="text-sm">Este es el rol principal del sistema con todos los permisos. Puedes crear nuevos roles según sea necesario.</p>
+            <p className="font-bold">{canManageRoles ? "Vista de Super Administrador" : "Vista de Administrador (solo lectura)"}</p>
+            <p className="text-sm">
+              {canManageRoles
+                ? "Este es el rol principal del sistema con todos los permisos. Puedes crear nuevos roles segun sea necesario."
+                : "Puedes consultar roles y permisos, pero no crear, editar, eliminar ni cambiar estados en este modulo."}
+            </p>
           </div>
         </div>
       </div>
 
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
           <h2 className="text-xl font-semibold text-slate-800">Roles</h2>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setModalOpen(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
-          >
-            <Plus className="h-5 w-5" />
-            Nuevo rol
-          </motion.button>
+          <div className="flex flex-wrap items-center justify-end gap-2 w-full lg:w-auto">
+            {canManageRoles && <AdminHolderCard className="w-full md:w-auto" />}
+            {canManageRoles && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setModalOpen(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
+              >
+                <Plus className="h-5 w-5" />
+                Nuevo rol
+              </motion.button>
+            )}
+          </div>
         </div>
 
         {/* Filtro por estado */}
@@ -551,7 +621,7 @@ const RolesContent = () => {
   onConfirm={handleConfirmStatusChange}
   isLoading={isChangingRolStatus}
   title={`${rolSeleccionado?.estado ? 'Desactivar' : 'Activar'} rol`}
-  message={`¿Estás seguro de que deseas ${rolSeleccionado?.estado ? 'desactivar' : 'activar'} el rol "${rolSeleccionado?.nombre}"?`}
+  message={`Estas seguro de que deseas ${rolSeleccionado?.estado ? 'desactivar' : 'activar'} el rol "${rolSeleccionado?.nombre}"?`}
 />
     </div>
   );
@@ -562,3 +632,4 @@ export default function Roles() {
     <RolesContent />
   );
 }
+

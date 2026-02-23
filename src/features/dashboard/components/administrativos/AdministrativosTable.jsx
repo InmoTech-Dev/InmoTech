@@ -77,6 +77,13 @@ const AdministrativosTable = ({
 
   // Helper para obtener el código de empleado
   const getEmployeeCode = (administrativo) => {
+    // Si es admin o super admin, mostrar el nombre exacto del rol resaltado
+    const protectedRole = getProtectedRole(administrativo);
+    if (protectedRole) {
+      return (
+        <span className="font-semibold text-blue-600">{protectedRole.nombre_rol}</span>
+      );
+    }
     return administrativo?.codigo_empleado || '-';
   };
 
@@ -85,12 +92,36 @@ const AdministrativosTable = ({
     return administrativo?.fecha_ingreso ? formatDate(administrativo.fecha_ingreso) : '-';
   };
 
+  // Helper para obtener el objeto de rol protegido activo con prioridad
+  const getProtectedRole = (administrativo) => {
+    const roles = administrativo?.persona?.roles || administrativo?.roles;
+    if (!roles || !Array.isArray(roles)) return null;
+
+    const priority = {
+      'super administrador': 1,
+      'administrador': 2,
+      'admin': 3
+    };
+
+    let bestRole = null;
+    let bestPriority = Infinity;
+
+    roles.forEach(rol => {
+      const nombre = (rol.nombre_rol || rol.nombre || rol.name || '').trim().toLowerCase();
+      const isActive = rol.PersonasRol ? !!rol.PersonasRol.estado : true;
+
+      if (isActive && priority[nombre] < bestPriority) {
+        bestPriority = priority[nombre];
+        bestRole = rol;
+      }
+    });
+
+    return bestRole;
+  };
+
   // Helper para verificar si el administrativo es super admin o admin
   const isSuperAdminOrAdmin = (administrativo) => {
-    if (!administrativo?.persona?.roles) return false;
-    return administrativo.persona.roles.some(rol =>
-      rol.nombre_rol === 'Super Administrador' || rol.nombre_rol === 'Administrador'
-    );
+    return !!getProtectedRole(administrativo);
   };
 
   // Componente para vista móvil
@@ -150,11 +181,10 @@ const AdministrativosTable = ({
             whileTap={{ scale: 0.95 }}
             onClick={() => onEdit(administrativo)}
             disabled={isSuperAdminOrAdmin(administrativo)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isSuperAdminOrAdmin(administrativo)
-                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                : 'bg-slate-600 text-white hover:bg-slate-700 cursor-pointer'
-            }`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isSuperAdminOrAdmin(administrativo)
+              ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+              : 'bg-slate-600 text-white hover:bg-slate-700 cursor-pointer'
+              }`}
             title={isSuperAdminOrAdmin(administrativo) ? "No se puede editar" : "Editar administrativo"}
           >
             <Edit className="w-4 h-4" />
@@ -175,175 +205,173 @@ const AdministrativosTable = ({
         <>
           {/* Desktop Table */}
           <div className="hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Administrativo
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Contacto
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Información Laboral
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {administrativos.map((administrativo, index) => {
-                const isRetired = administrativo.estado_laboral === 'Retirado';
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Administrativo
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Contacto
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Estado
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Información Laboral
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {administrativos.map((administrativo, index) => {
+                    const isRetired = administrativo.estado_laboral === 'Retirado';
 
-                return (
-                  <motion.tr
-                    key={administrativo.id_administrativo || `admin-${index}`}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`hover:bg-slate-50 transition-colors ${isRetired ? 'opacity-60' : ''}`}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
-                            <User className="h-5 w-5 text-slate-600" />
+                    return (
+                      <motion.tr
+                        key={administrativo.id_administrativo || `admin-${index}`}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`hover:bg-slate-50 transition-colors ${isRetired || isSuperAdminOrAdmin(administrativo) ? 'opacity-60' : ''}`}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
+                                <User className="h-5 w-5 text-slate-600" />
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-slate-900">{getFullName(administrativo)}</div>
+                              <div className="text-sm text-slate-500">{getEmployeeCode(administrativo)}</div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-slate-900">{getFullName(administrativo)}</div>
-                          <div className="text-sm text-slate-500">{getEmployeeCode(administrativo)}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-900">{getEmail(administrativo)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Phone className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-500">{formatPhoneNumber(getPhone(administrativo))}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <AdministrativoStatusSelector
-                        value={administrativo.estado_laboral}
-                        onChange={(newStatus) => onStatusChange(administrativo, newStatus)}
-                        loading={loadingStatusChanges.has(administrativo.id_administrativo)}
-                        disabled={isSuperAdminOrAdmin(administrativo)}
-                        className="w-[120px]"
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-900">{getHireDate(administrativo)}</span>
-                      </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-slate-400" />
+                            <span className="text-sm text-slate-900">{getEmail(administrativo)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Phone className="w-4 h-4 text-slate-400" />
+                            <span className="text-sm text-slate-500">{formatPhoneNumber(getPhone(administrativo))}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <AdministrativoStatusSelector
+                            value={administrativo.estado_laboral}
+                            onChange={(newStatus) => onStatusChange(administrativo, newStatus)}
+                            loading={loadingStatusChanges.has(administrativo.id_administrativo)}
+                            disabled={isSuperAdminOrAdmin(administrativo)}
+                            className="w-[120px]"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-slate-400" />
+                            <span className="text-sm text-slate-900">{getHireDate(administrativo)}</span>
+                          </div>
 
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <motion.button
-                          key={`view-${administrativo.id_administrativo}`}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => onView(administrativo)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Ver detalles"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </motion.button>
-                        <motion.button
-                          key={`edit-${administrativo.id_administrativo}`}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => onEdit(administrativo)}
-                          disabled={isSuperAdminOrAdmin(administrativo)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            isSuperAdminOrAdmin(administrativo)
-                              ? 'text-slate-300 cursor-not-allowed'
-                              : 'text-slate-600 hover:bg-slate-50 cursor-pointer'
-                          }`}
-                          title={isSuperAdminOrAdmin(administrativo) ? "No se puede editar" : "Editar administrativo"}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </motion.button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex items-center gap-2">
+                            <motion.button
+                              key={`view-${administrativo.id_administrativo}`}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => onView(administrativo)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Ver detalles"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </motion.button>
+                            <motion.button
+                              key={`edit-${administrativo.id_administrativo}`}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => onEdit(administrativo)}
+                              disabled={isSuperAdminOrAdmin(administrativo)}
+                              className={`p-2 rounded-lg transition-colors ${isSuperAdminOrAdmin(administrativo)
+                                ? 'text-slate-300 cursor-not-allowed'
+                                : 'text-slate-600 hover:bg-slate-50 cursor-pointer'
+                                }`}
+                              title={isSuperAdminOrAdmin(administrativo) ? "No se puede editar" : "Editar administrativo"}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </motion.button>
 
 
-                      </div>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Mobile Cards */}
-      <div className="md:hidden p-4">
-        {administrativos.map((administrativo, index) => (
-          <MobileAdministrativoCard key={administrativo.id_administrativo || `mobile-admin-${index}`} administrativo={administrativo} />
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-600">
-              Página {currentPage} de {totalPages}
-            </div>
-            <div className="flex items-center space-x-2">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => onPageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="p-2 text-slate-600 hover:bg-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </motion.button>
-
-              {[...Array(totalPages)].map((_, index) => {
-                const page = index + 1;
-                const isCurrentPage = page === currentPage;
-
-                return (
-                  <motion.button
-                    key={page}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => onPageChange(page)}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                      isCurrentPage
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-600 hover:bg-white'
-                    }`}
-                  >
-                    {page}
-                  </motion.button>
-                );
-              })}
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => onPageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="p-2 text-slate-600 hover:bg-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </motion.button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
-      )}
+
+          {/* Mobile Cards */}
+          <div className="md:hidden p-4">
+            {administrativos.map((administrativo, index) => (
+              <MobileAdministrativoCard key={administrativo.id_administrativo || `mobile-admin-${index}`} administrativo={administrativo} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-slate-600">
+                  Página {currentPage} de {totalPages}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="p-2 text-slate-600 hover:bg-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </motion.button>
+
+                  {[...Array(totalPages)].map((_, index) => {
+                    const page = index + 1;
+                    const isCurrentPage = page === currentPage;
+
+                    return (
+                      <motion.button
+                        key={page}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => onPageChange(page)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${isCurrentPage
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-600 hover:bg-white'
+                          }`}
+                      >
+                        {page}
+                      </motion.button>
+                    );
+                  })}
+
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => onPageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="p-2 text-slate-600 hover:bg-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

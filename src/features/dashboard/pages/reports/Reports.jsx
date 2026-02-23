@@ -12,7 +12,10 @@ import authService from '../../../../shared/services/authService'
 import { useToast } from '../../../../shared/hooks/use-toast'
 import { uploadToCloudinary } from '../../../../shared/services/cloudinary'
 import { Grid3X3, List } from 'lucide-react'
+import sseService from '../../../../shared/services/sseService'
 import * as XLSX from "xlsx";
+import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog'
+import AdminReportsView from './AdminReportsView'
 
 
 const ReportsContent = () => {
@@ -25,6 +28,8 @@ const ReportsContent = () => {
   const [showCancelled, setShowCancelled] = useState(false)
   const [statusFilter, setStatusFilter] = useState('Todos los estados')
   const [todayOnly, setTodayOnly] = useState(false)
+  const [isStatusChangeConfirmOpen, setIsStatusChangeConfirmOpen] = useState(false)
+  const [pendingStatusChange, setPendingStatusChange] = useState(null)
   const { createReport, updateReport, deleteReport } = useReports()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -41,16 +46,34 @@ const ReportsContent = () => {
     try {
       const data = await reportesInmobiliariosService.listarReportes()
       const rows = Array.isArray(data) ? data : (data?.data || [])
-      const mapped = rows.map((r) => ({
-        id: `J${String(r.id_reporte ?? r.id ?? '').toString().padStart(3, '0')}`,
-        referencia: r.id_reporte ?? r.id ?? '',
-        ubicacion: r.inmueble_ciudad || '',
-        tipoInmueble: r.inmueble_categoria || '',
-        propietario: r.reporta_nombre || '',
-        tipoReporte: r.tipo_reporte || '',
-        fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
-        estado: r.estado || 'Pendiente',
-      }))
+      const mapped = rows.map((r) => {
+        // Extraer datos del inmueble buscando en varios lugares posibles
+        const inm = r.inmueble || {};
+        const ciudad = r.inmueble_ciudad || inm.ciudad || '';
+        const categoria = r.inmueble_categoria || inm.categoria || '';
+        const titulo = r.inmueble_titulo || inm.titulo || r.titulo || '';
+        const direccion = r.inmueble_direccion || inm.direccion || '';
+
+        return {
+          id: `J${String(r.id_reporte ?? r.id ?? '').toString().padStart(3, '0')}`,
+          id_reporte: r.id_reporte ?? r.id ?? '', // ID numérico real
+          referencia: r.inmueble_referencia || r.registro_inmobiliario || '', // Alfanumérico del inmueble
+          ubicacion: ciudad,
+          tipoInmueble: categoria,
+          nombreInmueble: titulo || `Propiedad Ref: ${r.inmueble_referencia || r.registro_inmobiliario || ''}`,
+          direccionInmueble: direccion,
+          // Usar el propietario real del inmueble, no quien creó el reporte
+          propietario: r.propietario_nombre || r.propietario || '',
+          // Responsable: quien creó/reportó el reporte
+          responsable: r.reporta_nombre || formatResponsableName(r.reportado_por) || 'No asignado',
+          id_persona_reporta: Number(r.id_persona_reporta || (r.reportado_por?.id_persona ?? r.reportado_por?.id ?? 0)),
+          reportado_por: r.reportado_por || null,
+          prioridad: r.prioridad || 'Media',
+          tipoReporte: (r.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento'),
+          fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
+          estado: r.estado || 'Pendiente',
+        };
+      })
       setDbReports(mapped)
     } catch (err) {
       setDbError(err?.message || 'Error al cargar reportes')
@@ -60,9 +83,17 @@ const ReportsContent = () => {
     }
   }
 
-  // Cargar desde la base de datos al montar
+  // Cargar desde la base de datos al montar y suscribirse a SSE
   useEffect(() => {
     fetchReports()
+
+    // Suscribirse a cambios en tiempo real
+    const unsubscribe = sseService.on('report.changed', () => {
+      console.log('--- SSE: Refreshing reports due to real-time event ---');
+      fetchReports();
+    });
+
+    return () => unsubscribe();
   }, [])
 
   // Filtrar reportes (solo los del backend)
@@ -82,9 +113,17 @@ const ReportsContent = () => {
     return 'Pendiente'
   }
 
-  // NUEVO: aplicar filtros combinados (cancelados, estado)
+  // NUEVO: aplicar filtros combinados (cancelados, estado y visibilidad por rol)
   const todayStr = new Date().toLocaleDateString('es-ES')
+  const isSuperAdmin = user?.roles?.includes('Super Administrador')
+  const myPersonaId = Number(user?.id_persona ?? user?.id ?? 0)
+
   const displayedReports = filteredReports
+    .filter(r => {
+      // Si es Super Admin, ve todo. Si no, solo lo suyo.
+      if (isSuperAdmin) return true;
+      return Number(r.id_persona_reporta) === myPersonaId;
+    })
     .filter(r => showCancelled ? true : normalizeEstado(r.estado) !== 'Cancelado')
     .filter(r => statusFilter === 'Todos los estados' ? true : normalizeEstado(r.estado) === statusFilter)
     .filter(r => todayOnly ? (r.fecha === todayStr) : true)
@@ -109,8 +148,18 @@ const ReportsContent = () => {
     return full || r?.correo || r?.email || '';
   }
 
-  // NUEVO: cambiar estado desde Kanban y persistir en backend
-  const handleChangeEstado = async (report, nuevoEstado) => {
+  // NUEVO: solicitar confirmación antes de cambiar estado
+  const handleChangeEstadoRequest = (report, nuevoEstado) => {
+    setPendingStatusChange({ report, nuevoEstado })
+    setIsStatusChangeConfirmOpen(true)
+  }
+
+  // NUEVO: cambiar estado desde Kanban y persistir en backend (después de confirmación)
+  const handleChangeEstadoConfirm = async () => {
+    if (!pendingStatusChange) return
+
+    const { report, nuevoEstado } = pendingStatusChange
+
     try {
       const backendId =
         getBackendId(report) ||
@@ -139,7 +188,15 @@ const ReportsContent = () => {
         description: err?.message || 'No se pudo actualizar el estado.',
         variant: 'error',
       })
+    } finally {
+      setIsStatusChangeConfirmOpen(false)
+      setPendingStatusChange(null)
     }
+  }
+
+  const handleChangeEstadoCancel = () => {
+    setIsStatusChangeConfirmOpen(false)
+    setPendingStatusChange(null)
   }
 
   const handleNewReport = () => {
@@ -155,18 +212,28 @@ const ReportsContent = () => {
         throw new Error('ID de reporte inválido para ver detalles')
       }
 
-      const detailedReport = await reportesInmobiliariosService.obtenerReporte(reportId)
+      const response = await reportesInmobiliariosService.obtenerReporte(reportId)
+      const detailedReport = response.data || response
 
       // Add inmueble fields from shallow report or backend data
       detailedReport.ubicacion = report.ubicacion || detailedReport.inmueble_ciudad || ''
       detailedReport.tipoInmueble = report.tipoInmueble || detailedReport.inmueble_categoria || ''
-      detailedReport.propietario = report.propietario || detailedReport.reporta_nombre || ''
-      detailedReport.referencia = report.referencia || detailedReport.referencia || reportId
-      detailedReport.tipoReporte = report.tipoReporte || detailedReport.tipo_reporte || ''
+      // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
+      detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
+      detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
-      detailedReport.responsable = report.responsable || detailedReport.responsable || 'No asignado'
-      detailedReport.descripcion = detailedReport.descripcion || ''
+      detailedReport.prioridad = report.prioridad || detailedReport.prioridad || 'Media'
+      // Responsable: primero del detalle del backend (reportadoPor), luego del shallow report
+      detailedReport.responsable =
+        detailedReport.reportadoPor?.nombre_completo ||
+        report.responsable ||
+        'No asignado'
+      detailedReport.id_persona_reporta =
+        report.id_persona_reporta ||
+        (detailedReport.reportadoPor?.id_persona ?? detailedReport.reportadoPor?.id);
+      detailedReport.descripcion = detailedReport.descripcion || detailedReport.descripcion_reporte || ''
       detailedReport.seguimientoGeneral = detailedReport.seguimiento_general || ''
 
       // Fetch rubros and follow-ups
@@ -223,12 +290,16 @@ const ReportsContent = () => {
       // Add inmueble fields from shallow report or backend data
       detailedReport.ubicacion = report.ubicacion || detailedReport.inmueble_ciudad || ''
       detailedReport.tipoInmueble = report.tipoInmueble || detailedReport.inmueble_categoria || ''
-      detailedReport.propietario = report.propietario || detailedReport.reporta_nombre || ''
-      detailedReport.referencia = report.referencia || detailedReport.referencia || reportId
-      detailedReport.tipoReporte = report.tipoReporte || detailedReport.tipo_reporte || ''
+      // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
+      detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
+      detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
       detailedReport.responsable = report.responsable || detailedReport.responsable || 'No asignado'
+      detailedReport.id_persona_reporta =
+        report.id_persona_reporta ||
+        (detailedReport.reportadoPor?.id_persona ?? detailedReport.reportadoPor?.id);
       detailedReport.descripcion = detailedReport.descripcion || ''
       detailedReport.seguimientoGeneral = detailedReport.seguimiento_general || ''
 
@@ -259,7 +330,7 @@ const ReportsContent = () => {
 
   const handleCreateReport = async (reportData) => {
     try {
-      const personaId = Number(user?.id_persona ?? user?.id)
+      const personaId = reportData.id_persona_reporta || Number(user?.id_persona ?? user?.id)
 
       const payload = {
         id_inmueble: Number(reportData.id_inmueble),
@@ -375,39 +446,40 @@ const ReportsContent = () => {
     const backendId =
       getBackendId(reportData) ||
       getBackendId(selectedReport)
-  
+
     if (!backendId) {
       throw new Error('No se pudo determinar el ID del reporte para actualizar.')
     }
-  
+
     // 1) Actualizar campos del reporte (sin borrar nada)
     const patchPayload = {
       estado: normalizeEstado(reportData.estado),
       descripcion: (reportData.descripcion || '').trim(),
-      seguimiento_general: (reportData.seguimientoGeneral || '').trim()
+      seguimiento_general: (reportData.seguimientoGeneral || '').trim(),
+      id_persona_reporta: reportData.id_persona_reporta
     }
-  
+
     await reportesInmobiliariosService.actualizarReporte(
       backendId,
       patchPayload,
       patchPayload.seguimiento_general
     )
-  
+
     // 2) Upsert de rubros y sus seguimientos
     const rubrosToProcess = (reportData.rubros || [])
-  
+
     for (const r of rubrosToProcess) {
       const activos = (r.seguimientos || []).filter(s => s.activo !== false)
       const completados = activos.filter(s => normalizeEstado(s.estado) === 'Completado').length
       const progreso = activos.length > 0 ? Math.round((completados / activos.length) * 100) : 0
-  
+
       const rubroPayload = {
         nombre: (r.nombre || '').trim() || 'Rubro sin nombre',
         descripcion: (r.descripcion || '').trim(),
         estado: normalizeEstado(r.activo === false ? 'Cancelado' : (r.estado || 'Pendiente')),
         progreso
       }
-  
+
       // Crear o actualizar rubro según tenga backendId
       let rubroBackendId = Number(r.backendId ?? 0)
       if (rubroBackendId > 0) {
@@ -416,7 +488,7 @@ const ReportsContent = () => {
         const created = await reportesInmobiliariosService.crearRubro(backendId, rubroPayload)
         rubroBackendId = Number(created?.id_rubro ?? created?.id)
       }
-  
+
       // Upsert de seguimientos del rubro
       const segsToProcess = (r.seguimientos || [])
       for (const s of segsToProcess) {
@@ -424,7 +496,7 @@ const ReportsContent = () => {
           descripcion: (s.descripcion || '').trim(),
           estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente'))
         }
-  
+
         const segBackendId = Number(s.backendId ?? 0)
         if (segBackendId > 0) {
           await reportesInmobiliariosService.actualizarSeguimientoRubro(
@@ -442,7 +514,7 @@ const ReportsContent = () => {
         }
       }
     }
-  
+
     // Subir nuevas imágenes añadidas en edición (solo si traen File)
     const imagenes = Array.isArray(reportData.imagenes) ? reportData.imagenes : []
     for (const img of imagenes) {
@@ -456,7 +528,7 @@ const ReportsContent = () => {
         })
       }
     }
-  
+
     // Subir nuevos archivos añadidos en edición (solo si traen File)
     const archivos = Array.isArray(reportData.archivos) ? reportData.archivos : []
     for (const f of archivos) {
@@ -471,7 +543,7 @@ const ReportsContent = () => {
         })
       }
     }
-  
+
     setIsEditModalOpen(false)
     setSelectedReport(null)
     await fetchReports()
@@ -922,10 +994,10 @@ const ReportsContent = () => {
     printWindow.document.close();
 
     // Esperar a que se cargue el contenido y luego abrir el diálogo de impresión
-    printWindow.onload = function() {
+    printWindow.onload = function () {
       printWindow.focus();
       printWindow.print();
-      
+
       // Cerrar la ventana después de un breve delay
       setTimeout(() => {
         printWindow.close();
@@ -1002,6 +1074,8 @@ const ReportsContent = () => {
     }
   }
 
+  const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
+
   return (
     <div className='p-6 space-y-6'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
@@ -1018,41 +1092,65 @@ const ReportsContent = () => {
         onStatusChange={setStatusFilter}
         showCancelled={showCancelled}
         onToggleShowCancelled={() => setShowCancelled(v => !v)}
+        hideFilters={isAdminView}
       />
 
-      <div className='flex items-center justify-end gap-3'>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setViewMode(viewMode === 'table' ? 'board' : 'table')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-            viewMode === 'board'
-              ? 'bg-green-600 text-white shadow-lg'
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-green-300'
-          }`}
-        >
-          {viewMode === 'table' ? <Grid3X3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
-          {viewMode === 'table' ? 'Vista Kanban' : 'Vista Tabla'}
-        </motion.button>
-      </div>
-
-      {viewMode === 'board' ? (
-        <ReportsKanban
-          reports={displayedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onCreate={handleNewReport}
-          onChangeEstado={handleChangeEstado}
-          showCancelled={showCancelled}
+      {user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r)) ? (
+        <AdminReportsView
+          allReports={dbReports}
+          onViewReport={handleViewReport}
+          onEditReport={handleEditReport}
+          onDownloadPDF={handleDownloadReportPDF}
+          loading={dbLoading}
         />
       ) : (
-        <ReportsTable
-          reports={displayedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onDownloadPDF={handleDownloadReportPDF}
-        />
+        <>
+          <div className='flex items-center justify-end gap-3'>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setViewMode(viewMode === 'table' ? 'board' : 'table')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${viewMode === 'board'
+                ? 'bg-green-600 text-white shadow-lg'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-green-300'
+                }`}
+            >
+              {viewMode === 'table' ? <Grid3X3 className="w-4 h-4" /> : <List className="w-4 h-4" />}
+              {viewMode === 'table' ? 'Vista Kanban' : 'Vista Tabla'}
+            </motion.button>
+          </div>
+
+          {viewMode === 'board' ? (
+            <ReportsKanban
+              reports={displayedReports}
+              onView={handleViewReport}
+              onEdit={handleEditReport}
+              onCreate={handleNewReport}
+              onChangeEstado={handleChangeEstadoRequest}
+              showCancelled={showCancelled}
+            />
+          ) : (
+            <ReportsTable
+              reports={displayedReports}
+              onView={handleViewReport}
+              onEdit={handleEditReport}
+              onDownloadPDF={handleDownloadReportPDF}
+            />
+          )}
+        </>
       )}
+
+      {/* Confirmation Dialog for Status Change */}
+      <ConfirmationDialog
+        isOpen={isStatusChangeConfirmOpen}
+        onClose={handleChangeEstadoCancel}
+        onConfirm={handleChangeEstadoConfirm}
+        title="Confirmar cambio de estado"
+        message={pendingStatusChange ? `¿Estás seguro de que deseas cambiar el estado del reporte #${pendingStatusChange.report.id} a "${pendingStatusChange.nuevoEstado}"?` : ''}
+        confirmText="Sí, cambiar estado"
+        cancelText="Cancelar"
+        variant="info"
+      />
 
       <CreateReportModal
         isOpen={isCreateModalOpen}

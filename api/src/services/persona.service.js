@@ -23,26 +23,6 @@ const splitFullName = (value = '') => {
   };
 };
 
-const normalizeDocumentValue = (value = '') =>
-  String(value)
-    .trim()
-    .toUpperCase()
-    .replace(/[^0-9A-Z]/g, '');
-
-const isPlaceholderDocument = (value = '') => {
-  const normalized = normalizeDocumentValue(value);
-  return !normalized || /^TEMP[0-9A-Z]*$/.test(normalized);
-};
-
-const buildNormalizedCorreoWhere = (correoNormalizado) =>
-  sequelize.where(
-    sequelize.fn(
-      'LOWER',
-      sequelize.fn('LTRIM', sequelize.fn('RTRIM', sequelize.col('correo')))
-    ),
-    correoNormalizado
-  );
-
 class PersonaService {
   /**
    * Busca o crea una persona por documento
@@ -113,8 +93,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
-            attributes: ['id_rol', 'nombre_rol']
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
+            attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true }
           }
         ],
         limit: 10,
@@ -150,8 +134,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
-            attributes: ['id_rol', 'nombre_rol', 'descripcion']
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
+            attributes: ['id_rol', 'nombre_rol', 'descripcion'],
+            where: { estado: true }
           }
         ]
       });
@@ -218,140 +206,6 @@ class PersonaService {
   }
 
   /**
-   * Obtiene inmuebles del propietario autenticado con informacion de arriendo
-   */
-  async obtenerResumenPropietario(personaId) {
-    try {
-      const persona = await Persona.findByPk(personaId, {
-        include: [
-          {
-            model: Rol,
-            as: 'roles',
-            through: { attributes: [] },
-            attributes: ['id_rol', 'nombre_rol']
-          }
-        ]
-      });
-
-      if (!persona) {
-        throw new Error('Persona no encontrada');
-      }
-
-      const esPropietario = (persona.roles || []).some((r) => r.nombre_rol === 'Propietario');
-      if (!esPropietario) {
-        const roleError = new Error('La persona autenticada no tiene rol de propietario');
-        roleError.status = 403;
-        throw roleError;
-      }
-
-      const rows = await sequelize.query(
-        `
-        SELECT
-          i.id_inmueble,
-          i.titulo,
-          i.registro_inmobiliario,
-          i.direccion,
-          i.barrio,
-          i.ciudad,
-          i.departamento,
-          i.pais,
-          i.categoria,
-          i.operacion,
-          i.estado AS estado_inmueble,
-          i.precio_arriendo,
-          i.precio_venta,
-          ar.id_arrendamiento,
-          ar.estado AS estado_arriendo,
-          ar.fecha_inicio,
-          ar.fecha_finalizacion,
-          ar.valor_mensual,
-          ar.tipo_garantia,
-          ar.valor_garantia,
-          ren.id_arrendatario,
-          pArr.nombre_completo AS arrendatario_nombre,
-          pArr.correo AS arrendatario_correo,
-          pArr.telefono AS arrendatario_telefono
-        FROM Propiedad_inmueble pi
-        INNER JOIN Inmuebles i ON i.id_inmueble = pi.id_inmueble
-        OUTER APPLY (
-          SELECT TOP 1 a.*
-          FROM Arrendamientos a
-          WHERE a.id_inmueble = i.id_inmueble
-          ORDER BY
-            CASE WHEN a.estado IN ('Activo', 'Pendiente') THEN 0 ELSE 1 END,
-            ISNULL(a.fecha_inicio, a.fecha_creacion) DESC
-        ) ar
-        LEFT JOIN Arrendatarios ren ON ren.id_arrendatario = ar.id_arrendatario
-        LEFT JOIN Personas pArr ON pArr.id_persona = ren.id_persona
-        WHERE pi.id_persona = :personaId
-          AND pi.es_propietario_actual = 1
-        ORDER BY i.id_inmueble DESC
-        `,
-        {
-          replacements: { personaId },
-          type: sequelize.QueryTypes.SELECT
-        }
-      );
-
-      const inmuebles = (rows || []).map((row) => ({
-        id_inmueble: row.id_inmueble,
-        titulo: row.titulo,
-        registro_inmobiliario: row.registro_inmobiliario,
-        direccion: row.direccion,
-        barrio: row.barrio,
-        ciudad: row.ciudad,
-        departamento: row.departamento,
-        pais: row.pais,
-        categoria: row.categoria,
-        operacion: row.operacion,
-        estado_inmueble: row.estado_inmueble,
-        precio_arriendo: row.precio_arriendo,
-        precio_venta: row.precio_venta,
-        arriendo: row.id_arrendamiento
-          ? {
-              id_arrendamiento: row.id_arrendamiento,
-              estado: row.estado_arriendo,
-              fecha_inicio: row.fecha_inicio,
-              fecha_finalizacion: row.fecha_finalizacion,
-              valor_mensual: row.valor_mensual,
-              tipo_garantia: row.tipo_garantia,
-              valor_garantia: row.valor_garantia
-            }
-          : null,
-        arrendatario: row.id_arrendatario
-          ? {
-              id_arrendatario: row.id_arrendatario,
-              nombre_completo: row.arrendatario_nombre,
-              correo: row.arrendatario_correo,
-              telefono: row.arrendatario_telefono
-            }
-          : null,
-        canon_estimado: row.valor_mensual ?? row.precio_arriendo ?? null
-      }));
-
-      const resumen = {
-        total_inmuebles: inmuebles.length,
-        inmuebles_con_arriendo: inmuebles.filter((item) => !!item.arriendo).length,
-        arriendos_activos: inmuebles.filter((item) => item?.arriendo?.estado === 'Activo').length,
-        canon_total_estimado: inmuebles.reduce((acc, item) => acc + (Number(item.canon_estimado) || 0), 0)
-      };
-
-      return {
-        propietario: {
-          id_persona: persona.id_persona,
-          nombre_completo: persona.nombre_completo,
-          correo: persona.correo
-        },
-        resumen,
-        inmuebles
-      };
-    } catch (error) {
-      logger.error('Error obteniendo resumen del propietario:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Actualiza el perfil de una persona
    */
   async actualizarPerfil(personaId, updateData, updatedBy = null) {
@@ -379,57 +233,38 @@ class PersonaService {
         }
 
         const prevCorreo = (persona.correo || '').trim().toLowerCase();
-        const { password, confirmPassword, ...personaData } = mappedData;
+        const personaData = { ...mappedData };
 
         if (personaData.correo) {
           const nuevoCorreo = personaData.correo.trim().toLowerCase();
-          if (prevCorreo && nuevoCorreo !== prevCorreo) {
-            personaData.correo_verificado = false;
-            personaData.tiene_cuenta = true;
-            persona.correo = nuevoCorreo;
-            try {
-              await invitacionService.crearInvitacion({
-                id_persona: personaId,
-                creado_por: updatedBy || null,
-                tipo: 'signup_verify'
-              });
-              logger.info(`Invitacion de verificacion enviada a nuevo correo de persona ${personaId}`);
-            } catch (inviteError) {
-              logger.warn(`No se pudo enviar invitacion de verificacion a persona ${personaId}: ${inviteError.message}`);
+          if (nuevoCorreo !== prevCorreo) {
+            personaData.correo = nuevoCorreo;
+
+            if (persona.tiene_cuenta === false) {
+              personaData.correo_verificado = false;
+              personaData.tiene_cuenta = false;
+              try {
+                // Obtener roles de la persona para determinar el tipo de invitacion
+                const roles = await persona.getRoles({ transaction: t });
+                const nombreRoles = roles.map(r => r.nombre_rol);
+                const esAdmin = nombreRoles.some(r => ['Administrador', 'Super Administrador', 'Empleado', 'Agente'].includes(r));
+
+                await invitacionService.crearInvitacion({
+                  id_persona: personaId,
+                  creado_por: updatedBy || null,
+                  tipo: esAdmin ? 'admin_invite' : 'user_invite',
+                  rol_asignado: nombreRoles[0] || (esAdmin ? 'Administrativo' : 'Usuario')
+                });
+                logger.info(`Invitacion [${esAdmin ? 'administrativa' : 'de usuario'}] regenerada por cambio de correo para persona ${personaId}`);
+              } catch (inviteError) {
+                logger.warn(`No se pudo regenerar invitacion de persona ${personaId}: ${inviteError.message}`);
+              }
             }
           }
         }
 
         if (Object.keys(personaData).length > 0) {
           await persona.update(personaData, { transaction: t });
-        }
-
-        if (password) {
-          const { Acceso } = require('../models');
-          const bcryptUtilsLocal = require('../utils/bcrypt');
-          if (password !== confirmPassword) {
-            throw new Error('Las contraseñas no coinciden');
-          }
-          const acceso = await Acceso.findOne({
-            where: { id_persona: personaId },
-            transaction: t
-          });
-          const hashedPassword = await bcryptUtilsLocal.hashPassword(password);
-
-          if (acceso) {
-            await acceso.update({
-              contrasena: hashedPassword,
-              ultimo_cambio_password: new Date()
-            }, { transaction: t });
-            logger.info(`Contraseña actualizada para persona ID: ${personaId}`);
-          } else {
-            logger.warn(`No se encontró acceso para persona ID: ${personaId}, creando uno nuevo`);
-            await Acceso.create({
-              id_persona: personaId,
-              contrasena: hashedPassword,
-              ultimo_cambio_password: new Date()
-            }, { transaction: t });
-          }
         }
 
         logger.info(`Perfil actualizado para persona ID: ${personaId}`);
@@ -444,7 +279,9 @@ class PersonaService {
           telefono: personaData.telefono || persona.telefono,
           tiene_cuenta: personaData.tiene_cuenta ?? persona.tiene_cuenta,
           correo_verificado: personaData.correo_verificado ?? persona.correo_verificado,
-          fecha_registro: persona.fecha_registro
+          fecha_registro: persona.fecha_registro,
+          foto_perfil_url: personaData.foto_perfil_url || persona.foto_perfil_url,
+          foto_public_id: personaData.foto_public_id || persona.foto_public_id
         };
       } catch (error) {
         logger.error('Error actualizando perfil:', {
@@ -533,8 +370,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
             attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true },
             required: false
           },
           {
@@ -667,165 +508,54 @@ class PersonaService {
   }
 
   /**
-   * Crea una persona administrativa con posibilidad de crear cuenta de usuario
+   * Crea una persona desde panel administrativo sin acceso directo.
    */
-  async crearPersonaAdmin(personaData, password = null) {
-    return sequelize.transaction(async (t) => {
-      const normalizedCorreo =
-        typeof personaData.correo === 'string' ? personaData.correo.trim().toLowerCase() : '';
+  async crearPersonaAdmin(personaData) {
+    const result = await sequelize.transaction(async (t) => {
+      try {
+        const datosPersona = {
+          ...personaData,
+          tiene_cuenta: false,
+          estado: personaData.estado ?? true,
+          correo_verificado: false
+        };
 
-      const datosPersona = {
-        ...personaData,
-        correo: normalizedCorreo || personaData.correo,
-        tiene_cuenta: !!password,
-        estado: personaData.estado ?? true,
-        correo_verificado: !!password
-      };
+        const persona = await this.crearOActualizar(datosPersona, t);
 
-      let persona = null;
-
-      // Reusar persona existente por correo cuando corresponde (evita falsos "duplicados")
-      if (normalizedCorreo) {
-        const personaPorCorreo = await Persona.findOne({
-          where: buildNormalizedCorreoWhere(normalizedCorreo),
+        const rolDestino = personaData.rol || 'Usuario';
+        const rolModelo = await Rol.findOne({
+          where: { nombre_rol: rolDestino },
           transaction: t
         });
 
-        if (personaPorCorreo) {
-          const tipoDocPayload = normalizeDocumentValue(datosPersona.tipo_documento);
-          const numDocPayload = normalizeDocumentValue(datosPersona.numero_documento);
-          const tipoDocExistente = normalizeDocumentValue(personaPorCorreo.tipo_documento);
-          const numDocExistente = normalizeDocumentValue(personaPorCorreo.numero_documento);
-          let sameDocument = tipoDocPayload === tipoDocExistente && numDocPayload === numDocExistente;
+        if (rolModelo) {
+          const yaTieneRol = await PersonasRol.findOne({
+            where: { id_persona: persona.id_persona, id_rol: rolModelo.id_rol },
+            transaction: t
+          });
 
-          if (!sameDocument) {
-            const payloadDocPlaceholder = isPlaceholderDocument(datosPersona.numero_documento);
-            const existingDocPlaceholder = isPlaceholderDocument(personaPorCorreo.numero_documento);
-
-            if (payloadDocPlaceholder) {
-              // Si llega documento temporal desde formulario, no bloquear por mismatch.
-              sameDocument = true;
-            } else if (existingDocPlaceholder) {
-              // Si el registro existente es temporal, actualizarlo con el documento real.
-              await personaPorCorreo.update(
-                {
-                  tipo_documento: datosPersona.tipo_documento,
-                  numero_documento: datosPersona.numero_documento
-                },
-                { transaction: t }
-              );
-              sameDocument = true;
-            }
+          if (!yaTieneRol) {
+            await PersonasRol.create({
+              id_persona: persona.id_persona,
+              id_rol: rolModelo.id_rol
+            }, { transaction: t });
           }
-
-          if (!sameDocument) {
-            const totalRoles = await PersonasRol.count({
-              where: { id_persona: personaPorCorreo.id_persona },
-              transaction: t
-            });
-            const totalAccesos = await Acceso.count({
-              where: { id_persona: personaPorCorreo.id_persona },
-              transaction: t
-            });
-            const totalPropiedades = await PropiedadInmueble.count({
-              where: { id_persona: personaPorCorreo.id_persona },
-              transaction: t
-            });
-
-            const canAutoMergeByEmail =
-              !personaPorCorreo.tiene_cuenta &&
-              !personaPorCorreo.correo_verificado &&
-              totalRoles === 0 &&
-              totalAccesos === 0 &&
-              totalPropiedades === 0;
-
-            if (canAutoMergeByEmail) {
-              const personaConMismoDocumento = await Persona.findOne({
-                where: {
-                  tipo_documento: datosPersona.tipo_documento,
-                  numero_documento: (datosPersona.numero_documento || '').trim(),
-                  id_persona: { [Op.ne]: personaPorCorreo.id_persona }
-                },
-                transaction: t
-              });
-
-              if (personaConMismoDocumento) {
-                const conflictDocError = new Error('El documento ya está registrado con otro correo electrónico.');
-                conflictDocError.status = 409;
-                throw conflictDocError;
-              }
-
-              await personaPorCorreo.update(
-                {
-                  tipo_documento: datosPersona.tipo_documento,
-                  numero_documento: datosPersona.numero_documento
-                },
-                { transaction: t }
-              );
-              sameDocument = true;
-            }
-          }
-
-          if (!sameDocument) {
-            const conflictError = new Error('El correo ya está registrado con otro documento.');
-            conflictError.status = 409;
-            throw conflictError;
-          }
-
-          await personaPorCorreo.update(
-            {
-              ...datosPersona,
-              tiene_cuenta: password ? true : personaPorCorreo.tiene_cuenta
-            },
-            { transaction: t }
-          );
-          persona = personaPorCorreo;
         }
+
+        logger.info(`Persona administrativa creada (pendiente de activacion, con rol ${rolDestino}): ${persona.nombre_completo}`);
+
+        return persona;
+
+      } catch (error) {
+        logger.error('Error creando persona administrativa:', error);
+        return {
+          ...personaData,
+          id_persona: null
+        };
       }
-
-      if (!persona) {
-        persona = await this.crearOActualizar(datosPersona, t);
-      }
-
-      const rolDestino = personaData.rol || 'Usuario';
-      const rolModelo = await Rol.findOne({
-        where: { nombre_rol: rolDestino },
-        transaction: t
-      });
-
-      if (rolModelo) {
-        const yaTieneRol = await PersonasRol.findOne({
-          where: { id_persona: persona.id_persona, id_rol: rolModelo.id_rol },
-          transaction: t
-        });
-
-        if (!yaTieneRol) {
-          await PersonasRol.create({
-            id_persona: persona.id_persona,
-            id_rol: rolModelo.id_rol
-          }, { transaction: t });
-        }
-      }
-
-      if (password) {
-        const hashedPassword = await bcryptUtils.hashPassword(password);
-
-        await Acceso.create({
-          id_persona: persona.id_persona,
-          contrasena: hashedPassword,
-          ultimo_cambio_password: new Date()
-        }, { transaction: t });
-
-        logger.info(`Usuario administrativo creado con acceso: ${persona.correo || persona.nombre_completo}`);
-      } else {
-        logger.info(`Persona administrativa creada (sin cuenta, con rol ${rolDestino}): ${persona.nombre_completo}`);
-      }
-
-      return persona;
-    }).catch((error) => {
-      logger.error('Error creando persona administrativa:', error);
-      throw error;
     });
+
+    return result;
   }
 
   // Mantener métodos existentes para compatibilidad
@@ -935,8 +665,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
             attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true },
             required: false
           }
         ]
@@ -987,8 +721,12 @@ class PersonaService {
           {
             model: Rol,
             as: 'roles',
-            through: { attributes: [] },
+            through: {
+              attributes: ['estado'],
+              where: { estado: true }
+            },
             attributes: ['id_rol', 'nombre_rol'],
+            where: { estado: true },
             required: false
           }
         ]

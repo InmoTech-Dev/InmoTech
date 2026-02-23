@@ -1,5 +1,7 @@
 const reportesInmobiliariosService = require('../services/reportesInmobiliarios.service');
 const logger = require('../utils/logger');
+const sseService = require('../services/sse.service');
+const realtimeAudienceService = require('../services/realtimeAudience.service');
 
 class ReportesInmobiliariosController {
   /**
@@ -21,6 +23,19 @@ class ReportesInmobiliariosController {
       reporteData.id_persona_reporta = userId;
 
       const result = await reportesInmobiliariosService.crearReporte(reporteData, userId);
+
+      if (result.success) {
+        try {
+          const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+          sseService.emitReportChanged({
+            action: 'created',
+            reportId: result.data?.id_reporte || result.data?.id,
+            audienceUserIds: adminIds
+          });
+        } catch (sseError) {
+          logger.error('[SSE][REPORT] No se pudo emitir evento de creación:', sseError.message);
+        }
+      }
 
       return res.status(result.success ? 201 : 400).json(result);
     } catch (error) {
@@ -69,6 +84,23 @@ class ReportesInmobiliariosController {
       const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.actualizarReporte(parseInt(id), reporteData, userId);
+
+      if (result.success) {
+        try {
+          const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+          const affectedUsers = [];
+          if (reporteData.id_persona_reporta) affectedUsers.push(reporteData.id_persona_reporta);
+
+          sseService.emitReportChanged({
+            action: 'updated',
+            reportId: parseInt(id),
+            affectedUserIds: affectedUsers,
+            audienceUserIds: adminIds
+          });
+        } catch (sseError) {
+          logger.error('[SSE][REPORT] No se pudo emitir evento de actualización:', sseError.message);
+        }
+      }
 
       return res.status(result.success ? 200 : 400).json(result);
     } catch (error) {

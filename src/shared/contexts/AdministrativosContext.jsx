@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import administrativosApiService from '../services/administrativosApiService';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from './AuthContext';
+import sseService from '../services/sseService';
 
 const AdministrativosContext = createContext();
 
@@ -205,6 +206,23 @@ export const AdministrativosProvider = ({ children }) => {
       setLoading(false);
     }
   }, [loadAdministrativos, isAuthenticated, user]);
+
+  // Escuchar cambios en tiempo real vía SSE
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleUserChanged = (data) => {
+      console.log('Realtime: User change detected in AdministrativosContext', data);
+      // Recargar la lista de administrativos para reflejar cambios de estado o rol
+      loadAdministrativos();
+    };
+
+    const unsubscribe = sseService.on('user.changed', handleUserChanged);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [isAuthenticated, loadAdministrativos]);
 
   const value = {
     administrativos,

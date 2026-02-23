@@ -3,7 +3,7 @@ const router = express.Router();
 
 const auth = require('../middlewares/auth.middleware');
 const { validate, validateQuery } = require('../middlewares/validate.middleware');
-const { generalLimiter, createLimiter, strictLimiter } = require('../middlewares/security.middleware');
+const { createLimiter, strictLimiter } = require('../middlewares/security.middleware');
 const controller = require('../controllers/reportesInmobiliarios.controller');
 const service = require('../services/reportesInmobiliarios.service');
 const {
@@ -24,8 +24,6 @@ const {
 
 router.use(auth.authenticateToken);
 router.use(auth.authorizePermissions('reportes', 'ver'));
-
-router.use(generalLimiter);
 
 // Búsqueda de inmuebles para el módulo de reportes
 router.get('/inmuebles/autocomplete', validateQuery(autocompleteInmuebleSchema), controller.autocompleteInmuebles);

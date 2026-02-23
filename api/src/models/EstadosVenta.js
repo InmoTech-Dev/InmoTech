@@ -8,28 +8,40 @@ const EstadosVenta = sequelize.define(
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
-      field: 'id_estado_venta',
+      field: 'id_estado_venta'
     },
     nombre_estado: {
       type: DataTypes.STRING(100),
       allowNull: false,
-      field: 'nombre_estado',
+      field: 'nombre_estado'
     },
     descripcion: {
       type: DataTypes.STRING(255),
       allowNull: true,
-      field: 'descripcion',
+      field: 'descripcion'
     },
-    fecha_creacion: {
-      type: DataTypes.DATE,
+    orden: {
+      type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'fecha_creacion',
+      defaultValue: 1,
+      field: 'orden'
     },
+    es_estado_final: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'es_estado_final'
+    },
+    estado: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: 'estado'
+    }
   },
   {
-    tableName: 'EstadosVenta',
-    timestamps: false,
+    tableName: 'Estados_venta',
+    timestamps: false
   }
 );
 

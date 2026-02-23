@@ -145,25 +145,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (userData) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await authService.register(userData);
-      if (!response?.success) {
-        throw new Error(response?.message || 'Error en el registro');
-      }
-
-      return response?.data?.user || null;
-    } catch (err) {
-      setError(err.message || 'Error al registrar usuario');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const logout = useCallback(async () => {
     try {
       setLoading(true);
@@ -358,7 +339,6 @@ export const AuthProvider = ({ children }) => {
     loading,
     error,
     login,
-    register,
     logout,
     refreshToken,
     updateProfile,

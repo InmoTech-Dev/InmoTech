@@ -50,25 +50,6 @@ class PersonasController {
   }
 
   /**
-   * Obtener inmuebles/arriendos del propietario autenticado
-   */
-  async obtenerResumenPropietario(req, res, next) {
-    try {
-      const personaId = req.user.id;
-      const resumen = await personasService.obtenerResumenPropietario(personaId);
-
-      return res.status(200).json({
-        success: true,
-        message: 'Resumen de propietario obtenido exitosamente',
-        data: resumen
-      });
-    } catch (error) {
-      logger.error('Error obteniendo resumen de propietario:', error);
-      next(error);
-    }
-  }
-
-  /**
    * Actualizar perfil de la persona autenticada
    */
   async actualizarPerfil(req, res, next) {
@@ -175,50 +156,27 @@ class PersonasController {
   async crearPersona(req, res, next) {
     try {
       const personaData = req.validatedData;
-      const { password, confirmPassword, ...personaDataSinPassword } = personaData;
-      let invitationWarning = null;
+      const persona = await personasService.crearPersonaAdmin(personaData);
 
-      const persona = await personasService.crearPersonaAdmin(personaDataSinPassword, password);
+      try {
+        const rolesAdministrativos = ['Administrador', 'Super Administrador', 'Empleado', 'Agente', 'Gerente', 'Supervisor']; // Roles administrativos actualizados
+        const esAdmin = rolesAdministrativos.includes(personaData.rol);
 
-      // Si no se proporciona contraseña, enviar invitación para definir acceso por enlace.
-      if (!password) {
-        if (!persona?.id_persona) {
-          const inviteRefError = new Error('No se pudo generar la invitacion porque la persona no fue creada correctamente.');
-          inviteRefError.status = 500;
-          throw inviteRefError;
-        }
-
-        if (!persona?.correo) {
-          const inviteEmailError = new Error('El propietario debe tener un correo para recibir el enlace de activacion.');
-          inviteEmailError.status = 400;
-          throw inviteEmailError;
-        }
-
-        const rolAsignado = personaDataSinPassword.rol || 'Usuario';
-        const esAdministrativo =
-          rolAsignado === 'Administrador' ||
-          rolAsignado === 'Super Administrador' ||
-          rolAsignado === 'Empleado';
-
-        try {
-          await invitacionService.crearInvitacion({
-            id_persona: persona.id_persona,
-            creado_por: req.user?.id || null,
-            tipo: 'admin_invite',
-            rol_asignado: rolAsignado,
-            es_administrativo: esAdministrativo
-          });
-        } catch (inviteError) {
-          invitationWarning = 'Persona creada, pero no se pudo enviar el correo de activacion.';
-          logger.warn('No se pudo enviar invitacion al crear persona:', inviteError.message);
-        }
+        await invitacionService.crearInvitacion({
+          id_persona: persona.id_persona,
+          creado_por: req.user?.id || null,
+          tipo: esAdmin ? 'admin_invite' : 'user_invite',
+          rol_asignado: personaData.rol || (esAdmin ? 'Administrativo' : 'Usuario'),
+          es_administrativo: esAdmin
+        });
+      } catch (inviteError) {
+        logger.warn('No se pudo enviar invitacion al crear persona:', inviteError.message);
       }
 
       return res.status(201).json({
         success: true,
-        message: invitationWarning || 'Persona creada exitosamente',
-        data: persona,
-        ...(invitationWarning ? { warning: invitationWarning } : {})
+        message: 'Persona creada exitosamente',
+        data: persona
       });
     } catch (error) {
       logger.error('Error creando persona:', error);

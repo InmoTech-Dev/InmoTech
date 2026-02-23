@@ -1,8 +1,20 @@
 const { Rol, Persona, PersonasRol, Permiso } = require('../models');
 const { sequelize } = require('../config/database');
-const { Op } = require('sequelize'); // ✅ AGREGADO: Importar Op
 const logger = require('../utils/logger');
 const { buildPermissionsPayload, normalizePermissionsStructure } = require('../utils/permissions.helper');
+const {
+  SUPER_ADMIN_ROLE,
+  PROTECTED_ROLES,
+  SYSTEM_ROLES,
+} = require('../constants/roles.constants');
+
+const buildHttpError = (message, status) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+const isProtectedRole = (roleName = '') => PROTECTED_ROLES.includes(roleName);
 
 class RolesService {
   
@@ -24,9 +36,7 @@ class RolesService {
               as: 'roles',
               through: { attributes: [] },
               where: { 
-                nombre_rol: {
-                  [Op.in]: ['Super Administrador', 'Administrador']
-                }
+                nombre_rol: SUPER_ADMIN_ROLE
               },
               required: true
             }
@@ -35,7 +45,7 @@ class RolesService {
         });
 
         if (!usuario) {
-          throw new Error('No tienes permisos para crear roles');
+          throw buildHttpError('No tienes permisos para crear roles', 403);
         }
 
 // Verificar que el rol no existe (solo roles activos)
@@ -48,7 +58,7 @@ const rolExistente = await Rol.findOne({
 });
 
 if (rolExistente) {
-  throw new Error('El rol ya existe');
+  throw buildHttpError('El rol ya existe', 409);
 }
 
 // ✅ OPCIÓN: Reactivar rol si existe pero está inactivo
@@ -161,7 +171,7 @@ if (rolInactivo) {
   async asignarRol(personaId, rolId, userId) {
     const result = await sequelize.transaction(async (t) => {
       try {
-        // Verificar permisos (solo Admin+ puede asignar roles)
+        // Solo Super Administrador puede asignar roles
         const usuario = await Persona.findOne({
           where: { id_persona: userId },
           include: [
@@ -170,9 +180,7 @@ if (rolInactivo) {
               as: 'roles',
               through: { attributes: [] },
               where: { 
-                nombre_rol: { 
-                  [Op.in]: ['Super Administrador', 'Administrador'] 
-                } 
+                nombre_rol: SUPER_ADMIN_ROLE
               },
               required: true
             }
@@ -181,7 +189,7 @@ if (rolInactivo) {
         });
 
         if (!usuario) {
-          throw new Error('No tienes permisos para asignar roles');
+          throw buildHttpError('No tienes permisos para asignar roles', 403);
         }
 
         // Verificar que la persona existe
@@ -196,6 +204,10 @@ if (rolInactivo) {
 
         // Verificar que el rol existe
         const rol = await this.obtenerPorId(rolId);
+
+        if (isProtectedRole(rol?.nombre_rol)) {
+          throw buildHttpError('Operacion de rol protegido no permitida', 403);
+        }
 
         // Verificar que no tenga ya este rol
         const asignacionExistente = await PersonasRol.findOne({
@@ -240,7 +252,7 @@ if (rolInactivo) {
   async removerRol(personaId, rolId, userId) {
     const result = await sequelize.transaction(async (t) => {
       try {
-        // Verificar permisos
+        // Solo Super Administrador puede remover roles
         const usuario = await Persona.findOne({
           where: { id_persona: userId },
           include: [
@@ -249,9 +261,7 @@ if (rolInactivo) {
               as: 'roles',
               through: { attributes: [] },
               where: { 
-                nombre_rol: { 
-                  [Op.in]: ['Super Administrador', 'Administrador'] 
-                } 
+                nombre_rol: SUPER_ADMIN_ROLE
               },
               required: true
             }
@@ -260,7 +270,12 @@ if (rolInactivo) {
         });
 
         if (!usuario) {
-          throw new Error('No tienes permisos para remover roles');
+          throw buildHttpError('No tienes permisos para remover roles', 403);
+        }
+
+        const rol = await this.obtenerPorId(rolId);
+        if (isProtectedRole(rol?.nombre_rol)) {
+          throw buildHttpError('Operacion de rol protegido no permitida', 403);
         }
 
         // Encontrar asignación activa
@@ -341,9 +356,7 @@ if (rolInactivo) {
               as: 'roles',
               through: { attributes: [] },
               where: { 
-                nombre_rol: { 
-                  [Op.in]: ['Super Administrador', 'Administrador'] 
-                } 
+                nombre_rol: SUPER_ADMIN_ROLE
               },
               required: true
             }
@@ -352,7 +365,7 @@ if (rolInactivo) {
         });
 
         if (!usuario) {
-          throw new Error('No tienes permisos para actualizar roles');
+          throw buildHttpError('No tienes permisos para actualizar roles', 403);
         }
 
         const rol = await Rol.findOne({
@@ -365,8 +378,7 @@ if (rolInactivo) {
         }
 
         // No permitir cambiar nombre de roles del sistema
-        const rolesSistema = ['Super Administrador', 'Administrador', 'Empleado', 'Usuario', 'Propietario'];
-        if (rolesSistema.includes(rol.nombre_rol) && updateData.nombre_rol) {
+        if (SYSTEM_ROLES.includes(rol.nombre_rol) && updateData.nombre_rol) {
           throw new Error('No se puede cambiar el nombre de roles del sistema');
         }
 
@@ -473,9 +485,7 @@ if (rolInactivo) {
               as: 'roles',
               through: { attributes: [] },
               where: {
-                nombre_rol: {
-                  [Op.in]: ['Super Administrador', 'Administrador']
-                }
+                nombre_rol: SUPER_ADMIN_ROLE
               },
               required: true
             }
@@ -484,7 +494,7 @@ if (rolInactivo) {
         });
 
         if (!usuario) {
-          throw new Error('No tienes permisos para eliminar roles');
+          throw buildHttpError('No tienes permisos para eliminar roles', 403);
         }
 
         const rol = await Rol.findOne({
@@ -497,8 +507,7 @@ if (rolInactivo) {
         }
 
         // No permitir eliminar roles del sistema
-        const rolesSistema = ['Super Administrador', 'Administrador', 'Empleado', 'Usuario', 'Propietario'];
-        if (rolesSistema.includes(rol.nombre_rol)) {
+        if (SYSTEM_ROLES.includes(rol.nombre_rol)) {
           throw new Error('No se pueden eliminar roles del sistema');
         }
 

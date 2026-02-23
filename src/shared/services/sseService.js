@@ -23,11 +23,13 @@ class SSEService {
     this.eventSource = null;
     this.listeners = new Map();
     this._isConnected = false;
+    this.isConnecting = false;
     this.forcedDisconnect = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
     this.maxReconnectDelay = 30000;
+    this.reconnectTimer = null;
     this.verifySessionInFlight = false;
     this.verifySessionCooldownUntil = 0;
     this.verifySessionFailures = 0;
@@ -145,18 +147,41 @@ class SSEService {
   }
 
   async connect() {
+    if (this.forcedDisconnect) {
+      return;
+    }
+
+    if (this.isConnected || this.isConnecting) {
+      return;
+    }
+
+    if (this.eventSource && this.eventSource.readyState === EventSource.CONNECTING) {
+      return;
+    }
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     if (this.eventSource) {
       this.disconnect();
     }
 
     try {
+      this.isConnecting = true;
       const url = `${this.getApiBaseUrl()}/sse/connect?credentials=include`;
       this.eventSource = new EventSource(url, { withCredentials: true });
 
       this.eventSource.onopen = () => {
+        this.isConnecting = false;
         this._isConnected = true;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
         this.emit('connected', { occurred_at: new Date().toISOString() });
         this.emitConnectionState({ source: 'onopen' });
       };
@@ -168,6 +193,15 @@ class SSEService {
       };
 
       this.eventSource.onerror = async () => {
+        const previousSource = this.eventSource;
+        if (previousSource) {
+          previousSource.close();
+          if (this.eventSource === previousSource) {
+            this.eventSource = null;
+          }
+        }
+
+        this.isConnecting = false;
         this._isConnected = false;
         this.emit('disconnected', { occurred_at: new Date().toISOString() });
         this.emitConnectionState({ source: 'onerror' });
@@ -186,6 +220,7 @@ class SSEService {
 
       this.setupEventListeners();
     } catch (error) {
+      this.isConnecting = false;
       console.error('[SSE] Error creating connection:', error);
       this.handleReconnect();
     }
@@ -213,6 +248,7 @@ class SSEService {
     bind('appointment.changed', (data) => this.emit('appointment.changed', data));
     bind('notification.changed', (data) => this.emit('notification.changed', data));
     bind('user.changed', (data) => this.emit('user.changed', data));
+    bind('report.changed', (data) => this.emit('report.changed', data));
 
     bind('heartbeat', (data) => this.emit('heartbeat', data));
   }
@@ -237,7 +273,12 @@ class SSEService {
       occurred_at: new Date().toISOString(),
     });
 
-    setTimeout(() => {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.connect();
     }, this.reconnectDelay);
 
@@ -245,6 +286,12 @@ class SSEService {
   }
 
   disconnect() {
+    this.isConnecting = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;
@@ -292,6 +339,7 @@ class SSEService {
 
   resetForcedDisconnect() {
     this.forcedDisconnect = false;
+    this.isConnecting = false;
     this.verifySessionFailures = 0;
     this.verifySessionCooldownUntil = 0;
   }

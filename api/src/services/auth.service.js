@@ -1,12 +1,11 @@
 const crypto = require('crypto');
-const { Persona, Acceso, PersonasRol, Rol, Administrativo, Permiso } = require('../models');
+const { Persona, Acceso, Rol, Administrativo, Permiso } = require('../models');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const bcryptUtils = require('../utils/bcrypt');
 const jwtUtils = require('../utils/jwt');
 const logger = require('../utils/logger');
 const emailService = require('./email.service');
-const invitacionService = require('./invitacion.service');
 const { normalizeModuleKey, normalizePermissionKey } = require('../utils/permissions.helper');
 
 const normalizeEmail = (email = '') =>
@@ -20,7 +19,14 @@ const BASIC_PERSONA_ATTRIBUTES = [
   'correo',
   'estado',
   'nombre_completo',
-  'apellido_completo'
+  'apellido_completo',
+  'telefono',
+  'foto_perfil_url',
+  'foto_public_id',
+  'fecha_registro',
+  'tipo_documento',
+  'numero_documento',
+  'telefono'
 ];
 
 const BASIC_ACCESO_ATTRIBUTES = ['id_persona', 'contrasena'];
@@ -59,13 +65,6 @@ const buildRoleIncludeBasic = () => ({
   where: { estado: true },
   required: false,
   attributes: ['id_rol', 'nombre_rol', 'es_rol_administrativo']
-});
-
-const buildAdministrativoInclude = () => ({
-  model: Administrativo,
-  as: 'administrativo',
-  required: false,
-  where: { estado_laboral: 'Activo' }
 });
 
 const buildPermissionsFromRoles = (roles = []) => {
@@ -117,6 +116,13 @@ const buildAuthUser = (persona) => {
     correo: persona.correo,
     nombre_completo: persona.nombre_completo,
     apellido_completo: persona.apellido_completo,
+    telefono: persona.telefono,
+    foto_perfil_url: persona.foto_perfil_url,
+    foto_public_id: persona.foto_public_id,
+    fecha_registro: persona.fecha_registro,
+    tipo_documento: persona.tipo_documento,
+    numero_documento: persona.numero_documento,
+    telefono: persona.telefono,
     roles,
     es_administrativo,
     permisos
@@ -207,87 +213,6 @@ class AuthService {
       authUser: buildAuthUser(personaForAuth),
       hasAdministrativeRole: roleList.some((role) => role?.es_rol_administrativo === true)
     };
-  }
-
-  async registrarUsuario(userData) {
-    const result = await sequelize.transaction(async (t) => {
-      try {
-        const { email, password } = userData;
-        const normalizedEmail = normalizeEmail(email);
-
-        const personaExistente = await Persona.findOne({
-          where: buildEmailCondition(normalizedEmail),
-          transaction: t
-        });
-
-        if (personaExistente) {
-          throw new Error('El correo electronico ya esta registrado');
-        }
-
-        const nuevaPersona = await Persona.create({
-          tipo_documento: userData.tipo_documento,
-          numero_documento: userData.numero_documento,
-          nombre_completo: userData.nombre_completo,
-          apellido_completo: userData.apellido_completo,
-          correo: normalizedEmail,
-          telefono: userData.telefono,
-          tiene_cuenta: true,
-          estado: true
-        }, { transaction: t });
-
-        const hashedPassword = await bcryptUtils.hashPassword(password);
-        await Acceso.create({
-          id_persona: nuevaPersona.id_persona,
-          contrasena: hashedPassword
-        }, { transaction: t });
-
-        const rolUsuario = await Rol.findOne({
-          where: { nombre_rol: 'Usuario', estado: true },
-          transaction: t
-        });
-
-        if (rolUsuario) {
-          await PersonasRol.create({
-            id_persona: nuevaPersona.id_persona,
-            id_rol: rolUsuario.id_rol,
-            estado: true
-          }, { transaction: t });
-        }
-
-        const userRoles = rolUsuario ? [rolUsuario.nombre_rol] : [];
-        const userPayload = {
-          id: nuevaPersona.id_persona,
-          id_persona: nuevaPersona.id_persona,
-          email: nuevaPersona.correo,
-          correo: nuevaPersona.correo,
-          nombre_completo: nuevaPersona.nombre_completo,
-          apellido_completo: nuevaPersona.apellido_completo,
-          roles: userRoles,
-          es_administrativo: false,
-          permisos: {}
-        };
-
-        const payload = {
-          id: nuevaPersona.id_persona,
-          email: nuevaPersona.correo,
-          roles: userRoles,
-          es_administrativo: false
-        };
-
-        const tokens = jwtUtils.generateTokens(payload);
-        logger.info(`Usuario registrado: ${email}`);
-
-        return {
-          user: userPayload,
-          ...tokens
-        };
-      } catch (error) {
-        logger.error('Error en registro de usuario:', error);
-        throw error;
-      }
-    });
-
-    return result;
   }
 
   async iniciarSesion(email, password) {
@@ -533,75 +458,6 @@ class AuthService {
     return acceso.ultimo_cambio_password || null;
   }
 
-  async reenviarCodigoVerificacion(email, { ignoreLimits = false } = {}) {
-    const normalizedEmail = normalizeEmail(email);
-    if (!normalizedEmail) {
-      const error = new Error('Correo invalido');
-      error.status = 400;
-      throw error;
-    }
-
-    try {
-      return await invitacionService.reenviarSignupPorEmail(normalizedEmail, {
-        ignoreLimit: Boolean(ignoreLimits)
-      });
-    } catch (error) {
-      if (error?.code === 'VERIFICATION_LIMIT') {
-        error.status = error.status || 429;
-      } else if (!error?.status) {
-        error.status = 400;
-      }
-      throw error;
-    }
-  }
-
-  async verificarCodigoCorreo(email, codigo, meta = {}) {
-    const normalizedEmail = normalizeEmail(email);
-    const normalizedCode = String(codigo || '').trim();
-
-    if (!normalizedEmail) {
-      const error = new Error('Correo invalido');
-      error.status = 400;
-      throw error;
-    }
-
-    if (!normalizedCode) {
-      const error = new Error('Codigo invalido');
-      error.status = 400;
-      throw error;
-    }
-
-    try {
-      return await invitacionService.verificarCodigoSignup({
-        email: normalizedEmail,
-        codigo_6d: normalizedCode,
-        meta
-      });
-    } catch (error) {
-      if (!error?.status) {
-        error.status = 400;
-      }
-      throw error;
-    }
-  }
-
-  async verificarCorreo(token, meta = {}) {
-    const normalizedToken = typeof token === 'string' ? token.trim() : '';
-    if (!normalizedToken) {
-      const error = new Error('Token invalido');
-      error.status = 400;
-      throw error;
-    }
-
-    try {
-      return await invitacionService.verificarCorreo(normalizedToken, meta);
-    } catch (error) {
-      if (!error?.status) {
-        error.status = 400;
-      }
-      throw error;
-    }
-  }
   async solicitarRecuperacionContrasena(email) {
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail) {

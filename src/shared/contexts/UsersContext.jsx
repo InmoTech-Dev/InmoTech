@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import usersApiService from '../services/usersApiService';
 import invitacionApiService from '../services/invitacionApiService';
-import authService from '../services/authService';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from './AuthContext';
 import realtimeBus from '../services/realtimeBus';
 
 const UsersContext = createContext();
+const REALTIME_MIN_REFRESH_GAP_MS = 5000;
 
 export const useUsers = () => {
   const context = useContext(UsersContext);
@@ -24,12 +24,12 @@ export const UsersProvider = ({ children }) => {
   const { toast } = useToast();
   const { isAuthenticated, hasRole } = useAuth();
   const realtimeRefreshRef = useRef(null);
+  const loadUsersInFlightRef = useRef(null);
+  const lastRealtimeRefreshAtRef = useRef(0);
 
   const computeInvitacionEstado = useCallback((user) => {
     if (!user) return 'Cuenta activa';
     if (user.estado === false) return 'Cuenta deshabilitada';
-    const correoVerificado = user.correo_verificado ?? user.tiene_cuenta ?? false;
-    if (correoVerificado === false) return 'Verificacion de correo pendiente';
     if (user.tiene_cuenta === false) return 'Pendiente de activacion (sin contrasena)';
     return 'Cuenta activa';
   }, []);
@@ -50,21 +50,33 @@ export const UsersProvider = ({ children }) => {
 
   // Cargar usuarios
   const loadUsers = useCallback(async (params = {}) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await usersApiService.getUsers(params);
-      setUsers((response.data.personas || []).filter(Boolean));
-    } catch (err) {
-      setError(err.message || 'Error al cargar usuarios');
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los usuarios",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+    if (loadUsersInFlightRef.current) {
+      return loadUsersInFlightRef.current;
     }
+
+    const requestPromise = (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await usersApiService.getUsers(params);
+        setUsers((response.data.personas || []).filter(Boolean));
+      } catch (err) {
+        setError(err.message || 'Error al cargar usuarios');
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los usuarios",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    loadUsersInFlightRef.current = requestPromise.finally(() => {
+      loadUsersInFlightRef.current = null;
+    });
+
+    return loadUsersInFlightRef.current;
   }, [toast]);
 
   // Agregar usuario
@@ -137,24 +149,18 @@ export const UsersProvider = ({ children }) => {
 
       console.log('ðŸ‘¤ USERS CONTEXT: Usuario creado en BD:', userFromResponse);
 
-      const hasPassword = Boolean((sanitizedUserData.password || '').trim());
-      const tieneCuenta = userFromResponse.tiene_cuenta !== undefined ? userFromResponse.tiene_cuenta : hasPassword;
-      const correoVerificado = userFromResponse.correo_verificado !== undefined ? userFromResponse.correo_verificado : hasPassword;
-
-      const invitacionEstado = userFromResponse.estado === false
-        ? 'Cuenta deshabilitada'
-        : correoVerificado === false
-          ? 'Verificacion de correo pendiente'
-          : tieneCuenta === false
-            ? 'Pendiente de activacion (sin contrasena)'
-            : 'Cuenta activa';
+      const tieneCuenta = userFromResponse.tiene_cuenta !== undefined ? userFromResponse.tiene_cuenta : false;
+      const correoVerificado = userFromResponse.correo_verificado !== undefined ? userFromResponse.correo_verificado : false;
 
       const userWithEstado = {
         id_persona: userFromResponse.id_persona,
         estado: true,
         tiene_cuenta: tieneCuenta,
         correo_verificado: correoVerificado,
-        invitacion_estado: invitacionEstado,
+        invitacion_estado: computeInvitacionEstado({
+          estado: userFromResponse.estado ?? true,
+          tiene_cuenta: tieneCuenta
+        }),
         nombre_completo: (userFromResponse.nombre_completo !== 'undefined' ? userFromResponse.nombre_completo : '') || sanitizedUserData.nombre_completo,
         apellido_completo: (userFromResponse.apellido_completo !== 'undefined' ? userFromResponse.apellido_completo : '') || sanitizedUserData.apellido_completo,
         correo: userFromResponse.correo || userFromResponse.email || sanitizedUserData.correo,
@@ -185,7 +191,7 @@ export const UsersProvider = ({ children }) => {
       });
       throw error;
     }
-  }, [addUser, getApiErrorMessage, toast]);
+  }, [addUser, computeInvitacionEstado, getApiErrorMessage, toast]);
 
   const updateUserComplete = useCallback(async (id, userData) => {
     try {
@@ -202,11 +208,8 @@ export const UsersProvider = ({ children }) => {
           ...userActualizado
         };
 
-        const correoCambio = previo?.correo && userActualizado?.correo &&
-          previo.correo.toLowerCase() !== userActualizado.correo.toLowerCase();
-
         merged.estado = userActualizado.estado ?? previo?.estado ?? merged.estado ?? true;
-        merged.correo_verificado = correoCambio ? false : (userActualizado.correo_verificado ?? previo?.correo_verificado ?? merged.correo_verificado ?? false);
+        merged.correo_verificado = userActualizado.correo_verificado ?? previo?.correo_verificado ?? merged.correo_verificado ?? false;
         merged.tiene_cuenta = userActualizado.tiene_cuenta ?? previo?.tiene_cuenta ?? merged.tiene_cuenta ?? true;
         merged.invitacion_estado = computeInvitacionEstado(merged);
 
@@ -279,36 +282,25 @@ export const UsersProvider = ({ children }) => {
 
     try {
       const hasAccount = user.tiene_cuenta === true;
-      const isVerified = user.correo_verificado === true;
 
-      if (isVerified) {
+      if (hasAccount) {
         toast({
           title: 'Sin cambios',
-          description: 'La cuenta ya tiene el correo verificado.',
+          description: 'La cuenta ya esta activa.',
           variant: 'default'
         });
         return true;
       }
 
-      if (hasAccount) {
-        const normalizedEmail = (user.correo || '').trim().toLowerCase();
-        if (!normalizedEmail) {
-          throw new Error('No se encontro un correo valido para reenviar la verificacion.');
-        }
-        await authService.resendVerificationCode(normalizedEmail);
-      } else {
-        await invitacionApiService.crearInvitacion(user.id_persona);
-      }
+      await invitacionApiService.crearInvitacion(user.id_persona);
 
       setUsers(prev => prev.map(u => {
         if (u?.id_persona === user.id_persona) {
           return {
             ...u,
-            invitacion_estado: hasAccount
-              ? 'Verificacion de correo pendiente'
-              : 'Pendiente de activacion (sin contrasena)',
+            invitacion_estado: 'Pendiente de activacion (sin contrasena)',
             correo_verificado: false,
-            tiene_cuenta: u.tiene_cuenta ?? hasAccount
+            tiene_cuenta: false
           };
         }
         return u;
@@ -360,6 +352,16 @@ export const UsersProvider = ({ children }) => {
     }
 
     const scheduleLoadUsers = () => {
+      if (loadUsersInFlightRef.current) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastRealtimeRefreshAtRef.current < REALTIME_MIN_REFRESH_GAP_MS) {
+        return;
+      }
+      lastRealtimeRefreshAtRef.current = now;
+
       if (realtimeRefreshRef.current) {
         clearTimeout(realtimeRefreshRef.current);
       }
@@ -389,6 +391,7 @@ export const UsersProvider = ({ children }) => {
         clearTimeout(realtimeRefreshRef.current);
         realtimeRefreshRef.current = null;
       }
+      loadUsersInFlightRef.current = null;
     };
   }, [hasRole, isAuthenticated, loadUsers]);
 

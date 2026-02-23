@@ -1,5 +1,0 @@
-- [x] Filtrar solo usuarios con rol "Usuario" (no administradores)
-- [x] Agregar selector de habilitar/deshabilitar similar a citas
-- [x] Mejorar modales de crear/editar con validación de contraseñas
-- [x] Hacer completamente responsive
-- [x] Agregar filtros adicionales si es necesario

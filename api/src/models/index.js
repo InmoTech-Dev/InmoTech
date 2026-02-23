@@ -27,11 +27,13 @@ const EstadosVenta = require('./EstadosVenta');
 const Invitacion = require('./Invitacion');
 const Buyer = require('./Buyer');
 const Sale = require('./Sale');
+const VentaAdjunto = require('./VentaAdjunto');
 const Renant = require('./Renant');
 const Arriendo = require('./Arriendo');
 const Lease = require('./Lease');
 const Payment = require('./Payment');
 const Receipt = require('./Receipt');
+const SeguimientoArrendamiento = require('./SeguimientoArrendamiento');
 
 // Asociaciones de Cita
 Cita.belongsTo(Persona, { foreignKey: 'id_persona', as: 'cliente' });
@@ -130,6 +132,8 @@ SeguimientoVenta.belongsTo(Sale, { foreignKey: 'id_venta', as: 'venta' });
 SeguimientoVenta.belongsTo(Persona, { foreignKey: 'id_persona', as: 'persona' });
 SeguimientoVenta.belongsTo(EstadosVenta, { foreignKey: 'id_estado_venta', as: 'estado' });
 Inmueble.hasMany(Sale, { foreignKey: 'id_inmueble', as: 'ventas' });
+Sale.hasMany(VentaAdjunto, { foreignKey: 'id_venta', as: 'adjuntos' });
+VentaAdjunto.belongsTo(Sale, { foreignKey: 'id_venta', as: 'venta' });
 
 // Arrendamientos
 Arriendo.belongsTo(Renant, { foreignKey: 'id_arrendatario', as: 'arrendatario' });
@@ -143,7 +147,15 @@ Lease.belongsTo(Inmueble, {
   as: 'inmueble'
 });
 
-// Codeudor no existe como columna en la tabla actual, omitimos asociación
+// Codeudor (Persona)
+Lease.belongsTo(Persona, {
+  foreignKey: 'id_codeudor',
+  as: 'codeudor'
+});
+Persona.hasMany(Lease, {
+  foreignKey: 'id_codeudor',
+  as: 'leasesComoCodeudor'
+});
 
 // Nota: en el modelo Lease el atributo se llama id_cliente pero la columna es id_arrendatario
 // por eso usamos el nombre del atributo como foreignKey para que Sequelize lo resuelva al campo.
@@ -160,6 +172,24 @@ Inmueble.hasMany(Lease, {
 Renant.hasMany(Lease, {
   foreignKey: 'id_cliente',
   as: 'arrendamientosLegacy'
+});
+
+// Seguimiento de arrendamientos
+Lease.hasMany(SeguimientoArrendamiento, {
+  foreignKey: 'id_arrendamiento',
+  as: 'seguimientos'
+});
+SeguimientoArrendamiento.belongsTo(Lease, {
+  foreignKey: 'id_arrendamiento',
+  as: 'arrendamiento'
+});
+SeguimientoArrendamiento.belongsTo(Persona, {
+  foreignKey: 'id_persona',
+  as: 'autor'
+});
+Persona.hasMany(SeguimientoArrendamiento, {
+  foreignKey: 'id_persona',
+  as: 'seguimientos_arrendamiento'
 });
 
 // Sin relación de codeudor
@@ -189,11 +219,13 @@ module.exports = {
   EstadosVenta,
   Buyer,
   Sale,
+  VentaAdjunto,
   Renant,
   Arriendo,
   Lease,
   Payment,
   Receipt,
+  SeguimientoArrendamiento,
   Invitacion,
   Comodidad,
   InmuebleComodidad,

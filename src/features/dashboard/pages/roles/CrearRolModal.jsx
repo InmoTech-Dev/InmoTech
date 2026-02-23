@@ -118,7 +118,7 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef(null);
 
-  
+
   // Scroll to top when modal opens
   useEffect(() => {
     if (isOpen && formRef.current) {
@@ -130,17 +130,17 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!nombre.trim()) {
       newErrors.nombre = "El nombre del rol es obligatorio";
     } else if (nombre.trim().length < 3) {
       newErrors.nombre = "El nombre debe tener al menos 3 caracteres";
     }
 
-    const hasAnyPermission = modules.some(mod => 
+    const hasAnyPermission = modules.some(mod =>
       mod.enabled && mod.permisosSeleccionados.length > 0
     );
-    
+
     if (!hasAnyPermission) {
       newErrors.permisos = "Debe seleccionar al menos un permiso";
     }
@@ -181,17 +181,17 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
     );
     setErrors(prev => ({ ...prev, permisos: undefined }));
   };
-  
+
   const togglePermission = (index, permiso) => {
     setModules((prev) =>
       prev.map((mod, i) =>
         i === index
           ? (() => {
-              const nextSelection = getNextPermissionsSelection(mod.permisosSeleccionados, permiso);
-              const nextPermissions = mod.permisos.reduce((acc, modulePermission) => {
-                acc[modulePermission] = nextSelection.includes(modulePermission);
-                return acc;
-              }, {});
+            const nextSelection = getNextPermissionsSelection(mod.permisosSeleccionados, permiso);
+            const nextPermissions = mod.permisos.reduce((acc, modulePermission) => {
+              acc[modulePermission] = nextSelection.includes(modulePermission);
+              return acc;
+            }, {});
 
               return {
                 ...mod,
@@ -207,7 +207,7 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (isSubmitting) return;
     if (!validateForm()) {
       return;
@@ -251,10 +251,10 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
         }))
       );
       setErrors({});
-      
+
       // ✅ No cerrar aquí - dejar que Roles.jsx lo maneje después de éxito
       // onClose();
-      
+
     } catch (error) {
       console.error('Error al crear rol:', error);
       // Mostrar error en el modal
@@ -265,7 +265,7 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
   };
 
 
-  
+
   const handleClose = () => {
     if (isSubmitting) return;
     setErrors({});
@@ -286,7 +286,7 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
   };
 
   const activeModulesCount = modules.filter(mod => mod.enabled).length;
-  const totalPermissionsCount = modules.reduce((acc, mod) => 
+  const totalPermissionsCount = modules.reduce((acc, mod) =>
     acc + (mod.enabled ? mod.permisosSeleccionados.length : 0), 0
   );
 
@@ -356,9 +356,8 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                     setErrors(prev => ({ ...prev, nombre: undefined }));
                   }}
                   placeholder="Ej: Agente Comercial Senior"
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 transition-colors ${
-                    errors.nombre ? 'border-red-500' : 'border-slate-300'
-                  }`}
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 transition-colors ${errors.nombre ? 'border-red-500' : 'border-slate-300'
+                    }`}
                 />
                 {errors.nombre && (
                   <p className="text-red-500 text-sm mt-1">{errors.nombre}</p>
@@ -398,49 +397,44 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                 <h3 className="text-lg font-semibold text-slate-800 mb-4">
                   Configuración de Permisos por Módulo
                 </h3>
-                
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                   {modules.map((module, index) => {
                     const IconComponent = module.icon;
-                    
+
                     return (
                       <motion.div
                         key={module.name}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.03 }}
-                        className={`border-2 rounded-xl transition-all duration-200 hover:shadow-md ${
-                          module.enabled 
-                            ? 'bg-white border-slate-300 shadow-sm' 
+                        className={`border-2 rounded-xl transition-all duration-200 hover:shadow-md ${module.enabled
+                            ? 'bg-white border-slate-300 shadow-sm'
                             : 'bg-gray-50 border-gray-200'
-                        }`}
+                          }`}
                       >
                         {/* Header del módulo */}
                         <div className="p-4 border-b border-gray-100">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-3 flex-1">
-                              <div className={`p-2.5 rounded-lg transition-colors ${
-                                module.enabled 
-                                  ? 'bg-slate-100 border border-slate-200' 
+                              <div className={`p-2.5 rounded-lg transition-colors ${module.enabled
+                                  ? 'bg-slate-100 border border-slate-200'
                                   : 'bg-gray-100 border border-gray-200'
-                              }`}>
-                                <IconComponent 
-                                  className={`w-5 h-5 ${
-                                    module.enabled 
-                                      ? module.iconColor || 'text-slate-600' 
+                                }`}>
+                                <IconComponent
+                                  className={`w-5 h-5 ${module.enabled
+                                      ? module.iconColor || 'text-slate-600'
                                       : 'text-gray-400'
-                                  }`}
+                                    }`}
                                 />
                               </div>
                               <div className="flex-1">
-                                <h4 className={`font-semibold text-sm leading-tight ${
-                                  module.enabled ? 'text-slate-800' : 'text-gray-500'
-                                }`}>
+                                <h4 className={`font-semibold text-sm leading-tight ${module.enabled ? 'text-slate-800' : 'text-gray-500'
+                                  }`}>
                                   {module.name}
                                 </h4>
-                                <p className={`text-xs mt-1.5 leading-relaxed ${
-                                  module.enabled ? 'text-slate-600' : 'text-gray-400'
-                                }`}>
+                                <p className={`text-xs mt-1.5 leading-relaxed ${module.enabled ? 'text-slate-600' : 'text-gray-400'
+                                  }`}>
                                   {module.description}
                                 </p>
                               </div>
@@ -465,15 +459,14 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                                 const config = permissionConfig[permiso];
                                 const IconComponent = config.icon;
                                 const isChecked = module.permissions[permiso];
-                                
+
                                 return (
                                   <label
                                     key={permiso}
-                                    className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-                                      isChecked
+                                    className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all duration-200 ${isChecked
                                         ? `${config.bg} ${config.color.replace('text-', 'border-')} border-opacity-30`
                                         : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                                    }`}
+                                      }`}
                                   >
                                     <input
                                       type="checkbox"
@@ -482,15 +475,13 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                                       className="sr-only"
                                     />
                                     <div className={`p-1 rounded ${isChecked ? 'bg-white shadow-sm' : 'bg-gray-100'}`}>
-                                      <IconComponent 
-                                        className={`w-3.5 h-3.5 ${
-                                          isChecked ? config.color : 'text-gray-400'
-                                        }`}
+                                      <IconComponent
+                                        className={`w-3.5 h-3.5 ${isChecked ? config.color : 'text-gray-400'
+                                          }`}
                                       />
                                     </div>
-                                    <span className={`text-xs font-medium ${
-                                      isChecked ? config.color : 'text-gray-500'
-                                    }`}>
+                                    <span className={`text-xs font-medium ${isChecked ? config.color : 'text-gray-500'
+                                      }`}>
                                       {permiso}
                                     </span>
                                   </label>
@@ -523,11 +514,10 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
               whileTap={{ scale: 0.98 }}
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-                isSubmitting
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isSubmitting
                   ? 'bg-slate-400 cursor-not-allowed'
                   : 'bg-slate-600 hover:bg-slate-700'
-              } text-white`}
+                } text-white`}
             >
               <Save className="w-4 h-4" />
               {isSubmitting ? 'Creando...' : 'Crear Rol'}

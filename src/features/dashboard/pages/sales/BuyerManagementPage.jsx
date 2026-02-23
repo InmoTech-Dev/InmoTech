@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { FaUserPlus, FaEye, FaEdit, FaSearch, FaTrash, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FaUserPlus, FaSearch, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone, X } from 'lucide-react';
 import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
@@ -32,6 +32,8 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
         montoFinanciado: buyer.montoFinanciado || buyer.compra?.monto_financiado || "",
         observaciones: buyer.observaciones || buyer.compra?.observaciones || "",
         inmueble: buyer.inmueble || buyer.compra?.inmueble || null,
+        ultimaVenta: buyer.ultima_venta || buyer.compra || null,
+        inmueblesComprados: (buyer.inmueble || buyer.compra?.inmueble) ? [buyer.inmueble || buyer.compra?.inmueble] : [],
         formData: buyer.formData || formData,
         compra: buyer.compra || null,
         raw: buyer
@@ -101,7 +103,28 @@ export function BuyersManagementPage() {
     }, [searchTerm, fetchBuyers]);
 
     // --- FILTRO DE BÚSQUEDA ---
-    const filteredBuyers = compradores;
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const filteredBuyers = normalizedSearch
+        ? compradores.filter((buyer) => {
+              const fullName = [
+                  buyer.primerNombre,
+                  buyer.segundoNombre,
+                  buyer.primerApellido,
+                  buyer.segundoApellido,
+              ]
+                  .filter(Boolean)
+                  .join(" ")
+                  .toLowerCase();
+
+              return (
+                  fullName.includes(normalizedSearch) ||
+                  (buyer.documento || "").toLowerCase().includes(normalizedSearch) ||
+                  (buyer.tipoDocumento || "").toLowerCase().includes(normalizedSearch) ||
+                  (buyer.correo || "").toLowerCase().includes(normalizedSearch) ||
+                  (buyer.telefono || "").toLowerCase().includes(normalizedSearch)
+              );
+          })
+        : compradores;
 
     // --- HANDLERS GENERALES ---
     const handleCloseForm = () => {
@@ -248,61 +271,109 @@ export function BuyersManagementPage() {
         );
     };
 
-    // --- FUNCIÓN INTERNA PARA RENDERIZAR EL MODAL DE ELIMINACIÓN ---
     const renderDeleteModal = () => {
         if (!buyerToDelete) return null;
 
         const modalContent = (
-            <div 
-                className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm transition-opacity duration-300"
-                onClick={handleCancelDelete} 
+            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            {/* Backdrop estilo formularios */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={handleCancelDelete}
+            />
+
+            {/* Modal card estilo formularios */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.25 }}
+                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
             >
-                <div
-                    className="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-100 opacity-100"
-                    onClick={(e) => e.stopPropagation()} 
-                >
-                    <h3 className="text-2xl font-bold text-red-700 mb-4 flex items-center gap-2">
-                        <Trash2 className="w-5 h-5" /> Confirmar Eliminación
-                    </h3>
-                    <p className="mb-6 text-gray-700">
-                        ¿Estás seguro de que deseas eliminar a
-                        <span className="font-extrabold text-purple-700"> {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}</span>
-                        ? Esta acción es irreversible.
-                    </p>
-                    
-                    <div className="flex justify-end gap-3 pt-3 border-t">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleCancelDelete}
-                            className="bg-gray-300 text-gray-800 px-5 py-2 rounded-xl font-semibold hover:bg-gray-400 transition duration-150"
-                        >
-                            Cancelar
-                        </motion.button>
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleConfirmDelete}
-                            disabled={isDeleting}
-                            className={`bg-red-600 text-white px-5 py-2 rounded-xl font-semibold transition duration-150 shadow-md flex items-center gap-2 ${
-                                isDeleting ? "opacity-70 cursor-not-allowed" : "hover:bg-red-700"
-                            }`}
-                        >
-                            {!isDeleting && <Trash2 className="w-4 h-4" />}
-                            {isDeleting ? "Eliminando..." : "Eliminar"}
-                        </motion.button>
+                {/* Header */}
+                <div className="flex items-start justify-between p-6 border-b border-slate-200">
+                <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
+                    <Trash2 className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                    <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
+                    <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
                     </div>
                 </div>
+
+                <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleCancelDelete}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    aria-label="Cerrar"
+                >
+                    <X className="w-5 h-5 text-slate-500" />
+                </motion.button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6">
+                <p className="text-slate-700">
+                    ¿Estás seguro de que deseas eliminar a{" "}
+                    <span className="font-semibold text-slate-900">
+                    {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}
+                    </span>
+                    ? Esta acción no se puede deshacer.
+                </p>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCancelDelete}
+                    className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                    Cancelar
+                </motion.button>
+
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleConfirmDelete}
+                    disabled={isDeleting}
+                    className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
+                    isDeleting
+                        ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700 text-white"
+                    }`}
+                >
+                    {isDeleting ? (
+                    <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Eliminando...
+                    </>
+                    ) : (
+                    <>
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar
+                    </>
+                    )}
+                </motion.button>
+                </div>
+            </motion.div>
             </div>
         );
 
         return ReactDOM.createPortal(
             modalContent,
-            document.getElementById('modal-root') || document.body 
+            document.getElementById("modal-root") || document.body
         );
-    };
+        };
 
-    // Calcular estadísticas
+// Calcular estadísticas
     const stats = {
         total: filteredBuyers.length,
         activos: filteredBuyers.filter(b => b.estado === 'activo').length,
@@ -387,20 +458,17 @@ export function BuyersManagementPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.3 }}
                 >
-                {/* TABLA CON ESTILO UNIFICADO */}
+                {/* TABLA ESTILO ARRENDATARIOS */}
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Tipo doc</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">#Documento</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Primer nombre</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Segundo nombre</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Primer apellido</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Segundo apellido</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Correo</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Teléfono</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Información Personal</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Documento</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Inmueble Asignado</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
                                     <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
@@ -408,7 +476,7 @@ export function BuyersManagementPage() {
                                     {isLoading ? (
                                         <tr>
                                             <td
-                                                colSpan="9"
+                                                colSpan="6"
                                             className="px-6 py-8 text-center text-slate-500"
                                             >
                                                 <div className="flex items-center justify-center gap-2">
@@ -418,46 +486,62 @@ export function BuyersManagementPage() {
                                             </td>
                                         </tr>
                                     ) : filteredBuyers.length > 0 ? (
-                                        filteredBuyers.map((c) => (
+                                        filteredBuyers.map((c) => {
+                                            const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
+                                            const estado = c.estado || 'Activo';
+                                            const estadoClass =
+                                              estado.toLowerCase() === 'activo'
+                                                ? 'bg-green-100 text-green-700 border-green-200'
+                                                : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                                            return (
                                             <tr
                                                 key={c.id}
                                                 className="hover:bg-slate-50 transition-colors"
                                             >
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.tipoDocumento}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700 font-medium">{c.documento}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.primerNombre}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-500">
-                                                    {c.segundoNombre || "-"}
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="text-sm font-semibold text-slate-800">{nombreCompleto || 'Sin nombre'}</div>
+                                                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                                                        <Mail className="w-3 h-3" />
+                                                        {c.correo || 'Sin correo'}
+                                                    </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.primerApellido}</td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-500">
-                                                    {c.segundoApellido || "-"}
+                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                    <div className="text-xs text-slate-500">Tipo</div>
+                                                    <div className="font-medium">{c.tipoDocumento || 'N/D'}</div>
+                                                    <div className="text-xs text-slate-500 mt-1">Número</div>
+                                                    <div className="text-sm font-semibold text-slate-800">{c.documento || 'N/D'}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-sm text-slate-600">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <Home className="w-4 h-4 text-slate-400" />
+                                                        <span className="text-xs text-slate-500">
+                                                            {c.inmueble
+                                                                ? (c.inmueble.titulo ||
+                                                                    c.inmueble.registro_inmobiliario ||
+                                                                    c.inmueble.direccion ||
+                                                                    'Inmueble asignado')
+                                                                : 'Sin inmuebles asignados'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Phone className="w-4 h-4 text-slate-400" />
+                                                        <span>{c.telefono || 'Sin teléfono'}</span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <a
-                                                        href={`mailto:${c.correo}`}
-                                                        className="text-blue-600 hover:text-blue-800 transition-colors font-medium"
-                                                    >
-                                                        {c.correo}
-                                                    </a>
+                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${estadoClass}`}>
+                                                        {estado}
+                                                    </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">{c.telefono}</td>
                                                 <td className="px-6 py-4 text-center">
                                                     <div className="flex gap-2 justify-center">
                                                         <motion.button
                                                             whileHover={{ scale: 1.1 }}
                                                             whileTap={{ scale: 0.9 }}
-                                                            aria-label="Editar comprador"
-                                                            className="text-green-600 hover:text-green-800 transition-colors p-1 rounded-lg hover:bg-green-50"
-                                                            onClick={() => handleEditClick(c)}
-                                                        >
-                                                            <Edit className="w-4 h-4" />
-                                                        </motion.button>
-                                                        <motion.button
-                                                            whileHover={{ scale: 1.1 }}
-                                                            whileTap={{ scale: 0.9 }}
                                                             aria-label="Ver comprador"
-                                                            className="text-sky-600 hover:text-sky-800 transition-colors p-1 rounded-lg hover:bg-sky-50"
+                                                            className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
                                                             onClick={() => handleViewClick(c)}
                                                         >
                                                             <Eye className="w-4 h-4" />
@@ -465,8 +549,17 @@ export function BuyersManagementPage() {
                                                         <motion.button
                                                             whileHover={{ scale: 1.1 }}
                                                             whileTap={{ scale: 0.9 }}
+                                                            aria-label="Editar comprador"
+                                                            className="p-2 text-green-600 hover:text-green-800 transition-colors"
+                                                            onClick={() => handleEditClick(c)}
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </motion.button>
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.1 }}
+                                                            whileTap={{ scale: 0.9 }}
                                                             aria-label="Eliminar comprador"
-                                                            className="text-red-600 hover:text-red-800 transition-colors p-1 rounded-lg hover:bg-red-50"
+                                                            className="p-2 text-red-600 hover:text-red-800 transition-colors"
                                                             onClick={() => handleDeleteRequest(c)}
                                                         >
                                                             <Trash2 className="w-4 h-4" />
@@ -474,11 +567,11 @@ export function BuyersManagementPage() {
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))
+                                        )})
                                     ) : (
                                         <tr>
                                             <td
-                                                colSpan="9"
+                                                colSpan="6"
                                                 className="px-6 py-8 text-center text-slate-500"
                                             >
                                                 <div className="flex flex-col items-center gap-2">

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, UserPlus, LogOut, LayoutDashboard, ChevronDown, Calendar, Building2 } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, ChevronDown, Calendar } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/use-toast';
 
@@ -68,11 +68,6 @@ const ActionButtons = ({ className = '', onButtonClick }) => {
 
     return hasAdministrativeAccess;
   };
-
-  const roleNames = (user?.roles || []).map((role) =>
-    typeof role === 'object' ? role.nombre_rol : role
-  );
-  const isOwner = roleNames.includes('Propietario');
 
   if (isAuthenticated && user) {
     const displayName = user.nombre_completo || user.email || 'Usuario';
@@ -163,7 +158,7 @@ const ActionButtons = ({ className = '', onButtonClick }) => {
                 )}
 
                 {/* Mis Citas Option */}
-                {!shouldShowDashboard && !isOwner && (
+                {!shouldShowDashboard && (
                   <Link
                     to="/mis-citas"
                     onClick={() => setIsDropdownOpen(false)}
@@ -172,28 +167,6 @@ const ActionButtons = ({ className = '', onButtonClick }) => {
                     <Calendar className="h-4 w-4" />
                     <span>Mis Citas</span>
                   </Link>
-                )}
-
-                {/* Opciones para Propietario */}
-                {isOwner && (
-                  <>
-                    <Link
-                      to="/mis-citas"
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors duration-200"
-                    >
-                      <Calendar className="h-4 w-4" />
-                      <span>Mis Citas</span>
-                    </Link>
-                    <Link
-                      to="/mis-inmuebles"
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors duration-200"
-                    >
-                      <Building2 className="h-4 w-4" />
-                      <span>Mis Inmuebles</span>
-                    </Link>
-                  </>
                 )}
 
                 {/* Logout Option */}
@@ -212,12 +185,6 @@ const ActionButtons = ({ className = '', onButtonClick }) => {
   }
 
   const buttons = [
-    {
-      to: '/registro',
-      icon: UserPlus,
-      label: 'Crear cuenta',
-      primary: false
-    },
     {
       to: '/login',
       icon: User,

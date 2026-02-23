@@ -20,7 +20,7 @@ router.post(
   '/',
   // Permitir cita publica; si hay cookie optionalAuth setea req.user para trazabilidad
   optionalAuth,
-  function(req, res, next) {
+  function (req, res, next) {
     // ✅ Permitir que usuarios autenticados creen citas sin permisos especiales
     // (hace la funcionalidad de agendar citas accesible para usuarios normales)
     req.skipPermissions = true;
@@ -47,13 +47,24 @@ router.get(
   citaController.buscarPersonaPorDocumento
 );
 
+// GET /api/v1/citas/horarios-disponibles-publico - Obtener horarios disponibles para visitantes (PÚBLICO)
+router.get(
+  '/horarios-disponibles-publico',
+  validateQuery(Joi.object({
+    fecha_cita: Joi.string().isoDate().required(),
+    id_servicio: Joi.number().integer().required(),
+    id_inmueble: Joi.number().integer().optional()
+  })),
+  citaController.obtenerHorariosDisponiblesPublico
+);
+
 // GET /api/v1/citas/mis-citas - Obtener citas del usuario autenticado como cliente
 // ✅ IMPORTANTE: Esta ruta debe definirse ANTES de rutas con parámetros como /:id
 // Nota: Usuarios normales pueden ver sus propias citas sin permisos especiales
 router.get(
   '/mis-citas',
   authenticateToken,
-  function(req, res, next) {
+  function (req, res, next) {
     // Marcar que esta ruta no requiere permisos especiales
     // (permite que usuarios normales accedan a sus propias citas)
     req.skipPermissions = true;
@@ -66,7 +77,7 @@ router.get(
 router.get(
   '/mis-citas/horarios-disponibles',
   authenticateToken,
-  function(req, res, next) {
+  function (req, res, next) {
     // Marcar que esta ruta no requiere permisos especiales
     req.skipPermissions = true;
     next();
@@ -79,7 +90,7 @@ router.get(
 router.put(
   '/user/:id/reagendar',
   authenticateToken,
-  function(req, res, next) {
+  function (req, res, next) {
     // Marcar que esta ruta no requiere permisos especiales
     req.skipPermissions = true;
     next();
@@ -93,7 +104,7 @@ router.put(
 router.post(
   '/mis-citas/:id/cancelar',
   authenticateToken,
-  function(req, res, next) {
+  function (req, res, next) {
     // Marcar que esta ruta no requiere permisos especiales
     req.skipPermissions = true;
     next();
@@ -109,7 +120,7 @@ router.get(
   '/agentes-disponibles',
   authenticateToken,
   authorizePermissions('citas', 'ver'),
-  function(req, res, next) {
+  function (req, res, next) {
     // Saltar sanitizeInput si está aplicándose globalmente
     req.skipSanitize = true;
     next();

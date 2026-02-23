@@ -152,8 +152,8 @@ const ProfilePage = () => {
       }
 
       const payload = {
-        nombre: (formData.nombre_completo || "").trim(),
-        apellidos: (formData.apellidos || "").trim(),
+        nombre_completo: (formData.nombre_completo || "").trim(),
+        apellido_completo: (formData.apellidos || "").trim(),
         telefono: formData.telefono || "",
         foto_perfil_url: uploadResult?.url || formData.foto_perfil_url || null,
         foto_public_id: uploadResult?.public_id || formData.foto_public_id || null

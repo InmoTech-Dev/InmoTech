@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const sseService = require('./sse.service');
 const realtimeAudienceService = require('./realtimeAudience.service');
 const invitacionService = require('./invitacion.service');
+const { PROTECTED_ROLES } = require('../constants/roles.constants');
 
 const isTruthyEnv = (value, defaultValue = false) => {
   if (value === undefined || value === null || value === '') {
@@ -15,6 +16,14 @@ const isTruthyEnv = (value, defaultValue = false) => {
 };
 
 const ADMIN_INVITE_EMAIL_ASYNC = isTruthyEnv(process.env.ADMIN_INVITE_EMAIL_ASYNC, true);
+
+const buildHttpError = (message, status) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+const isProtectedRole = (roleName = '') => PROTECTED_ROLES.includes(roleName);
 
 class AdministrativoService {
   /**
@@ -56,9 +65,9 @@ class AdministrativoService {
           }),
           normalizedEmail
             ? Persona.findOne({
-                where: { correo: normalizedEmail },
-                transaction: t
-              })
+              where: { correo: normalizedEmail },
+              transaction: t
+            })
             : Promise.resolve(null),
           Administrativo.findOne({
             attributes: ['id_administrativo'],
@@ -78,18 +87,18 @@ class AdministrativoService {
           }),
           normalizedEmail
             ? Administrativo.findOne({
-                attributes: ['id_administrativo'],
-                include: [
-                  {
-                    model: Persona,
-                    as: 'persona',
-                    attributes: ['id_persona'],
-                    where: { correo: normalizedEmail },
-                    required: true
-                  }
-                ],
-                transaction: t
-              })
+              attributes: ['id_administrativo'],
+              include: [
+                {
+                  model: Persona,
+                  as: 'persona',
+                  attributes: ['id_persona'],
+                  where: { correo: normalizedEmail },
+                  required: true
+                }
+              ],
+              transaction: t
+            })
             : Promise.resolve(null)
         ]);
 
@@ -156,6 +165,10 @@ class AdministrativoService {
 
           if (!rolSeleccionado) {
             throw new Error('El rol seleccionado no es válido o no es administrativo');
+          }
+
+          if (isProtectedRole(rolSeleccionado.nombre_rol)) {
+            throw buildHttpError('Rol protegido: no asignable por este flujo', 403);
           }
 
           rolAsignado = rolSeleccionado;
@@ -497,7 +510,10 @@ class AdministrativoService {
                 {
                   model: Rol,
                   as: 'roles',
-                  through: { attributes: ['estado', 'fecha_asignacion'] },
+                  through: {
+                    attributes: ['estado', 'fecha_asignacion'],
+                    where: { estado: true }
+                  },
                   where: { estado: true },
                   required: false
                 }
@@ -533,22 +549,47 @@ class AdministrativoService {
         }
 
         // Actualizar rol si se proporciona
-        if (rolId) {
+        if (rolId !== undefined && rolId !== null) {
+          const rolIdNormalizado = Number.parseInt(rolId, 10);
+          if (!Number.isInteger(rolIdNormalizado) || rolIdNormalizado <= 0) {
+            throw buildHttpError('El rol especificado no es vÃ¡lido', 400);
+          }
+
+          const rolDestino = await Rol.findOne({
+            where: {
+              id_rol: rolIdNormalizado,
+              es_rol_administrativo: true,
+              estado: true,
+            },
+            transaction: t,
+          });
+
+          if (!rolDestino) {
+            throw buildHttpError('El rol seleccionado no es vÃ¡lido o no es administrativo', 400);
+          }
+
+          if (isProtectedRole(rolDestino.nombre_rol)) {
+            throw buildHttpError('Rol protegido: no asignable por este flujo', 403);
+          }
+
           const personaId = administrativo.persona.id_persona;
           const rolActual = await PersonasRol.findOne({
             where: { id_persona: personaId },
-            transaction: t
+            transaction: t,
           });
 
           if (rolActual) {
-            if (rolActual.id_rol !== rolId) {
-              await rolActual.update({ id_rol: rolId }, { transaction: t });
+            if (rolActual.id_rol !== rolIdNormalizado) {
+              await rolActual.update({ id_rol: rolIdNormalizado }, { transaction: t });
             }
           } else {
-            await PersonasRol.create({
-              id_persona: personaId,
-              id_rol: rolId
-            }, { transaction: t });
+            await PersonasRol.create(
+              {
+                id_persona: personaId,
+                id_rol: rolIdNormalizado,
+              },
+              { transaction: t }
+            );
           }
         }
 
@@ -587,7 +628,10 @@ class AdministrativoService {
                 {
                   model: Rol,
                   as: 'roles',
-                  through: { attributes: ['estado', 'fecha_asignacion'] },
+                  through: {
+                    attributes: ['estado', 'fecha_asignacion'],
+                    where: { estado: true }
+                  },
                   where: { estado: true },
                   required: false
                 }
@@ -670,7 +714,10 @@ class AdministrativoService {
                 {
                   model: Rol,
                   as: 'roles',
-                  through: { attributes: ['estado', 'fecha_asignacion'] },
+                  through: {
+                    attributes: ['estado', 'fecha_asignacion'],
+                    where: { estado: true }
+                  },
                   where: { estado: true },
                   required: false
                 }
@@ -743,7 +790,10 @@ class AdministrativoService {
               {
                 model: Rol,
                 as: 'roles',
-                through: { attributes: ['estado', 'fecha_asignacion'] },
+                through: {
+                  attributes: ['estado', 'fecha_asignacion'],
+                  where: { estado: true }
+                },
                 where: { estado: true },
                 required: false
               }

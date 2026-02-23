@@ -16,10 +16,6 @@ class InvitacionApiService {
   async crearInvitacion(id_persona) {
     return apiClient.post('/invitaciones', { id_persona });
   }
-
-  async verificarCorreo(token) {
-    return apiClient.get('/auth/verify-email', { params: { token } });
-  }
 }
 
 export default new InvitacionApiService();

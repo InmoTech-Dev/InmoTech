@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 
@@ -30,7 +31,6 @@ const DOCUMENT_OPTIONS = [
 const PAYMENT_OPTIONS = [
     { value: "efectivo", label: "Efectivo" },
     { value: "transferencia", label: "Transferencia" },
-    { value: "credito", label: "Crédito" },
     { value: "mixto", label: "Mixto" },
 ];
 
@@ -42,12 +42,12 @@ const BUYER_AUTOFILL_FIELDS = [
 
 // Estado inicial
 const initial = {
-    vendedorTipoDocumento: "CC",
+    vendedorTipoDocumento: "",
     vendedorDocumento: "",
     vendedorNombreCompleto: "",
     vendedorCorreo: "",
     vendedorTelefono: "",
-    compradorTipoDocumento: "CC",
+    compradorTipoDocumento: "",
     compradorDocumento: "",
     compradorPersonaId: "",
     compradorNombreCompleto: "",
@@ -66,6 +66,9 @@ const initial = {
     inmuebleEstado: "Disponible",
     fechaVenta: new Date().toISOString().slice(0, 10),
     medioPago: "efectivo",
+    medioPagoDescripcion: "",
+    medioPagoEfectivo: "",
+    medioPagoTransferencia: "",
 };
 
 export default function SalesForm({ onClose, onSubmit }) {
@@ -83,7 +86,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     const selectedBuyerRef = useRef(null);
     const manuallyEditedBuyerFieldsRef = useRef(new Set());
     const buyerDocumentSnapshotRef = useRef({
-        tipo: "CC",
+        tipo: "",
         numero: "",
     });
     const [buyerLookupState, setBuyerLookupState] = useState({
@@ -100,7 +103,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     // Campos estrictamente numéricos (solo dígitos)
     const strictNumericFields = [];
 
-    const currencyFields = ["inmueblePrecio"];
+    const currencyFields = ["inmueblePrecio", "medioPagoEfectivo", "medioPagoTransferencia"];
 
     // Campos para validaciones de formato
     const nameFields = [
@@ -126,7 +129,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             "inmuebleBarrio", "inmuebleDireccion", "inmuebleGaraje"
         ],
         4: [
-            "fechaVenta", "medioPago", "inmueblePrecio"
+            "fechaVenta", "medioPago", "medioPagoEfectivo", "medioPagoTransferencia", "inmueblePrecio"
         ]
     };
 
@@ -172,6 +175,9 @@ export default function SalesForm({ onClose, onSubmit }) {
             // Venta
             fechaVenta: "Fecha de Venta",
             medioPago: "Medio de Pago",
+            medioPagoDescripcion: "Descripción del pago mixto",
+            medioPagoEfectivo: "Pago en efectivo",
+            medioPagoTransferencia: "Pago por transferencia",
         };
         return labels[name] ?? name;
     };
@@ -309,6 +315,37 @@ export default function SalesForm({ onClose, onSubmit }) {
                 const newErrors = { ...prev };
                 delete newErrors[name];
                 return newErrors;
+            });
+        }
+
+        // Si cambia el medio de pago a algo distinto de mixto, limpiar campos mixtos
+        if (name === "medioPago" && cleanValue.toLowerCase() !== "mixto") {
+            valuesRef.current.medioPagoDescripcion = "";
+            displayValuesRef.current.medioPagoDescripcion = "";
+            valuesRef.current.medioPagoEfectivo = "";
+            valuesRef.current.medioPagoTransferencia = "";
+            displayValuesRef.current.medioPagoEfectivo = "";
+            displayValuesRef.current.medioPagoTransferencia = "";
+
+            const descEl = elRefs.current.medioPagoDescripcion;
+            const efEl = elRefs.current.medioPagoEfectivo;
+            const trEl = elRefs.current.medioPagoTransferencia;
+            if (descEl) {
+                try { descEl.value = ""; } catch (_err) { /* ignore */ }
+            }
+            if (efEl) {
+                try { efEl.value = ""; } catch (_err) { /* ignore */ }
+            }
+            if (trEl) {
+                try { trEl.value = ""; } catch (_err) { /* ignore */ }
+            }
+
+            setErrors(prev => {
+                const next = { ...prev };
+                delete next.medioPagoDescripcion;
+                delete next.medioPagoEfectivo;
+                delete next.medioPagoTransferencia;
+                return next;
             });
         }
     };
@@ -793,11 +830,19 @@ export default function SalesForm({ onClose, onSubmit }) {
         let hasError = false;
         let firstErrorField = null;
         
+        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
+
         for (const fieldName of fieldsToCheck) {
             const value = valuesRef.current[fieldName] || "";
             let error = null;
 
-            const isRequired = requiredFields.includes(fieldName);
+            const isPaymentDescription = fieldName === "medioPagoDescripcion";
+            const isCashSplit = fieldName === "medioPagoEfectivo";
+            const isTransferSplit = fieldName === "medioPagoTransferencia";
+            const isMixto = medioPagoActual === "mixto";
+            const isRequired =
+                requiredFields.includes(fieldName) ||
+                (isMixto && (isCashSplit || isTransferSplit));
             
             // Validación de obligatoriedad
             if (isRequired && !value.toString().trim() && fieldName !== 'inmuebleGaraje') { 
@@ -805,7 +850,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             } 
             
             // Validación de números estrictos
-            if (isRequired && strictNumericFields.includes(fieldName)) {
+            if (isRequired && (strictNumericFields.includes(fieldName) || isCashSplit || isTransferSplit)) {
                  if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                      error = "Este campo es obligatorio y debe ser mayor a 0";
                  }
@@ -837,9 +882,14 @@ export default function SalesForm({ onClose, onSubmit }) {
                 } 
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
                     error = `Debe ser un correo electrónico válido.`;
-                } 
+                }
                 else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) { 
                     error = `Solo se permiten números enteros.`;
+                }
+                else if (isMixto && (isCashSplit || isTransferSplit)) {
+                    if (!isValidNumeric(value)) {
+                        error = "Solo se permiten números enteros.";
+                    }
                 }
             }
             
@@ -880,6 +930,11 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
+    const asNumber = (val) => {
+        const clean = (val ?? "").toString().replace(/[^0-9]/g, "");
+        return clean ? Number(clean) : 0;
+    };
+
     // Envío del formulario
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -906,6 +961,29 @@ export default function SalesForm({ onClose, onSubmit }) {
             return;
         }
 
+        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
+        if (medioPagoActual === "mixto") {
+            const efectivo = asNumber(valuesRef.current.medioPagoEfectivo);
+            const transferencia = asNumber(valuesRef.current.medioPagoTransferencia);
+            const total = asNumber(valuesRef.current.inmueblePrecio);
+
+            const mixErrors = {};
+            if (!efectivo) mixErrors.medioPagoEfectivo = "Ingresa el valor en efectivo (mayor a 0).";
+            if (!transferencia) mixErrors.medioPagoTransferencia = "Ingresa el valor por transferencia (mayor a 0).";
+            if (efectivo && transferencia && total && efectivo + transferencia !== total) {
+                mixErrors.medioPagoTransferencia = "La suma de efectivo y transferencia debe igualar el precio de venta.";
+            }
+
+            if (Object.keys(mixErrors).length) {
+                setErrors((prev) => ({ ...prev, ...mixErrors }));
+                setStep(4);
+                const first = Object.keys(mixErrors)[0];
+                const el = elRefs.current[first];
+                if (el) el.focus();
+                return;
+            }
+        }
+
         let buyerRef = selectedBuyerRef.current;
 
         if (!buyerRef) {
@@ -926,6 +1004,14 @@ export default function SalesForm({ onClose, onSubmit }) {
             ...normalizedValues,
             selectedBuyer: buyerRef,
         };
+
+        if (medioPagoActual === "mixto") {
+            const efectivo = asNumber(valuesRef.current.medioPagoEfectivo);
+            const transferencia = asNumber(valuesRef.current.medioPagoTransferencia);
+            const formattedEfectivo = formatNumberWithThousandsSeparator(efectivo.toString());
+            const formattedTransferencia = formatNumberWithThousandsSeparator(transferencia.toString());
+            payload.medioPagoDescripcion = `Efectivo: $ ${formattedEfectivo} | Transferencia: $ ${formattedTransferencia}`;
+        }
         
         if (onSubmit) onSubmit(payload);
         onClose?.();
@@ -935,7 +1021,14 @@ export default function SalesForm({ onClose, onSubmit }) {
     const Field = ({ name, as = "input", options = [], placeholder, type = "text" }) => {
         const label = getLabel(name);
         const errorMessage = errors[name];
-        const isRequired = requiredFields.includes(name);
+        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
+        const isMixto = medioPagoActual === "mixto";
+        const isPaymentDescription = name === "medioPagoDescripcion";
+        const isCashSplit = name === "medioPagoEfectivo";
+        const isTransferSplit = name === "medioPagoTransferencia";
+        const isRequired =
+            requiredFields.includes(name) ||
+            (isMixto && (isCashSplit || isTransferSplit));
 
         const isDocField = docFields.includes(name);
         const isPhoneField = phoneFields.includes(name);
@@ -1059,20 +1152,28 @@ export default function SalesForm({ onClose, onSubmit }) {
     const formattedPrice = formatNumberWithThousandsSeparator(valuesRef.current.inmueblePrecio || 0);
 
     return (
-        <div 
-            className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4 overflow-y-auto"
-            onClick={onClose}
-        >
-            <div 
-                className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 relative my-8 transform transition-all duration-300 max-h-[90vh] overflow-y-auto"
+        <AnimatePresence>
+            <motion.div 
+                className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4 overflow-y-auto"
+                onClick={onClose}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+            >
+            <motion.div 
+                className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 relative my-8 max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                transition={{ duration: 0.25 }}
             >
 
-                <button onClick={onClose} className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 p-1 rounded-full transition duration-150" aria-label="Cerrar">
+                <motion.button onClick={onClose} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 p-1 rounded-full transition duration-150" aria-label="Cerrar">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
-                </button>
+                </motion.button>
 
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Nueva venta</h2>
@@ -1140,7 +1241,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                                         : "text-green-700"
                                             }`}
                                         >
-                                            {buyerLookupState.loading && "Buscando comprador…"}
+                                            {buyerLookupState.loading && "Buscando compradorâ€¦"}
                                             {!buyerLookupState.loading && buyerLookupState.error && buyerLookupState.error}
                                             {!buyerLookupState.loading && !buyerLookupState.error && buyerLookupState.message}
                                         </p>
@@ -1210,6 +1311,18 @@ export default function SalesForm({ onClose, onSubmit }) {
                                     as="select"
                                     options={PAYMENT_OPTIONS}
                                 />
+                                {(valuesRef.current.medioPago || "").toLowerCase() === "mixto" && (
+                                    <>
+                                        <Field
+                                            name="medioPagoEfectivo"
+                                            placeholder="Valor en efectivo (COP)"
+                                        />
+                                        <Field
+                                            name="medioPagoTransferencia"
+                                            placeholder="Valor por transferencia (COP)"
+                                        />
+                                    </>
+                                )}
                                 <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
                             </div>
 
@@ -1224,10 +1337,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         <p className="font-medium text-gray-700">Ubicación:</p>
                                         <p className="text-right font-medium text-gray-900">{valuesRef.current.inmuebleCiudad || "N/A"}</p>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <p className="font-medium text-gray-700">Garaje:</p>
-                                        <p className="text-right font-medium text-gray-900">{valuesRef.current.inmuebleGaraje ? "Sí" : "No"}</p>
-                                    </div>
                                     <div className="border-t border-blue-400 pt-2 flex justify-between items-center font-extrabold text-lg mt-2">
                                         <span className="text-gray-900">PRECIO FINAL:</span>
                                         <span className="text-blue-700">$ {formattedPrice}</span>
@@ -1239,37 +1348,44 @@ export default function SalesForm({ onClose, onSubmit }) {
 
                     <div className="pt-4 border-t mt-6 flex justify-between">
                         {step > 1 && (
-                            <button
+                            <motion.button
                                 type="button"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={prevStep}
                                 className="px-5 py-2 text-sm bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-150"
                             >
                                 Atrás
-                            </button>
+                            </motion.button>
                         )}
                         {step === 1 && <div />}
 
                         {step < totalSteps && (
-                            <button
+                            <motion.button
                                 type="button"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={handleNextStep}
                                 className="px-6 py-2 text-sm bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02]"
                             >
                                 Siguiente
-                            </button>
+                            </motion.button>
                         )}
 
                         {step === totalSteps && (
-                            <button
+                            <motion.button
                                 type="submit"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 className="px-6 py-2 text-sm bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02]"
                             >
                                 Registrar Venta
-                            </button>
+                            </motion.button>
                         )}
                     </div>
                 </form>
-            </div>
-        </div>
+            </motion.div>
+            </motion.div>
+        </AnimatePresence>
     );
 }

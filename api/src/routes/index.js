@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { sequelize } = require('../config/database');
 
 // Rutas importadas
 const authRoutes = require('./auth.routes');
@@ -21,6 +22,37 @@ const invitacionesRoutes = require('./invitaciones.routes');
 const uploadRoutes = require('./upload.routes');
 const arriendoRoutes = require('./arriendo.routes');
 const dashboardRoutes = require('./dashboard.route');
+const securityRoutes = require('./security.routes');
+
+const parsePositiveInt = (rawValue, fallbackValue) => {
+  const parsed = Number.parseInt(rawValue, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackValue;
+};
+
+const HEALTH_DB_CACHE_TTL_MS = parsePositiveInt(process.env.HEALTH_DB_CACHE_TTL_MS, 30000);
+let lastDbHealthCheckAt = 0;
+let lastDbHealthStatus = false;
+let lastDbHealthError = null;
+
+const resolveDbHealth = async () => {
+  const now = Date.now();
+  if (now - lastDbHealthCheckAt <= HEALTH_DB_CACHE_TTL_MS) {
+    return { isConnected: lastDbHealthStatus, error: lastDbHealthError };
+  }
+
+  try {
+    await sequelize.query('SELECT 1 AS ok');
+    lastDbHealthStatus = true;
+    lastDbHealthError = null;
+  } catch (error) {
+    lastDbHealthStatus = false;
+    lastDbHealthError = error?.message || 'database_unavailable';
+  } finally {
+    lastDbHealthCheckAt = now;
+  }
+
+  return { isConnected: lastDbHealthStatus, error: lastDbHealthError };
+};
 
 // Montaje de rutas
 router.use('/auth', authRoutes);
@@ -43,17 +75,19 @@ router.use('/invitaciones', invitacionesRoutes);
 router.use('/files', uploadRoutes);
 router.use('/arriendos', arriendoRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/security', securityRoutes);
 
 // Ruta de salud
 router.get('/health', async (req, res) => {
   try {
-    const dbStatus = await require('../config/database').testConnection();
+    const dbHealth = await resolveDbHealth();
     res.json({
       success: true,
       status: 'OK',
       message: 'Servidor funcionando correctamente',
       timestamp: new Date().toISOString(),
-      database: dbStatus ? 'Conectado' : 'Desconectado',
+      database: dbHealth.isConnected ? 'Conectado' : 'Desconectado',
+      database_reason: dbHealth.error || null,
       environment: process.env.NODE_ENV || 'development',
       version: process.env.API_VERSION || 'v1'
     });

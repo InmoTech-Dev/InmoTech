@@ -410,11 +410,13 @@ export const inmueblesAPI = {
       if (!clean) return null;
 
       const response = await apiClient.get('/inmuebles', {
-        registro: clean,
-        registro_inmobiliario: clean,
-        busqueda: clean,
-        page: 1,
-        limit: 5,
+        params: {
+          registro: clean,
+          registro_inmobiliario: clean,
+          busqueda: clean,
+          page: 1,
+          limit: 5,
+        },
       });
 
       const payload = extractPayload(response) || {};
@@ -424,7 +426,12 @@ export const inmueblesAPI = {
         ? payload.data.map(mapInmuebleFromApi)
         : [];
 
-      return items[0] || null;
+      const normalizedClean = clean.toLowerCase();
+      const matched =
+        items.find((item) => (item.registro || '').trim().toLowerCase() === normalizedClean) ||
+        items[0];
+
+      return matched || null;
     } catch (error) {
       console.error('Error en getInmuebleByRegistro:', error);
       throw error;

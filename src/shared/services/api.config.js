@@ -15,6 +15,15 @@ const API_CONFIG = {
   CSRF_HEADER_NAME: import.meta.env.VITE_CSRF_HEADER_NAME || 'X-CSRF-Token',
 };
 
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const REFRESH_ENDPOINT = '/auth/refresh';
+const LOGOUT_ENDPOINT = '/auth/logout';
+const PUBLIC_AUTH_ENDPOINTS = new Set([
+  '/auth/login',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+]);
+
 const parseRetryAfterMs = (rawValue) => {
   if (!rawValue) return null;
 
@@ -29,26 +38,13 @@ const parseRetryAfterMs = (rawValue) => {
   return Math.max(0, retryAt - Date.now());
 };
 
-const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const REFRESH_ENDPOINT = '/auth/refresh';
-const LOGOUT_ENDPOINT = '/auth/logout';
-const PUBLIC_AUTH_ENDPOINTS = new Set([
-  '/auth/login',
-  '/auth/register',
-  '/auth/verify-code',
-  '/auth/resend-code',
-  '/auth/verify-email',
-  '/auth/forgot-password',
-  '/auth/reset-password',
-]);
-
 class ApiClient {
   constructor() {
     this.maxRetries = API_CONFIG.RETRY_ATTEMPTS;
     this.onUnauthorized = null;
     this.refreshPromise = null;
     this.isHandlingUnauthorized = false;
-    this.rateLimitUntil = 0;
+    this.inFlightGetRequests = new Map();
   }
 
   registerUnauthorizedCallback(callback) {
@@ -82,6 +78,10 @@ class ApiClient {
 
   isPublicAuthEndpoint(endpoint = '') {
     return PUBLIC_AUTH_ENDPOINTS.has(endpoint);
+  }
+
+  isSseEndpoint(endpoint = '') {
+    return endpoint.startsWith('/sse');
   }
 
   getCookieValue(name) {
@@ -183,10 +183,18 @@ class ApiClient {
   }
 
   buildRequestHeaders(endpoint, options = {}) {
+    const isFormData = options?.body instanceof FormData;
+
     const headers = {
       ...API_CONFIG.HEADERS,
       ...(options.headers || {}),
     };
+
+    // Evitar forzar Content-Type cuando se envía FormData (el navegador agrega boundary)
+    if (isFormData) {
+      delete headers['Content-Type'];
+      delete headers['content-type'];
+    }
 
     const method = options.method || 'GET';
     if (this.isMutatingMethod(method)) {
@@ -199,135 +207,177 @@ class ApiClient {
     return headers;
   }
 
-  async request(endpoint, options = {}, retryCount = 0) {
-    if (Date.now() < this.rateLimitUntil) {
-      const remainingMs = this.rateLimitUntil - Date.now();
-      const retryInSec = Math.max(1, Math.ceil(remainingMs / 1000));
-      const error = new Error(`Demasiadas peticiones. Reintenta en ${retryInSec}s.`);
-      error.status = 429;
-      error.data = {
-        success: false,
-        message: error.message,
-      };
-      throw error;
-    }
+  buildGetRequestKey(normalizedEndpoint, params = {}) {
+    const entries = Object.entries(params || {})
+      .filter(([, value]) => value !== null && value !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
 
+    return entries.length > 0 ? `${normalizedEndpoint}?${entries.join('&')}` : normalizedEndpoint;
+  }
+
+  async request(endpoint, options = {}, retryCount = 0) {
     const normalizedEndpoint = this.normalizeEndpoint(endpoint);
     const isRetryAfterRefresh = options.__isRetryAfterRefresh === true;
     const skipAuthRefresh = options.skipAuthRefresh === true || options.skipAuth === true;
+    const skipDedup = options.__skipDedup === true || options.disableDedup === true;
+    const method = String(options.method || 'GET').toUpperCase();
+    const shouldDedup = method === 'GET' && !skipDedup;
+    const requestKey = shouldDedup
+      ? this.buildGetRequestKey(normalizedEndpoint, options.params || {})
+      : null;
 
-    const url = new URL(`${API_CONFIG.BASE_URL}${normalizedEndpoint}`);
-    if (options.params && Object.keys(options.params).length > 0) {
-      Object.entries(options.params).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
-          url.searchParams.append(key, value);
+    const runRequest = async () => {
+      const url = new URL(`${API_CONFIG.BASE_URL}${normalizedEndpoint}`);
+      if (options.params && Object.keys(options.params).length > 0) {
+        Object.entries(options.params).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            url.searchParams.append(key, value);
+          }
+        });
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+      const config = {
+        ...options,
+        method,
+        headers: this.buildRequestHeaders(normalizedEndpoint, options),
+        credentials: 'include',
+        signal: controller.signal,
+      };
+
+      delete config.params;
+      delete config.__isRetryAfterRefresh;
+      delete config.skipAuthRefresh;
+      delete config.skipAuth;
+      delete config.__skipDedup;
+      delete config.disableDedup;
+
+      try {
+        const response = await fetch(url.toString(), config);
+
+        const isAuthEndpoint =
+          this.isRefreshEndpoint(normalizedEndpoint) || this.isLogoutEndpoint(normalizedEndpoint);
+        const isPublicAuthEndpoint = this.isPublicAuthEndpoint(normalizedEndpoint);
+
+        if (response.status === 401) {
+          if (!isAuthEndpoint && !isPublicAuthEndpoint && !isRetryAfterRefresh && !skipAuthRefresh) {
+            const refreshed = await this.refreshSessionSingleFlight();
+            if (refreshed) {
+              return this.request(
+                normalizedEndpoint,
+                { ...options, __isRetryAfterRefresh: true, __skipDedup: true },
+                retryCount
+              );
+            }
+          }
+
+          const payload = await this.parseResponsePayload(response);
+          if (
+            !isAuthEndpoint &&
+            !isPublicAuthEndpoint &&
+            !skipAuthRefresh &&
+            this.shouldForceLogout(response.status, payload)
+          ) {
+            await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'unauthorized'));
+          }
+          throw this.buildError(response.status, payload, 'Sesion no autorizada');
         }
-      });
-    }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+        if (response.status === 403 || response.status === 423) {
+          const payload = await this.parseResponsePayload(response);
 
-    const config = {
-      ...options,
-      headers: this.buildRequestHeaders(normalizedEndpoint, options),
-      credentials: 'include',
-      signal: controller.signal,
+          if (
+            !isAuthEndpoint &&
+            !isPublicAuthEndpoint &&
+            !skipAuthRefresh &&
+            this.shouldForceLogout(response.status, payload)
+          ) {
+            await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'session_revoked'));
+          }
+
+          throw this.buildError(response.status, payload, payload?.message || response.statusText);
+        }
+
+        if (response.status === 429) {
+          const payload = await this.parseResponsePayload(response);
+          const canRetry =
+            method === 'GET' &&
+            !isAuthEndpoint &&
+            !isPublicAuthEndpoint &&
+            !this.isSseEndpoint(normalizedEndpoint) &&
+            retryCount < 1;
+
+          if (canRetry) {
+            const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
+            const waitTime = Math.min(
+              30000,
+              Math.max(retryAfterMs || API_CONFIG.RETRY_DELAY, API_CONFIG.RETRY_DELAY)
+            );
+            await this.delay(waitTime);
+            return this.request(normalizedEndpoint, { ...options, __skipDedup: true }, retryCount + 1);
+          }
+
+          throw this.buildError(
+            429,
+            payload,
+            'Demasiadas peticiones. Por favor, espera e intenta nuevamente.'
+          );
+        }
+
+        if (!response.ok) {
+          const errorPayload = await this.parseResponsePayload(response);
+          throw this.buildError(response.status, errorPayload, response.statusText);
+        }
+
+        return await this.parseResponsePayload(response);
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          const canRetryTimeout =
+            retryCount < API_CONFIG.RETRY_ATTEMPTS &&
+            method === 'GET' &&
+            !this.isRefreshEndpoint(normalizedEndpoint) &&
+            !this.isLogoutEndpoint(normalizedEndpoint) &&
+            !this.isSseEndpoint(normalizedEndpoint);
+
+          if (canRetryTimeout) {
+            await this.delay(API_CONFIG.RETRY_DELAY);
+            return this.request(normalizedEndpoint, { ...options, __skipDedup: true }, retryCount + 1);
+          }
+
+          const timeoutError = new Error('La peticion tardo demasiado tiempo.');
+          timeoutError.code = 'TIMEOUT';
+          throw timeoutError;
+        }
+
+        if (error.message === 'Failed to fetch') {
+          const networkError = new Error('No se pudo conectar con el servidor.');
+          networkError.code = 'NETWORK_ERROR';
+          throw networkError;
+        }
+
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
     };
 
-    delete config.params;
-    delete config.__isRetryAfterRefresh;
-    delete config.skipAuthRefresh;
-    delete config.skipAuth;
-
-    try {
-      const response = await fetch(url.toString(), config);
-      clearTimeout(timeoutId);
-
-      const isAuthEndpoint =
-        this.isRefreshEndpoint(normalizedEndpoint) || this.isLogoutEndpoint(normalizedEndpoint);
-      const isPublicAuthEndpoint = this.isPublicAuthEndpoint(normalizedEndpoint);
-
-      if (response.status === 401) {
-
-        if (!isAuthEndpoint && !isPublicAuthEndpoint && !isRetryAfterRefresh && !skipAuthRefresh) {
-          const refreshed = await this.refreshSessionSingleFlight();
-          if (refreshed) {
-            return this.request(
-              normalizedEndpoint,
-              { ...options, __isRetryAfterRefresh: true },
-              retryCount
-            );
-          }
-        }
-
-        const payload = await this.parseResponsePayload(response);
-        if (
-          !isAuthEndpoint &&
-          !isPublicAuthEndpoint &&
-          !skipAuthRefresh &&
-          this.shouldForceLogout(response.status, payload)
-        ) {
-          await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'unauthorized'));
-        }
-        throw this.buildError(response.status, payload, 'Sesion no autorizada');
-      }
-
-      if (response.status === 403 || response.status === 423) {
-        const payload = await this.parseResponsePayload(response);
-
-        if (
-          !isAuthEndpoint &&
-          !isPublicAuthEndpoint &&
-          !skipAuthRefresh &&
-          this.shouldForceLogout(response.status, payload)
-        ) {
-          await this.triggerUnauthorized(this.getUnauthorizedReason(payload, 'session_revoked'));
-        }
-
-        throw this.buildError(response.status, payload, payload?.message || response.statusText);
-      }
-
-      if (response.status === 429) {
-        const payload = await this.parseResponsePayload(response);
-        const retryAfterHeader = response.headers.get('retry-after');
-        const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-        const defaultCooldownMs = 15000;
-        const cooldownMs = Math.max(defaultCooldownMs, retryAfterMs || 0);
-
-        this.rateLimitUntil = Date.now() + cooldownMs;
-        throw this.buildError(
-          429,
-          payload || { success: false, message: 'Demasiadas peticiones. Por favor, espera e intenta nuevamente.' },
-          'Demasiadas peticiones. Por favor, espera e intenta nuevamente.'
-        );
-      }
-
-      if (!response.ok) {
-        const errorPayload = await this.parseResponsePayload(response);
-        throw this.buildError(response.status, errorPayload, response.statusText);
-      }
-
-      return await this.parseResponsePayload(response);
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        if (retryCount < API_CONFIG.RETRY_ATTEMPTS) {
-          await this.delay(API_CONFIG.RETRY_DELAY);
-          return this.request(normalizedEndpoint, options, retryCount + 1);
-        }
-        const timeoutError = new Error('La peticion tardo demasiado tiempo.');
-        timeoutError.code = 'TIMEOUT';
-        throw timeoutError;
-      }
-
-      if (error.message === 'Failed to fetch') {
-        const networkError = new Error('No se pudo conectar con el servidor.');
-        networkError.code = 'NETWORK_ERROR';
-        throw networkError;
-      }
-
-      throw error;
+    if (!shouldDedup) {
+      return runRequest();
     }
+
+    const inFlight = this.inFlightGetRequests.get(requestKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const pendingRequest = runRequest().finally(() => {
+      this.inFlightGetRequests.delete(requestKey);
+    });
+    this.inFlightGetRequests.set(requestKey, pendingRequest);
+    return pendingRequest;
   }
 
   async get(endpoint, paramsOrOptions = {}) {
@@ -356,26 +406,29 @@ class ApiClient {
   }
 
   async post(endpoint, body = {}, headers = {}) {
+    const isFormData = body instanceof FormData;
     return this.request(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
   }
 
   async put(endpoint, body = {}, headers = {}) {
+    const isFormData = body instanceof FormData;
     return this.request(endpoint, {
       method: 'PUT',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
   }
 
   async patch(endpoint, body = {}, headers = {}) {
+    const isFormData = body instanceof FormData;
     return this.request(endpoint, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
   }
 

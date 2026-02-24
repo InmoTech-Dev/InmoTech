@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { renantsApiService } from "../../../../shared/services/arrendatarioApiService";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 // Lista de campos que deben ser obligatorios según la solicitud del usuario (INCLUYE ARRENDATARIO, CODEUDOR, INMUEBLE Y CONTRATO)
 const requiredFields = [
@@ -166,6 +167,7 @@ export default function RentForm({ onClose, onSubmit }) {
     });
     const arrendatarioLookupTimeoutRef = useRef(null);
     const arrendatarioLookupRequestId = useRef(0);
+    const { toast } = useToast();
     const manuallyEditedArrendatarioFieldsRef = useRef(new Set());
     const [inmuebleLookupState, setInmuebleLookupState] = useState({
         loading: false,
@@ -475,12 +477,22 @@ export default function RentForm({ onClose, onSubmit }) {
                     message: "Datos del inmueble completados automáticamente.",
                     error: null
                 });
+                toast({
+                    title: "Inmueble encontrado",
+                    description: "Datos del inmueble completados automáticamente.",
+                    variant: "default",
+                });
             } else {
                 valuesRef.current.idInmueble = undefined;
                 setInmuebleLookupState({
                     loading: false,
                     message: "",
-                    error: "No encontramos un inmueble con ese registro."
+                    error: null
+                });
+                toast({
+                    title: "Inmueble no encontrado",
+                    description: "No encontramos un inmueble con ese registro.",
+                    variant: "destructive",
                 });
             }
         } catch (error) {
@@ -489,7 +501,12 @@ export default function RentForm({ onClose, onSubmit }) {
             setInmuebleLookupState({
                 loading: false,
                 message: "",
-                error: error?.message || "No fue posible buscar el inmueble."
+                error: null
+            });
+            toast({
+                title: "Error al buscar inmueble",
+                description: error?.message || "No fue posible buscar el inmueble.",
+                variant: "destructive",
             });
         }
     }, [autofillInmueble]);
@@ -543,11 +560,21 @@ export default function RentForm({ onClose, onSubmit }) {
                     message: "Datos completados automáticamente.",
                     error: null
                 });
+                toast({
+                    title: "Arrendatario encontrado",
+                    description: "Datos del arrendatario completados automáticamente.",
+                    variant: "default",
+                });
             } else {
                 setArrendatarioLookupState({
                     loading: false,
                     message: "",
                     error: "No encontramos un arrendatario con ese documento."
+                });
+                toast({
+                    title: "Arrendatario no encontrado",
+                    description: "No encontramos un arrendatario con ese documento.",
+                    variant: "destructive",
                 });
             }
         } catch (error) {
@@ -556,6 +583,11 @@ export default function RentForm({ onClose, onSubmit }) {
                 loading: false,
                 message: "",
                 error: error?.message || "No fue posible buscar el arrendatario."
+            });
+            toast({
+                title: "Error al buscar arrendatario",
+                description: error?.message || "No fue posible buscar el arrendatario.",
+                variant: "destructive",
             });
         }
     }, [applyArrendatarioData]);

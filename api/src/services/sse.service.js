@@ -327,13 +327,13 @@ class SSEService {
     });
   }
 
-  emitAppointmentChanged({ action, appointmentId, affectedUserIds = [], audienceUserIds = [] }) {
+  emitReportChanged({ action, reportId, affectedUserIds = [], audienceUserIds = [] }) {
     const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
     if (recipients.length === 0) return;
 
-    this.sendToUsers(recipients, 'appointment.changed', {
+    this.sendToUsers(recipients, 'report.changed', {
       action: action || 'updated',
-      appointment_id: this.normalizeUserId(appointmentId),
+      report_id: this.normalizeUserId(reportId),
       affected_user_ids: this.normalizeUserIds(affectedUserIds),
       occurred_at: new Date().toISOString(),
     });

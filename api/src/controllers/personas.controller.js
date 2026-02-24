@@ -159,12 +159,15 @@ class PersonasController {
       const persona = await personasService.crearPersonaAdmin(personaData);
 
       try {
+        const rolesAdministrativos = ['Administrador', 'Super Administrador', 'Empleado', 'Agente', 'Gerente', 'Supervisor']; // Roles administrativos actualizados
+        const esAdmin = rolesAdministrativos.includes(personaData.rol);
+
         await invitacionService.crearInvitacion({
           id_persona: persona.id_persona,
           creado_por: req.user?.id || null,
-          tipo: (personaData.rol === 'Administrador' || personaData.rol === 'Super Administrador')
-            ? 'admin_invite'
-            : 'user_invite'
+          tipo: esAdmin ? 'admin_invite' : 'user_invite',
+          rol_asignado: personaData.rol || (esAdmin ? 'Administrativo' : 'Usuario'),
+          es_administrativo: esAdmin
         });
       } catch (inviteError) {
         logger.warn('No se pudo enviar invitacion al crear persona:', inviteError.message);

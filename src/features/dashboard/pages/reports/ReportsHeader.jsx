@@ -17,7 +17,8 @@ export function ReportsHeader({
   todayOnly,
   onToggleToday,
   showCancelled,
-  onToggleShowCancelled
+  onToggleShowCancelled,
+  hideFilters = false
 }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
@@ -59,19 +60,21 @@ export function ReportsHeader({
       {/* Actions */}
       <div className="flex w-full sm:w-auto gap-2 flex-wrap items-center">
         {/* Search Bar */}
-        <div className="relative w-full sm:w-64">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            type="text"
-            placeholder="Buscar reportes..."
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9 pr-3 py-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-        </div>
+        {!hideFilters && (
+          <div className="relative w-full sm:w-64">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              type="text"
+              placeholder="Buscar reportes..."
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-9 pr-3 py-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            />
+          </div>
+        )}
 
         {/* Status Filter */}
-        {onStatusChange && (
+        {onStatusChange && !hideFilters && (
           <div className="relative" ref={statusRef}>
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -126,7 +129,7 @@ export function ReportsHeader({
         )}
 
         {/* Show Cancelled */}
-        {onToggleShowCancelled && (
+        {onToggleShowCancelled && !hideFilters && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}

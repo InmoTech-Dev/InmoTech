@@ -24,13 +24,14 @@ class InvitacionController {
       const { token } = req.validatedQuery;
       logger.info(`Validando invitacion desde IP ${req.ip}`);
       const data = await invitacionService.validar(token);
+      logger.info(`Invitacion valida tipo [${data.tipo}] para persona [${data.id_persona}] desde IP ${req.ip}`);
       return res.status(200).json({
         success: true,
         message: 'Invitacion valida',
         data
       });
     } catch (error) {
-      logger.warn('Invitacion invalida:', error.message);
+      logger.warn(`Invitacion invalida o token no encontrado desde IP ${req.ip}: ${error.message}`);
       return res.status(400).json({
         success: false,
         message: error.message

@@ -50,6 +50,28 @@ class PersonasController {
   }
 
   /**
+   * Obtener resumen de inmuebles del propietario autenticado
+   */
+  async obtenerResumenPropietario(req, res, next) {
+    try {
+      const personaId = req.user.id;
+      const perfil = await personasService.obtenerPerfil(personaId);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Resumen de inmuebles obtenido exitosamente',
+        data: {
+          id_persona: perfil.id_persona,
+          inmuebles: perfil.inmuebles || []
+        }
+      });
+    } catch (error) {
+      logger.error('Error obteniendo resumen de inmuebles:', error);
+      next(error);
+    }
+  }
+
+  /**
    * Actualizar perfil de la persona autenticada
    */
   async actualizarPerfil(req, res, next) {

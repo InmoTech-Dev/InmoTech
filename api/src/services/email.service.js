@@ -126,6 +126,50 @@ class EmailService {
     }
   }
 
+  _buildResetPasswordUrl(token, email = '') {
+    const frontendBase =
+      process.env.PASSWORD_RESET_FRONTEND_URL ||
+      process.env.FRONTEND_URL ||
+      process.env.CLIENT_URL ||
+      "http://localhost:3000";
+
+    const normalizedBase = String(frontendBase).replace(/\/+$/, "");
+    const params = new URLSearchParams({ token: String(token) });
+    if (email) {
+      params.set('email', String(email).trim().toLowerCase());
+    }
+    return `${normalizedBase}/reset-password?${params.toString()}`;
+  }
+
+  async sendPasswordResetEmail({ to, token }) {
+    if (!to || !token) {
+      const error = new Error("Parametros invalidos para recuperacion de contrasena");
+      error.code = "INVALID_PASSWORD_RESET_EMAIL_PAYLOAD";
+      throw error;
+    }
+
+    const resetUrl = this._buildResetPasswordUrl(token, to);
+    const mailOptions = {
+      from: `"Matriz Inmobiliaria" <${process.env.EMAIL_FROM}>`,
+      to,
+      subject: "Recuperacion de contrasena",
+      html: this.generarTemplateRecuperacionContrasena({ resetUrl }),
+    };
+
+    const { info, intentos_envio } = await this._enviarConReintentos(mailOptions, {
+      logContext: "PASSWORD_RESET",
+      metadata: { to },
+    });
+
+    logger.info(`[EMAIL][PASSWORD_RESET] Correo enviado a ${to}`, {
+      messageId: info.messageId,
+      intentos_envio,
+    });
+
+    return { success: true, messageId: info.messageId, intentos_envio };
+  }
+
+
   async enviarEmailCitaSolicitada({ cita, correoAlterno, timezone } = {}) {
     try {
       const ctx = this._buildCitaContexto(cita, { timezone, correoAlterno });
@@ -806,6 +850,59 @@ class EmailService {
       </html>
     `;
   }
+
+  generarTemplateRecuperacionContrasena({ resetUrl }) {
+    const logoUrl = process.env.EMAIL_LOGO_URL || "https://matrizinmobiliaria.com/images/logo-matriz-sin-fondo.png";
+
+    return `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Recuperacion de contrasena</title>
+        <style>
+          body { margin:0; padding:0; background:#f5f7fb; font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif; color:#1f2d3d; }
+          .wrapper { width:100%; padding:24px 0; }
+          .container { max-width:640px; margin:0 auto; background:#ffffff; border-radius:14px; overflow:hidden; box-shadow:0 18px 46px rgba(15,43,70,0.12); }
+          .header { padding:28px; background:linear-gradient(135deg,#0f2b46,#1b5f8c); color:#fff; }
+          .logo { width:180px; max-width:70%; }
+          .content { padding:30px 28px 34px; }
+          h1 { margin:0 0 14px; font-size:24px; color:#0f2b46; }
+          p { margin:0 0 14px; line-height:1.6; color:#4a5566; }
+          .cta { display:inline-block; padding:14px 28px; background:linear-gradient(135deg,#2f6fed,#2a5fd1); color:#ffffff; font-weight:800; text-decoration:none; border-radius:12px; margin:18px 0; }
+          .url { word-break:break-all; color:#0f2b46; font-size:13px; }
+          .footer { background:#0f2034; color:#c9d5e5; text-align:center; padding:18px; font-size:13px; }
+          .footer a { color:#c9d5e5; text-decoration:none; }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          <div class="container">
+            <div class="header">
+              <img class="logo" src="${logoUrl}" alt="Matriz Inmobiliaria" />
+              <p style="margin:12px 0 0; opacity:0.95; color:#f7f9ff; font-weight:700;">Solicitud de cambio de contrasena</p>
+            </div>
+            <div class="content">
+              <h1>Restablece tu contrasena</h1>
+              <p>Recibimos una solicitud para cambiar la contrasena de tu cuenta.</p>
+              <p>Haz clic en el siguiente boton para continuar. El enlace expira en 1 hora.</p>
+              <a class="cta" href="${resetUrl}" target="_blank" rel="noopener noreferrer">Restablecer contrasena</a>
+              <p>Si el boton no funciona, copia y pega este enlace en tu navegador:</p>
+              <p class="url">${resetUrl}</p>
+              <p style="font-size:13px; color:#6b7280;">Si no solicitaste este cambio, ignora este correo.</p>
+            </div>
+            <div class="footer">
+              <div>Si necesitas ayuda, escribenos a <a href="mailto:hola@matrizinmobiliaria.com">hola@matrizinmobiliaria.com</a></div>
+              <div style="margin-top:8px;">&copy; 2025 Matriz Inmobiliaria. Todos los derechos reservados.</div>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
 
   generarTemplateInvitacion(nombreCompleto = "", codigo6d, expiraEn, activationLink, correo, rolAsignado = null, esAdministrativo = false) {
     const primerNombre = nombreCompleto.trim().split(" ")[0] || "Hola";

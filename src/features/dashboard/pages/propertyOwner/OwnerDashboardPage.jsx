@@ -121,7 +121,7 @@ const PropertyOwnersManagement = () => {
       setOwnersError(null);
     } catch (error) {
       console.error('Error obteniendo propietarios:', error);
-      setOwnersError(error.message || 'No se pudo cargar la informaciÃ³n de propietarios');
+      setOwnersError(error.message || 'No se pudo cargar la información de propietarios');
     } finally {
       setOwnersLoading(false);
     }
@@ -205,11 +205,21 @@ const PropertyOwnersManagement = () => {
     if (ownerSubmitting) {
       return;
     }
+
+    if (modalMode === 'create' && (!Array.isArray(selectedInmuebles) || selectedInmuebles.length === 0)) {
+      showAlert('error', 'Debes asignar al menos un inmueble para crear el propietario.');
+      return;
+    }
+
     setOwnerSubmitting(true);
     try {
       const selectedIds = Array.from(
         new Set((selectedInmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
       );
+
+      if (modalMode === 'create' && selectedIds.length === 0) {
+        throw new Error('Debes asignar al menos un inmueble válido para crear el propietario.');
+      }
 
       const syncOwnerAssignments = async (ownerId, previousIds = []) => {
         const prevSet = new Set((previousIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
@@ -285,7 +295,7 @@ const PropertyOwnersManagement = () => {
       closeModal();
     } catch (error) {
       console.error('Error guardando propietario:', error);
-      showAlert('error', error.message || 'No se pudo completar la operaciÃ³n');
+      showAlert('error', error.message || 'No se pudo completar la operación');
     } finally {
       setOwnerSubmitting(false);
     }
@@ -316,7 +326,7 @@ const PropertyOwnersManagement = () => {
               </div>
               <div className="flex-1">
                 <h3 className={`font-semibold ${alert.type === 'success' ? 'text-green-800' : 'text-blue-800'}`}>
-                  {alert.type === 'success' ? 'Â¡Ã‰xito!' : 'InformaciÃ³n'}
+                  {alert.type === 'success' ? '¡Éxito!' : 'Información'}
                 </h3>
                 <p className={`text-xs mt-0.5 ${alert.type === 'success' ? 'text-green-700' : 'text-blue-700'}`}>
                   {alert.message}
@@ -341,7 +351,7 @@ const PropertyOwnersManagement = () => {
               <User className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">GestiÃ³n de Propietarios</h1>
+              <h1 className="text-xl font-bold text-gray-800">Gestión de Propietarios</h1>
               <p className="text-sm text-gray-600">Administra los propietarios registrados</p>
             </div>
           </div>
@@ -512,7 +522,7 @@ const PropertyOwnersManagement = () => {
                     disabled={currentPage === 1}
                     className="px-2 py-1 text-sm rounded border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
                   >
-                    Â«
+                    «
                   </button>
                   {[...Array(totalPages)].map((_, i) => (
                     <button
@@ -532,7 +542,7 @@ const PropertyOwnersManagement = () => {
                     disabled={currentPage === totalPages}
                     className="px-2 py-1 text-sm rounded border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
                   >
-                    Â»
+                    »
                   </button>
                 </div>
               )}
@@ -561,7 +571,7 @@ const PropertyOwnersManagement = () => {
 
 export default PropertyOwnersManagement;
 
-// Estilos de animaciÃ³n
+// Estilos de animación
 const style = document.createElement('style');
 style.textContent = `
   @keyframes slide-in {

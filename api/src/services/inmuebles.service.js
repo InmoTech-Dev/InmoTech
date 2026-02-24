@@ -107,6 +107,26 @@ const validateRequiredAmenitiesForCategory = ({ categoria, comodidades }) => {
   }
 };
 
+const parseBooleanFilter = (valor) => {
+  if (valor === undefined || valor === null || valor === '') {
+    return undefined;
+  }
+
+  if (typeof valor === 'boolean') {
+    return valor;
+  }
+
+  const normalized = String(valor).trim().toLowerCase();
+  if (['true', '1', 'si', 'sí'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no'].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+};
+
 const mapComodidadesFromInstance = (comodidades = []) =>
   comodidades.map((comodidad) => ({
     id_comodidad: comodidad.id_comodidad,
@@ -391,7 +411,9 @@ class InmueblesService {
         precio_max,
         area_min,
         categoria,
-        estado
+        estado,
+        destacado,
+        propietario_id
       } = filtros;
 
       const {
@@ -416,12 +438,19 @@ class InmueblesService {
 
       if (ciudad) whereClause.ciudad = { [Op.iLike]: `%${ciudad}%` };
       if (categoria) whereClause.categoria = categoria;
+      const destacadoFilter = parseBooleanFilter(destacado);
+      if (destacadoFilter !== undefined) {
+        whereClause.destacado = destacadoFilter;
+      }
       if (precio_min || precio_max) {
         whereClause.precio_venta = {};
         if (precio_min) whereClause.precio_venta[Op.gte] = precio_min;
         if (precio_max) whereClause.precio_venta[Op.lte] = precio_max;
       }
       if (area_min) whereClause.area_construida = { [Op.gte]: area_min };
+
+      const propietarioIdFilter = Number.parseInt(propietario_id, 10);
+      const hasPropietarioFilter = Number.isInteger(propietarioIdFilter) && propietarioIdFilter > 0;
 
       const { count, rows } = await Inmueble.findAndCountAll({
         where: whereClause,
@@ -432,8 +461,11 @@ class InmueblesService {
           {
             model: PropiedadInmueble,
             as: 'propietarios',
-            required: false,
-            where: { es_propietario_actual: true },
+            required: hasPropietarioFilter,
+            where: {
+              es_propietario_actual: true,
+              ...(hasPropietarioFilter ? { id_persona: propietarioIdFilter } : {})
+            },
             attributes: [
               'id_propiedad_inmueble',
               'fecha_inicio',

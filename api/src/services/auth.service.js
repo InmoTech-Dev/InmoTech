@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { Persona, Acceso, Rol, Administrativo, Permiso } = require('../models');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
@@ -31,8 +31,37 @@ const BASIC_PERSONA_ATTRIBUTES = [
 
 const BASIC_ACCESO_ATTRIBUTES = ['id_persona', 'contrasena'];
 
-const PASSWORD_RESET_TTL = 60 * 60 * 1000;
 const passwordResetTokens = new Map();
+const PASSWORD_RESET_EXPIRES_IN = process.env.JWT_PASSWORD_RESET_EXPIRES_IN || '1h';
+const PASSWORD_RESET_SECRET = (process.env.JWT_PASSWORD_RESET_SECRET || process.env.JWT_SECRET || '').trim();
+
+const signPasswordResetToken = ({ personId, email }) => {
+  if (!PASSWORD_RESET_SECRET) {
+    throw new Error('JWT_PASSWORD_RESET_SECRET o JWT_SECRET es requerido para recuperar contrasena');
+  }
+
+  return jwt.sign(
+    { typ: 'password_reset', pid: personId, email: normalizeEmail(email) },
+    PASSWORD_RESET_SECRET,
+    { expiresIn: PASSWORD_RESET_EXPIRES_IN }
+  );
+};
+
+const verifyPasswordResetToken = (token, { ignoreExpiration = false } = {}) => {
+  if (!PASSWORD_RESET_SECRET) {
+    throw new Error('JWT_PASSWORD_RESET_SECRET o JWT_SECRET es requerido para recuperar contrasena');
+  }
+
+  const payload = jwt.verify(token, PASSWORD_RESET_SECRET, { ignoreExpiration });
+  if (!payload || payload.typ !== 'password_reset') {
+    const error = new Error('Token invalido o expirado.');
+    error.name = 'JsonWebTokenError';
+    throw error;
+  }
+
+  return payload;
+};
+
 
 const buildRoleInclude = () => ({
   model: Rol,
@@ -477,13 +506,10 @@ class AuthService {
       throw error;
     }
 
-    const token = crypto.randomBytes(32).toString('hex');
-    passwordResetTokens.set(token, {
+    const token = signPasswordResetToken({
       personId: persona.id_persona,
-      expiresAt: Date.now() + PASSWORD_RESET_TTL
+      email: persona.correo
     });
-
-    setTimeout(() => passwordResetTokens.delete(token), PASSWORD_RESET_TTL);
 
     await emailService.sendPasswordResetEmail({
       to: persona.correo,
@@ -495,42 +521,91 @@ class AuthService {
   }
 
   async validarTokenRecuperacion(token) {
-    const record = passwordResetTokens.get(token);
-    if (!record) {
+    let payload = null;
+    let legacyRecord = null;
+
+    try {
+      payload = verifyPasswordResetToken(token);
+    } catch (tokenError) {
+      // Compatibilidad con enlaces antiguos almacenados en memoria.
+      legacyRecord = passwordResetTokens.get(token);
+
+      if (legacyRecord) {
+        if (legacyRecord.expiresAt < Date.now()) {
+          const error = new Error('Enlace expirado.');
+          error.status = 400;
+          error.code = 'RESET_TOKEN_EXPIRED';
+          throw error;
+        }
+      } else if (tokenError.name === 'TokenExpiredError') {
+        try {
+          const expiredPayload = verifyPasswordResetToken(token, { ignoreExpiration: true });
+          const error = new Error('Enlace expirado.');
+          error.status = 400;
+          error.code = 'RESET_TOKEN_EXPIRED';
+          error.data = { email: normalizeEmail(expiredPayload?.email || '') || null };
+          throw error;
+        } catch (innerError) {
+          if (innerError.code === 'RESET_TOKEN_EXPIRED') throw innerError;
+        }
+      }
+
       const error = new Error('Token invalido o expirado.');
       error.status = 400;
+      error.code = 'RESET_TOKEN_INVALID';
       throw error;
     }
 
-    if (record.expiresAt < Date.now()) {
-      passwordResetTokens.delete(token);
-      const error = new Error('El token ha expirado.');
+    const personIdFromToken = payload?.pid || legacyRecord?.personId;
+    const persona = await Persona.findByPk(personIdFromToken, {
+      attributes: ['id_persona', 'correo']
+    });
+
+    if (!persona) {
+      const error = new Error('Token invalido o expirado.');
       error.status = 400;
+      error.code = 'RESET_TOKEN_INVALID';
       throw error;
     }
 
     return {
       valido: true,
-      expira_en: new Date(record.expiresAt).toISOString()
+      expira_en: payload?.exp ? new Date(payload.exp * 1000).toISOString() : new Date(legacyRecord.expiresAt).toISOString(),
+      email: persona.correo || normalizeEmail(payload?.email || '') || null
     };
   }
 
   async restablecerContrasena(token, newPassword) {
-    const record = passwordResetTokens.get(token);
-    if (!record) {
-      const error = new Error('Token invalido o expirado.');
-      error.status = 400;
-      throw error;
+    let personId = null;
+
+    try {
+      const payload = verifyPasswordResetToken(token);
+      personId = payload?.pid || null;
+    } catch (tokenError) {
+      // Compatibilidad con tokens antiguos en memoria.
+      const legacyRecord = passwordResetTokens.get(token);
+      if (legacyRecord) {
+        if (legacyRecord.expiresAt < Date.now()) {
+          const error = new Error('El token ha expirado.');
+          error.status = 400;
+          error.code = 'RESET_TOKEN_EXPIRED';
+          throw error;
+        }
+        personId = legacyRecord.personId;
+      } else if (tokenError.name === 'TokenExpiredError') {
+        const error = new Error('El token ha expirado.');
+        error.status = 400;
+        error.code = 'RESET_TOKEN_EXPIRED';
+        throw error;
+      } else {
+        const error = new Error('Token invalido o expirado.');
+        error.status = 400;
+        error.code = 'RESET_TOKEN_INVALID';
+        throw error;
+      }
     }
 
-    if (record.expiresAt < Date.now()) {
-      passwordResetTokens.delete(token);
-      const error = new Error('El token ha expirado.');
-      error.status = 400;
-      throw error;
-    }
-
-    const acceso = await Acceso.findOne({ where: { id_persona: record.personId } });
+    const acceso = await Acceso.findOne({ where: { id_persona: personId } });
     if (!acceso) {
       const error = new Error('No se encontro el usuario para restablecer la contrasena.');
       error.status = 404;
@@ -544,7 +619,7 @@ class AuthService {
     });
     passwordResetTokens.delete(token);
 
-    logger.info(`Contrasena restablecida para usuario ${record.personId}`);
+    logger.info(`Contrasena restablecida para usuario ${personId}`);
     return true;
   }
 }

@@ -346,6 +346,13 @@ const OwnerForm = ({
     });
     setErrors(fieldErrors);
     const hasErrors = Object.values(fieldErrors).some((msg) => msg);
+    if (mode === 'create' && selectedInmuebles.length === 0) {
+      setFormAlert({
+        type: 'error',
+        message: 'Debes asignar al menos un inmueble para crear el propietario.'
+      });
+      return false;
+    }
     if (hasErrors) {
       setFormAlert({
         type: 'error',
@@ -808,8 +815,8 @@ const OwnerForm = ({
         }
         subtitle={
           mode === 'view'
-            ? 'Consulta la informaci�n registrada'
-            : 'Completa la informaci�n y conf�rmala'
+            ? 'Consulta la información registrada'
+            : 'Completa la información y confírmala'
         }
         steps={stepsForLayout}
         activeStep={activeStepForLayout}

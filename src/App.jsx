@@ -18,6 +18,7 @@ import ServicesPage from './features/services/pages/ServicesPage'
 import LoginPage from './features/auth/pages/LoginPage'
 import UserAppointmentsPage from './features/appointments/pages/UserAppointmentsPage'
 import ActivateAccountPage from './features/auth/pages/ActivateAccountPage'
+import ResetPasswordPage from './features/auth/pages/ResetPasswordPage'
 
 // Dashboard pages
 import DashboardPage from './features/dashboard/DashboardPage'
@@ -117,6 +118,10 @@ function App() {
         <Route
           path="/activar"
           element={<ActivateAccountPage />}
+        />
+        <Route
+          path="/reset-password"
+          element={<ResetPasswordPage />}
         />
 
         {/* Authenticated user routes with navbar/footer */}

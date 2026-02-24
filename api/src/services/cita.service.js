@@ -33,6 +33,32 @@ const normalizarHoraTexto = (hora) => {
   return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
 };
 
+const normalizarHoraComparable = (hora) => {
+  if (hora instanceof Date && !Number.isNaN(hora.getTime())) {
+    const horas = String(hora.getUTCHours()).padStart(2, '0');
+    const minutos = String(hora.getUTCMinutes()).padStart(2, '0');
+    const segundos = String(hora.getUTCSeconds()).padStart(2, '0');
+    return `${horas}:${minutos}:${segundos}`;
+  }
+
+  if (typeof hora === 'string') {
+    const horaLimpia = hora.trim();
+    const hhmmss = horaLimpia.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+    if (hhmmss) {
+      const horas = String(Number(hhmmss[1])).padStart(2, '0');
+      return `${horas}:${hhmmss[2]}:${hhmmss[3]}`;
+    }
+
+    const hhmm = horaLimpia.match(/^(\d{1,2}):(\d{2})$/);
+    if (hhmm) {
+      const horas = String(Number(hhmm[1])).padStart(2, '0');
+      return `${horas}:${hhmm[2]}:00`;
+    }
+  }
+
+  return hora;
+};
+
 const horaEnMinutos = (hora) => {
   const horaNormalizada = normalizarHoraTexto(hora);
   if (!horaNormalizada) return null;
@@ -473,6 +499,8 @@ class CitaService {
 
       // Bloqueo Inteligente: Cancelar otras solicitudes para el mismo espacio
       if (cita.id_inmueble && cita.id_servicio === 1) { // Solo para Visitas
+        const horaInicioComparable = normalizarHoraComparable(cita.hora_inicio);
+
         await Cita.update(
           {
             id_estado_cita: 6, // Cancelada
@@ -483,7 +511,7 @@ class CitaService {
             where: {
               id_inmueble: cita.id_inmueble,
               fecha_cita: cita.fecha_cita,
-              hora_inicio: cita.hora_inicio,
+              hora_inicio: horaInicioComparable,
               id_estado_cita: { [Op.in]: [1, 4] }, // Solicitada o Reagendada
               id_cita: { [Op.ne]: id }
             }

@@ -10,6 +10,7 @@ import { canonicalizePermissions, normalizeModuleKey, normalizePermissionKey } f
 const AuthContext = createContext(undefined);
 
 const USER_KEY = 'inmotech_user';
+const PUBLIC_BOOTSTRAP_DISABLED_PATHS = new Set(['/reset-password']);
 const ALL_MODULES = [
   'dashboard',
   'citas',
@@ -31,6 +32,12 @@ const parseUserJson = (rawValue) => {
   } catch (error) {
     return null;
   }
+};
+
+const shouldSkipAuthBootstrap = () => {
+  if (typeof window === 'undefined') return false;
+  const currentPath = window.location?.pathname || '';
+  return PUBLIC_BOOTSTRAP_DISABLED_PATHS.has(currentPath);
 };
 
 const extractPermissionsByModule = (user) => {
@@ -81,6 +88,11 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const loadAuthFromStorage = useCallback(async () => {
+    if (shouldSkipAuthBootstrap()) {
+      setInitializing(false);
+      return;
+    }
+
     try {
       const localStored = localStorage.getItem(USER_KEY);
       const sessionStored = sessionStorage.getItem(USER_KEY);
@@ -225,7 +237,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const requestPasswordReset = async (email) => {
+  const requestPasswordReset = useCallback(async (email) => {
     try {
       setError(null);
       const response = await authService.forgotPassword(email);
@@ -242,9 +254,9 @@ export const AuthProvider = ({ children }) => {
       custom.status = err.status;
       throw custom;
     }
-  };
+  }, []);
 
-  const resetPasswordWithToken = async (token, newPassword) => {
+  const resetPasswordWithToken = useCallback(async (token, newPassword) => {
     try {
       setError(null);
       const response = await authService.resetPassword(token, newPassword);
@@ -256,9 +268,9 @@ export const AuthProvider = ({ children }) => {
       setError(err.message || 'Error restableciendo contrasena');
       throw err;
     }
-  };
+  }, []);
 
-  const validateResetToken = async (token) => {
+  const validateResetToken = useCallback(async (token) => {
     try {
       setError(null);
       return await authService.validateResetToken(token);
@@ -266,7 +278,7 @@ export const AuthProvider = ({ children }) => {
       setError(err.message || 'Error validando enlace de recuperacion');
       throw err;
     }
-  };
+  }, []);
 
   const hasRole = useCallback((roles) => {
     if (!user || !user.roles) return false;

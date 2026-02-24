@@ -22,12 +22,33 @@ const ALLOWED_UPLOAD_FOLDERS = (
 );
 const DEFAULT_UPLOAD_FOLDER = ALLOWED_UPLOAD_FOLDERS[0] || 'inmotech/inmuebles';
 
+const normalizeFolderPath = (value = '') =>
+  String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+
 const resolveUploadFolder = (folderInput) => {
-  const candidate = typeof folderInput === 'string' ? folderInput.trim() : '';
+  const candidate = normalizeFolderPath(folderInput);
   if (!candidate) return DEFAULT_UPLOAD_FOLDER;
-  if (!ALLOWED_UPLOAD_FOLDERS.includes(candidate)) {
+
+  // Bloquear traversal o caracteres peligrosos.
+  if (
+    candidate.includes('..') ||
+    !/^[a-zA-Z0-9/_-]+$/.test(candidate)
+  ) {
     return null;
   }
+
+  const allowed = ALLOWED_UPLOAD_FOLDERS.map((folder) => normalizeFolderPath(folder)).filter(Boolean);
+  const isExactAllowed = allowed.includes(candidate);
+  const isAllowedSubfolder = allowed.some((folder) => candidate.startsWith(`${folder}/`));
+
+  if (!isExactAllowed && !isAllowedSubfolder) {
+    return null;
+  }
+
   return candidate;
 };
 

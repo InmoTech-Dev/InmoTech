@@ -460,6 +460,9 @@ const buscarInmueblesSchema = Joi.object({
     .valid('Apartamento', 'Casa', 'Local', 'Oficina', 'Bodega', 'Lote', 'Finca', 'Otro')
     .optional(),
 
+  destacado: Joi.boolean()
+    .optional(),
+
   pagina: Joi.number()
     .integer()
     .min(1)

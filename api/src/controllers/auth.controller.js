@@ -1,4 +1,5 @@
 const authService = require('../services/auth.service');
+const personaService = require('../services/persona.service');
 const logger = require('../utils/logger');
 const opsConsoleLogger = require('../utils/opsConsoleLogger');
 const jwtUtils = require('../utils/jwt');
@@ -218,11 +219,32 @@ class AuthController {
 
     try {
       const result = await authService.iniciarSesion(email, password);
+      const userId = result?.user?.id_persona || result?.user?.id;
+      const roles = Array.isArray(result?.user?.roles) ? result.user.roles : [];
+      const esPropietario = roles.includes('Propietario');
+      let inmueblesAsignados = [];
+
+      if (esPropietario && userId) {
+        try {
+          const perfil = await personaService.obtenerPerfil(userId);
+          inmueblesAsignados = Array.isArray(perfil?.inmuebles) ? perfil.inmuebles : [];
+        } catch (propError) {
+          logger.warn(
+            `No se pudieron cargar inmuebles del propietario ${userId} en login movil: ${propError.message}`
+          );
+        }
+      }
+
+      const mobileTokenData = buildMobileTokenData(result);
+      mobileTokenData.user = {
+        ...mobileTokenData.user,
+        inmuebles: inmueblesAsignados
+      };
 
       return res.status(200).json({
         success: true,
         message: 'Inicio de sesion exitoso',
-        data: buildMobileTokenData(result),
+        data: mobileTokenData,
       });
     } catch (error) {
       logger.error('Error en inicio de sesion movil:', {

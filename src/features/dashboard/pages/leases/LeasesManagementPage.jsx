@@ -8,6 +8,8 @@ import LeasesPersonForm from "../../components/leases/TenantForm";
 import ViewTenantModal from "../../components/leases/ViewTenantForm";
 import { renantsApiService } from "../../../../shared/services/arrendatarioApiService";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
+import MESSAGES from "../../../../shared/constants/messages";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 export function LeasesManagementPage() {
   const [arrendatarios, setArrendatarios] = useState([]);
@@ -19,6 +21,7 @@ export function LeasesManagementPage() {
   const [tenantToEdit, setTenantToEdit] = useState(null);
   const [tenantToView, setTenantToView] = useState(null);
   const [tenantToDelete, setTenantToDelete] = useState(null);
+  const { toast } = useToast();
   const handleViewTenant = async (tenant) => {
     if (!tenant) return;
     // Optimistic show basic data
@@ -80,12 +83,12 @@ export function LeasesManagementPage() {
     };
   };
 
-  const fetchTenants = async () => {
-    try {
-      setIsLoading(true);
-      const [tenants, arriendosResp] = await Promise.all([
-        renantsApiService.getAll(),
-        arriendoApiService.obtenerArriendos().catch(() => ({ data: { data: [] } }))
+    const fetchTenants = async () => {
+        try {
+            setIsLoading(true);
+            const [tenants, arriendosResp] = await Promise.all([
+                renantsApiService.getAll(),
+                arriendoApiService.obtenerArriendos().catch(() => ({ data: { data: [] } }))
       ]);
 
       const arriendosList = arriendosResp?.data?.data || arriendosResp?.data || arriendosResp || [];
@@ -147,10 +150,14 @@ export function LeasesManagementPage() {
     try {
       const newTenant = await renantsApiService.create(formData);
       setArrendatarios((prev) => [newTenant, ...prev]);
-      setStatusMessage({ type: "success", message: "Arrendatario creado correctamente" });
+      toast({ title: "Arrendatario creado", description: MESSAGES.leaseTenant.create, variant: "default" });
       handleCloseForm();
     } catch (error) {
-      setStatusMessage({ type: "error", message: error.message || "No fue posible crear el arrendatario" });
+      toast({
+        title: "Error al crear arrendatario",
+        description: error.message || MESSAGES.leaseTenant.createError,
+        variant: "destructive",
+      });
       throw error;
     } finally {
       setFormSubmitting(false);
@@ -163,10 +170,14 @@ export function LeasesManagementPage() {
     try {
       const updated = await renantsApiService.update(tenantToEdit.id, formData);
       setArrendatarios((prev) => prev.map((tenant) => (tenant.id === updated.id ? updated : tenant)));
-      setStatusMessage({ type: "success", message: "Arrendatario actualizado correctamente" });
+      toast({ title: "Arrendatario actualizado", description: MESSAGES.leaseTenant.update, variant: "default" });
       handleCloseForm();
     } catch (error) {
-      setStatusMessage({ type: "error", message: error.message || "No fue posible actualizar el arrendatario" });
+      toast({
+        title: "Error al actualizar arrendatario",
+        description: error.message || MESSAGES.leaseTenant.updateError,
+        variant: "destructive",
+      });
       throw error;
     } finally {
       setFormSubmitting(false);
@@ -186,9 +197,13 @@ export function LeasesManagementPage() {
       const removedTenant = await renantsApiService.delete(tenantToDelete.id);
       const removedId = removedTenant?.id ?? tenantToDelete.id;
       setArrendatarios((prev) => prev.filter((tenant) => tenant.id !== removedId));
-      setStatusMessage({ type: "success", message: "Arrendatario eliminado correctamente" });
+      toast({ title: "Arrendatario eliminado", description: MESSAGES.leaseTenant.delete, variant: "default" });
     } catch (error) {
-      setStatusMessage({ type: "error", message: error.message || "No fue posible eliminar al arrendatario" });
+      toast({
+        title: "Error al eliminar arrendatario",
+        description: error.message || MESSAGES.leaseTenant.deleteError,
+        variant: "destructive",
+      });
     } finally {
       setTenantToDelete(null);
     }
@@ -381,19 +396,7 @@ const renderDeleteModal = () => {
           </div>
         </motion.div>
 
-        {statusMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`rounded-lg px-4 py-3 text-sm font-medium ${
-              statusMessage.type === "success"
-                ? "bg-green-50 text-green-800 border border-green-200"
-                : "bg-red-50 text-red-800 border border-red-200"
-            }`}
-          >
-            {statusMessage.message}
-          </motion.div>
-        )}
+        {/* Banner removido: se usarán toasts para feedback */}
 
         {/* CONTENT AREA */}
         <motion.div

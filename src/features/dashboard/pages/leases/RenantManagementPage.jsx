@@ -7,6 +7,8 @@ import RenantForm from "../../components/leases/RenantForm";
 import ViewRenant from "../../components/leases/ViewRenant"; 
 import "../../../../shared/styles/globals.css";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
+import MESSAGES from "../../../../shared/constants/messages";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 const formatCurrency = (value) => {
   const numeric = Number(value);
@@ -170,6 +172,7 @@ export function RenantManagementPage() {
   const [viewingRent, setViewingRent] = useState(null);
   const [statusRent, setStatusRent] = useState(null); // arriendo en seguimiento (solo estado)
   const [statusMessage, setStatusMessage] = useState(null);
+  const { toast } = useToast();
   const fetchArriendos = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -185,7 +188,12 @@ export function RenantManagementPage() {
     } catch (error) {
       setStatusMessage({
         type: "error",
-        message: error?.message || "No fue posible cargar los arrendatarios"
+        message: error?.message || MESSAGES.leaseContract.loadError
+      });
+      toast({
+        title: "Error al cargar arriendos",
+        description: error?.message || MESSAGES.leaseContract.loadError,
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
@@ -201,7 +209,12 @@ export function RenantManagementPage() {
     // Solo refrescamos desde API; crear arrendatario no debe agregar a la lista de arriendos
     fetchArriendos();
     setShowForm(false);
-    setStatusMessage({ type: "success", message: "Arriendo sincronizado con la API" });
+    setStatusMessage({ type: "success", message: MESSAGES.leaseContract.sync });
+    toast({
+      title: "Arriendo sincronizado",
+      description: MESSAGES.leaseContract.sync,
+      variant: "default",
+    });
   };
 
   const openStatusModal = (rent) => {
@@ -225,11 +238,21 @@ export function RenantManagementPage() {
       });
       await fetchArriendos();
       closeStatusModal();
-      setStatusMessage({ type: "success", message: "Estado del arriendo actualizado" });
+      setStatusMessage({ type: "success", message: MESSAGES.leaseContract.stateUpdate });
+      toast({
+        title: "Estado actualizado",
+        description: MESSAGES.leaseContract.stateUpdate,
+        variant: "default",
+      });
     } catch (error) {
       setStatusMessage({
         type: "error",
-        message: error?.response?.data?.message || error?.message || "No se pudo actualizar el estado",
+        message: error?.response?.data?.message || error?.message || MESSAGES.leaseContract.stateError,
+      });
+      toast({
+        title: "Error al actualizar estado",
+        description: error?.response?.data?.message || error?.message || MESSAGES.leaseContract.stateError,
+        variant: "destructive",
       });
     }
   };
@@ -251,11 +274,21 @@ export function RenantManagementPage() {
     try {
       await arriendoApiService.eliminarArriendo(id);
       setArriendos((prev) => prev.filter((r) => r.id !== id));
-      setStatusMessage({ type: "success", message: "Arriendo eliminado correctamente" });
+      setStatusMessage({ type: "success", message: MESSAGES.leaseContract.delete });
+      toast({
+        title: "Arriendo eliminado",
+        description: MESSAGES.leaseContract.delete,
+        variant: "default",
+      });
     } catch (error) {
       setStatusMessage({
         type: "error",
-        message: error?.response?.data?.message || error?.message || "No se pudo eliminar el arriendo",
+        message: error?.response?.data?.message || error?.message || MESSAGES.leaseContract.deleteError,
+      });
+      toast({
+        title: "Error al eliminar arriendo",
+        description: error?.response?.data?.message || error?.message || MESSAGES.leaseContract.deleteError,
+        variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
@@ -568,17 +601,7 @@ const renderDeleteModal = () => {
           </motion.button>
         </motion.div>
 
-        {statusMessage && (
-          <div
-            className={`rounded-xl border px-4 py-3 text-sm mt-4 ${
-              statusMessage.type === "error"
-                ? "bg-red-50 border-red-200 text-red-700"
-                : "bg-green-50 border-green-200 text-green-700"
-            }`}
-          >
-            {statusMessage.message}
-          </div>
-        )}
+        {/* Banner removido: feedback ahora solo por toasts */}
         {/* SEARCH AND FILTERS */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

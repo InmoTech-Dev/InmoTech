@@ -151,9 +151,38 @@ const formatOwnerFromApi = (owner = {}) => {
   };
 };
 
+// Variante que conserva documento y tipo de documento si vienen en la respuesta
+const formatOwnerFromApiWithDocs = (owner = {}) => {
+  const base = formatOwnerFromApi(owner);
+  const documento =
+    owner.numero_documento ||
+    owner.numeroDocumento ||
+    owner.documento ||
+    owner.cedula ||
+    owner.cédula ||
+    owner.identificacion ||
+    owner.identificación ||
+    owner.nit ||
+    null;
+  const tipoDocumento =
+    owner.tipo_documento ||
+    owner.tipoDocumento ||
+    owner.tipo_doc ||
+    owner.documento_tipo ||
+    owner.tipo ||
+    owner.clase_documento ||
+    null;
+
+  return {
+    ...base,
+    documento,
+    tipo_documento: tipoDocumento,
+  };
+};
+
 export const mapInmuebleFromApi = (inmueble = {}) => {
   const propietariosRaw = Array.isArray(inmueble.propietarios) ? inmueble.propietarios : [];
-  const propietarios = propietariosRaw.map(formatOwnerFromApi);
+  const propietarios = propietariosRaw.map(formatOwnerFromApiWithDocs);
   const ownerIds = propietarios.map((owner) => owner.id).filter(Boolean);
 
   const precioVenta = toNumber(inmueble.precio_venta ?? inmueble.precioVenta);

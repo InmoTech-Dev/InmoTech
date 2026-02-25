@@ -401,6 +401,16 @@ export const inmueblesAPI = {
   // Versión pública (landing) - usa /inmuebles/buscar sin auth
   async getPublicInmuebles(page = 1, limit = DEFAULT_LIMIT, filters = {}) {
     try {
+      const isAvailableForPublicCatalog = (item = {}) => {
+        if (item.estado_bool === false) return false;
+        const status = String(item.estado_frontend || item.estado || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        return status !== 'vendido' && status !== 'arrendado';
+      };
+
       const response = await apiClient.get('/inmuebles/buscar', {
         pagina: page,
         limite: limit,
@@ -410,7 +420,9 @@ export const inmueblesAPI = {
 
       const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
-        ? payload.inmuebles.map(mapInmuebleFromApi)
+        ? payload.inmuebles
+            .map(mapInmuebleFromApi)
+            .filter(isAvailableForPublicCatalog)
         : [];
 
       return {

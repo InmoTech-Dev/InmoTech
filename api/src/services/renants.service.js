@@ -195,7 +195,11 @@ class RenantService {
 
         // Marcar el inmueble como arrendado
         await inmueble.update(
-          { estado: 'Arrendado' },
+          {
+            estado: false,
+            estado_frontend: 'Arrendado',
+            destacado: false
+          },
           { transaction }
         );
       }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Eye, Edit, FileText, Star } from 'lucide-react';
 
-export const ActionButtons = ({ onView, onEdit, onDocument, onToggleFeatured, isFeatured }) => {
+export const ActionButtons = ({ onView, onEdit, onDocument, onToggleFeatured, isFeatured, isFeaturedDisabled = false }) => {
   return (
     <div className="flex items-center gap-1.5 whitespace-nowrap">
       <button
@@ -33,16 +33,24 @@ export const ActionButtons = ({ onView, onEdit, onDocument, onToggleFeatured, is
       </button>
       {onToggleFeatured && (
         <button
+          type="button"
           onClick={onToggleFeatured}
+          disabled={isFeaturedDisabled}
           className={`p-1.5 rounded-lg transition-all group relative ${
-            isFeatured
-              ? 'text-amber-600 bg-amber-50 hover:text-amber-700'
-              : 'text-gray-600 hover:text-amber-600 hover:bg-amber-50'
+            isFeaturedDisabled
+              ? 'text-slate-300 bg-slate-100 cursor-not-allowed'
+              : isFeatured
+                ? 'text-amber-600 bg-amber-50 hover:text-amber-700'
+                : 'text-gray-600 hover:text-amber-600 hover:bg-amber-50'
           }`}
         >
           <Star className={`w-4 h-4 ${isFeatured ? 'fill-amber-400' : ''}`} />
           <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-            {isFeatured ? 'Quitar destacado' : 'Marcar como destacado'}
+            {isFeaturedDisabled
+              ? 'No disponible en estado Vendido o Arrendado'
+              : isFeatured
+                ? 'Quitar destacado'
+                : 'Marcar como destacado'}
           </span>
         </button>
       )}

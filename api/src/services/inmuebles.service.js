@@ -336,6 +336,52 @@ const countSelectedAmenitiesByInmueble = async (inmuebleId, transaction) => {
   });
 };
 
+const normalizeEstadoFrontend = (value = '') =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const buildEstadoFrontendCondition = (valor, column = 'Inmuebles.estado_frontend') => {
+  if (valor === undefined || valor === null) {
+    return null;
+  }
+
+  if (typeof valor === 'string' && normalizeEstadoFrontend(valor) === 'todos') {
+    return null;
+  }
+
+  const normalized = normalizeEstadoFrontend(valor);
+  if (!normalized) return null;
+
+  const columnReference = sequelize.col(column);
+  return sequelize.where(
+    sequelize.fn('LOWER', sequelize.cast(columnReference, 'NVARCHAR(100)')),
+    normalized
+  );
+};
+
+const buildEstadoFrontendExclusionCondition = (values = [], column = 'Inmuebles.estado_frontend') => {
+  const normalizedValues = Array.isArray(values)
+    ? values
+        .map((value) => normalizeEstadoFrontend(value))
+        .filter(Boolean)
+    : [];
+
+  if (!normalizedValues.length) return null;
+
+  const columnReference = sequelize.col(column);
+  return sequelize.where(
+    sequelize.fn('LOWER', sequelize.cast(columnReference, 'NVARCHAR(100)')),
+    {
+      [Op.notIn]: normalizedValues
+    }
+  );
+};
+
+const shouldClearDestacadoByEstadoFrontend = (estadoFrontend) => {
+  if (typeof estadoFrontend !== 'string') return false;
+  const normalized = estadoFrontend.trim().toLowerCase();
+  return normalized === 'vendido' || normalized === 'arrendado';
+};
+
 class InmueblesService {
   /**
    * Crear un nuevo inmueble
@@ -412,6 +458,8 @@ class InmueblesService {
         area_min,
         categoria,
         estado,
+        estado_frontend,
+        excluir_estados_frontend,
         destacado,
         propietario_id
       } = filtros;
@@ -434,6 +482,21 @@ class InmueblesService {
       if (estadoCondition) {
         whereClause[Op.and] = whereClause[Op.and] || [];
         whereClause[Op.and].push(estadoCondition);
+      }
+
+      const estadoFrontendCondition = buildEstadoFrontendCondition(estado_frontend, 'Inmuebles.estado_frontend');
+      if (estadoFrontendCondition) {
+        whereClause[Op.and] = whereClause[Op.and] || [];
+        whereClause[Op.and].push(estadoFrontendCondition);
+      }
+
+      const estadoFrontendExclusionCondition = buildEstadoFrontendExclusionCondition(
+        excluir_estados_frontend,
+        'Inmuebles.estado_frontend'
+      );
+      if (estadoFrontendExclusionCondition) {
+        whereClause[Op.and] = whereClause[Op.and] || [];
+        whereClause[Op.and].push(estadoFrontendExclusionCondition);
       }
 
       if (ciudad) whereClause.ciudad = { [Op.iLike]: `%${ciudad}%` };
@@ -719,8 +782,13 @@ class InmueblesService {
             }
           }
 
+          if (shouldClearDestacadoByEstadoFrontend(payload.estado_frontend)) {
+            payload.destacado = false;
+          }
+
           const quiereDestacar = isTruthyBoolean(payload.destacado);
           const estabaDestacado = isTruthyBoolean(inmueble.destacado);
+
           if (quiereDestacar && !estabaDestacado) {
             await validateDestacadosLimit({
               transaction: t,

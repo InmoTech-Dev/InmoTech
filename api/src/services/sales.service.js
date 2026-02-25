@@ -121,7 +121,8 @@ class SaleService {
         await inmueble.update(
           {
             estado: false,
-            estado_frontend: 'Vendido'
+            estado_frontend: 'Vendido',
+            destacado: false
           },
           { transaction: t }
         );

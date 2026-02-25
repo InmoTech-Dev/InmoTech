@@ -18,6 +18,15 @@ const ESTADOS_POR_OPERACION = {
 const getEstadosDisponibles = (operacion) =>
   ESTADOS_POR_OPERACION[operacion] || ESTADOS_POR_OPERACION['Venta y Arriendo'];
 
+const isFinalStatusForFeatured = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'arrendado' || normalized === 'vendido';
+};
+
 export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange, onToggleFeatured }) => {
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
@@ -55,6 +64,7 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                 const selectedEstado = estadosDisponibles.includes(estadoActual)
                   ? estadoActual
                   : 'Disponible';
+                const featuredDisabled = isFinalStatusForFeatured(estadoActual);
 
                 return (
                   <tr key={property.id} className="hover:bg-slate-50 transition-colors">
@@ -117,6 +127,7 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                         onDocument={() => onDocument(property)}
                         onToggleFeatured={onToggleFeatured ? () => onToggleFeatured(property) : undefined}
                         isFeatured={property.destacado || property.featured}
+                        isFeaturedDisabled={featuredDisabled}
                       />
                     </td>
                   </tr>

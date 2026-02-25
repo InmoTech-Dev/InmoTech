@@ -34,6 +34,15 @@ const resolveEstadoFrontend = (operacion, estadoActual) => {
   return 'Disponible';
 };
 
+const isFinalStatusForFeatured = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'arrendado' || normalized === 'vendido';
+};
+
 const InmuebleDashboardPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -120,6 +129,10 @@ const InmuebleDashboardPage = () => {
 
   const handleToggleFeatured = async (inmueble) => {
     try {
+      if (isFinalStatusForFeatured(inmueble.estado)) {
+        return;
+      }
+
       const currentValue = inmueble.destacado ?? inmueble.featured ?? false;
       if (!currentValue) {
         const destacadosCount = inmuebles.filter((item) => (item.destacado ?? item.featured ?? false)).length;

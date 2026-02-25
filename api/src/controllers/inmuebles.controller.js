@@ -178,6 +178,7 @@ class InmueblesController {
    */
   async buscarInmuebles(req, res, next) {
     try {
+      const query = req.validatedQuery || req.query;
       const {
         ciudad,
         precio_min,
@@ -187,7 +188,7 @@ class InmueblesController {
         destacado,
         pagina = 1,
         limite = 20
-      } = req.query;
+      } = query;
 
       const filtros = {
         ciudad,
@@ -195,7 +196,10 @@ class InmueblesController {
         precio_max: precio_max ? parseFloat(precio_max) : undefined,
         area_min: area_min ? parseFloat(area_min) : undefined,
         categoria,
-        destacado
+        destacado,
+        estado: true,
+        // En catálogo público nunca mostrar inmuebles finalizados.
+        excluir_estados_frontend: ['Vendido', 'Arrendado']
       };
 
       const opciones = {

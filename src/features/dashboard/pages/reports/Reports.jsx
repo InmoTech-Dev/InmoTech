@@ -397,8 +397,8 @@ const ReportsContent = () => {
         const fileObj = img.file
         if (!fileObj) continue
 
-        const upload = await uploadToCloudinary(fileObj, { folder: `reportes/${backendId}/imagenes` })
-        await reportesInmobiliariosService.agregarImagen(backendId, { url: upload.secure_url })
+        const upload = await uploadToCloudinary(fileObj, { folder: `inmotech/reportes/${backendId}/imagenes` })
+        await reportesInmobiliariosService.agregarImagen(backendId, { url: upload.url })
         toast({
           title: 'Imagen guardada',
           description: `${img.name || 'Imagen'} guardada correctamente.`,
@@ -413,8 +413,8 @@ const ReportsContent = () => {
         const fileObj = f.file
         if (!fileObj) continue
 
-        const upload = await uploadToCloudinary(fileObj, { folder: `reportes/${backendId}/archivos` })
-        await reportesInmobiliariosService.agregarArchivo(backendId, { nombre, url: upload.secure_url })
+        const upload = await uploadToCloudinary(fileObj, { folder: `inmotech/reportes/${backendId}/archivos` })
+        await reportesInmobiliariosService.agregarArchivo(backendId, { nombre, url: upload.url })
         toast({
           title: 'Archivo guardado',
           description: `${nombre} guardado correctamente.`,
@@ -519,8 +519,8 @@ const ReportsContent = () => {
     const imagenes = Array.isArray(reportData.imagenes) ? reportData.imagenes : []
     for (const img of imagenes) {
       if (img.file) {
-        const upload = await uploadToCloudinary(img.file, { folder: `reportes/${backendId}/imagenes` })
-        await reportesInmobiliariosService.agregarImagen(backendId, { url: upload.secure_url })
+        const upload = await uploadToCloudinary(img.file, { folder: `inmotech/reportes/${backendId}/imagenes` })
+        await reportesInmobiliariosService.agregarImagen(backendId, { url: upload.url })
         toast({
           title: 'Imagen guardada',
           description: `${img.name || 'Imagen'} guardada correctamente.`,
@@ -534,8 +534,8 @@ const ReportsContent = () => {
     for (const f of archivos) {
       if (f.file) {
         const nombre = (f.name || f.nombre || 'Archivo').toString()
-        const upload = await uploadToCloudinary(f.file, { folder: `reportes/${backendId}/archivos` })
-        await reportesInmobiliariosService.agregarArchivo(backendId, { nombre, url: upload.secure_url })
+        const upload = await uploadToCloudinary(f.file, { folder: `inmotech/reportes/${backendId}/archivos` })
+        await reportesInmobiliariosService.agregarArchivo(backendId, { nombre, url: upload.url })
         toast({
           title: 'Archivo guardado',
           description: `${nombre} guardado correctamente.`,
@@ -1077,7 +1077,7 @@ const ReportsContent = () => {
   const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
 
   return (
-    <div className='p-6 space-y-6'>
+    <div className='px-0 py-6 space-y-6'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
       {dbError && <div className='p-4 text-red-600'>{dbError}</div>}
 

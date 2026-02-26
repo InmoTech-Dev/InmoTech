@@ -218,7 +218,7 @@ const AdminReportsView = ({
     }, [selectedUser, allReports]);
 
     return (
-        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden flex h-[calc(100vh-180px)] min-h-[600px]">
+        <div className="bg-white border-y border-slate-100 shadow-xl overflow-hidden flex h-[calc(100vh-180px)] min-h-[600px] w-full">
             {/* Column 1: User List (Sidebar) */}
             <UserSidebar
                 users={filteredUsers}
@@ -230,7 +230,7 @@ const AdminReportsView = ({
             />
 
             {/* Column 2: Selection List (Center) */}
-            <div className="w-[380px] min-w-[320px] shrink-0 flex flex-col border-l border-slate-50 bg-[#FBFDFF]/10">
+            <div className="w-[320px] min-w-[300px] shrink-0 flex flex-col border-l border-slate-50 bg-[#FBFDFF]/10">
                 <AdminFilterBar
                     filters={filters}
                     setFilters={setFilters}

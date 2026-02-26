@@ -79,7 +79,6 @@ BEGIN
         -- Información de documento (permite identificación sin duplicados)
         tipo_documento VARCHAR(20) NOT NULL CHECK (tipo_documento IN ('CC', 'CE', 'NIT', 'Pasaporte', 'TI')),
         numero_documento VARCHAR(20) NOT NULL,
-
         -- Nombres completos (unificados para simplicidad y mejor ordenamiento)
         nombre_completo VARCHAR(100) NOT NULL,
         apellido_completo VARCHAR(100) NOT NULL,

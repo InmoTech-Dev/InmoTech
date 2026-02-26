@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle2 } from "lucide-react";
 import { ventaApiService } from "../../../../shared/services/ventaApiService";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 /**
  * Modal de seguimiento / cambio de estado de venta.
@@ -13,6 +15,7 @@ export default function PurchaseTrackingModal({
   onUpdate,
 }) {
   if (!venta) return null;
+  const { toast } = useToast();
 
   const statusList = useMemo(() => {
     if (!Array.isArray(statusOptions)) return [];
@@ -140,7 +143,11 @@ export default function PurchaseTrackingModal({
         (basePayload.adjuntos || []).some((a) => (a.tipo || "").toLowerCase() === "comprobante") &&
         (basePayload.adjuntos || []).some((a) => (a.tipo || "").toLowerCase() === "contrato")
       ) {
-        alert("Venta cerrada: estado completada con comprobante y contrato cargados.");
+        toast({
+          title: "Venta cerrada",
+          description: "Estado completado y documentos (contrato y comprobante) cargados.",
+          variant: "default",
+        });
       }
       onClose();
     } finally {
@@ -321,9 +328,10 @@ export default function PurchaseTrackingModal({
 
           <div className="pt-2 flex justify-between items-center gap-3">
             {isClosed && (
-              <p className="text-sm text-green-700 font-semibold">
-                Venta cerrada: estado completada y documentos cargados.
-              </p>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm font-semibold">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Venta cerrada: estado completado y documentos cargados.</span>
+              </div>
             )}
             <motion.button
               whileHover={{ scale: 1.02 }}

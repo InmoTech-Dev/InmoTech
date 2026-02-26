@@ -2694,27 +2694,6 @@ BEGIN
     PRINT '? Comodidades insertadas por tipo de inmueble';
 END
 
--- Super Administrador
-IF NOT EXISTS (SELECT 1 FROM Personas WHERE numero_documento = '999999999')
-BEGIN
-    INSERT INTO Personas (tipo_documento, numero_documento, nombre_completo, apellido_completo, correo, telefono, tiene_cuenta)
-    VALUES ('CC', '999999999', 'Super', 'Admin', 'admin@inmotech.com', '+57 300 000 0000', 1);
-
-    DECLARE @id_super_admin INT = SCOPE_IDENTITY();
-
-    INSERT INTO Acceso (id_persona, contrasena)
-    VALUES (@id_super_admin, '$2b$10$rKvFJZEJfRJdLx6jxL5zMeyPh8s9JZCvC.yMFNyV8HQKZ6yFN.JxC'); -- Contraseña: Admin123!
-
-    INSERT INTO Administrativos (id_persona, codigo_empleado, fecha_ingreso, cargo, departamento, estado_laboral)
-    VALUES (@id_super_admin, 'ADMIN-001', GETDATE(), 'Super Administrador', 'Tecnología', 'Activo');
-
-    DECLARE @id_rol_super INT = (SELECT id_rol FROM Roles WHERE nombre_rol = 'Super Administrador');
-    INSERT INTO Personas_rol (id_persona, id_rol)
-    VALUES (@id_super_admin, @id_rol_super);
-
-    PRINT '? Super Administrador creado exitosamente';
-END
-
 -- Propietarios de ejemplo
 IF NOT EXISTS (SELECT 1 FROM Propietarios WHERE registro_propietario = 'PROP-001')
 BEGIN

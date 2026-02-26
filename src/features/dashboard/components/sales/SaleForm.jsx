@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 // Lista de campos que deben ser obligatorios para el registro
 const requiredFields = [
@@ -71,10 +72,104 @@ const initial = {
     medioPagoTransferencia: "",
 };
 
+// Helpers para validar restricciones de inmueble
+const normalizeTextValue = (value = "") =>
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const getPropertySource = (property = {}) =>
+    property?.metadata?.raw || property?.raw || property || {};
+
+const propertyHasActiveLease = (property = {}) => {
+    const source = getPropertySource(property);
+    const estadoTexto = normalizeTextValue(
+        property.estado ||
+        source.estado_frontend ||
+        source.estado ||
+        source.estado_inmueble
+    );
+
+    const leaseCollections = [
+        source.arriendos,
+        source.arrendamientos,
+        source.leases,
+        source.lease,
+        source.inmueble_arriendos,
+        source.arriendos_activos,
+    ].filter(Array.isArray);
+
+    const leaseList = leaseCollections.flat();
+
+    const hasLeaseMarkedActive = leaseList.some((lease) => {
+        const leaseState = normalizeTextValue(
+            lease?.estado ||
+            lease?.estado_contrato ||
+            lease?.estado_arriendo ||
+            lease?.status
+        );
+        return (
+            leaseState === "activo" ||
+            leaseState === "activa" ||
+            leaseState.includes("vigente") ||
+            leaseState.includes("en curso")
+        );
+    });
+
+    return (
+        estadoTexto.includes("arrend") ||
+        estadoTexto.includes("alquil") ||
+        hasLeaseMarkedActive
+    );
+};
+
+const propertyIsOnlyForRent = (property = {}) => {
+    const source = getPropertySource(property);
+    const operacion = normalizeTextValue(
+        property.operacion || source.operacion || source.tipo_operacion
+    );
+    return operacion === "arriendo" || operacion === "alquiler";
+};
+
+const normalizeDocType = (value = "") => {
+    const v = normalizeTextValue(value);
+    if (!v) return "";
+    if (["cc", "c.c", "cedula", "cédula", "cedula de ciudadania", "cédula de ciudadanía", "id"].includes(v)) return "CC";
+    if (["ce", "c.e", "cedula de extranjeria", "cédula de extranjería", "extranjeria", "extranjería"].includes(v)) return "CE";
+    if (["nit", "n.i.t", "tax id"].includes(v)) return "NIT";
+    if (["pasaporte", "passport", "pp"].includes(v)) return "PASAPORTE";
+    if (["ti", "t.i", "tarjeta de identidad"].includes(v)) return "TI";
+    return value; // deja tal cual si no coincide; el select mostrará vacío si no existe la opción
+};
+
+// Separa posibles prefijos de tipo y limpia solo dígitos para el número
+const splitDocTypeAndNumber = (rawNumber = "", rawType = "") => {
+    const trimmed = String(rawNumber || "").trim();
+    let inferredType = normalizeDocType(rawType);
+    let numberOnly = trimmed.replace(/\D+/g, "");
+
+    const match = trimmed.match(/^([A-Za-z]{1,4})[\s\-]*([0-9]+)$/);
+    if (match) {
+        inferredType = inferredType || normalizeDocType(match[1]);
+        numberOnly = match[2];
+    }
+
+    return {
+        tipo: inferredType,
+        numero: numberOnly
+    };
+};
+
+const getOwnerCandidate = (inmueble = {}) => {
+    if (inmueble.propietario) return inmueble.propietario;
+    if (Array.isArray(inmueble.propietarios) && inmueble.propietarios.length) return inmueble.propietarios[0];
+    const source = getPropertySource(inmueble);
+    return source?.propietario || source?.owner || null;
+};
+
 export default function SalesForm({ onClose, onSubmit }) {
     const [step, setStep] = useState(1);
     const [errors, setErrors] = useState({});
     const totalSteps = 4;
+    const { toast } = useToast();
 
     // Refs para manejo eficiente de estado (igual que en el formulario de arriendos)
     const valuesRef = useRef({ ...initial });
@@ -114,19 +209,20 @@ export default function SalesForm({ onClose, onSubmit }) {
     const emailFields = ["vendedorCorreo", "compradorCorreo"];
 
     // Campos agrupados por paso para la validación
+    // Orden de pasos: 1) inmueble, 2) vendedor (propietario), 3) comprador, 4) precio/pago
     const stepFields = {
         1: [
-            "vendedorTipoDocumento", VENDEDOR_DOC, "vendedorNombreCompleto", 
-            "vendedorCorreo", "vendedorTelefono",
-        ],
-        2: [
-            "compradorTipoDocumento", COMPRADOR_DOC, "compradorNombreCompleto", 
-            "compradorCorreo", "compradorTelefono",
-        ],
-        3: [
             "inmuebleTipo", "inmuebleRegistro", "inmuebleNombre",
             "inmueblePais", "inmuebleDepartamento", "inmuebleCiudad",
             "inmuebleBarrio", "inmuebleDireccion", "inmuebleGaraje"
+        ],
+        2: [
+            "vendedorTipoDocumento", VENDEDOR_DOC, "vendedorNombreCompleto", 
+            "vendedorCorreo", "vendedorTelefono",
+        ],
+        3: [
+            "compradorTipoDocumento", COMPRADOR_DOC, "compradorNombreCompleto", 
+            "compradorCorreo", "compradorTelefono",
         ],
         4: [
             "fechaVenta", "medioPago", "medioPagoEfectivo", "medioPagoTransferencia", "inmueblePrecio"
@@ -370,6 +466,55 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
     };
 
+    // Autocompleta vendedor con datos del propietario del inmueble
+    const autofillVendedorDesdePropietario = (inmueble = {}) => {
+        const owner = getOwnerCandidate(inmueble);
+        if (!owner) return;
+
+        const source = getPropertySource(inmueble);
+        const raw = inmueble.metadata?.raw || {};
+        const ownerRawList = Array.isArray(raw.propietarios) && raw.propietarios.length ? raw.propietarios[0] : null;
+        const ownerRaw =
+            raw.propietario ||
+            raw.owner ||
+            raw.propietario_principal ||
+            raw.propietarioPrincipal ||
+            ownerRawList ||
+            raw ||
+            {};
+
+        const docNumero =
+            owner.numero_documento || owner.numeroDocumento || owner.documento || owner.cedula || owner.identificacion || owner.identificación || owner.nit ||
+            source?.propietario_documento || source?.documento_propietario ||
+            source?.identificacion_propietario || source?.cedula_propietario || source?.nit_propietario || source?.documento ||
+            ownerRaw.numero_documento || ownerRaw.numeroDocumento || ownerRaw.documento || ownerRaw.cedula || ownerRaw.cédula ||
+            ownerRaw.identificacion || ownerRaw.identificación || ownerRaw.nit || ownerRaw.nro_documento_propietario || ownerRaw.doc_propietario;
+
+        const docTipo =
+            owner.tipo_documento || owner.tipoDocumento || owner.tipo_doc || owner.documento_tipo ||
+            source?.propietario_tipo_documento || source?.tipo_documento_propietario || source?.documento_tipo || source?.tipo_doc || source?.tipoDocumento ||
+            ownerRaw.tipo_documento || ownerRaw.tipoDocumento || ownerRaw.tipo_doc || ownerRaw.documento_tipo || ownerRaw.tipo || ownerRaw.clase_documento;
+
+        const nombre =
+            owner.nombreCompleto || owner.nombre_completo ||
+            [owner.nombre, owner.apellido, owner.apellidos].filter(Boolean).join(" ").trim();
+
+        const { tipo, numero } = splitDocTypeAndNumber(docNumero, docTipo);
+
+        if (tipo) setFieldValue("vendedorTipoDocumento", tipo);
+        if (numero) {
+            setFieldValue(VENDEDOR_DOC, String(numero));
+            // Guardar snapshot para que las validaciones/búsquedas no lo borren
+            buyerDocumentSnapshotRef.current = {
+                tipo: valuesRef.current.vendedorTipoDocumento || tipo || "",
+                numero: String(numero)
+            };
+        }
+        if (nombre) setFieldValue("vendedorNombreCompleto", nombre);
+        if (owner.email || owner.correo) setFieldValue("vendedorCorreo", owner.email || owner.correo);
+        if (owner.telefono || owner.celular) setFieldValue("vendedorTelefono", owner.telefono || owner.celular);
+    };
+
     const autofillInmueble = (inmueble, { skipEstado = false } = {}) => {
         if (!inmueble) return;
 
@@ -400,6 +545,9 @@ export default function SalesForm({ onClose, onSubmit }) {
             const priceEl = elRefs.current["inmueblePrecio"];
             if (priceEl) priceEl.value = formatted;
         }
+
+        // Autocompletar vendedor con datos del propietario
+        autofillVendedorDesdePropietario(inmueble);
     };
 
     const handleInmuebleLookup = useCallback(async (registro = "") => {
@@ -412,11 +560,46 @@ export default function SalesForm({ onClose, onSubmit }) {
             const inmueble = await inmueblesAPI.getInmuebleByRegistro(cleanRegistro);
 
             if (inmueble && inmueble.id) {
+                if (propertyHasActiveLease(inmueble)) {
+                    setInmuebleLookupState({ loading: false, message: "", error: null });
+                    setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.inmuebleRegistro; // evitamos mostrar texto de la API en el campo
+                        return next;
+                    });
+                    toast({
+                        title: "Inmueble con arriendo activo",
+                        description: "No se puede vender: arriendo activo.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
+                if (propertyIsOnlyForRent(inmueble)) {
+                    setInmuebleLookupState({ loading: false, message: "", error: null });
+                    setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.inmuebleRegistro;
+                        return next;
+                    });
+                    toast({
+                        title: "Inmueble marcado solo para arriendo",
+                        description: "No se puede vender este inmueble porque está para arriendo.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
                 autofillInmueble(inmueble, { skipEstado: true });
                 setInmuebleLookupState({
                     loading: false,
                     message: "Datos del inmueble completados automáticamente.",
                     error: null,
+                });
+                toast({
+                    title: "Inmueble encontrado",
+                    description: "Datos del inmueble completados automáticamente.",
+                    variant: "default",
                 });
             } else {
                 setInmuebleLookupState({
@@ -424,12 +607,22 @@ export default function SalesForm({ onClose, onSubmit }) {
                     message: "",
                     error: "No encontramos un inmueble con ese registro.",
                 });
+                toast({
+                    title: "Inmueble no encontrado",
+                    description: "No encontramos un inmueble con ese registro.",
+                    variant: "destructive",
+                });
             }
         } catch (error) {
             setInmuebleLookupState({
                 loading: false,
                 message: "",
                 error: error?.message || "No fue posible buscar el inmueble.",
+            });
+            toast({
+                title: "Error al buscar inmueble",
+                description: error?.message || "No fue posible buscar el inmueble.",
+                variant: "destructive",
             });
         }
     }, []);
@@ -790,12 +983,22 @@ export default function SalesForm({ onClose, onSubmit }) {
                     message: "Datos del comprador completados automáticamente.",
                     error: null,
                 });
+                toast({
+                    title: "Comprador encontrado",
+                    description: "Datos del comprador completados automáticamente.",
+                    variant: "default",
+                });
             } else {
                 resetBuyerSelection();
                 setBuyerLookupState({
                     loading: false,
                     message: "",
                     error: "No encontramos un comprador registrado con ese documento.",
+                });
+                toast({
+                    title: "Comprador no encontrado",
+                    description: "No encontramos un comprador registrado con ese documento.",
+                    variant: "destructive",
                 });
             }
         } catch (error) {
@@ -807,6 +1010,11 @@ export default function SalesForm({ onClose, onSubmit }) {
                 loading: false,
                 message: "",
                 error: error?.message || "No fue posible buscar el comprador.",
+            });
+            toast({
+                title: "Error al buscar comprador",
+                description: error?.message || "No fue posible buscar el comprador.",
+                variant: "destructive",
             });
         }
     }, [applyBuyerData, resetBuyerSelection]);
@@ -1190,71 +1398,18 @@ export default function SalesForm({ onClose, onSubmit }) {
                     <p className="text-xs text-blue-700 font-bold mt-2 text-center">
                         Paso {step} de {totalSteps}:{" "}
                         <span className="font-semibold text-gray-600">
-                            {step === 1 ? "Datos del Vendedor" : 
-                             step === 2 ? "Datos del Comprador" : 
-                             step === 3 ? "Detalles de la Propiedad" : "Precio de Venta"}
+                            {step === 1 ? "Datos del Inmueble" : 
+                             step === 2 ? "Datos del Vendedor (Propietario)" : 
+                             step === 3 ? "Datos del Comprador" : "Precio y Medio de Pago"}
                         </span>
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* PASO 1: Datos del Vendedor */}
+                    {/* PASO 1: Datos del Inmueble */}
                     {step === 1 && (
                         <div>
-                            <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">1. Información del Vendedor</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-                                <Field
-                                    name="vendedorTipoDocumento"
-                                    as="select"
-                                    options={DOCUMENT_OPTIONS}
-                                />
-                                <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
-                                <Field name="vendedorNombreCompleto" placeholder="Solo letras y espacios." />
-                                <Field name="vendedorCorreo" placeholder="correo@dominio.com" type="email" />
-                                <Field name="vendedorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PASO 2: Datos del Comprador */}
-                    {step === 2 && (
-                        <div>
-                            <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">2. Información del Comprador</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-                                <Field
-                                    name="compradorTipoDocumento"
-                                    as="select"
-                                    options={DOCUMENT_OPTIONS}
-                                />
-                                <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
-                                <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
-                                <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
-                                <Field name="compradorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
-                                {(buyerLookupState.loading || buyerLookupState.error || buyerLookupState.message) && (
-                                    <div className="md:col-span-2">
-                                        <p
-                                            className={`text-sm ${
-                                                buyerLookupState.loading
-                                                    ? "text-blue-600"
-                                                    : buyerLookupState.error
-                                                        ? "text-red-600"
-                                                        : "text-green-700"
-                                            }`}
-                                        >
-                                            {buyerLookupState.loading && "Buscando compradorâ€¦"}
-                                            {!buyerLookupState.loading && buyerLookupState.error && buyerLookupState.error}
-                                            {!buyerLookupState.loading && !buyerLookupState.error && buyerLookupState.message}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PASO 3: Detalles de la Propiedad */}
-                    {step === 3 && (
-                        <div>
-                            <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">3. Detalles y Ubicación del Inmueble</h3>
+                            <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">1. Detalles y Ubicación del Inmueble</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                                 <Field
                                     name="inmuebleTipo"
@@ -1296,6 +1451,59 @@ export default function SalesForm({ onClose, onSubmit }) {
                                 </div>
 
                                 <Field name="inmuebleGaraje" type="checkbox" />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* PASO 2: Datos del Vendedor */}
+                    {step === 2 && (
+                        <div>
+                            <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">2. Información del Vendedor (Propietario)</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+                                <Field
+                                    name="vendedorTipoDocumento"
+                                    as="select"
+                                    options={DOCUMENT_OPTIONS}
+                                />
+                                <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                <Field name="vendedorNombreCompleto" placeholder="Solo letras y espacios." />
+                                <Field name="vendedorCorreo" placeholder="correo@dominio.com" type="email" />
+                                <Field name="vendedorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* PASO 3: Datos del Comprador */}
+                    {step === 3 && (
+                        <div>
+                            <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">3. Información del Comprador</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+                                <Field
+                                    name="compradorTipoDocumento"
+                                    as="select"
+                                    options={DOCUMENT_OPTIONS}
+                                />
+                                <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
+                                <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
+                                <Field name="compradorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
+                                {(buyerLookupState.loading || buyerLookupState.error || buyerLookupState.message) && (
+                                    <div className="md:col-span-2">
+                                        <p
+                                            className={`text-sm ${
+                                                buyerLookupState.loading
+                                                    ? "text-blue-600"
+                                                    : buyerLookupState.error
+                                                        ? "text-red-600"
+                                                        : "text-green-700"
+                                            }`}
+                                        >
+                                            {buyerLookupState.loading && "Buscando compradorâ€¦"}
+                                            {!buyerLookupState.loading && buyerLookupState.error && buyerLookupState.error}
+                                            {!buyerLookupState.loading && !buyerLookupState.error && buyerLookupState.message}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

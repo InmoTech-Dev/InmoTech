@@ -19,10 +19,12 @@ import InterestedPeopleTable from "../../components/sales/InterestedPeople";
 import ViewSaleModal from "../../components/sales/ViewSale";
 
 import ventaApiService from "../../../../shared/services/ventaApiService";
+import MESSAGES from "../../../../shared/constants/messages";
 
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 
 const STATUS_NORMALIZE = (value = "") =>
@@ -223,6 +225,80 @@ const buildBuyerFullName = (buyer = {}, fallback = "") => {
 
   return name || fallback || "";
 
+};
+
+
+
+const normalizeTextValue = (value = "") =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const getPropertySource = (property = {}) =>
+  property?.raw?.metadata?.raw || property?.raw || property || {};
+
+const propertyHasActiveLease = (property = {}) => {
+  const source = getPropertySource(property);
+  const estadoTexto = normalizeTextValue(
+    property.estado ||
+    property?.raw?.estado ||
+    source.estado_frontend ||
+    source.estado ||
+    source.estado_inmueble
+  );
+
+  const leaseCollections = [
+    source.arriendos,
+    source.arrendamientos,
+    source.leases,
+    source.lease,
+    source.inmueble_arriendos,
+    source.arriendos_activos,
+  ].filter(Array.isArray);
+
+  const leaseList = leaseCollections.flat();
+
+  const hasLeaseMarkedActive = leaseList.some((lease) => {
+    const leaseState = normalizeTextValue(
+      lease?.estado ||
+      lease?.estado_contrato ||
+      lease?.estado_arriendo ||
+      lease?.status
+    );
+    return (
+      leaseState === "activo" ||
+      leaseState === "activa" ||
+      leaseState.includes("vigente") ||
+      leaseState.includes("en curso")
+    );
+  });
+
+  return (
+    estadoTexto.includes("arrend") ||
+    estadoTexto.includes("alquil") ||
+    hasLeaseMarkedActive
+  );
+};
+
+const propertyIsSold = (property = {}) => {
+  const source = getPropertySource(property);
+  const estadoTexto = normalizeTextValue(
+    property.estado ||
+    property?.raw?.estado ||
+    source.estado_frontend ||
+    source.estado ||
+    source.estado_inmueble
+  );
+  const operacion = normalizeTextValue(
+    property?.raw?.operacion || property.operacion || source.operacion
+  );
+  const estadoVenta = normalizeTextValue(
+    source.estado_venta || source.estadoVenta || source.status_venta
+  );
+
+  return (
+    estadoTexto.includes("vend") ||
+    estadoVenta.includes("vend") ||
+    operacion === "vendido"
+  );
 };
 
 
@@ -955,6 +1031,7 @@ export function SalesManagementPage() {
   const [statusCatalog, setStatusCatalog] = useState([]);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
   const [statusesError, setStatusesError] = useState(null);
+  const { toast } = useToast();
 
 
 
@@ -1317,6 +1394,24 @@ export function SalesManagementPage() {
 
     }
 
+    if (propertyHasActiveLease(matchedProperty)) {
+      setSavingVenta(false);
+      setStatusMessage({
+        type: "error",
+        text: "El inmueble seleccionado tiene un arriendo activo. Finaliza o marca el contrato como inactivo antes de registrarlo como venta.",
+      });
+      return;
+    }
+
+    if (propertyIsSold(matchedProperty)) {
+      setSavingVenta(false);
+      setStatusMessage({
+        type: "error",
+        text: "El inmueble ya aparece como vendido en el sistema. No se puede registrar otra venta para este registro.",
+      });
+      return;
+    }
+
 
 
     const payload = buildSalePayload(saleData, buyerInfo, matchedProperty);
@@ -1473,16 +1568,17 @@ export function SalesManagementPage() {
 
       setVentas((prev) => [...prev, normalizedSale]);
 
+      const successText = buyerUpdateError
+        ? MESSAGES.sale.create.partialBuyer
+        : MESSAGES.sale.create.success;
       setStatusMessage({
-
         type: "success",
-
-        text: buyerUpdateError
-
-          ? "Venta registrada, pero no se pudo actualizar la ficha del comprador. Revisa el módulo de compradores."
-
-          : "Venta registrada correctamente.",
-
+        text: successText,
+      });
+      toast({
+        title: "Venta registrada",
+        description: successText,
+        variant: "default",
       });
 
       handleCloseForm();
@@ -1501,6 +1597,11 @@ export function SalesManagementPage() {
 
           "No se pudo registrar la venta en la API. Revisa los datos e intenta nuevamente.",
 
+      });
+      toast({
+        title: "Error al registrar venta",
+        description: error?.message || MESSAGES.sale.create.error,
+        variant: "destructive",
       });
 
     } finally {
@@ -1570,6 +1671,20 @@ export function SalesManagementPage() {
         return;
       }
 
+      const isCompleting =
+        STATUS_NORMALIZE(
+          mergedPayload.estadoSeguimiento || trackingPayload.descripcion || ""
+        ) === STATUS_NORMALIZE("Completada");
+      if (isCompleting) {
+        const confirmed = window.confirm(
+          "Vas a marcar el seguimiento como 'Completada'. ¿Confirmas que quieres guardar este cambio?"
+        );
+        if (!confirmed) {
+          setStatusMessage(null);
+          return;
+        }
+      }
+
       await ventaApiService.cambiarEstado(saleId, {
         ...trackingPayload,
         descripcion: mergedPayload.descripcionSeguimiento || trackingPayload.descripcion,
@@ -1598,11 +1713,21 @@ export function SalesManagementPage() {
         type: "success",
         text: "Estados guardados correctamente.",
       });
+      toast({
+        title: "Seguimiento actualizado",
+        description: MESSAGES.sale.tracking.success,
+        variant: "default",
+      });
     } catch (error) {
       console.error("Error actualizando estados:", error);
       setStatusMessage({
         type: "error",
         text: error?.message || "No se pudo actualizar el estado. Intenta nuevamente.",
+      });
+      toast({
+        title: "Error al actualizar estado",
+        description: error?.message || MESSAGES.sale.tracking.error,
+        variant: "destructive",
       });
     } finally {
       setTrackingSale(null);
@@ -1883,57 +2008,7 @@ export function SalesManagementPage() {
 
 
 
-        {statusMessage && (
-
-          <motion.div
-
-            initial={{ opacity: 0, y: 20 }}
-
-            animate={{ opacity: 1, y: 0 }}
-
-            className={`rounded-lg border px-4 py-3 text-sm font-medium ${
-
-              statusMessage.type === "error"
-
-                ? "border-red-200 bg-red-50 text-red-700"
-
-                : "border-green-200 bg-green-50 text-green-700"
-
-            }`}
-
-          >
-
-            <div className="flex items-center justify-between gap-4">
-
-              <span>{statusMessage.text}</span>
-
-              {statusMessage.type === "error" && (
-
-                <motion.button
-
-                  whileHover={{ scale: 1.05 }}
-
-                  whileTap={{ scale: 0.95 }}
-
-                  type="button"
-
-                  className="text-xs font-semibold uppercase tracking-wide text-red-600 hover:text-red-800"
-
-                  onClick={fetchVentas}
-
-                >
-
-                  Reintentar
-
-                </motion.button>
-
-              )}
-
-            </div>
-
-          </motion.div>
-
-        )}
+        {/* Banner de estado removido: usaremos toasts para feedback */}
 
 
 
@@ -2197,6 +2272,8 @@ export function SalesManagementPage() {
   );
 
 }
+
+
 
 
 

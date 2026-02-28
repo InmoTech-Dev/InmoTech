@@ -7,6 +7,8 @@ import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
+import MESSAGES from "../../../../shared/constants/messages";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
     const info = {
@@ -70,6 +72,7 @@ export function BuyersManagementPage() {
     const [buyerToEdit, setBuyerToEdit] = useState(null);
     const [buyerToView, setBuyerToView] = useState(null);
     const [buyerToDelete, setBuyerToDelete] = useState(null);
+    const { toast } = useToast();
 
     const showStatus = (type, message) => {
         setStatusMessage({ type, message });
@@ -84,7 +87,7 @@ export function BuyersManagementPage() {
             const buyers = await buyersApiService.getAll(params);
             setCompradores(normalizeBuyers(filterRealBuyers(buyers)));
         } catch (error) {
-            showStatus("error", error.message || "No fue posible cargar los compradores");
+            showStatus("error", error.message || MESSAGES.buyer.loadError);
         } finally {
             setIsLoading(false);
         }
@@ -157,10 +160,21 @@ export function BuyersManagementPage() {
             const newBuyer = await buyersApiService.create(formData);
             const mapped = mapApiBuyerToRow(newBuyer, formData);
             setCompradores((prev) => [mapped, ...prev.filter((buyer) => buyer.id !== mapped.id)]);
-            showStatus("success", "Comprador registrado correctamente");
+            showStatus("success", MESSAGES.buyer.create);
+            toast({
+                title: "Comprador creado",
+                description: MESSAGES.buyer.create,
+                variant: "default",
+            });
             handleCloseForm();
         } catch (error) {
-            showStatus("error", error.message || "No fue posible crear el comprador");
+            const errMsg = error.message || MESSAGES.buyer.createError || "No fue posible crear el comprador";
+            showStatus("error", errMsg);
+            toast({
+                title: "Error al crear comprador",
+                description: errMsg,
+                variant: "destructive",
+            });
             throw error;
         } finally {
             setFormSubmitting(false);
@@ -187,10 +201,21 @@ export function BuyersManagementPage() {
             setCompradores((prev) =>
                 prev.map((buyer) => (buyer.id === mapped.id ? mapped : buyer))
             );
-            showStatus("success", "Comprador actualizado correctamente");
+            showStatus("success", MESSAGES.buyer.update);
+            toast({
+                title: "Comprador actualizado",
+                description: MESSAGES.buyer.update,
+                variant: "default",
+            });
             handleCloseForm();
         } catch (error) {
-            showStatus("error", error.message || "No fue posible actualizar el comprador");
+            const errMsg = error.message || MESSAGES.buyer.updateError || "No fue posible actualizar el comprador";
+            showStatus("error", errMsg);
+            toast({
+                title: "Error al actualizar",
+                description: errMsg,
+                variant: "destructive",
+            });
             throw error;
         } finally {
             setFormSubmitting(false);
@@ -228,9 +253,20 @@ export function BuyersManagementPage() {
             setCompradores((prev) =>
                 prev.filter((b) => (b.id ?? b.personaId) !== removedId)
             );
-            showStatus("success", "Comprador eliminado correctamente");
+            showStatus("success", MESSAGES.buyer.delete);
+            toast({
+                title: "Comprador eliminado",
+                description: MESSAGES.buyer.delete,
+                variant: "default",
+            });
         } catch (error) {
-            showStatus("error", error.message || "No fue posible eliminar al comprador");
+            const errMsg = error.message || MESSAGES.buyer.deleteError || "No fue posible eliminar al comprador";
+            showStatus("error", errMsg);
+            toast({
+                title: "Error al eliminar",
+                description: errMsg,
+                variant: "destructive",
+            });
         } finally {
             setIsDeleting(false);
             setBuyerToDelete(null);
@@ -384,19 +420,7 @@ export function BuyersManagementPage() {
     return (
         <>
             <div className="p-6 space-y-6">
-                {statusMessage && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`mb-6 rounded-lg border px-4 py-3 text-sm font-semibold ${
-                            statusMessage.type === "error"
-                                ? "border-red-200 bg-red-50 text-red-700"
-                                : "border-green-200 bg-green-50 text-green-800"
-                        }`}
-                    >
-                        {statusMessage.message}
-                    </motion.div>
-                )}
+                {/* Se oculta el banner superior; usamos solo toasts */}
 
                 {/* HEADER CON NUEVO ESTILO */}
                 <motion.div

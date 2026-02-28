@@ -242,14 +242,12 @@ class SSEService {
     bind('user_disabled', (data) => this.emit('user_disabled', data));
     bind('password_changed', (data) => this.emit('password_changed', data));
     bind('admin_access_revoked', (data) => this.emit('admin_access_revoked', data));
-
     bind('session.force_logout', (data) => this.emitForcedLogout(data));
-
     bind('appointment.changed', (data) => this.emit('appointment.changed', data));
     bind('notification.changed', (data) => this.emit('notification.changed', data));
     bind('user.changed', (data) => this.emit('user.changed', data));
     bind('role.changed', (data) => this.emit('role.changed', data));
-
+    bind('report.changed', (data) => this.emit('report.changed', data));
     bind('heartbeat', (data) => this.emit('heartbeat', data));
   }
 

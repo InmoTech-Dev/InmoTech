@@ -218,16 +218,15 @@ export default function AdminHolderCard({ className = "" }) {
   };
 
   const validateForm = () => {
-    const targetPersonaId = Number.parseInt(form.targetPersonaId, 10);
+    const target = Number.parseInt(form.targetPersonaId, 10);
     const reason = String(form.reason || "").trim();
     const nextErrors = {
       targetPersonaId: "",
       reason: "",
     };
 
-    if (!Number.isInteger(targetPersonaId) || targetPersonaId <= 0) {
-      nextErrors.targetPersonaId = "Debes seleccionar un administrativo destino.";
-    }
+    // No validamos targetPersonaId si se deja vacío (0/null)
+    // Pero la razón sí es obligatoria siempre.
 
     if (!reason) {
       nextErrors.reason = "La razon de la transferencia es obligatoria.";
@@ -251,7 +250,7 @@ export default function AdminHolderCard({ className = "" }) {
     try {
       setIsSubmitting(true);
       const payload = {
-        target_persona_id: targetPersonaId,
+        target_persona_id: targetPersonaId || 0, // 0 indica dejar vacío
         disable_previous_account: form.disablePreviousAccount,
         reason,
       };
@@ -298,7 +297,7 @@ export default function AdminHolderCard({ className = "" }) {
       ? " La cuenta del administrador saliente sera deshabilitada."
       : ""
     }`
-    : "Confirmas cambiar el titular del rol Administrador?";
+    : `Confirmas dejar el puesto de Administrador vacio?${form.disablePreviousAccount ? " La cuenta del administrador saliente sera deshabilitada." : ""}`;
 
   const modal = isModalOpen && typeof document !== "undefined"
     ? createPortal(
@@ -344,6 +343,9 @@ export default function AdminHolderCard({ className = "" }) {
                   maxListHeight={240}
                   className="max-h-56"
                 >
+                  <SelectItem value="0" className="text-amber-700 font-medium">
+                    -- Dejar puesto vacio --
+                  </SelectItem>
                   {candidates.map((candidate) => (
                     <SelectItem
                       key={candidate.id_persona}

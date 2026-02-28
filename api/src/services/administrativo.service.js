@@ -579,14 +579,22 @@ class AdministrativoService {
           });
 
           if (rolActual) {
-            if (rolActual.id_rol !== rolIdNormalizado) {
-              await rolActual.update({ id_rol: rolIdNormalizado }, { transaction: t });
-            }
+            // Siempre aseguramos que esté activo al editar, y actualizamos el ID si cambió
+            await rolActual.update(
+              {
+                id_rol: rolIdNormalizado,
+                estado: true,
+                fecha_asignacion: new Date()
+              },
+              { transaction: t }
+            );
           } else {
             await PersonasRol.create(
               {
                 id_persona: personaId,
                 id_rol: rolIdNormalizado,
+                estado: true,
+                fecha_asignacion: new Date()
               },
               { transaction: t }
             );
@@ -594,6 +602,16 @@ class AdministrativoService {
         }
 
         logger.info(`Administrativo actualizado: ID ${id}`);
+
+        // Emitir evento SSE para cambios en tiempo real
+        const personaId = administrativo.persona.id_persona;
+        const audienceIds = await require('./realtimeAudience.service').obtenerAdministrativosActivosIds();
+        sseService.emitUserChanged({
+          action: 'updated',
+          userId: personaId,
+          affectedUserIds: [personaId],
+          audienceUserIds: audienceIds
+        });
 
         return administrativo;
 

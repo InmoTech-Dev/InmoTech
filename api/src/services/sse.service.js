@@ -365,6 +365,14 @@ class SSEService {
     });
   }
 
+  emitRoleChanged({ action, roleId }) {
+    this.broadcastToAll('role.changed', {
+      action: action || 'updated',
+      role_id: this.normalizeUserId(roleId),
+      occurred_at: new Date().toISOString(),
+    });
+  }
+
   /**
    * Obtiene estadisticas de conexiones SSE
    */

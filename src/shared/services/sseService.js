@@ -248,6 +248,7 @@ class SSEService {
     bind('appointment.changed', (data) => this.emit('appointment.changed', data));
     bind('notification.changed', (data) => this.emit('notification.changed', data));
     bind('user.changed', (data) => this.emit('user.changed', data));
+    bind('role.changed', (data) => this.emit('role.changed', data));
 
     bind('heartbeat', (data) => this.emit('heartbeat', data));
   }

@@ -4,7 +4,6 @@ import ReportSelectionList from './components/ReportSelectionList';
 import ReportDetailedView from './components/ReportDetailedView';
 import administrativosApiService from '@/shared/services/administrativosApiService';
 import reportesInmobiliariosService from '@/features/dashboard/services/reportesInmobiliarios.service';
-import AdminFilterBar from './components/AdminFilterBar';
 import { useToast } from '@/shared/hooks/use-toast';
 
 const AdminReportsView = ({
@@ -12,7 +11,9 @@ const AdminReportsView = ({
     onViewReport,
     onEditReport,
     onDownloadPDF,
-    loading: reportsLoading
+    loading: reportsLoading,
+    filters,
+    setFilters
 }) => {
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -20,7 +21,6 @@ const AdminReportsView = ({
     const [usersLoading, setUsersLoading] = useState(true);
     const [detailedLoading, setDetailedLoading] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [filters, setFilters] = useState({ year: '', month: '', city: '' });
     const { toast } = useToast();
 
     useEffect(() => {
@@ -67,16 +67,7 @@ const AdminReportsView = ({
         fetchUsers();
     }, []);
 
-    // Calculate dynamic filter options
-    const filterOptions = React.useMemo(() => {
-        const cities = [...new Set(allReports.map(r => r.ubicacion).filter(Boolean))].sort();
-        const years = [...new Set(allReports.map(r => {
-            const parts = r.fecha?.split('/');
-            return parts?.[2];
-        }).filter(Boolean))].sort((a, b) => b - a);
 
-        return { cities, years };
-    }, [allReports]);
 
     // Apply filters to ALL reports first to determine which users have matching reports
     const filteredReportsGlobal = React.useMemo(() => {
@@ -218,7 +209,7 @@ const AdminReportsView = ({
     }, [selectedUser, allReports]);
 
     return (
-        <div className="bg-white border-y border-slate-100 shadow-xl overflow-hidden flex h-[calc(100vh-180px)] min-h-[600px] w-full">
+        <div className="bg-white border-y border-slate-100 shadow-xl overflow-hidden flex flex-1 min-h-0 w-full mt-4">
             {/* Column 1: User List (Sidebar) */}
             <UserSidebar
                 users={filteredUsers}
@@ -231,12 +222,6 @@ const AdminReportsView = ({
 
             {/* Column 2: Selection List (Center) */}
             <div className="w-[320px] min-w-[300px] shrink-0 flex flex-col border-l border-slate-50 bg-[#FBFDFF]/10">
-                <AdminFilterBar
-                    filters={filters}
-                    setFilters={setFilters}
-                    options={filterOptions}
-                    onClear={() => setFilters({ year: '', month: '', city: '' })}
-                />
                 <ReportSelectionList
                     selectedUser={selectedUser}
                     reports={userReports}

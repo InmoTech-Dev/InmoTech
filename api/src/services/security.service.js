@@ -44,14 +44,18 @@ class SecurityService {
           ],
           transaction: t,
         }),
-        Persona.findOne({
-          where: { id_persona: targetPersonaId, estado: true },
-          transaction: t,
-        }),
-        Administrativo.findOne({
-          where: { id_persona: targetPersonaId, estado_laboral: 'Activo' },
-          transaction: t,
-        }),
+        targetPersonaId && targetPersonaId > 0
+          ? Persona.findOne({
+            where: { id_persona: targetPersonaId, estado: true },
+            transaction: t,
+          })
+          : Promise.resolve(null),
+        targetPersonaId && targetPersonaId > 0
+          ? Administrativo.findOne({
+            where: { id_persona: targetPersonaId, estado_laboral: 'Activo' },
+            transaction: t,
+          })
+          : Promise.resolve(null),
       ]);
 
       if (!actorPersona) {
@@ -66,12 +70,14 @@ class SecurityService {
         throw buildHttpError('Configuracion invalida de rol Administrador', 400);
       }
 
-      if (!targetPersona) {
-        throw buildHttpError('La persona objetivo no existe o está inactiva', 400);
-      }
+      if (targetPersonaId && targetPersonaId > 0) {
+        if (!targetPersona) {
+          throw buildHttpError('La persona objetivo no existe o esta inactiva', 400);
+        }
 
-      if (!targetAdministrativo) {
-        throw buildHttpError('La persona objetivo no tiene un registro administrativo activo', 400);
+        if (!targetAdministrativo) {
+          throw buildHttpError('La persona objetivo no tiene un registro administrativo activo', 400);
+        }
       }
 
       const activeAdminAssignments = await PersonasRol.findAll({
@@ -115,39 +121,68 @@ class SecurityService {
 
       if (currentAdminAssignment) {
         await currentAdminAssignment.update({ estado: false }, { transaction: t });
-      }
-
-      const existingTargetAssignment = await PersonasRol.findOne({
-        where: {
-          id_persona: targetPersonaId,
-          id_rol: adminRole.id_rol,
-        },
-        transaction: t,
-      });
-
-      // Desactivar cualquier otro rol que tenga el usuario objetivo
-      await PersonasRol.update(
-        { estado: false },
-        {
+        
+        // Si el administrador saliente no tiene otros roles activos, 
+        // le asignamos el rol de 'Empleado' por defecto para que siga siendo administrativo
+        const remainingRoles = await PersonasRol.count({
           where: {
-            id_persona: targetPersonaId,
-            id_rol: { [require('sequelize').Op.ne]: adminRole.id_rol }
+            id_persona: previousHolderPersonaId,
+            estado: true
           },
           transaction: t
-        }
-      );
+        });
 
-      if (existingTargetAssignment) {
-        await existingTargetAssignment.update({ estado: true }, { transaction: t });
-      } else {
-        await PersonasRol.create(
-          {
+        if (remainingRoles === 0) {
+          const defaultRole = await Rol.findOne({
+            where: { nombre_rol: 'Empleado', estado: true },
+            transaction: t
+          });
+
+          if (defaultRole) {
+            await PersonasRol.create({
+              id_persona: previousHolderPersonaId,
+              id_rol: defaultRole.id_rol,
+              estado: true
+            }, { transaction: t });
+            
+            logger.info(`[SECURITY][ADMIN_HOLDER] Se asigno rol de Empleado por defecto al usuario ${previousHolderPersonaId} tras dejar el cargo de Administrador`);
+          }
+        }
+      }
+
+      if (targetPersonaId && targetPersonaId > 0) {
+        const existingTargetAssignment = await PersonasRol.findOne({
+          where: {
             id_persona: targetPersonaId,
             id_rol: adminRole.id_rol,
-            estado: true,
           },
-          { transaction: t }
+          transaction: t,
+        });
+
+        // Desactivar cualquier otro rol que tenga el usuario objetivo
+        await PersonasRol.update(
+          { estado: false },
+          {
+            where: {
+              id_persona: targetPersonaId,
+              id_rol: { [require('sequelize').Op.ne]: adminRole.id_rol }
+            },
+            transaction: t
+          }
         );
+
+        if (existingTargetAssignment) {
+          await existingTargetAssignment.update({ estado: true }, { transaction: t });
+        } else {
+          await PersonasRol.create(
+            {
+              id_persona: targetPersonaId,
+              id_rol: adminRole.id_rol,
+              estado: true,
+            },
+            { transaction: t }
+          );
+        }
       }
 
       let previousAccountDisabled = false;
@@ -182,10 +217,10 @@ class SecurityService {
       });
 
       return {
-        action: previousHolderPersonaId ? 'transferred' : 'assigned',
+        action: !targetPersonaId || targetPersonaId <= 0 ? 'removed' : (previousHolderPersonaId ? 'transferred' : 'assigned'),
         role_id: adminRole.id_rol,
         previous_holder_persona_id: previousHolderPersonaId,
-        new_holder_persona_id: targetPersonaId,
+        new_holder_persona_id: (targetPersonaId && targetPersonaId > 0) ? targetPersonaId : null,
         previous_account_disabled: previousAccountDisabled,
         audit_timestamp: auditTimestamp,
       };
@@ -193,13 +228,25 @@ class SecurityService {
 
     const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
 
-    // Notificar cambio para el nuevo administrador
-    sseService.emitUserChanged({
-      action: 'role_changed',
-      userId: payload.new_holder_persona_id,
-      affectedUserIds: [payload.new_holder_persona_id],
-      audienceUserIds: adminIds,
-    });
+    // Notificar cambio para el nuevo administrador (si hay uno)
+    if (payload.new_holder_persona_id) {
+      sseService.emitUserChanged({
+        action: 'role_changed',
+        userId: payload.new_holder_persona_id,
+        affectedUserIds: [payload.new_holder_persona_id],
+        audienceUserIds: adminIds,
+      });
+    }
+
+    // Notificar al poseedor anterior que ya no tiene el rol
+    if (payload.previous_holder_persona_id) {
+      sseService.emitUserChanged({
+        action: 'role_changed',
+        userId: payload.previous_holder_persona_id,
+        affectedUserIds: [payload.previous_holder_persona_id],
+        audienceUserIds: adminIds,
+      });
+    }
 
     if (payload.previous_account_disabled && payload.previous_holder_persona_id) {
       sseService.notifyUserDisabled(payload.previous_holder_persona_id);

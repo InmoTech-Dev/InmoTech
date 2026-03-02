@@ -1,6 +1,6 @@
 ﻿const citaService = require('../services/cita.service');
 const personaService = require('../services/persona.service');
-const { isSuperAdministrator } = require('../middlewares/auth.middleware');
+const { isSuperAdministrator, isAdministrator } = require('../middlewares/auth.middleware');
 const logger = require('../utils/logger');
 const { Persona } = require('../models');
 const emailService = require('../services/email.service');
@@ -131,6 +131,15 @@ class CitaController {
         footer: 'Ô£à cita creada exitosamente',
       });
 
+      // âœ… Enviar email de auditoria si fue creado por un administrativo
+      if (req.user && req.user.es_administrativo) {
+        emailService.enviarEmailAuditoriaAdministrativo({
+          cita: nuevaCita,
+          administrador: req.user,
+          accion: 'CREACION'
+        }).catch(err => logger.error('[EMAIL][AUDIT] Error enviando correo de creacion:', err));
+      }
+
       return res.status(201).json({ success: true, data: nuevaCita });
     } catch (error) {
       opsConsoleLogger.eventBlock({
@@ -254,6 +263,9 @@ class CitaController {
         appointmentId: parsedId,
       });
 
+      // âœ… Enviar email de auditoria
+      this._enviarAuditoriaEstado(cita, req.user, 2);
+
       return res.status(200).json({
         success: true,
         message: 'Cita confirmada exitosamente',
@@ -291,6 +303,9 @@ class CitaController {
         cita,
         appointmentId: parsedId,
       });
+
+      // âœ… Enviar email de auditoria
+      this._enviarAuditoriaEliminacion(cita, req.user);
 
       return res.status(200).json({
         success: true,
@@ -341,6 +356,15 @@ class CitaController {
         appointmentId: parsedId,
       });
 
+      // âœ… Enviar email de auditoria
+      if (req.user && req.user.es_administrativo) {
+        emailService.enviarEmailAuditoriaAdministrativo({
+          cita,
+          administrador: req.user,
+          accion: 'REAGENDAMIENTO'
+        }).catch(err => logger.error('[EMAIL][AUDIT] Error enviando correo de reagendamiento:', err));
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Cita reagendada exitosamente',
@@ -387,17 +411,19 @@ class CitaController {
         });
       }
 
-      // ├ó┼ôÔÇª Verificar l├â┬¡mite de ediciones antes de actualizar
+      // âœ… Verificar lÃ­mite de ediciones antes de actualizar (omitir para administradores)
       const citaExistente = await citaService.obtenerCitaPorId(parsedId);
-      if (citaExistente.ediciones_realizadas >= citaExistente.ediciones_maximas) {
+      const isAdmin = isSuperAdministrator(req.user) || isAdministrator(req.user);
+      
+      if (!isAdmin && citaExistente.ediciones_realizadas >= citaExistente.ediciones_maximas) {
         return res.status(400).json({
           success: false,
-          message: `Esta cita ha alcanzado el l├â┬¡mite m├â┬íximo de ${citaExistente.ediciones_maximas} ediciones permitidas`
+          message: `Esta cita ha alcanzado el lÃ­mite mÃ¡ximo de ${citaExistente.ediciones_maximas} ediciones permitidas`
         });
       }
 
-      // ├ó┼ôÔÇª Incrementar contador de ediciones antes de actualizar
-      const cita = await citaService.incrementarContadorEdicionesActualizar(parsedId, req.validatedData);
+      // âœ… Incrementar contador de ediciones antes de actualizar (omitir incremento para administradores)
+      const cita = await citaService.incrementarContadorEdicionesActualizar(parsedId, req.validatedData, { increment: !isAdmin });
 
 
 
@@ -436,6 +462,9 @@ class CitaController {
         cita,
         appointmentId: parsedId,
       });
+
+      // âœ… Enviar email de auditoria
+      this._enviarAuditoriaEliminacion(cita, req.user);
 
       return res.status(200).json({
         success: true,
@@ -482,6 +511,9 @@ class CitaController {
         appointmentId: parsedId,
       });
 
+      // âœ… Enviar email de auditoria
+      this._enviarAuditoriaEstado(citaDetallada, req.user, id_estado_cita);
+
       return res.status(200).json({
         success: true,
         message: 'Estado de cita actualizado exitosamente',
@@ -490,6 +522,22 @@ class CitaController {
     } catch (error) {
       logger.error(`├ó┬Ø┼Æ Error en actualizarEstadoCita: ${error.message}`);
       next(error);
+    }
+  }
+
+  // âœ… Nuevo hook para auditoria despues de cambio de estado
+  _enviarAuditoriaEstado = async (cita, user, idEstadoNuevo) => {
+    if (user && user.es_administrativo) {
+      let accion = 'CONFIRMACION'; // Por defecto si es 2
+      if (idEstadoNuevo === 2) accion = 'CONFIRMACION';
+      else if (idEstadoNuevo === 6) accion = 'CANCELACION';
+      else return; // Solo auditamos estas por ahora para no saturar
+
+      emailService.enviarEmailAuditoriaAdministrativo({
+        cita,
+        administrador: user,
+        accion
+      }).catch(err => logger.error('[EMAIL][AUDIT] Error enviando correo de estado:', err));
     }
   }
 
@@ -614,6 +662,24 @@ class CitaController {
         }
         if (esPrimeraAsignacionSolicitada) {
           await emailService.enviarEmailCitaConfirmadaAgente({ cita: citaDetallada });
+        }
+
+        // âœ… Enviar email de auditoria al ejecutor
+        if (req.user && req.user.es_administrativo) {
+          emailService.enviarEmailAuditoriaAdministrativo({
+            cita: citaDetallada,
+            administrador: req.user,
+            accion: 'ASIGNACION'
+          }).catch(err => logger.error('[EMAIL][AUDIT] Error enviando correo de asignacion:', err));
+        }
+
+        // âœ… Notificar al nuevo agente si es diferente al ejecutor
+        if (citaDetallada.id_agente_asignado && citaDetallada.id_agente_asignado !== req.user.id) {
+          // Ya lo hace arriba con enviarEmailCitaConfirmadaAgente, pero solo en condiciones especificas.
+          // Si queremos que SIEMPRE le llegue al agente nuevo cuando lo asignan:
+          if (!esReasignacionConfirmada && !esPrimeraAsignacionSolicitada) {
+             await emailService.enviarEmailCitaConfirmadaAgente({ cita: citaDetallada });
+          }
         }
       } catch (emailError) {
         logger.error(`[EMAIL][CITA] No se pudo notificar asignacion de agente en cita ${parsedId}: ${emailError.message}`);
@@ -846,8 +912,8 @@ class CitaController {
         // Obtener citas existentes para esa fecha y servicio de visitas a inmuebles
         // Solo citas confirmadas, programadas o reagendada (no canceladas ni completadas)
         const filtros = {
-          fecha: fecha_cita,
-          estado_in: "2,3,4" // confirmada, programada, re agendada
+          fecha_cita: fecha_cita,
+          id_estado_cita: "2,3,4" // confirmada, programada, re agendada
         };
 
         const result = await citaService.obtenerTodasLasCitas(filtros);
@@ -1041,7 +1107,10 @@ class CitaController {
 
       // Solo aplicar restricciones para "Visita a Propiedad" (ID 1)
       if (idServicioParsed === 1) {
-        const filtros = { fecha_cita };
+        const filtros = { 
+          fecha_cita,
+          id_estado_cita: "1,2,3,4" // Traer solo activas (solicitada, confirmada, programada, reagendada)
+        };
         if (id_inmueble) filtros.id_inmueble = parseInt(id_inmueble);
         
         const result = await citaService.obtenerTodasLasCitas(filtros);
@@ -1060,10 +1129,11 @@ class CitaController {
           return String(t);
         };
 
-        // 1. Horarios OCUPADOS (Ya hay una confirmación activa)
+        // 1. Horarios OCUPADOS (Ya hay una confirmaciÃ³n activa)
+        // âœ… Incluir estado 4 (reagendada) como bloqueo
         const horariosOcupados = new Set(
           citasExistentes
-            .filter(c => [2, 3].includes(c.id_estado_cita))
+            .filter(c => [2, 3, 4].includes(c.id_estado_cita))
             .map(c => formatTime(c.hora_inicio))
         );
 

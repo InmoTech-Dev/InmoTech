@@ -26,7 +26,14 @@ const DEFAULT_UPLOAD_FOLDER = ALLOWED_UPLOAD_FOLDERS[0] || 'inmotech/inmuebles';
 const resolveUploadFolder = (folderInput) => {
   const candidate = typeof folderInput === 'string' ? folderInput.trim() : '';
   if (!candidate) return DEFAULT_UPLOAD_FOLDER;
-  if (!ALLOWED_UPLOAD_FOLDERS.includes(candidate)) {
+
+  // Modificación: Permitir si la carpeta comienza con alguna de la lista permitida
+  // Esto permite estructuras como "inmotech/reportes/123/imagenes"
+  const isAllowed = ALLOWED_UPLOAD_FOLDERS.some(base =>
+    candidate === base || candidate.startsWith(`${base}/`)
+  );
+
+  if (!isAllowed) {
     return null;
   }
   return candidate;
@@ -92,6 +99,8 @@ const subirImagen = async (req, res) => {
       (req.body && req.body.folder) ||
       (req.query && req.query.folder) ||
       DEFAULT_UPLOAD_FOLDER;
+
+    logger.info(`Intento de subida a carpeta: "${requestedFolder}"`);
     const folder = resolveUploadFolder(requestedFolder);
     if (!folder) {
       return res.status(400).json({

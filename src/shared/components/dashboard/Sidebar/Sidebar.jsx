@@ -51,24 +51,30 @@ const Sidebar = React.forwardRef(({
 
     const availableModules = getAvailableModules();
     const moduleSet = new Set(availableModules);
-    const roleNames = user.roles || [];
+    
+    // Soporte para roles como string o como objeto
+    const roleNames = (user.roles || []).map(rol => 
+      typeof rol === 'object' ? rol.nombre_rol : rol
+    );
 
     if (roleNames.includes('Super Administrador') || roleNames.includes('Administrador')) {
       return navigationItems;
     }
 
     return navigationItems.filter(item => {
+      // Siempre mostrar dashboard
       if (item.id === 'dashboard') {
         return true;
       }
 
+      // No mostrar seguridad a usuarios que no sean admin
       if (item.id === 'seguridad') {
         return false;
       }
 
       return moduleSet.has(item.id);
     });
-  }, [user, getAvailableModules]);
+  }, [user, getAvailableModules]); // getAvailableModules cambia cuando el perfil se recarga vía SSE
 
   useEffect(() => {
     if (navRef.current) {

@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const {
   Reporte,
   Inmueble,
+  PropiedadInmueble,
   Persona,
   ReporteImagen,
   ReporteArchivo,
@@ -80,6 +81,7 @@ class ReportesInmobiliariosService {
       estado,
       tipo_reporte,
       id_inmueble,
+      id_propietario,
       pagina = 1,
       limite = 20,
       ordenar_por = 'fecha_creacion',
@@ -108,22 +110,34 @@ class ReportesInmobiliariosService {
     if (tipo_reporte) where.tipo_reporte = tipo_reporte
     if (id_inmueble) where.id_inmueble = id_inmueble
 
+    // Si hay id_propietario, filtrar por inmuebles que pertenecen a ese propietario
+    const include = [
+      {
+        model: Inmueble,
+        as: 'inmueble',
+        attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria', 'titulo'],
+        required: !!id_propietario, // Si hay id_propietario, el join debe ser inner
+        include: id_propietario ? [
+          {
+            model: PropiedadInmueble,
+            as: 'propietarios',
+            where: { id_persona: id_propietario, estado: 'Activo' },
+            required: true
+          }
+        ] : []
+      },
+      {
+        model: Persona,
+        as: 'reportadoPor',
+        attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo']
+      }
+    ];
+
     try {
       // Consulta con JOIN para obtener el propietario real del inmueble
       const { rows: reports, count: total } = await Reporte.findAndCountAll({
         where,
-        include: [
-          {
-            model: Inmueble,
-            as: 'inmueble',
-            attributes: ['id_inmueble', 'registro_inmobiliario', 'direccion', 'ciudad', 'categoria', 'titulo']
-          },
-          {
-            model: Persona,
-            as: 'reportadoPor',
-            attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo']
-          }
-        ],
+        include,
         order: [[orderBy, orderDir]],
         limit: pageSize,
         offset,
@@ -384,13 +398,15 @@ class ReportesInmobiliariosService {
 
   // Seguimiento por rubro usando Sequelize
   async crearSeguimientoRubro(id_reporte, rubroId, data, userId) {
-    const { descripcion, estado } = data;
+    const { descripcion, estado, fecha } = data;
+    // Usar la fecha enviada por el usuario si está disponible; de lo contrario, usar la fecha actual del servidor
+    const fechaCreacion = fecha ? new Date(fecha) : new Date();
     const seguimiento = await RubroSeguimiento.create({
       id_rubro: rubroId,
       id_persona: userId,
       descripcion,
       estado,
-      fecha_creacion: new Date()
+      fecha_creacion: fechaCreacion
     });
     return { success: true, data: seguimiento };
   }
@@ -409,9 +425,14 @@ class ReportesInmobiliariosService {
   }
 
   async actualizarSeguimientoRubro(id_reporte, rubroId, seguimientoId, data) {
-    const { estado, descripcion } = data;
+    const { estado, descripcion, fecha } = data;
+    const updateFields = { estado, descripcion };
+    // Si el usuario envió una fecha, actualizar también fecha_creacion
+    if (fecha) {
+      updateFields.fecha_creacion = new Date(fecha);
+    }
     await RubroSeguimiento.update(
-      { estado, descripcion },
+      updateFields,
       { where: { id_seguimiento_rubro: seguimientoId, id_rubro: rubroId } }
     );
     const seguimiento = await RubroSeguimiento.findByPk(seguimientoId, {

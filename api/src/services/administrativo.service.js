@@ -540,6 +540,28 @@ class AdministrativoService {
 
         // Actualizar datos de persona si se proporcionan
         if (personaData) {
+          // Validar duplicidad de correo
+          if (personaData.correo && personaData.correo !== administrativo.persona.correo) {
+            const existingEmail = await Persona.findOne({
+              where: { correo: personaData.correo },
+              transaction: t
+            });
+            if (existingEmail) {
+              throw buildHttpError('El correo electrónico ya está registrado por otro usuario', 400);
+            }
+          }
+
+          // Validar duplicidad de documento
+          if (personaData.numero_documento && personaData.numero_documento !== administrativo.persona.numero_documento) {
+            const existingDoc = await Persona.findOne({
+              where: { numero_documento: personaData.numero_documento },
+              transaction: t
+            });
+            if (existingDoc) {
+              throw buildHttpError('El número de documento ya está registrado por otro usuario', 400);
+            }
+          }
+
           await administrativo.persona.update(personaData, { transaction: t });
         }
 
@@ -579,14 +601,22 @@ class AdministrativoService {
           });
 
           if (rolActual) {
-            if (rolActual.id_rol !== rolIdNormalizado) {
-              await rolActual.update({ id_rol: rolIdNormalizado }, { transaction: t });
-            }
+            // Siempre aseguramos que esté activo al editar, y actualizamos el ID si cambió
+            await rolActual.update(
+              {
+                id_rol: rolIdNormalizado,
+                estado: true,
+                fecha_asignacion: new Date()
+              },
+              { transaction: t }
+            );
           } else {
             await PersonasRol.create(
               {
                 id_persona: personaId,
                 id_rol: rolIdNormalizado,
+                estado: true,
+                fecha_asignacion: new Date()
               },
               { transaction: t }
             );
@@ -594,6 +624,16 @@ class AdministrativoService {
         }
 
         logger.info(`Administrativo actualizado: ID ${id}`);
+
+        // Emitir evento SSE para cambios en tiempo real
+        const personaId = administrativo.persona.id_persona;
+        const audienceIds = await require('./realtimeAudience.service').obtenerAdministrativosActivosIds();
+        sseService.emitUserChanged({
+          action: 'updated',
+          userId: personaId,
+          affectedUserIds: [personaId],
+          audienceUserIds: audienceIds
+        });
 
         return administrativo;
 
@@ -896,7 +936,37 @@ class AdministrativoService {
     } catch (error) {
       logger.error('Error obteniendo siguiente número de empleado:', error);
       // En caso de error, usar un valor por defecto único basado en timestamp
-      return Math.floor(Date.now() / 1000) % 1000 + 1;
+    }
+  }
+  /**
+   * Obtiene los correos electrónicos de los Súper Administradores y Administradores activos
+   * @returns {Promise<string[]>} Lista de correos
+   */
+  async obtenerEmailsAdministradores() {
+    try {
+      const { SUPER_ADMIN_ROLE, ADMINISTRATOR_ROLE } = require('../constants/roles.constants');
+
+      const administradores = await Persona.findAll({
+        attributes: ['correo'],
+        where: { estado: true },
+        include: [
+          {
+            model: Rol,
+            as: 'roles',
+            where: {
+              nombre_rol: [SUPER_ADMIN_ROLE, ADMINISTRATOR_ROLE],
+              estado: true
+            },
+            required: true,
+            through: { where: { estado: true } }
+          }
+        ]
+      });
+
+      return administradores.map(admin => admin.correo).filter(Boolean);
+    } catch (error) {
+      logger.error('Error obteniendo emails de administradores:', error);
+      throw error;
     }
   }
 }

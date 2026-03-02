@@ -11,6 +11,7 @@ import { usePropertyAutocomplete } from '../../../../shared/hooks/usePropertyAut
 import { useToast } from '../../../../shared/hooks/use-toast';
 import GeneralFollowUpSection from './GeneralFollowUpSection';
 import { useGeneralFollowUp } from '../../hooks/useGeneralFollowUp';
+import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog';
 import {
   PlusIcon,
   EditIcon,
@@ -19,6 +20,7 @@ import {
   FileIcon,
   ImageIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   ChevronRightIcon,
   CheckIcon,
   UserIcon,
@@ -29,11 +31,13 @@ import {
   FileText,
   ClipboardList as ClipboardListIcon,
   Building,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '../../../../shared/contexts/AuthContext.jsx';
 import administrativosApiService from '../../../../shared/services/administrativosApiService';
 import rolesApiService from '../../../../shared/services/rolesApiService';
+import { ImageViewer } from '../../../../shared/components/ui/ImageViewer';
 
 const CreateReportModal = ({
   isOpen,
@@ -161,6 +165,27 @@ const CreateReportModal = ({
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
+  // Formatear fecha para el input datetime-local
+  const formatDatetimeForInput = (dateValue) => {
+    if (!dateValue) return '';
+    // Si ya está en formato datetime-local exacto (sin zona horaria), retornar tal cual
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateValue)) return dateValue;
+    // Convertir siempre con new Date() para respetar la zona horaria local
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      const year = date.getFullYear();
+      const month = pad(date.getMonth() + 1);
+      const day = pad(date.getDate());
+      const hours = pad(date.getHours());
+      const minutes = pad(date.getMinutes());
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (e) {
+      return '';
+    }
+  };
+
   // Valores por defecto para el formulario
   const defaultFormData = {
     ubicacion: '',
@@ -188,6 +213,19 @@ const CreateReportModal = ({
   const [activeTab, setActiveTab] = useState('cliente');
   const [eligibleUsers, setEligibleUsers] = useState([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+    variant: 'warning'
+  });
+
+  // Estado para el visualizador de imágenes
+  const [viewerConfig, setViewerConfig] = useState({
+    isOpen: false,
+    currentIndex: 0
+  });
 
   // Referencias para los inputs de archivos
   const imageInputRef = useRef(null);
@@ -228,11 +266,24 @@ const CreateReportModal = ({
             backendId: Number(s.id_seguimiento_rubro ?? s.id ?? 0),
             responsable: typeof s.responsable === 'string' ? s.responsable : formatResponsableName(s.responsable),
             activo: s.activo !== false,
+            fecha: formatDatetimeForInput(s.fecha || s.fecha_creacion),
+            expandido: false,
           })),
         }));
         setRubros(normalizedRubros);
-        setImagenes(initialData.imagenes || []);
-        setArchivos(initialData.archivos || []);
+
+        // Normalizar imágenes y archivos para asegurar que tengan un ID único
+        const normalizedImagenes = (initialData.imagenes || []).map((img, idx) => ({
+          ...img,
+          id: img.id || img.id_imagen || `img-${idx}-${Date.now()}`
+        }));
+        setImagenes(normalizedImagenes);
+
+        const normalizedArchivos = (initialData.archivos || []).map((file, idx) => ({
+          ...file,
+          id: file.id || file.id_archivo || `file-${idx}-${Date.now()}`
+        }));
+        setArchivos(normalizedArchivos);
         // Si hay una referencia inicial, buscar la propiedad y pre-seleccionarla para activar la UI de "Auto"
         if (initialData.referencia) {
           setSearchTerm(initialData.referencia);
@@ -462,9 +513,33 @@ const CreateReportModal = ({
     });
   };
 
-  // Eliminar imagen
-  const eliminarImagen = (id) => {
-    setImagenes(prev => prev.filter(img => img.id !== id));
+  // Eliminar imagen con confirmación
+  const eliminarImagen = (imgId) => {
+    if (!imgId) return; // Seguridad adicional
+
+    setConfirmConfig({
+      isOpen: true,
+      title: '¿Eliminar imagen?',
+      message: '¿Estás seguro de que deseas eliminar esta imagen de evidencia? Esta acción no se puede deshacer.',
+      variant: 'danger',
+      onConfirm: () => {
+        setImagenes(prev => prev.filter(img => img.id !== imgId));
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        toast({
+          title: 'Imagen eliminada',
+          description: 'La imagen se eliminó correctamente.',
+          variant: 'success',
+        });
+      }
+    });
+  };
+
+  // Abrir visualizador de imágenes
+  const openViewer = (index) => {
+    setViewerConfig({
+      isOpen: true,
+      currentIndex: index
+    });
   };
 
   // Eliminar archivo
@@ -502,15 +577,33 @@ const CreateReportModal = ({
 
   // Anular/Reactivar rubro (soft delete)
   const toggleRubroActivo = (id) => {
-    setRubros(prev => prev.map(rubro =>
-      rubro.id === id
-        ? {
-          ...rubro,
-          activo: !rubro.activo,
-          fechaAnulacion: !rubro.activo ? null : new Date().toISOString()
-        }
-        : rubro
-    ));
+    const rubro = rubros.find(r => r.id === id);
+    if (!rubro) return;
+
+    const action = () => {
+      setRubros(prev => prev.map(r =>
+        r.id === id
+          ? {
+            ...r,
+            activo: !r.activo,
+            fechaAnulacion: !r.activo ? null : new Date().toISOString()
+          }
+          : r
+      ));
+      setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+    };
+
+    if (rubro.activo) {
+      setConfirmConfig({
+        isOpen: true,
+        title: '¿Confirmar anulación?',
+        message: '¿Estás seguro de que deseas anular este rubro? Esta acción se guardará al actualizar el reporte.',
+        onConfirm: action,
+        variant: 'danger'
+      });
+    } else {
+      action();
+    }
   };
 
   // Anular rubro (soft delete)
@@ -547,6 +640,7 @@ const CreateReportModal = ({
         estado: 'pendiente',
         activo: true,
         fechaAnulacion: null,
+        expandido: true,
         // Prefill: nombre completo del usuario autenticado
         responsable: getUserFullName()
       };
@@ -579,24 +673,59 @@ const CreateReportModal = ({
     ));
   };
 
-  // Anular/Reactivar seguimiento (soft delete)
-  const toggleSeguimientoActivo = (rubroId, seguimientoId) => {
+  // Toggle expandir seguimiento de rubro
+  const toggleSeguimientoExpansion = (rubroId, seguimientoId) => {
     setRubros(prev => prev.map(rubro =>
       rubro.id === rubroId
         ? {
           ...rubro,
           seguimientos: rubro.seguimientos.map(seg =>
-            seg.id === seguimientoId
-              ? {
-                ...seg,
-                activo: !seg.activo,
-                fechaAnulacion: !seg.activo ? null : new Date().toISOString()
-              }
-              : seg
+            seg.id === seguimientoId ? { ...seg, expandido: !seg.expandido } : seg
           )
         }
         : rubro
     ));
+  };
+
+  // Anular/Reactivar seguimiento (soft delete)
+  const toggleSeguimientoActivo = (rubroId, seguimientoId) => {
+    const rubro = rubros.find(r => r.id === rubroId);
+    if (!rubro) return;
+
+    const seguimiento = rubro.seguimientos.find(s => s.id === seguimientoId);
+    if (!seguimiento) return;
+
+    const action = () => {
+      setRubros(prev => prev.map(r =>
+        r.id === rubroId
+          ? {
+            ...r,
+            seguimientos: r.seguimientos.map(seg =>
+              seg.id === seguimientoId
+                ? {
+                  ...seg,
+                  activo: !seg.activo,
+                  fechaAnulacion: !seg.activo ? null : new Date().toISOString()
+                }
+                : seg
+            )
+          }
+          : r
+      ));
+      setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+    };
+
+    if (seguimiento.activo) {
+      setConfirmConfig({
+        isOpen: true,
+        title: '¿Confirmar anulación?',
+        message: '¿Estás seguro de que deseas anular este seguimiento? Esta acción se guardará al actualizar el reporte.',
+        onConfirm: action,
+        variant: 'danger'
+      });
+    } else {
+      action();
+    }
   };
 
 
@@ -1037,23 +1166,31 @@ const CreateReportModal = ({
                       </div>
 
                       {imagenes.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          {imagenes.map((imagen, index) => (
-                            <div key={imagen.id ?? index} className="relative group">
-                              <img
-                                src={imagen.url}
-                                alt={`Imagen ${index + 1}`}
-                                className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => eliminarImagen(imagen.id)}
-                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
+                        <div className="max-h-72 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                          <div className="grid grid-cols-2 gap-3">
+                            {imagenes.map((imagen, index) => (
+                              <div key={imagen.id ?? index} className="relative group cursor-pointer" onClick={() => openViewer(index)}>
+                                <img
+                                  src={imagen.url}
+                                  alt={`Imagen ${index + 1}`}
+                                  className="w-full h-24 object-cover rounded-lg border border-gray-200 shadow-sm transition-transform group-hover:scale-[1.02]"
+                                />
+                                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                  <Eye className="w-5 h-5 text-white drop-shadow-md" />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    eliminarImagen(imagen.id);
+                                  }}
+                                  className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-md z-10"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
@@ -1094,24 +1231,26 @@ const CreateReportModal = ({
                       </div>
 
                       {archivos.length > 0 ? (
-                        <div className="space-y-2">
-                          {archivos.map((archivo, index) => (
-                            <div key={archivo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                              <div className="flex items-center space-x-3">
-                                <FileIcon className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm font-medium text-gray-700 truncate">
-                                  {archivo.name}
-                                </span>
+                        <div className="max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                          <div className="space-y-2">
+                            {archivos.map((archivo, index) => (
+                              <div key={archivo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                                <div className="flex items-center space-x-3 overflow-hidden">
+                                  <FileIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                                  <span className="text-sm font-medium text-gray-700 truncate">
+                                    {archivo.name}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => eliminarArchivo(archivo.id)}
+                                  className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => eliminarArchivo(archivo.id)}
-                                className="text-red-500 hover:text-red-700 p-1"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
@@ -1247,141 +1386,171 @@ const CreateReportModal = ({
                                 </div>
 
                                 <div className="space-y-2">
-                                  {rubro.seguimientos.filter(seg => seg.activo !== false).map((seguimiento, index) => (
-                                    <div
-                                      key={seguimiento.id}
-                                      className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group"
-                                    >
-                                      {/* Header del seguimiento */}
-                                      <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center space-x-2">
-                                          <div className="w-7 h-7 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-full flex items-center justify-center">
-                                            <span className="text-xs font-semibold text-blue-700">#{index + 1}</span>
+                                  {rubro.seguimientos.filter(seg => seg.activo !== false).map((seguimiento, index) => {
+                                    const isCreated = seguimiento.backendId > 0;
+                                    return (
+                                      <div
+                                        key={seguimiento.id}
+                                        className={`bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group ${isCreated ? 'opacity-90 bg-slate-50/50' : ''}`}
+                                      >
+                                        {/* Header del seguimiento */}
+                                        <div className="flex items-center justify-between mb-3">
+                                          <div className="flex items-center space-x-2">
+                                            <div className="w-7 h-7 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-full flex items-center justify-center">
+                                              <span className="text-xs font-semibold text-blue-700">#{index + 1}</span>
+                                            </div>
+                                            <span className="text-sm font-medium text-slate-800">Seguimiento {index + 1}</span>
                                           </div>
-                                          <span className="text-sm font-medium text-slate-800">Seguimiento {index + 1}</span>
-                                        </div>
 
-                                        <div className="flex items-center space-x-2">
-                                          <span
-                                            className={`text-[11px] px-2 py-1 rounded-full border ${seguimiento.estado === 'completado'
-                                              ? 'bg-green-50 text-green-700 border-green-200'
-                                              : seguimiento.estado === 'en-proceso'
-                                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                                : 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                              }`}
-                                          >
-                                            {seguimiento.estado ? seguimiento.estado[0].toUpperCase() + seguimiento.estado.slice(1) : 'Pendiente'}
-                                          </span>
-                                          <Button
-                                            type="button"
-                                            onClick={() => toggleSeguimientoActivo(rubro.id, seguimiento.id)}
-                                            size="sm"
-                                            variant="outline"
-                                            className="text-red-600 border-red-200 hover:bg-red-50 text-xs px-2 py-1 rounded-md"
-                                          >
-                                            <XCircleIcon className="w-3 h-3 mr-1" />
-                                            Anular
-                                          </Button>
-                                        </div>
-                                      </div>
-
-                                      {/* Campos organizados en grid */}
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                                        <div>
-                                          <label className="block text-xs font-medium text-slate-700 mb-1">
-                                            <CalendarIcon className="w-3 h-3 inline mr-1 text-slate-500" />
-                                            Fecha
-                                          </label>
-                                          <Input
-                                            type="datetime-local"
-                                            value={seguimiento.fecha}
-                                            onChange={(e) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'fecha', e.target.value)}
-                                            className="text-xs h-8"
-                                          />
-                                        </div>
-                                        <div>
-                                          <label className="block text-xs font-medium text-slate-700 mb-1">
-                                            Estado
-                                          </label>
-                                          <Select
-                                            value={seguimiento.estado}
-                                            onValueChange={(value) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'estado', value)}
-                                          >
-                                            <SelectTrigger className="text-xs h-8">
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="text-xs">
-                                              <SelectItem value="pendiente">
-                                                <div className="flex items-center">
-                                                  <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
-                                                  Pendiente
-                                                </div>
-                                              </SelectItem>
-                                              <SelectItem value="en-proceso">
-                                                <div className="flex items-center">
-                                                  <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
-                                                  En Proceso
-                                                </div>
-                                              </SelectItem>
-                                              <SelectItem value="completado">
-                                                <div className="flex items-center">
-                                                  <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                                                  Completado
-                                                </div>
-                                              </SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                      </div>
-
-                                      {/* Responsable */}
-                                      <div className="mb-3">
-                                        <label className="block text-xs font-medium text-slate-700 mb-1">
-                                          <UserIcon className="w-3 h-3 inline mr-1 text-slate-500" />
-                                          Responsable
-                                        </label>
-                                        <Input
-                                          value={seguimiento.responsable || ''}
-                                          onChange={(e) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'responsable', e.target.value)}
-                                          placeholder="Nombre del responsable"
-                                          className="text-xs h-8"
-                                        />
-                                      </div>
-
-                                      {/* Descripción */}
-                                      <div>
-                                        <label className="block text-xs font-medium text-slate-700 mb-1">
-                                          <FileText className="w-3 h-3 inline mr-1 text-slate-500" />
-                                          Descripción
-                                        </label>
-                                        <Textarea
-                                          value={seguimiento.descripcion}
-                                          onChange={(e) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'descripcion', e.target.value)}
-                                          placeholder="Describe las actividades realizadas o por realizar..."
-                                          rows={2}
-                                          className="text-xs resize-none"
-                                        />
-                                      </div>
-
-                                      {/* Indicador de estado visual */}
-                                      <div className="mt-3 pt-2 border-t border-slate-100">
-                                        <div className="flex items-center justify-between text-xs text-slate-600">
-                                          <span>Estado actual:</span>
-                                          <div className="flex items-center">
-                                            <div
-                                              className={`w-2 h-2 rounded-full mr-2 ${seguimiento.estado === 'completado'
-                                                ? 'bg-green-400'
+                                          <div className="flex items-center space-x-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleSeguimientoExpansion(rubro.id, seguimiento.id)}
+                                              className="p-1 hover:bg-slate-100 rounded-md transition-colors text-slate-500"
+                                              title={seguimiento.expandido ? "Colapsar" : "Expandir"}
+                                            >
+                                              {seguimiento.expandido ? (
+                                                <ChevronUpIcon className="w-5 h-5" />
+                                              ) : (
+                                                <ChevronDownIcon className="w-5 h-5" />
+                                              )}
+                                            </button>
+                                            <span
+                                              className={`text-[11px] px-2 py-1 rounded-full border ${seguimiento.estado === 'completado'
+                                                ? 'bg-green-50 text-green-700 border-green-200'
                                                 : seguimiento.estado === 'en-proceso'
-                                                  ? 'bg-blue-400'
-                                                  : 'bg-yellow-400'
+                                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                  : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                                                 }`}
-                                            ></div>
-                                            <span className="capitalize">{seguimiento.estado || 'pendiente'}</span>
+                                            >
+                                              {seguimiento.estado ? seguimiento.estado[0].toUpperCase() + seguimiento.estado.slice(1) : 'Pendiente'}
+                                            </span>
+                                            <Button
+                                              type="button"
+                                              onClick={() => toggleSeguimientoActivo(rubro.id, seguimiento.id)}
+                                              size="sm"
+                                              variant="outline"
+                                              className="text-red-600 border-red-200 hover:bg-red-50 text-xs px-2 py-1 rounded-md"
+                                            >
+                                              <XCircleIcon className="w-3 h-3 mr-1" />
+                                              Anular
+                                            </Button>
                                           </div>
                                         </div>
+
+                                        {/* Campos organizados en grid */}
+                                        <AnimatePresence>
+                                          {seguimiento.expandido && (
+                                            <motion.div
+                                              initial={{ opacity: 0, height: 0 }}
+                                              animate={{ opacity: 1, height: 'auto' }}
+                                              exit={{ opacity: 0, height: 0 }}
+                                              className="overflow-hidden"
+                                            >
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                                <div>
+                                                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                                                    <CalendarIcon className="w-3 h-3 inline mr-1 text-slate-500" />
+                                                    Fecha
+                                                  </label>
+                                                  <Input
+                                                    type="datetime-local"
+                                                    value={seguimiento.fecha}
+                                                    onChange={(e) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'fecha', e.target.value)}
+                                                    className="text-xs h-8"
+                                                    disabled={isCreated}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                                                    Estado
+                                                  </label>
+                                                  <Select
+                                                    value={seguimiento.estado}
+                                                    onValueChange={(value) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'estado', value)}
+                                                    disabled={isCreated}
+                                                  >
+                                                    <SelectTrigger className={`text-xs h-8 ${isCreated ? 'bg-slate-50' : ''}`}>
+                                                      <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="text-xs">
+                                                      <SelectItem value="pendiente">
+                                                        <div className="flex items-center">
+                                                          <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
+                                                          Pendiente
+                                                        </div>
+                                                      </SelectItem>
+                                                      <SelectItem value="en-proceso">
+                                                        <div className="flex items-center">
+                                                          <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+                                                          En Proceso
+                                                        </div>
+                                                      </SelectItem>
+                                                      <SelectItem value="completado">
+                                                        <div className="flex items-center">
+                                                          <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                                          Completado
+                                                        </div>
+                                                      </SelectItem>
+                                                    </SelectContent>
+                                                  </Select>
+                                                </div>
+                                              </div>
+
+                                              {/* Responsable */}
+                                              <div className="mb-3">
+                                                <label className="block text-xs font-medium text-slate-700 mb-1">
+                                                  <UserIcon className="w-3 h-3 inline mr-1 text-slate-500" />
+                                                  Responsable
+                                                </label>
+                                                <Input
+                                                  value={seguimiento.responsable || ''}
+                                                  onChange={(e) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'responsable', e.target.value)}
+                                                  placeholder="Nombre del responsable"
+                                                  className="text-xs h-8"
+                                                  disabled={isCreated}
+                                                />
+                                              </div>
+
+                                              {/* Descripción */}
+                                              <div>
+                                                <label className="block text-xs font-medium text-slate-700 mb-1">
+                                                  <FileText className="w-3 h-3 inline mr-1 text-slate-500" />
+                                                  Descripción
+                                                </label>
+                                                <Textarea
+                                                  value={seguimiento.descripcion}
+                                                  onChange={(e) => editarSeguimientoRubro(rubro.id, seguimiento.id, 'descripcion', e.target.value)}
+                                                  placeholder="Describe las actividades realizadas o por realizar..."
+                                                  rows={2}
+                                                  className="text-xs resize-none"
+                                                  disabled={isCreated}
+                                                />
+                                              </div>
+
+                                              {/* Indicador de estado visual */}
+                                              <div className="mt-3 pt-2 border-t border-slate-100">
+                                                <div className="flex items-center justify-between text-xs text-slate-600">
+                                                  <span>Estado actual:</span>
+                                                  <div className="flex items-center">
+                                                    <div
+                                                      className={`w-2 h-2 rounded-full mr-2 ${seguimiento.estado === 'completado'
+                                                        ? 'bg-green-400'
+                                                        : seguimiento.estado === 'en-proceso'
+                                                          ? 'bg-blue-400'
+                                                          : 'bg-yellow-400'
+                                                        }`}
+                                                    ></div>
+                                                    <span className="capitalize">{seguimiento.estado || 'pendiente'}</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
                                       </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
 
                                   {/* Indicador de progreso del rubro */}
                                   <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -1501,7 +1670,7 @@ const CreateReportModal = ({
             </div>
 
             {/* Footer (acciones a la derecha, misma paleta) */}
-            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+            < div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4" >
               <Button
                 type="button"
                 onClick={onClose}
@@ -1518,11 +1687,31 @@ const CreateReportModal = ({
               >
                 {isSubmitting ? 'Guardando...' : submitLabel}
               </Button>
-            </div>
-          </motion.div>
-        </div>
+            </div >
+          </motion.div >
+
+          {/* Diálogo de Confirmación */}
+          <ConfirmationDialog
+            isOpen={confirmConfig.isOpen}
+            onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={confirmConfig.onConfirm}
+            title={confirmConfig.title}
+            message={confirmConfig.message}
+            variant={confirmConfig.variant}
+            confirmText="Sí, continuar"
+            cancelText="Cancelar"
+          />
+
+          <ImageViewer
+            isOpen={viewerConfig.isOpen}
+            onClose={() => setViewerConfig(prev => ({ ...prev, isOpen: false }))}
+            images={imagenes}
+            currentIndex={viewerConfig.currentIndex}
+            onIndexChange={(index) => setViewerConfig(prev => ({ ...prev, currentIndex: index }))}
+          />
+        </div >
       )}
-    </AnimatePresence>,
+    </AnimatePresence >,
     document.body
   );
 };

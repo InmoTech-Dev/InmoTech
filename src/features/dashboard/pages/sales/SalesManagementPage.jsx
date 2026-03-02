@@ -733,7 +733,17 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
       "Sin nombre",
 
-    inmuebleArea: fallback.inmuebleArea ?? inmueble.area ?? "N/D",
+    inmuebleArea:
+      fallback.inmuebleArea ??
+      inmueble.area ??
+      inmueble.area_total ??
+      inmueble.area_construida ??
+      inmueble.area_privada ??
+      inmueble.area_lote ??
+      (inmueble.metadata?.raw?.area_total) ??
+      (inmueble.metadata?.raw?.area_construida) ??
+      (inmueble.metadata?.raw?.area) ??
+      "N/D",
 
     inmuebleHabitaciones:
 

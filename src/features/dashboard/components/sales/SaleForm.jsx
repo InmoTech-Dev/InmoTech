@@ -810,6 +810,14 @@ const normalizePhone = (value = "") => {
 
             triggerBuyerLookup(name === COMPRADOR_DOC ? 0 : 200);
         }
+
+        if (name === "compradorNombreCompleto") {
+            const currentTipo = valuesRef.current.compradorTipoDocumento || "";
+            const normalizedDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+            if (shouldTriggerBuyerLookup(currentTipo, normalizedDocumento) && !selectedBuyerRef.current) {
+                triggerBuyerLookup(0);
+            }
+        }
     };
 
     // === FUNCIONES DE NORMALIZACIÓN ===
@@ -955,7 +963,8 @@ const normalizePhone = (value = "") => {
             return {
                 primerNombre: parts[0],
                 segundoNombre: "",
-                primerApellido: "",
+                // Evita fallos en backend por apellido faltante: reutilizamos el mismo valor
+                primerApellido: parts[0],
                 segundoApellido: "",
             };
         }
@@ -972,9 +981,9 @@ const normalizePhone = (value = "") => {
         if (parts.length === 3) {
             return {
                 primerNombre: parts[0],
-                segundoNombre: "",
-                primerApellido: parts[1],
-                segundoApellido: parts[2],
+                segundoNombre: parts[1],
+                primerApellido: parts[2],
+                segundoApellido: "",
             };
         }
 
@@ -1096,7 +1105,33 @@ const normalizePhone = (value = "") => {
 
             if (buyer) {
                 applyBuyerData(buyer);
-                const isBuyer = Boolean(buyer?.raw?.tipo_comprador || buyer?.raw?.tipoComprador || buyer?.tipoCompra);
+
+                // Si la persona existe pero no tiene registro de comprador, crearlo inmediatamente
+                if (!buyer.id && !buyer.compradorId) {
+                    // Asegurar nombre completo antes de crear
+                    if (!valuesRef.current.compradorNombreCompleto?.trim()) {
+                        const composedName = [buyer.primerNombre, buyer.segundoNombre, buyer.primerApellido, buyer.segundoApellido]
+                            .filter(Boolean)
+                            .join(" ")
+                            .trim();
+                        if (composedName) {
+                            valuesRef.current.compradorNombreCompleto = composedName;
+                            displayValuesRef.current.compradorNombreCompleto = composedName;
+                            const nombreEl = elRefs.current.compradorNombreCompleto;
+                            if (nombreEl) {
+                                try { nombreEl.value = composedName; } catch (_err) { /* ignore */ }
+                            }
+                        }
+                    }
+
+                    try {
+                        await createBuyerFromForm();
+                        return;
+                    } catch (_err) {
+                        // Si falla la creaciÃ³n, continuamos mostrando los datos de persona encontrados
+                    }
+                }
+
                 setBuyerLookupState({
                     loading: false,
                     message: "Persona encontrada y datos autocompletados.",
@@ -1107,18 +1142,33 @@ const normalizePhone = (value = "") => {
                     description: "Datos autocompletados correctamente.",
                     variant: "default",
                 });
-            } else {
+                return;
+            }
+
+            // Si no existe comprador, crearlo automÃ¡ticamente usando los datos digitados
+            const nombreCompleto = (valuesRef.current.compradorNombreCompleto || "").trim();
+            if (!nombreCompleto) {
                 resetBuyerSelection();
                 setBuyerLookupState({
                     loading: false,
                     message: "",
-                    error: "No encontramos un comprador registrado con ese documento.",
+                    error: "No encontramos un comprador con ese documento. Ingresa el nombre para crearlo automÃ¡ticamente.",
                 });
                 toast({
                     title: "Comprador no encontrado",
-                    description: "No encontramos un comprador registrado con ese documento.",
+                    description: "Agrega el nombre completo para crear y seleccionar al comprador.",
                     variant: "destructive",
                 });
+                return;
+            }
+
+            try {
+                await createBuyerFromForm();
+            } catch (_err) {
+                // createBuyerFromForm ya muestra el error, solo aseguramos reset de loading si no se manejÃ³
+                if (buyerLookupRequestId.current === requestId) {
+                    setBuyerLookupState((prev) => ({ ...prev, loading: false }));
+                }
             }
         } catch (error) {
             if (buyerLookupRequestId.current !== requestId) {
@@ -1136,7 +1186,7 @@ const normalizePhone = (value = "") => {
                 variant: "destructive",
             });
         }
-    }, [applyBuyerData, resetBuyerSelection]);
+    }, [applyBuyerData, resetBuyerSelection, createBuyerFromForm]);
 
     const triggerBuyerLookup = useCallback(
         (delay = 250) => {

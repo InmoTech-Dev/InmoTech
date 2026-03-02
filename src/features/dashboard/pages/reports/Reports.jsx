@@ -32,6 +32,11 @@ const ReportsContent = () => {
   const [todayOnly, setTodayOnly] = useState(false)
   const [isStatusChangeConfirmOpen, setIsStatusChangeConfirmOpen] = useState(false)
   const [pendingStatusChange, setPendingStatusChange] = useState(null)
+  const [adminFilters, setAdminFilters] = useState({
+    city: '',
+    year: '',
+    month: '',
+  })
   const { createReport, updateReport, deleteReport } = useReports()
   const { user } = useAuth()
   const { toast } = useToast()

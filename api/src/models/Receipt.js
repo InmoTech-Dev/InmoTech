@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+﻿const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 const Payment = require('./Payment');
 
@@ -78,3 +78,5 @@ Receipt.belongsTo(Payment, { foreignKey: 'id_cobro', as: 'cobro' });
 Payment.hasOne(Receipt, { foreignKey: 'id_cobro', as: 'comprobante' });
 
 module.exports = Receipt;
+
+

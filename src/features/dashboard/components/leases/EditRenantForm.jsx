@@ -22,7 +22,7 @@ const defaultInitial = {
     estabilidadLaboral: "",
 
     tipoInmueble: "", registroInmobiliario: "", nombreInmueble: "", area: "", habitaciones: "", banos: "",
-    departamento: "", ciudad: "", barrio: "", estrato: "", direccion: "", precioInmueble: "", garaje: false,
+    departamento: "", ciudad: "", barrio: "", estrato: "", direccion: "", precioInmueble: "",
 
     fechaInicio: "", fechaFinal: "", fechaCobro: "", precio: "", estado: "",
 };
@@ -60,7 +60,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         ],
         3: [
             "tipoInmueble", "registroInmobiliario", "nombreInmueble", "area", "habitaciones", "banos",
-            "departamento", "ciudad", "barrio", "estrato", "direccion", "precioInmueble", "garaje"
+            "departamento", "ciudad", "barrio", "estrato", "direccion", "precioInmueble"
         ],
         4: ["fechaInicio", "fechaFinal", "fechaCobro", "precio", "estado"],
     };
@@ -77,7 +77,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             registroInmobiliario: "Registro Inmobiliario", nombreInmueble: "Nombre del Inmueble", area: "Área (m²)",
             habitaciones: "Número de Habitaciones", banos: "Número de Baños", departamento: "Departamento",
             ciudad: "Ciudad", barrio: "Barrio", estrato: "Estrato", direccion: "Dirección", precioInmueble: "Precio del Inmueble",
-            garaje: "Garaje", fechaInicio: "Fecha de Inicio", fechaFinal: "Fecha de Finalización", fechaCobro: "Fecha de Cobro",
+            fechaInicio: "Fecha de Inicio", fechaFinal: "Fecha de Finalización", fechaCobro: "Fecha de Cobro",
             precio: "Precio del Arriendo", estado: "Estado del Arriendo",
         };
         return labels[name] ?? name;
@@ -147,6 +147,27 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                 try { el.value = displayValue; } catch (err) { }
             }
         }
+
+        // Recalcular estado al montar refs si ya hay fechaCobro en edición
+        if (name === "fechaCobro" && valuesRef.current.fechaCobro) {
+            const estadoAuto = isOnOrAfterToday(valuesRef.current.fechaCobro) ? "Debe" : "Activo";
+            valuesRef.current.estado = estadoAuto;
+            displayValuesRef.current.estado = estadoAuto;
+            const estadoEl = elRefs.current.estado;
+            if (estadoEl) {
+                try { estadoEl.value = estadoAuto; } catch (_) {}
+            }
+        }
+    };
+
+    const isOnOrAfterToday = (dateString) => {
+        if (!dateString) return false;
+        const d = new Date(dateString);
+        if (Number.isNaN(d)) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() <= today.getTime();
     };
 
     const handleInputChange = (e) => {
@@ -167,6 +188,16 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             }
             
             valuesRef.current[name] = cleanValue;
+
+            if (name === "fechaCobro") {
+                const estadoAuto = isOnOrAfterToday(cleanValue) ? "Debe" : "Activo";
+                valuesRef.current.estado = estadoAuto;
+                displayValuesRef.current.estado = estadoAuto;
+                const estadoEl = elRefs.current.estado;
+                if (estadoEl) {
+                    try { estadoEl.value = estadoAuto; } catch (_) {}
+                }
+            }
         }
 
         if (errors[name] && cleanValue.length === 0) {
@@ -194,7 +225,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         setErrors(prev => {
             const newErrors = { ...prev };
 
-            if (isRequired && !value.toString().trim() && name !== 'garaje') { 
+        if (isRequired && !value.toString().trim()) { 
                 errorMessage = "Este campo es obligatorio.";
             }
 
@@ -252,7 +283,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
             const isRequired = requiredFields.includes(fieldName);
             
-            if (isRequired && !value.toString().trim() && fieldName !== 'garaje') { 
+        if (isRequired && !value.toString().trim()) { 
                 error = "Este campo es obligatorio.";
             } 
             
@@ -334,7 +365,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     };
 
     const handleNextStep = () => {
-        let fieldsToValidate = stepFields[step].filter(f => f !== 'garaje' || requiredFields.includes('garaje'));
+        let fieldsToValidate = stepFields[step];
         
         if (step === 1 && valuesRef.current[NUMERO_DOC_COD].toString().trim()) {
             if (!fieldsToValidate.includes(NUMERO_DOC_COD)) fieldsToValidate.push(NUMERO_DOC_COD);
@@ -364,7 +395,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     const handleSubmit = (e) => {
         e.preventDefault();
         
-        const allFieldsToValidate = Object.values(stepFields).flat().filter(f => f !== 'garaje' || requiredFields.includes('garaje'));
+        const allFieldsToValidate = Object.values(stepFields).flat();
         const { currentErrors, hasError, firstErrorField } = runValidation(allFieldsToValidate);
 
         setErrors(currentErrors);
@@ -386,7 +417,9 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             return;
         }
 
-        const payload = { ...valuesRef.current };
+        const estadoAuto = isOnOrAfterToday(valuesRef.current.fechaCobro) ? "Debe" : "Activo";
+        valuesRef.current.estado = estadoAuto;
+        const payload = { ...valuesRef.current, estado: estadoAuto };
         if (onSubmit) onSubmit(payload);
         onClose?.();
         console.log("Formulario de Edición Enviado:", payload);
@@ -493,12 +526,12 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     return (
         // 🔑 Fondo del modal con desenfoque - ESTILO ACTUALIZADO
         <div 
-            className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4"
+            className="fixed inset-0 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm z-50 p-3 md:p-6 overflow-y-auto md:overflow-hidden"
             onClick={onClose}
         >
             {/* Contenido principal del modal con estilo consistente */}
             <div 
-                className="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 relative max-h-[90vh] overflow-y-auto"
+                className="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-3 md:p-4 relative my-3 max-h-[88vh] flex flex-col overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
                 
@@ -520,29 +553,31 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
                 {/* Barra de progreso */}
                 <div className="mb-6">
-                    <div className="w-full bg-gray-200 h-2 rounded-full">
+                    <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
                         <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
                             style={{ width: `${(step / totalSteps) * 100}%` }}
                         />
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">
+                    <p className="text-xs text-blue-700 font-bold mt-2 text-center">
                         Paso {step} de {totalSteps}:{" "}
-                        {step === 1 ? "Datos del Inquilino" : step === 2 ? "Datos del Codeudor" : step === 3 ? "Datos del Inmueble" : "Datos del Contrato y Pago"}
-                        {" "} (Campos obligatorios marcados con *)
+                        <span className="font-semibold text-gray-600">
+                            {step === 1 ? "Datos del Inquilino" : step === 2 ? "Datos del Codeudor" : step === 3 ? "Datos del Inmueble" : "Datos del Contrato y Pago"}
+                        </span>
+                        <span className="text-gray-500 font-normal"> (Campos obligatorios marcados con *)</span>
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit}>
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto pr-1 md:pr-2">
+                    <div className="bg-slate-50 rounded-xl p-3 md:p-4 border border-slate-200 space-y-4">
                         
                         {/* PASO 1 */}
                         {step === 1 && (
                             <div>
-                                <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">
+                                <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">
                                     Datos del Inquilino
                                 </h3>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                                     <Field
                                         name="tipoDocInquilino"
                                         as="select"
@@ -566,10 +601,10 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                         {/* PASO 2 */}
                         {step === 2 && (
                             <div>
-                                <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">
+                                <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">
                                     Datos del Codeudor
                                 </h3>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                                     <Field
                                         name="tipoDocCodeudor"
                                         as="select"
@@ -594,10 +629,10 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                         {/* PASO 3 */}
                         {step === 3 && (
                             <div>
-                                <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">
+                                <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">
                                     Datos del Inmueble
                                 </h3>
-                                <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+                                <div className="grid grid-cols-3 gap-x-3 gap-y-2">
                                     <Field
                                         name="tipoInmueble"
                                         as="select"
@@ -618,7 +653,6 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                                     <Field name="estrato" placeholder="Ej: 4. Solo números enteros mayores a 0." />
                                     <Field name="direccion" placeholder="Ej: Calle 10 # 45-20" />
                                     <Field name="precioInmueble" placeholder="Ej: 1.500.000 (Solo números enteros mayores a 0)." />
-                                    <Field name="garaje" type="checkbox" />
                                 </div>
                             </div>
                         )}
@@ -626,10 +660,10 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                         {/* PASO 4 */}
                         {step === 4 && (
                             <div>
-                                <h3 className="text-lg font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200">
+                                <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">
                                     Datos del Contrato y Pago
                                 </h3>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                                     <Field name="fechaInicio" type="date" />
                                     <Field name="fechaFinal" type="date" />
                                     <Field name="fechaCobro" type="date" />
@@ -685,3 +719,12 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         </div>
     );
 }
+
+
+
+
+
+
+
+
+

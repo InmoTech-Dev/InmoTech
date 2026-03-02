@@ -15,13 +15,34 @@ const splitNames = (fullName = '') => {
   return { first, rest: parts.slice(1).join(' ') || second || '' };
 };
 
-const normalizeDoc = (value = '') =>
-  value
-    .toString()
-    .replace(/\D/g, '')
-    .trim();
+const normalizeDocByType = (tipo = '', value = '') => {
+  const upper = (tipo || '').toString().trim().toUpperCase();
+  const raw = (value || '').toString().trim();
+  if (upper === 'PAS' || upper === 'PASAPORTE') return raw.replace(/\s+/g, '');
+  return raw.replace(/\D/g, '').trim();
+};
 
 const normalizeTipo = (value = '') => value.toString().trim().toUpperCase();
+
+// Mapea al formato esperado por el backend/BD (Pasaporte capitalizado)
+const mapTipoToBackend = (value = '') => {
+  const upper = normalizeTipo(value);
+  if (upper === 'PAS' || upper === 'PASAPORTE') return 'Pasaporte';
+  return upper;
+};
+const getTipoVariants = (value = '') => {
+  const upper = normalizeTipo(value);
+  const variants = [upper];
+  const mapLong = {
+    CC: 'Cedula de Ciudadania',
+    CE: 'Cedula de Extranjeria',
+    TI: 'Tarjeta de Identidad',
+    PAS: 'Pasaporte',
+    PASAPORTE: 'Pasaporte',
+  };
+  if (mapLong[upper]) variants.push(mapLong[upper]);
+  return Array.from(new Set(variants.filter(Boolean)));
+};
 
 const mapBuyerFromApi = (buyer = {}, formData = {}) => {
   const persona = buyer.persona || buyer.Persona || buyer;
@@ -96,43 +117,81 @@ const buildPayload = (payload = {}) => {
 };
 
 export const buyersApiService = {
+  async findPersonaByDocument(tipoDocumento, numeroDocumento) {
+    const numero = normalizeDocByType(tipoDocumento, numeroDocumento);
+    const tipo = mapTipoToBackend(tipoDocumento);
+    try {
+      const response = await apiClient.get('/personas/buscar', {
+        params: { tipo_documento: tipo, numero_documento: numero, _ts: Date.now() },
+        headers: { 'Cache-Control': 'no-store' }
+      });
+      let list = extractList(response);
+      if (!list.length && Array.isArray(response?.data)) list = response.data;
+      if (!list.length && Array.isArray(response?.personas)) list = response.personas;
+      if (!list.length) return null;
+      const row = list[0];
+      return mapBuyerFromApi({
+        ...row,
+        persona: row,
+        raw: row,
+        id_comprador: row.id_comprador,
+        buyerId: row.id_comprador
+      });
+    } catch (error) {
+      if (import.meta?.env?.DEV) {
+        console.warn('[buyersApiService] persona/buscar fallo', { tipo, numero, error: error?.message });
+      }
+      return null;
+    }
+  },
+
   async getAll(params = {}) {
-    const response = await apiClient.get('/sales/buyers', params);
+    const response = await apiClient.get('/sales/buyers', { params });
     return extractList(response).map((item) => mapBuyerFromApi(item));
   },
 
   async findByDocument(tipoDocumento, numeroDocumento) {
-    const params = {
-      tipo_documento: (tipoDocumento || '').trim(),
-      numero_documento: (numeroDocumento || '').trim(),
-    };
-    const response = await apiClient.get('/sales/buyers', params);
-    const list = extractList(response);
-    if (!list.length) return null;
+    try {
+      const params = {
+        tipo_documento: normalizeTipo(tipoDocumento),
+        numero_documento: normalizeDoc(numeroDocumento),
+      };
+      const response = await apiClient.get('/sales/buyers', { params });
+      const list = extractList(response);
+      if (!list.length) {
+        const personaMatch = await this.findPersonaByDocument(tipoDocumento, numeroDocumento);
+        return personaMatch || null;
+      }
 
-    const targetDoc = normalizeDoc(numeroDocumento);
-    const targetTipo = normalizeTipo(tipoDocumento);
+      const targetDoc = normalizeDoc(numeroDocumento);
+      const targetTipo = normalizeTipo(tipoDocumento);
 
-    const exactMatch = list.find((item) => {
-      const doc =
-        normalizeDoc(
-          item?.numero_documento ||
-          item?.documento ||
-          item?.persona?.numero_documento
-        );
+      const exactMatch = list.find((item) => {
+        const doc =
+          normalizeDoc(
+            item?.numero_documento ||
+            item?.documento ||
+            item?.persona?.numero_documento
+          );
 
-      const tipo =
-        normalizeTipo(
-          item?.tipo_documento ||
-          item?.tipoDocumento ||
-          item?.persona?.tipo_documento
-        );
+        const tipo =
+          normalizeTipo(
+            item?.tipo_documento ||
+            item?.tipoDocumento ||
+            item?.persona?.tipo_documento
+          );
 
-      return doc && doc === targetDoc && (!targetTipo || tipo === targetTipo);
-    });
+        return doc && doc === targetDoc && (!targetTipo || tipo === targetTipo);
+      });
 
-    if (!exactMatch) return null;
-    return mapBuyerFromApi(exactMatch);
+      if (!exactMatch) return null;
+      return mapBuyerFromApi(exactMatch);
+    } catch (error) {
+      if (import.meta?.env?.DEV) {
+        console.warn('[buyersApiService.findByDocument] fallo', { tipoDocumento, numeroDocumento, error: error?.message });
+      }
+      return null; // permite fallback a Personas
+    }
   },
 
   async getById(id) {

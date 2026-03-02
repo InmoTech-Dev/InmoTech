@@ -7,6 +7,11 @@ const sseService = require('./sse.service');
 const realtimeAudienceService = require('./realtimeAudience.service');
 const invitacionService = require('./invitacion.service');
 
+const normalizeTipoDoc = (value = '') => {
+  const t = value.toString().trim().toUpperCase();
+  return (t === 'PAS' || t === 'PASAPORTE') ? 'Pasaporte' : t;
+};
+
 const splitFullName = (value = '') => {
   if (!value) {
     return { first: '', second: '' };
@@ -83,39 +88,47 @@ class PersonaService {
    */
   async buscarPorDocumento(tipoDocumento, numeroDocumento) {
     try {
-      const personas = await Persona.findAll({
-        where: {
-          tipo_documento: tipoDocumento,
-          numero_documento: { [Op.like]: `%${numeroDocumento}%` },
-          estado: true
-        },
-        include: [
-          {
-            model: Rol,
-            as: 'roles',
-            through: {
-              attributes: ['estado'],
-              where: { estado: true }
-            },
-            attributes: ['id_rol', 'nombre_rol'],
-            where: { estado: true }
-          }
-        ],
-        limit: 10,
-        order: [['nombre_completo', 'ASC']]
-      });
+      const rows = await sequelize.query(
+        'EXEC sp_BuscarPersonaPorDocumento @tipo_documento = :tipo, @numero_documento = :numero',
+        {
+          replacements: {
+            tipo: normalizeTipoDoc(tipoDocumento),
+            numero: (numeroDocumento || '').trim()
+          },
+          type: sequelize.QueryTypes.SELECT
+        }
+      );
 
-      return personas.map(persona => ({
-        id_persona: persona.id_persona,
-        tipo_documento: persona.tipo_documento,
-        numero_documento: persona.numero_documento,
-        nombre_completo: persona.nombre_completo,
-        apellido_completo: persona.apellido_completo,
-        correo: persona.correo,
-        telefono: persona.telefono,
-        tiene_cuenta: persona.tiene_cuenta,
-        estado: persona.estado,
-        roles: persona.roles || []
+      if (!rows || rows.length === 0) return [];
+
+      return rows.map((r) => ({
+        id_persona: r.id_persona,
+        tipo_documento: r.tipo_documento,
+        numero_documento: r.numero_documento,
+        nombre_completo: r.nombre_completo,
+        apellido_completo: r.apellido_completo,
+        correo: r.correo,
+        telefono: r.telefono,
+        tiene_cuenta: r.tiene_cuenta,
+        estado: r.estado_persona ?? r.estado ?? true,
+
+        // Flags para front
+        es_comprador: r.es_comprador ?? (r.id_comprador ? 1 : 0),
+        es_arrendatario: r.es_arrendatario ?? (r.id_arrendatario ? 1 : 0),
+
+        // Datos comprador (si existen)
+        id_comprador: r.id_comprador || null,
+        registro_comprador: r.registro_comprador || null,
+        tipo_comprador: r.tipo_comprador || null,
+        estado_comprador: r.estado_comprador || null,
+
+        // Datos arrendatario (si existen)
+        id_arrendatario: r.id_arrendatario || null,
+        registro_arrendatario: r.registro_arrendatario || null,
+        tipo_arrendatario: r.tipo_arrendatario || null,
+        estado_arrendatario: r.estado_arrendatario || null,
+
+        raw: r
       }));
     } catch (error) {
       logger.error('Error buscando por documento:', error);
@@ -565,23 +578,6 @@ class PersonaService {
     });
 
     return result;
-  }
-
-  // Mantener métodos existentes para compatibilidad
-  async buscarPorDocumento(tipo_documento, numero_documento, transaction = null) {
-    try {
-      const persona = await Persona.findOne({
-        where: {
-          tipo_documento,
-          numero_documento: numero_documento.trim()
-        },
-        transaction
-      });
-      return persona;
-    } catch (error) {
-      logger.error('Error al buscar persona por documento:', error);
-      return null;
-    }
   }
 
   async crearOActualizar(datosPersona, transaction = null) {

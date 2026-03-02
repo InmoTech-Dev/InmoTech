@@ -2115,6 +2115,60 @@ GO
 PRINT '? Función fn_EsCompradorActivo creada correctamente';
 GO
 
+-- Procedimiento: sp_BuscarPersonaPorDocumento
+-- Descripción: dado tipo + número de documento, retorna la persona y, si existen,
+--              sus registros de Comprador y Arrendatario para autocompletar en front.
+IF OBJECT_ID('dbo.sp_BuscarPersonaPorDocumento', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_BuscarPersonaPorDocumento;
+GO
+
+CREATE PROCEDURE dbo.sp_BuscarPersonaPorDocumento
+    @tipo_documento   VARCHAR(20),
+    @numero_documento VARCHAR(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @tipo_doc_trim VARCHAR(20)   = LTRIM(RTRIM(@tipo_documento));
+    DECLARE @num_doc_trim  VARCHAR(20)   = LTRIM(RTRIM(@numero_documento));
+
+    SELECT 
+        -- Persona
+        p.id_persona,
+        p.tipo_documento,
+        p.numero_documento,
+        p.nombre_completo,
+        p.apellido_completo,
+        p.correo,
+        p.telefono,
+        p.tiene_cuenta,
+        p.estado AS estado_persona,
+
+        -- Flags para el front
+        CASE WHEN c.id_comprador   IS NULL THEN 0 ELSE 1 END AS es_comprador,
+        CASE WHEN a.id_arrendatario IS NULL THEN 0 ELSE 1 END AS es_arrendatario,
+
+        -- Comprador (si existe)
+        c.id_comprador,
+        c.registro_comprador,
+        c.tipo_comprador,
+        c.estado AS estado_comprador,
+
+        -- Arrendatario (si existe)
+        a.id_arrendatario,
+        a.registro_arrendatario,
+        a.tipo_arrendatario,
+        a.estado AS estado_arrendatario
+    FROM Personas p
+    LEFT JOIN Compradores   c ON c.id_persona = p.id_persona
+    LEFT JOIN Arrendatarios a ON a.id_persona = p.id_persona
+    WHERE p.tipo_documento = @tipo_doc_trim
+      AND p.numero_documento = @num_doc_trim;
+END;
+GO
+PRINT '? Procedimiento sp_BuscarPersonaPorDocumento creado';
+GO
+
 -- Procedimiento: sp_CrearCompradorCompleto
 IF OBJECT_ID('dbo.sp_CrearCompradorCompleto', 'P') IS NOT NULL
     DROP PROCEDURE dbo.sp_CrearCompradorCompleto;

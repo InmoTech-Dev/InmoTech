@@ -806,26 +806,31 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
 
 const toISODate = (value) => {
+  const pad = (num) => String(num).padStart(2, "0");
+  const toYmd = (date) =>
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
-  if (!value) return new Date().toISOString();
+  if (!value) {
+    return toYmd(new Date());
+  }
 
-  const directDate = new Date(value);
+  const raw = String(value).trim();
+  const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymdMatch) {
+    return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
+  }
 
+  const directDate = new Date(raw);
   if (!Number.isNaN(directDate.getTime())) {
-
-    return directDate.toISOString();
-
+    return toYmd(directDate);
   }
 
-  const dateOnly = new Date(`${value}T00:00:00`);
-
+  const dateOnly = new Date(`${raw}T00:00:00`);
   if (!Number.isNaN(dateOnly.getTime())) {
-
-    return dateOnly.toISOString();
-
+    return toYmd(dateOnly);
   }
 
-  return new Date().toISOString();
+  return toYmd(new Date());
 
 };
 

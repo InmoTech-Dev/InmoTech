@@ -1004,6 +1004,17 @@ const normalizePhone = (value = "") => {
 
         setBuyerLookupState({ loading: true, message: "", error: null });
         try {
+            const existingBuyer = await buyersApiService.findByDocument(tipoDocumento, documento);
+            if (existingBuyer?.id || existingBuyer?.compradorId || existingBuyer?.raw?.id_comprador) {
+                applyBuyerData(existingBuyer);
+                setBuyerLookupState({
+                    loading: false,
+                    message: "Comprador encontrado y seleccionado.",
+                    error: null,
+                });
+                return existingBuyer;
+            }
+
             const createdBuyer = await buyersApiService.create({
                 tipoDocumento,
                 documento,

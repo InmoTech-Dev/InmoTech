@@ -21,6 +21,7 @@ const normalizeDocByType = (tipo = '', value = '') => {
   if (upper === 'PAS' || upper === 'PASAPORTE') return raw.replace(/\s+/g, '');
   return raw.replace(/\D/g, '').trim();
 };
+const normalizeDoc = (value = '') => String(value || '').replace(/\D/g, '').trim();
 
 const normalizeTipo = (value = '') => value.toString().trim().toUpperCase();
 
@@ -201,9 +202,21 @@ export const buyersApiService = {
   },
 
   async create(payload) {
-    const response = await apiClient.post('/sales/buyers', buildPayload(payload));
-    const data = response?.data?.data ?? response?.data ?? response;
-    return mapBuyerFromApi(data, payload);
+    try {
+      const response = await apiClient.post('/sales/buyers', buildPayload(payload));
+      const data = response?.data?.data ?? response?.data ?? response;
+      return mapBuyerFromApi(data, payload);
+    } catch (error) {
+      const status = error?.status || error?.response?.status;
+      if (status !== 409) throw error;
+
+      const existing = await this.findByDocument(payload?.tipoDocumento, payload?.documento);
+      if (existing?.id || existing?.compradorId || existing?.raw?.id_comprador) {
+        return existing;
+      }
+
+      throw error;
+    }
   },
 
   async update(id, payload) {

@@ -4,6 +4,37 @@ const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
 
 class SaleService {
+  _normalizeSaleDate(value) {
+    const now = new Date();
+    const isDateOnly = (input) => /^\d{4}-\d{2}-\d{2}$/.test(String(input || '').trim());
+    const toLocalMidnight = (date) =>
+      new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+
+    if (!value) return toLocalMidnight(now);
+
+    const raw = String(value).trim();
+
+    if (isDateOnly(raw)) {
+      const [y, m, d] = raw.split('-').map(Number);
+      return new Date(y, m - 1, d, 0, 0, 0, 0);
+    }
+
+    if (raw.includes('T')) {
+      const [datePart] = raw.split('T');
+      if (isDateOnly(datePart)) {
+        const [y, m, d] = datePart.split('-').map(Number);
+        return new Date(y, m - 1, d, 0, 0, 0, 0);
+      }
+    }
+
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return toLocalMidnight(parsed);
+    }
+
+    return toLocalMidnight(now);
+  }
+
   _isMissingVentaAdjuntosTable(error) {
     const message = String(error?.original?.message || error?.message || '').toLowerCase();
     return message.includes('invalid object name') && message.includes('ventaadjuntos');
@@ -170,11 +201,13 @@ class SaleService {
         const comprador = await Buyer.findByPk(compradorId, { transaction: t, include: ['persona'] });
         if (!comprador) throw new Error('Comprador no encontrado');
 
+        const normalizedSaleDate = this._normalizeSaleDate(saleData.fecha_venta);
+
         const newSale = await Sale.create(
           {
             id_comprador: compradorId,
             id_inmueble: saleData.id_inmueble,
-            fecha_venta: saleData.fecha_venta,
+            fecha_venta: normalizedSaleDate,
             valor_venta: saleData.valor_venta,
             medio_pago: saleData.medio_pago,
             tipo_doc_vendedor: saleData.tipo_doc_vendedor || saleData.vendedorTipoDocumento || saleData.tipo_documento_vendedor || null,
@@ -443,6 +476,9 @@ class SaleService {
 
     if (payload.estado) {
       payload.estado = this._mapEstadoToDb(payload.estado, sale.estado);
+    }
+    if (payload.fecha_venta) {
+      payload.fecha_venta = this._normalizeSaleDate(payload.fecha_venta);
     }
 
     await sale.update(payload);

@@ -12,7 +12,10 @@ const AdminReportsView = ({
     onViewReport,
     onEditReport,
     onDownloadPDF,
-    loading: reportsLoading
+    loading: reportsLoading,
+    filters,
+    setFilters,
+    refreshTrigger
 }) => {
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -207,15 +210,11 @@ const AdminReportsView = ({
         }
     };
 
-    // Reset selected report when user changes or reports are reloaded
     useEffect(() => {
-        if (selectedReport) {
-            const isStillInList = userReports.some(r => r.id === selectedReport.id);
-            if (!isStillInList) {
-                setSelectedReport(null);
-            }
+        if (selectedReport && refreshTrigger > 0) {
+            handleSelectReport(selectedReport);
         }
-    }, [selectedUser, allReports]);
+    }, [refreshTrigger]);
 
     return (
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden flex h-[calc(100vh-180px)] min-h-[600px]">

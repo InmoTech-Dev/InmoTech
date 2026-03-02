@@ -19,8 +19,10 @@ import AdminReportsView from './AdminReportsView'
 
 
 const ReportsContent = () => {
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedReport, setSelectedReport] = useState(null)
+  const [refreshDetailedView, setRefreshDetailedView] = useState(0)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -515,9 +517,27 @@ const ReportsContent = () => {
       }
     }
 
+    // 3) Sincronizar imágenes (Eliminar removidas y subir nuevas)
+    const currentImagenes = Array.isArray(reportData.imagenes) ? reportData.imagenes : []
+    const originalImagenes = selectedReport.imagenes || []
+
+    // Identificar IDs que siguen presentes (usando id o backendId)
+    const currentImgIds = new Set(currentImagenes.map(img => img.id_imagen || img.id))
+
+    // Eliminar las que ya no están
+    for (const img of originalImagenes) {
+      const imgId = img.id_imagen || img.id
+      if (imgId && !currentImgIds.has(imgId)) {
+        try {
+          await reportesInmobiliariosService.eliminarImagen(backendId, imgId)
+        } catch (e) {
+          console.error('Error al eliminar imagen:', e)
+        }
+      }
+    }
+
     // Subir nuevas imágenes añadidas en edición (solo si traen File)
-    const imagenes = Array.isArray(reportData.imagenes) ? reportData.imagenes : []
-    for (const img of imagenes) {
+    for (const img of currentImagenes) {
       if (img.file) {
         const upload = await uploadToCloudinary(img.file, { folder: `inmotech/reportes/${backendId}/imagenes` })
         await reportesInmobiliariosService.agregarImagen(backendId, { url: upload.url })
@@ -529,9 +549,26 @@ const ReportsContent = () => {
       }
     }
 
+    // 4) Sincronizar archivos (Eliminar removidos y subir nuevos)
+    const currentArchivos = Array.isArray(reportData.archivos) ? reportData.archivos : []
+    const originalArchivos = selectedReport.archivos || []
+
+    const currentFileIds = new Set(currentArchivos.map(f => f.id_archivo || f.id))
+
+    // Eliminar los que ya no están
+    for (const f of originalArchivos) {
+      const fileId = f.id_archivo || f.id
+      if (fileId && !currentFileIds.has(fileId)) {
+        try {
+          await reportesInmobiliariosService.eliminarArchivo(backendId, fileId)
+        } catch (e) {
+          console.error('Error al eliminar archivo:', e)
+        }
+      }
+    }
+
     // Subir nuevos archivos añadidos en edición (solo si traen File)
-    const archivos = Array.isArray(reportData.archivos) ? reportData.archivos : []
-    for (const f of archivos) {
+    for (const f of currentArchivos) {
       if (f.file) {
         const nombre = (f.name || f.nombre || 'Archivo').toString()
         const upload = await uploadToCloudinary(f.file, { folder: `inmotech/reportes/${backendId}/archivos` })
@@ -546,6 +583,7 @@ const ReportsContent = () => {
 
     setIsEditModalOpen(false)
     setSelectedReport(null)
+    setRefreshDetailedView(prev => prev + 1)
     await fetchReports()
   }
 
@@ -1102,6 +1140,9 @@ const ReportsContent = () => {
           onEditReport={handleEditReport}
           onDownloadPDF={handleDownloadReportPDF}
           loading={dbLoading}
+          filters={adminFilters}
+          setFilters={setAdminFilters}
+          refreshTrigger={refreshDetailedView}
         />
       ) : (
         <>

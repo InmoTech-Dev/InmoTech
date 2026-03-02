@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const renantsController = require('../controllers/renants.controller');
 const { validate } = require('../middlewares/validate.middleware');
-const { createLimiter, strictLimiter } = require('../middlewares/security.middleware');
+const { renantsLimiter, strictLimiter } = require('../middlewares/security.middleware');
 
 const {
   createRenantSchema,
@@ -13,7 +13,7 @@ const {
 // POST /api/v1/leases/renants - Crear arrendatario
 router.post(
   '/',
-  createLimiter,
+  renantsLimiter,
   validate(createRenantSchema),
   renantsController.createRenant
 );

@@ -784,9 +784,6 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
         numericPrice
       )
     ),
-
-    inmuebleGaraje: fallback.inmuebleGaraje ?? Boolean(inmueble.garaje),
-
     inmuebleEstado:
 
       fallback.inmuebleEstado ?? inmueble.estado ?? sale.estado ?? "Pendiente",
@@ -869,9 +866,25 @@ const buildSalePayload = (saleData = {}, buyerInfo, propertyInfo) => {
 
   return {
 
-    id_comprador: buyerInfo?.id ?? buyerInfo?.compradorId ?? buyerInfo?.raw?.id_comprador ?? buyerInfo?.raw?.buyerId ?? null,
+    id_comprador:
+      buyerInfo?.id !== undefined && buyerInfo?.id !== null
+        ? Number(buyerInfo.id)
+        : buyerInfo?.compradorId !== undefined && buyerInfo?.compradorId !== null
+          ? Number(buyerInfo.compradorId)
+          : buyerInfo?.raw?.id_comprador !== undefined && buyerInfo?.raw?.id_comprador !== null
+            ? Number(buyerInfo.raw.id_comprador)
+            : buyerInfo?.raw?.buyerId !== undefined && buyerInfo?.raw?.buyerId !== null
+              ? Number(buyerInfo.raw.buyerId)
+              : null,
 
-    id_persona: buyerInfo?.personaId ?? buyerInfo?.raw?.personaId ?? buyerInfo?.raw?.persona?.id_persona,
+    id_persona:
+      buyerInfo?.personaId !== undefined && buyerInfo?.personaId !== null
+        ? Number(buyerInfo.personaId)
+        : buyerInfo?.raw?.personaId !== undefined && buyerInfo?.raw?.personaId !== null
+          ? Number(buyerInfo.raw.personaId)
+          : buyerInfo?.raw?.persona?.id_persona !== undefined && buyerInfo?.raw?.persona?.id_persona !== null
+            ? Number(buyerInfo.raw.persona.id_persona)
+            : null,
 
     id_inmueble: Number(propertyInfo?.id ?? propertyInfo?.raw?.id_inmueble),
 
@@ -1338,6 +1351,42 @@ export function SalesManagementPage() {
 
     }
 
+    const buyerId =
+      buyerInfo?.id ??
+      buyerInfo?.compradorId ??
+      buyerInfo?.raw?.id_comprador ??
+      buyerInfo?.raw?.buyerId ??
+      null;
+
+    if (!buyerId || Number.isNaN(Number(buyerId))) {
+      setSavingVenta(false);
+      setStatusMessage({
+        type: "error",
+        text: "No se pudo obtener el identificador del comprador. Guarda o selecciona un comprador válido antes de crear la venta.",
+      });
+      toast({
+        title: "Comprador requerido",
+        description: "Selecciona un comprador válido antes de registrar la venta.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const numericPrice = toNumericValue(saleData.inmueblePrecio);
+    if (!numericPrice || numericPrice <= 0) {
+      setSavingVenta(false);
+      setStatusMessage({
+        type: "error",
+        text: "Ingresa un precio de venta válido (mayor a 0) antes de guardar.",
+      });
+      toast({
+        title: "Precio requerido",
+        description: "El precio de venta debe ser mayor a 0.",
+        variant: "destructive",
+      });
+      return;
+    }
+
 
 
     if (loadingProperties) {
@@ -1646,21 +1695,6 @@ export function SalesManagementPage() {
       mergedPayload.estadoSeguimiento = mergedPayload.estado || "Iniciada";
 
     try {
-      setStatusMessage({ type: "info", text: "Guardando cambios..." });
-
-      setVentas((prevVentas) =>
-        prevVentas.map((v) =>
-          String(v.id) === String(saleId)
-            ? {
-                ...v,
-                estado: mergedPayload.estado,
-                estadoSeguimiento: mergedPayload.estadoSeguimiento,
-                descripcionSeguimiento: mergedPayload.descripcionSeguimiento,
-              }
-            : v
-        )
-      );
-
       const trackingPayload = buildTrackingPayload(mergedPayload, statusCatalog);
 
       if (!trackingPayload) {
@@ -1671,19 +1705,7 @@ export function SalesManagementPage() {
         return;
       }
 
-      const isCompleting =
-        STATUS_NORMALIZE(
-          mergedPayload.estadoSeguimiento || trackingPayload.descripcion || ""
-        ) === STATUS_NORMALIZE("Completada");
-      if (isCompleting) {
-        const confirmed = window.confirm(
-          "Vas a marcar el seguimiento como 'Completada'. ¿Confirmas que quieres guardar este cambio?"
-        );
-        if (!confirmed) {
-          setStatusMessage(null);
-          return;
-        }
-      }
+      setStatusMessage({ type: "info", text: "Guardando cambios..." });
 
       await ventaApiService.cambiarEstado(saleId, {
         ...trackingPayload,

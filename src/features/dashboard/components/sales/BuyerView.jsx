@@ -1,16 +1,73 @@
-import React from "react";
-import { FaImage, FaMapMarkerAlt, FaMoneyBillWave } from "react-icons/fa";
+import React, { useMemo } from "react";
+import { FaImage, FaMapMarkerAlt, FaMoneyBillWave, FaTimes } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
+
+/* ---------- UI helpers (mismo estilo compacto) ---------- */
+function Field({ label, value, className = "" }) {
+  const v = value ?? "";
+  const empty = v === "" || v === "-" || v === null || v === undefined;
+
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <p className="text-[11px] font-semibold text-gray-500">{label}</p>
+      <p className={`mt-0.5 text-sm break-words ${empty ? "text-gray-400" : "text-gray-900"}`}>
+        {empty ? "-" : v}
+      </p>
+    </div>
+  );
+}
+
+function Pill({ children, tone = "gray" }) {
+  const tones = {
+    green: "bg-green-50 text-green-700 border-green-200",
+    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    red: "bg-red-50 text-red-700 border-red-200",
+    gray: "bg-gray-50 text-gray-700 border-gray-200",
+    blue: "bg-blue-50 text-blue-700 border-blue-200",
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${tones[tone]}`}>
+      {children || "-"}
+    </span>
+  );
+}
+
+function estadoTone(estado) {
+  const e = (estado || "").toLowerCase();
+  if (["pagad", "complet", "aprob", "activa", "activo"].some((k) => e.includes(k))) return "green";
+  if (["pend", "proceso", "revision", "revisión"].some((k) => e.includes(k))) return "yellow";
+  if (!estado) return "gray";
+  if (["cancel", "rechaz", "anulad"].some((k) => e.includes(k))) return "red";
+  return "blue";
+}
+
+function formatMoneyCOP(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  const num = typeof value === "number" ? value : Number(String(value).replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(num)) return String(value);
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(num);
+}
+
+function formatDateCompact(value) {
+  if (!value) return "-";
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("es-CO");
+}
 
 export default function BuyerView({ buyer, onClose }) {
   const fullName = [
     buyer?.primerNombre,
     buyer?.segundoNombre,
     buyer?.primerApellido,
-    buyer?.segundoApellido
+    buyer?.segundoApellido,
   ]
     .filter(Boolean)
-    .join(" ");
+    .join(" ")
+    .trim();
 
   const operacion =
     buyer?.ultimaVenta || buyer?.compra || buyer?.venta || buyer?.sale || buyer?.raw?.venta || null;
@@ -29,25 +86,12 @@ export default function BuyerView({ buyer, onClose }) {
     (Array.isArray(inmueble?.imagenes) ? inmueble.imagenes[0] : "") ||
     "";
 
-  const formatCurrency = (value) => {
-    if (!value && value !== 0) return "-";
-    return Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      maximumFractionDigits: 0
-    }).format(Number(value));
-  };
-
-  const formatDate = (value) => {
-    if (!value) return "-";
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("es-CO");
-  };
-
   const fechaCompra =
     operacion?.fecha_venta || operacion?.fechaCompra || operacion?.fecha || buyer?.fechaCompra || null;
+
   const valorCompra =
     operacion?.valor_venta || operacion?.valorCompra || operacion?.valor || buyer?.valorCompra || null;
+
   const medioPago =
     operacion?.medio_pago ||
     operacion?.medioPago ||
@@ -65,183 +109,181 @@ export default function BuyerView({ buyer, onClose }) {
     buyer?.medioPagoDescripcion ||
     buyer?.medio_pago_descripcion ||
     null;
+
   const estadoVenta =
     operacion?.estado || operacion?.estado_venta || buyer?.estado_venta || buyer?.estado || null;
+
+  const categoriaTipo = useMemo(() => {
+    if (!inmueble) return "-";
+    return inmueble?.categoria || inmueble?.tipo || inmueble?.categoriaInmueble || "N/D";
+  }, [inmueble]);
 
   return (
     <AnimatePresence>
       {buyer && (
         <motion.div
-          className="fixed inset-0 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm z-50 p-4"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] p-3 sm:p-4 flex items-center justify-center"
           onClick={onClose}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-6 relative max-h-[88vh] overflow-hidden"
+            className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100"
             onClick={(e) => e.stopPropagation()}
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            initial={{ opacity: 0, y: 14, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.98 }}
-            transition={{ duration: 0.25 }}
+            exit={{ opacity: 0, y: 14, scale: 0.99 }}
+            transition={{ duration: 0.2 }}
           >
-            <motion.button
-              onClick={onClose}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="absolute top-5 right-5 text-gray-500 hover:text-blue-600 transition duration-150 p-1 rounded-full"
-              aria-label="Cerrar"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </motion.button>
-
-            <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Información del comprador</h2>
-                <p className="text-sm text-gray-600">
-                  Detalles completos del comprador, el inmueble y la operación realizada.
-                </p>
-              </div>
-
-              {/* Info personal */}
-              <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Información personal</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="font-semibold text-gray-700">Nombre completo:</p>
-                    <p className="text-gray-900">{fullName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-700">Documento:</p>
-                    <p className="text-gray-900">
-                      {buyer?.tipoDocumento} - {buyer?.documento}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-700">Teléfono:</p>
-                    <p className="text-gray-900">{buyer?.telefono || "-"}</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <p className="font-semibold text-gray-700">Correo electrónico:</p>
-                    {buyer?.correo ? (
-                      <a href={`mailto:${buyer.correo}`} className="text-blue-600 hover:text-blue-800 underline">
-                        {buyer.correo}
-                      </a>
-                    ) : (
-                      <p className="text-gray-900">-</p>
-                    )}
-                  </div>
+            {/* Header sticky compacto */}
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
+              <div className="px-4 sm:px-5 py-3.5 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
+                    Información del comprador
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
+                    Detalles del comprador, el inmueble y la operación realizada.
+                  </p>
                 </div>
-              </section>
 
-              {/* Operación */}
-              <section className="rounded-xl border border-gray-200 bg-white p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <FaMoneyBillWave className="text-green-600" />
-                  Datos de la operación
-                </h3>
+                <motion.button
+                  onClick={onClose}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-full border border-gray-200 text-gray-600 hover:text-blue-700 hover:border-blue-200 hover:bg-blue-50 transition"
+                  aria-label="Cerrar"
+                >
+                  <FaTimes />
+                </motion.button>
+              </div>
+            </div>
 
-                {operacion ? (
-                  <div className="space-y-3 text-sm text-gray-800">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
-                      <div>
-                        <p className="font-semibold text-gray-700">Fecha de compra:</p>
-                        <p className="text-gray-900">{formatDate(fechaCompra)}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-700">Valor de compra:</p>
-                        <p className="text-gray-900 font-semibold">{formatCurrency(valorCompra)}</p>
-                      </div>
-                    </div>
+            {/* Body */}
+            <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Personal (sin pill CC) */}
+<section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+  <div className="flex items-center justify-between gap-2 mb-3">
+    <h3 className="text-sm font-semibold text-gray-900">Información personal</h3>
+    {/* quitado el Pill de tipoDocumento */}
+  </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
-                      <div>
-                        <p className="font-semibold text-gray-700">Medio de pago:</p>
-                        <p className="text-gray-900">{medioPago || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-700">Estado de la venta:</p>
-                        <p className="text-gray-900">{estadoVenta || "-"}</p>
-                      </div>
-                    </div>
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+    <Field label="Nombre" value={fullName || "-"} className="sm:col-span-2" />
 
-                    {(operacion?.observaciones || buyer?.observaciones) && (
-                      <div>
-                        <p className="font-semibold text-gray-700 mb-1">Observaciones:</p>
-                        <p className="text-gray-900 bg-white rounded-lg p-3 border border-gray-200">
-                          {operacion?.observaciones || buyer?.observaciones}
-                        </p>
-                      </div>
-                    )}
+    <Field
+      label="Documento"
+      value={
+        (buyer?.tipoDocumento ? `${buyer.tipoDocumento} - ` : "") + (buyer?.documento || "-")
+      }
+    />
+
+    <Field label="Teléfono" value={buyer?.telefono || "-"} />
+
+    <div className="sm:col-span-2">
+      <p className="text-[11px] font-semibold text-gray-500">Correo</p>
+      <div className="mt-0.5 text-sm break-words">
+        {buyer?.correo ? (
+          <a href={`mailto:${buyer.correo}`} className="text-blue-600 hover:text-blue-800 underline">
+            {buyer.correo}
+          </a>
+        ) : (
+          <span className="text-gray-400">-</span>
+        )}
+      </div>
+    </div>
+  </div>
+</section>
+
+                {/* Operación */}
+                <section className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                      <FaMoneyBillWave className="text-green-600" />
+                      Operación
+                    </h3>
+                    <Pill tone={estadoTone(estadoVenta)}>{estadoVenta || "-"}</Pill>
                   </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <FaImage size={36} className="mx-auto text-gray-300 mb-2" />
-                    <p className="text-gray-500 italic">
-                      Aún no se ha registrado una operación de compra para este comprador.
-                    </p>
+
+                  {operacion ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                        <Field label="Fecha" value={formatDateCompact(fechaCompra)} />
+                        <Field label="Valor" value={formatMoneyCOP(valorCompra)} />
+                        <Field label="Medio de pago" value={medioPago || "-"} className="col-span-2" />
+                      </div>
+
+                      {(operacion?.observaciones || buyer?.observaciones) && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-[11px] font-semibold text-gray-500 mb-1">Observaciones</p>
+                          <p className="text-sm text-gray-900 whitespace-pre-line leading-5">
+                            {operacion?.observaciones || buyer?.observaciones}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FaImage size={28} className="mx-auto text-gray-300 mb-2" />
+                      <p className="text-gray-500 italic text-sm">
+                        Aún no se ha registrado una operación para este comprador.
+                      </p>
+                    </div>
+                  )}
+                </section>
+
+                {/* Inmueble */}
+                <section className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                      <FaMapMarkerAlt className="text-blue-600" />
+                      Inmueble adquirido
+                    </h3>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {categoriaTipo && categoriaTipo !== "-" ? <Pill tone="blue">{categoriaTipo}</Pill> : null}
+                      {registroInmobiliario && registroInmobiliario !== "-" ? <Pill>{registroInmobiliario}</Pill> : null}
+                    </div>
                   </div>
-                )}
-              </section>
 
-              {/* Inmueble */}
-              <section className="rounded-xl border border-gray-200 bg-white p-4">
-                <h3 className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b border-gray-100 flex items-center gap-2">
-                  <FaMapMarkerAlt className="text-blue-600" />
-                  Inmueble adquirido
-                </h3>
-
-                {inmueble ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-800">
-                    <div className="flex items-center gap-3">
-                      <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200 overflow-hidden">
+                  {inmueble ? (
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="w-full md:w-40 h-28 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center text-gray-400 shrink-0">
                         {imagenInmueble ? (
                           <img src={imagenInmueble} alt="Inmueble" className="w-full h-full object-cover" />
                         ) : (
-                          <FaImage size={24} />
+                          <FaImage size={22} />
                         )}
                       </div>
-                      <div className="space-y-1">
-                        <p className="font-semibold text-gray-700">Registro inmobiliario:</p>
-                        <p className="text-gray-900">{registroInmobiliario}</p>
-                        <p className="font-semibold text-gray-700">Categoría / Tipo:</p>
-                        <p className="text-gray-900">
-                          {inmueble?.categoria || inmueble?.tipo || inmueble?.categoriaInmueble || "N/D"}
-                        </p>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                          <Field label="Registro inmobiliario" value={registroInmobiliario} />
+                          <Field label="Categoría / Tipo" value={categoriaTipo} />
+                          <Field label="Dirección" value={inmueble?.direccion || "N/D"} className="sm:col-span-2" />
+                          <Field
+                            label="Ubicación"
+                            value={(inmueble?.ciudad || "N/D") + ", " + (inmueble?.departamento || "N/D")}
+                            className="sm:col-span-2"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <div>
-                        <p className="font-semibold text-gray-700">Dirección:</p>
-                        <p className="text-gray-900">{inmueble?.direccion || "N/D"}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-700">Ubicación:</p>
-                        <p className="text-gray-900">
-                          {inmueble?.ciudad || "N/D"}, {inmueble?.departamento || "N/D"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-gray-500 text-sm italic">Sin inmuebles asignados</div>
-                )}
-              </section>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 text-sm italic">Sin inmuebles asignados</div>
+                  )}
+                </section>
+              </div>
             </div>
 
-            <div className="mt-5 pt-4 border-t border-gray-200 flex justify-end">
+            {/* Footer sticky compacto */}
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-5 py-3 flex justify-end">
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onClose}
-                className="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 transition disabled:opacity-60"
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold shadow-sm hover:bg-blue-700 transition"
               >
                 Cerrar
               </motion.button>

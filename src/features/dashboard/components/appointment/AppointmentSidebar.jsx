@@ -131,10 +131,14 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
   };
 
   const getPropertyName = (cita) => {
-    if (typeof cita.inmueble === 'object') {
-      return cita.inmueble.direccion || 'Sin dirección';
+    const inmueble = cita?.inmueble;
+    if (inmueble && typeof inmueble === 'object') {
+      return inmueble.direccion || 'Sin dirección';
     }
-    return cita.propiedad || 'Sin propiedad';
+    if (typeof cita?.propiedad === 'object') {
+      return cita.propiedad?.direccion || 'Sin dirección';
+    }
+    return cita?.propiedad || 'Sin propiedad';
   };
 
   return (

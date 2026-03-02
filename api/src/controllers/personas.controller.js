@@ -2,6 +2,12 @@ const personasService = require('../services/persona.service');
 const invitacionService = require('../services/invitacion.service');
 const logger = require('../utils/logger');
 
+const normalizeTipoDoc = (value = '') => {
+  const t = value.toString().trim().toUpperCase();
+  if (t === 'PAS' || t === 'PASAPORTE') return 'Pasaporte';
+  return t;
+};
+
 class PersonasController {
   /**
    * Buscar personas por documento
@@ -17,7 +23,10 @@ class PersonasController {
         });
       }
 
-      const personas = await personasService.buscarPorDocumento(tipo_documento, numero_documento);
+      const personas = await personasService.buscarPorDocumento(
+        normalizeTipoDoc(tipo_documento),
+        numero_documento
+      );
 
       return res.status(200).json({
         success: true,
@@ -45,6 +54,61 @@ class PersonasController {
       });
     } catch (error) {
       logger.error('Error obteniendo perfil:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Obtener resumen de inmuebles del propietario autenticado
+   */
+  async obtenerResumenPropietario(req, res, next) {
+    try {
+      const personaId = req.user.id;
+      const perfil = await personasService.obtenerPerfil(personaId);
+      const inmuebles = Array.isArray(perfil.inmuebles) ? perfil.inmuebles : [];
+
+      const normalizar = (value = '') => String(value || '').trim().toLowerCase();
+      const incluyeVenta = (operacion = '') => normalizar(operacion).includes('venta');
+      const incluyeArriendo = (operacion = '') => normalizar(operacion).includes('arriendo');
+      const esArrendado = (item = {}) => normalizar(item.estado_frontend) === 'arrendado';
+      const canonSeguro = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+
+      const inmueblesVenta = inmuebles.filter((item) => incluyeVenta(item.operacion)).length;
+      const inmueblesArriendo = inmuebles.filter((item) => incluyeArriendo(item.operacion)).length;
+      const canonTotalEsperado = inmuebles.reduce((acc, item) => {
+        if (!esArrendado(item)) return acc;
+        return acc + canonSeguro(item.precio_arriendo);
+      }, 0);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Resumen de inmuebles obtenido exitosamente',
+        data: {
+          id_persona: perfil.id_persona,
+          propietario: {
+            id_persona: perfil.id_persona,
+            nombre_completo: perfil.nombre_completo,
+            apellido_completo: perfil.apellido_completo,
+            correo: perfil.correo,
+            telefono: perfil.telefono
+          },
+          resumen: {
+            total_inmuebles: inmuebles.length,
+            inmuebles_venta: inmueblesVenta,
+            inmuebles_arriendo: inmueblesArriendo,
+            canon_total_esperado: canonTotalEsperado
+          },
+          inmuebles: inmuebles.map((item) => ({
+            ...item,
+            estado_inmueble: item.estado_frontend || (item.estado ? 'Disponible' : 'No disponible')
+          }))
+        }
+      });
+    } catch (error) {
+      logger.error('Error obteniendo resumen de inmuebles:', error);
       next(error);
     }
   }

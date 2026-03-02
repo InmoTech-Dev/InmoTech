@@ -1,6 +1,8 @@
 const authService = require('../services/auth.service');
+const personaService = require('../services/persona.service');
 const logger = require('../utils/logger');
 const opsConsoleLogger = require('../utils/opsConsoleLogger');
+const jwtUtils = require('../utils/jwt');
 const { generateCsrfToken, CSRF_COOKIE_NAME } = require('../middlewares/csrf.middleware');
 
 const ACCESS_COOKIE_NAME = 'accessToken';
@@ -89,6 +91,15 @@ const setCsrfCookie = (res, cookieOptions) => {
 
   return csrfToken;
 };
+
+const buildMobileTokenData = (result) => ({
+  user: result.user,
+  accessToken: result.accessToken,
+  refreshToken: result.refreshToken,
+  tokenType: 'Bearer',
+  accessTokenExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
+  refreshTokenExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+});
 
 const clearAuthCookies = (res, cookieOptions) => {
   const clearOptions = {
@@ -202,6 +213,87 @@ class AuthController {
     }
   }
 
+  async iniciarSesionMovil(req, res, next) {
+    const { email, password } = req.validatedData;
+    const clientIp = resolveClientIp(req);
+
+    try {
+      const result = await authService.iniciarSesion(email, password);
+      const userId = result?.user?.id_persona || result?.user?.id;
+      const roles = Array.isArray(result?.user?.roles) ? result.user.roles : [];
+      const esPropietario = roles.includes('Propietario');
+      let inmueblesAsignados = [];
+
+      if (esPropietario && userId) {
+        try {
+          const perfil = await personaService.obtenerPerfil(userId);
+          inmueblesAsignados = Array.isArray(perfil?.inmuebles) ? perfil.inmuebles : [];
+        } catch (propError) {
+          logger.warn(
+            `No se pudieron cargar inmuebles del propietario ${userId} en login movil: ${propError.message}`
+          );
+        }
+      }
+
+      const mobileTokenData = buildMobileTokenData(result);
+      mobileTokenData.user = {
+        ...mobileTokenData.user,
+        inmuebles: inmueblesAsignados
+      };
+
+      return res.status(200).json({
+        success: true,
+        message: 'Inicio de sesion exitoso',
+        data: mobileTokenData,
+      });
+    } catch (error) {
+      logger.error('Error en inicio de sesion movil:', {
+        email,
+        ip: clientIp,
+        reason: error.code || error.message,
+      });
+
+      if (error.code === 'ACCOUNT_DISABLED') {
+        return res.status(error.status || 423).json({
+          success: false,
+          message: error.message,
+          reason: 'account_disabled',
+        });
+      }
+      if (error.code === 'ADMIN_ACCESS_REVOKED') {
+        return res.status(error.status || 403).json({
+          success: false,
+          message: error.message,
+          reason: 'admin_access_revoked',
+        });
+      }
+      if (error.code === 'EMAIL_NOT_VERIFIED' || error.code === 'EMAIL_VERIFICATION_LIMIT') {
+        return res.status(error.status || 403).json({
+          success: false,
+          message: error.message,
+          reason: error.code,
+          data: error.meta || null,
+        });
+      }
+      if (error.code === 'INVALID_CREDENTIALS') {
+        return res.status(error.status || 401).json({
+          success: false,
+          message: error.message,
+          reason: error.code || 'INVALID_CREDENTIALS',
+        });
+      }
+      if (error.status) {
+        return res.status(error.status).json({
+          success: false,
+          message: error.message,
+          reason: error.code || null,
+          data: error.meta || null,
+        });
+      }
+      next(error);
+    }
+  }
+
   async refrescarToken(req, res, next) {
     try {
       const refreshTokenFromCookie = req.cookies?.refreshToken;
@@ -241,6 +333,105 @@ class AuthController {
         message: error.message || 'Token de refresco invalido o expirado',
         reason: normalizedReason,
         forceLogout: normalizedReason === 'account_disabled' || normalizedReason === 'admin_access_revoked',
+      });
+    }
+  }
+
+  async refrescarTokenMovil(req, res, next) {
+    try {
+      const refreshToken =
+        req.validatedData?.refreshToken ||
+        req.body?.refreshToken ||
+        jwtUtils.extractTokenFromHeader(req.get('authorization'));
+
+      if (!refreshToken) {
+        return res.status(401).json({
+          success: false,
+          message: 'Token de refresco requerido',
+          reason: 'REFRESH_TOKEN_REQUIRED',
+        });
+      }
+
+      const tokens = await authService.refrescarToken(refreshToken);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Token refrescado exitosamente',
+        data: buildMobileTokenData(tokens),
+      });
+    } catch (error) {
+      logger.error('Error refrescando token movil:', error);
+      const normalizedReason =
+        error.code === 'ACCOUNT_DISABLED'
+          ? 'account_disabled'
+          : error.code === 'ADMIN_ACCESS_REVOKED'
+            ? 'admin_access_revoked'
+            : error.code || 'INVALID_REFRESH_TOKEN';
+
+      return res.status(error.status || 401).json({
+        success: false,
+        message: error.message || 'Token de refresco invalido o expirado',
+        reason: normalizedReason,
+        forceLogout:
+          normalizedReason === 'account_disabled' || normalizedReason === 'admin_access_revoked',
+      });
+    }
+  }
+
+  async verificarCodigo(req, res, next) {
+    try {
+      const { email, codigo } = req.validatedData;
+      const data = await authService.verificarCodigoCorreo(email, codigo, { ip: req.ip, userAgent: req.get('user-agent') });
+      return res.status(200).json({
+        success: true,
+        message: data?.ya_verificado ? 'Tu correo ya estaba verificado' : 'Correo verificado exitosamente',
+        data,
+      });
+    } catch (error) {
+      logger.warn('Verificacion de codigo fallida:', error.message);
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  async reenviarCodigo(req, res, next) {
+    try {
+      const { email } = req.validatedData;
+      const roles = req.user?.roles || [];
+      const isAdmin = roles.includes('Super Administrador') || roles.includes('Administrador');
+
+      const data = await authService.reenviarCodigoVerificacion(email, { ignoreLimits: isAdmin });
+      return res.status(200).json({
+        success: true,
+        message: 'Hemos enviado un nuevo codigo a tu correo',
+        data,
+      });
+    } catch (error) {
+      logger.warn('Error reenviando codigo de verificacion:', error.message);
+      return res.status(error.code === 'VERIFICATION_LIMIT' ? 429 : 400).json({
+        success: false,
+        message: error.message,
+        reason: error.code || null,
+      });
+    }
+  }
+
+  async verificarCorreo(req, res, next) {
+    try {
+      const { token } = req.validatedQuery;
+      const data = await authService.verificarCorreo(token, { ip: req.ip, userAgent: req.get('user-agent') });
+      return res.status(200).json({
+        success: true,
+        message: 'Correo verificado exitosamente',
+        data,
+      });
+    } catch (error) {
+      logger.warn('Verificacion de correo fallida:', error.message);
+      return res.status(400).json({
+        success: false,
+        message: error.message,
       });
     }
   }

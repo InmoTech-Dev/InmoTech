@@ -16,7 +16,6 @@ const {
 // POST /api/v1/leases - Crear arrendamiento
 router.post(
   '/',
-  createLimiter,
   validate(createLeaseSchema),
   leasesController.createLease
 );
@@ -75,7 +74,6 @@ router.patch(
 // POST /api/v1/leases/:id/payments/:paymentId/receipt - Crear comprobante de pago
 router.post(
   '/:id/payments/:paymentId/receipt',
-  createLimiter,
   validate(createReceiptSchema),
   leasesController.createReceipt
 );

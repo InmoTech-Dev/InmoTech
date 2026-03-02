@@ -630,8 +630,8 @@ class CitaApiService {
 
       const payload = {
         id_agente_nuevo: idAgenteNuevo,
-        comentario: comentario || "",
-        motivo_reagendamiento: motivoReagendamiento || comentario || ""
+        comentario: comentario,
+        motivo_reagendamiento: motivoReagendamiento || comentario || null
       };
 
       const response = await apiClient.post(`/citas/${idCita}/asignar-agente`, payload);

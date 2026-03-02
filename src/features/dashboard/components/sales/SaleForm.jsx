@@ -63,7 +63,6 @@ const initial = {
     inmuebleBarrio: "",
     inmuebleDireccion: "",
     inmueblePrecio: "",
-    inmuebleGaraje: false,
     inmuebleEstado: "Disponible",
     fechaVenta: new Date().toISOString().slice(0, 10),
     medioPago: "efectivo",
@@ -129,6 +128,20 @@ const propertyIsOnlyForRent = (property = {}) => {
     return operacion === "arriendo" || operacion === "alquiler";
 };
 
+const propertyIsSold = (property = {}) => {
+    const source = getPropertySource(property);
+    const estadoTexto = normalizeTextValue(
+        property.estado ||
+        source.estado ||
+        source.estado_inmueble ||
+        source.estado_frontend ||
+        property.estadoVenta ||
+        source.estado_venta
+    );
+    const soldKeywords = ["vendido", "vendida", "vendidos", "sold", "cerrada", "completada"];
+    return soldKeywords.some((kw) => estadoTexto.includes(kw));
+};
+
 const normalizeDocType = (value = "") => {
     const v = normalizeTextValue(value);
     if (!v) return "";
@@ -156,6 +169,14 @@ const splitDocTypeAndNumber = (rawNumber = "", rawType = "") => {
         tipo: inferredType,
         numero: numberOnly
     };
+};
+
+// Limpia el número de documento a solo dígitos (para validación y búsquedas)
+const cleanDocument = (value = "") => value.toString().replace(/[^0-9]/g, "").trim();
+const MIN_BUYER_DOC_LENGTH = 6;
+const shouldTriggerBuyerLookup = (tipoDocumento = "", numeroDocumento = "") => {
+    const cleaned = cleanDocument(numeroDocumento);
+    return Boolean(tipoDocumento) && cleaned.length >= MIN_BUYER_DOC_LENGTH;
 };
 
 const getOwnerCandidate = (inmueble = {}) => {
@@ -205,8 +226,22 @@ export default function SalesForm({ onClose, onSubmit }) {
         "vendedorNombreCompleto", "compradorNombreCompleto",
     ];
     const docFields = [VENDEDOR_DOC, COMPRADOR_DOC];
-    const phoneFields = ["vendedorTelefono", "compradorTelefono"];
-    const emailFields = ["vendedorCorreo", "compradorCorreo"];
+const phoneFields = ["vendedorTelefono", "compradorTelefono"];
+const emailFields = ["vendedorCorreo", "compradorCorreo"];
+
+const sanitizeNumericString = (value) => {
+    if (value === undefined || value === null) return "";
+    return value.toString().replace(/[^0-9]/g, "");
+};
+
+const normalizePhone = (value = "") => {
+    const digits = sanitizeNumericString(value);
+    if (!digits) return "";
+    if (digits.startsWith("57") && digits.length > 10) {
+        return digits.slice(-10);
+    }
+    return digits.slice(-10);
+};
 
     // Campos agrupados por paso para la validación
     // Orden de pasos: 1) inmueble, 2) vendedor (propietario), 3) comprador, 4) precio/pago
@@ -214,7 +249,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         1: [
             "inmuebleTipo", "inmuebleRegistro", "inmuebleNombre",
             "inmueblePais", "inmuebleDepartamento", "inmuebleCiudad",
-            "inmuebleBarrio", "inmuebleDireccion", "inmuebleGaraje"
+            "inmuebleBarrio", "inmuebleDireccion"
         ],
         2: [
             "vendedorTipoDocumento", VENDEDOR_DOC, "vendedorNombreCompleto", 
@@ -266,7 +301,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             inmuebleBarrio: "Barrio/Zona",
             inmuebleDireccion: "Dirección Completa",
             inmueblePrecio: "Precio de Venta (COP)", 
-            inmuebleGaraje: "¿Tiene Garaje?",
+
 
             // Venta
             fechaVenta: "Fecha de Venta",
@@ -376,6 +411,8 @@ export default function SalesForm({ onClose, onSubmit }) {
     const handleInputChange = (e) => {
         let { name, type, value, checked } = e.target;
         let cleanValue = value;
+        const isDocFieldChange = docFields.includes(name);
+        const isPhoneFieldChange = phoneFields.includes(name);
 
         if (type === "checkbox") {
             valuesRef.current[name] = checked;
@@ -387,6 +424,13 @@ export default function SalesForm({ onClose, onSubmit }) {
                 
                 displayValuesRef.current[name] = formattedValue;
                 e.target.value = formattedValue;
+            } else if (isDocFieldChange || isPhoneFieldChange) {
+                // Sanitizar en vivo para que no "salte" el cursor
+                cleanValue = cleanDocument(value);
+                displayValuesRef.current[name] = cleanValue;
+                if (e.target.value !== cleanValue) {
+                    e.target.value = cleanValue;
+                }
             } else {
                 displayValuesRef.current[name] = value;
             }
@@ -402,6 +446,30 @@ export default function SalesForm({ onClose, onSubmit }) {
             // Marcar campos editados manualmente
             if (BUYER_AUTOFILL_FIELDS.includes(name)) {
                 manuallyEditedBuyerFieldsRef.current.add(name);
+            }
+
+            // Disparar búsqueda solo cuando hay datos mínimos (evita bloquear escritura)
+            if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
+                const tipoDocActual =
+                    name === "compradorTipoDocumento" ? cleanValue : (valuesRef.current.compradorTipoDocumento || "");
+                const numeroDocActual =
+                    name === COMPRADOR_DOC ? cleanValue : (valuesRef.current.compradorDocumento || "");
+
+                buyerDocumentSnapshotRef.current = {
+                    tipo: tipoDocActual,
+                    numero: cleanDocument(numeroDocActual || ""),
+                };
+
+                if (shouldTriggerBuyerLookup(tipoDocActual, numeroDocActual)) {
+                    triggerBuyerLookup(120);
+                } else {
+                    // Limpia mensajes de lookup mientras el usuario sigue escribiendo
+                    setBuyerLookupState((prev) =>
+                        prev.loading || prev.error || prev.message
+                            ? { loading: false, message: "", error: null }
+                            : prev
+                    );
+                }
             }
         }
 
@@ -560,6 +628,21 @@ export default function SalesForm({ onClose, onSubmit }) {
             const inmueble = await inmueblesAPI.getInmuebleByRegistro(cleanRegistro);
 
             if (inmueble && inmueble.id) {
+                if (propertyIsSold(inmueble)) {
+                    setInmuebleLookupState({ loading: false, message: "", error: null });
+                    setErrors((prev) => {
+                        const next = { ...prev };
+                        next.inmuebleRegistro = "Este inmueble ya fue vendido y no puede registrarse otra venta.";
+                        return next;
+                    });
+                    toast({
+                        title: "Inmueble ya vendido",
+                        description: "No se puede registrar una nueva venta para este inmueble.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
                 if (propertyHasActiveLease(inmueble)) {
                     setInmuebleLookupState({ loading: false, message: "", error: null });
                     setErrors((prev) => {
@@ -644,7 +727,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             const newErrors = { ...prev };
 
             // Validar campo obligatorio
-            if (isRequired && !value.trim() && name !== 'inmuebleGaraje') { 
+            if (isRequired && !value.trim()) { 
                  errorMessage = "Este campo es obligatorio.";
             }
 
@@ -700,18 +783,30 @@ export default function SalesForm({ onClose, onSubmit }) {
         // Lógica de búsqueda de comprador
         if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
             const currentTipo = valuesRef.current.compradorTipoDocumento || "";
-            const normalizedDocumento = valuesRef.current.compradorDocumento || "";
-            const docChanged =
-                buyerDocumentSnapshotRef.current.tipo !== currentTipo ||
-                buyerDocumentSnapshotRef.current.numero !== normalizedDocumento;
+            const normalizedDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+            const docReady = shouldTriggerBuyerLookup(currentTipo, normalizedDocumento);
+            const previousSnapshot = { ...buyerDocumentSnapshotRef.current };
 
-            if (docChanged) {
-                resetBuyerSelection({ resetState: true, resetFields: true });
+            if (!docReady) {
                 buyerDocumentSnapshotRef.current = {
                     tipo: currentTipo,
                     numero: normalizedDocumento,
                 };
+                return;
             }
+
+            const docChanged =
+                previousSnapshot.tipo !== currentTipo ||
+                previousSnapshot.numero !== normalizedDocumento;
+
+            if (docChanged) {
+                resetBuyerSelection({ resetState: true, resetFields: true });
+            }
+
+            buyerDocumentSnapshotRef.current = {
+                tipo: currentTipo,
+                numero: normalizedDocumento,
+            };
 
             triggerBuyerLookup(name === COMPRADOR_DOC ? 0 : 200);
         }
@@ -812,8 +907,9 @@ export default function SalesForm({ onClose, onSubmit }) {
             displayValuesRef.current.compradorCorreo = buyer.correo || buyer.raw?.persona?.correo || "";
         }
         if (!manuallyEditedBuyerFieldsRef.current.has("compradorTelefono")) {
-            valuesRef.current.compradorTelefono = buyer.telefono || buyer.raw?.persona?.telefono || "";
-            displayValuesRef.current.compradorTelefono = buyer.telefono || buyer.raw?.persona?.telefono || "";
+            const normalizedPhone = normalizePhone(buyer.telefono || buyer.raw?.persona?.telefono || "");
+            valuesRef.current.compradorTelefono = normalizedPhone;
+            displayValuesRef.current.compradorTelefono = normalizedPhone;
         }
 
         // Forzar actualización de los inputs
@@ -897,7 +993,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const createBuyerFromForm = useCallback(async () => {
         const tipoDocumento = normalizeValueForStorage("compradorTipoDocumento", valuesRef.current.compradorTipoDocumento || "");
-        const documento = normalizeValueForStorage(COMPRADOR_DOC, valuesRef.current.compradorDocumento || "");
+        const documento = cleanDocument(normalizeValueForStorage(COMPRADOR_DOC, valuesRef.current.compradorDocumento || ""));
         const nombreCompleto = (valuesRef.current.compradorNombreCompleto || "").trim();
 
         if (!tipoDocumento || !documento || !nombreCompleto) {
@@ -908,6 +1004,17 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         setBuyerLookupState({ loading: true, message: "", error: null });
         try {
+            const existingBuyer = await buyersApiService.findByDocument(tipoDocumento, documento);
+            if (existingBuyer?.id || existingBuyer?.compradorId || existingBuyer?.raw?.id_comprador) {
+                applyBuyerData(existingBuyer);
+                setBuyerLookupState({
+                    loading: false,
+                    message: "Comprador encontrado y seleccionado.",
+                    error: null,
+                });
+                return existingBuyer;
+            }
+
             const createdBuyer = await buyersApiService.create({
                 tipoDocumento,
                 documento,
@@ -925,6 +1032,11 @@ export default function SalesForm({ onClose, onSubmit }) {
                 message: "Comprador creado y seleccionado.",
                 error: null,
             });
+            toast({
+                title: "Comprador creado",
+                description: "Datos guardados y autocompletados.",
+                variant: "default",
+            });
 
             return createdBuyer;
         } catch (error) {
@@ -939,10 +1051,14 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const fetchBuyerByDocument = useCallback(async () => {
         const tipoDocumento = (valuesRef.current.compradorTipoDocumento || "").trim();
-        const numeroDocumento = valuesRef.current.compradorDocumento || "";
+        const numeroDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+        // Guardar el valor limpio para futuras validaciones y llamadas
+        valuesRef.current.compradorDocumento = numeroDocumento;
+        displayValuesRef.current.compradorDocumento = numeroDocumento;
 
-        if (!tipoDocumento || !numeroDocumento) {
+        if (!shouldTriggerBuyerLookup(tipoDocumento, numeroDocumento)) {
             resetBuyerSelection({ resetState: true, resetFields: true });
+            setBuyerLookupState({ loading: false, message: "", error: null });
             return;
         }
 
@@ -953,6 +1069,11 @@ export default function SalesForm({ onClose, onSubmit }) {
                 loading: false,
                 message: "",
                 error: "Documento inválido. Corrija el formato antes de buscar.",
+            });
+            toast({
+                title: "Documento inválido",
+                description: "Corrige el tipo y número antes de buscar.",
+                variant: "destructive",
             });
             return;
         }
@@ -967,10 +1088,18 @@ export default function SalesForm({ onClose, onSubmit }) {
         });
 
         try {
-            const buyer = await buyersApiService.findByDocument(
+            let buyer = await buyersApiService.findByDocument(
                 tipoDocumento,
                 numeroDocumento
             );
+
+            // Fallback: buscar en tabla Personas si no existe como comprador
+            if (!buyer) {
+                buyer = await buyersApiService.findPersonaByDocument(
+                    tipoDocumento,
+                    numeroDocumento
+                );
+            }
 
             if (buyerLookupRequestId.current !== requestId) {
                 return;
@@ -978,14 +1107,15 @@ export default function SalesForm({ onClose, onSubmit }) {
 
             if (buyer) {
                 applyBuyerData(buyer);
+                const isBuyer = Boolean(buyer?.raw?.tipo_comprador || buyer?.raw?.tipoComprador || buyer?.tipoCompra);
                 setBuyerLookupState({
                     loading: false,
-                    message: "Datos del comprador completados automáticamente.",
+                    message: "Persona encontrada y datos autocompletados.",
                     error: null,
                 });
                 toast({
                     title: "Comprador encontrado",
-                    description: "Datos del comprador completados automáticamente.",
+                    description: "Datos autocompletados correctamente.",
                     variant: "default",
                 });
             } else {
@@ -1009,11 +1139,11 @@ export default function SalesForm({ onClose, onSubmit }) {
             setBuyerLookupState({
                 loading: false,
                 message: "",
-                error: error?.message || "No fue posible buscar el comprador.",
+                error: "No fue posible buscar el comprador. Intenta de nuevo.",
             });
             toast({
                 title: "Error al buscar comprador",
-                description: error?.message || "No fue posible buscar el comprador.",
+                description: "No fue posible buscar el comprador. Intenta de nuevo.",
                 variant: "destructive",
             });
         }
@@ -1053,7 +1183,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 (isMixto && (isCashSplit || isTransferSplit));
             
             // Validación de obligatoriedad
-            if (isRequired && !value.toString().trim() && fieldName !== 'inmuebleGaraje') { 
+            if (isRequired && !value.toString().trim()) { 
                 error = "Este campo es obligatorio.";
             } 
             
@@ -1118,7 +1248,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     // Navegación entre pasos
     const handleNextStep = () => {
-        let fieldsToValidate = stepFields[step].filter(f => f !== 'inmuebleGaraje' || requiredFields.includes('inmuebleGaraje'));
+        let fieldsToValidate = stepFields[step];
         
         const { currentErrors, hasError, firstErrorField } = runValidation(fieldsToValidate);
 
@@ -1147,7 +1277,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        const allFieldsToValidate = Object.values(stepFields).flat().filter(f => f !== 'inmuebleGaraje' || requiredFields.includes('inmuebleGaraje'));
+        const allFieldsToValidate = Object.values(stepFields).flat();
         const { currentErrors, hasError, firstErrorField } = runValidation(allFieldsToValidate);
 
         setErrors(currentErrors);
@@ -1257,6 +1387,9 @@ export default function SalesForm({ onClose, onSubmit }) {
             inputType = "email";
         }
 
+        const inputMode = (isDocField || isPhoneField || isStrictNumeric) ? "numeric" : undefined;
+        const pattern = (isDocField || isPhoneField || isStrictNumeric) ? "[0-9]*" : undefined;
+
         // Placeholders mejorados para documentos
         let fieldPlaceholder = placeholder;
         if (isDocField) {
@@ -1345,6 +1478,8 @@ export default function SalesForm({ onClose, onSubmit }) {
                     ref={setElRef(name)}
                     className={getFieldClass(name)}
                     type={inputType}
+                    inputMode={inputMode}
+                    pattern={pattern}
                     placeholder={fieldPlaceholder}
                     defaultValue={initial[name] ?? ""}
                     onChange={handleInputChange}
@@ -1361,21 +1496,21 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     return (
         <AnimatePresence>
-            <motion.div 
-                className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4 overflow-y-auto"
+            <motion.div
+                className="fixed inset-0 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm z-50 p-3 md:p-6 overflow-y-auto md:overflow-hidden"
                 onClick={onClose}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
             >
-            <motion.div 
-                className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 relative my-8 max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.98 }}
-                transition={{ duration: 0.25 }}
-            >
+                <motion.div
+                    className="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-3 md:p-4 relative my-3 max-h-[88vh] flex flex-col overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                    initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                    transition={{ duration: 0.25 }}
+                >
 
                 <motion.button onClick={onClose} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 p-1 rounded-full transition duration-150" aria-label="Cerrar">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1405,12 +1540,12 @@ export default function SalesForm({ onClose, onSubmit }) {
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto pr-1 md:pr-2">
                     {/* PASO 1: Datos del Inmueble */}
                     {step === 1 && (
                         <div>
-                            <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">1. Detalles y Ubicación del Inmueble</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+                            <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">1. Detalles y Ubicación del Inmueble</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2 md:gap-y-3">
                                 <Field
                                     name="inmuebleTipo"
                                     as="select"
@@ -1449,8 +1584,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                                 <div className="md:col-span-2">
                                     <Field name="inmuebleDireccion" as="textarea" placeholder="Dirección completa, ej: Carrera 10 # 25-50" />
                                 </div>
-
-                                <Field name="inmuebleGaraje" type="checkbox" />
                             </div>
                         </div>
                     )}
@@ -1458,8 +1591,8 @@ export default function SalesForm({ onClose, onSubmit }) {
                     {/* PASO 2: Datos del Vendedor */}
                     {step === 2 && (
                         <div>
-                            <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">2. Información del Vendedor (Propietario)</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+                            <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">2. Información del Vendedor (Propietario)</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2 md:gap-y-3">
                                 <Field
                                     name="vendedorTipoDocumento"
                                     as="select"
@@ -1476,8 +1609,8 @@ export default function SalesForm({ onClose, onSubmit }) {
                     {/* PASO 3: Datos del Comprador */}
                     {step === 3 && (
                         <div>
-                            <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">3. Información del Comprador</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+                            <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">3. Información del Comprador</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2 md:gap-y-3">
                                 <Field
                                     name="compradorTipoDocumento"
                                     as="select"
@@ -1511,8 +1644,8 @@ export default function SalesForm({ onClose, onSubmit }) {
                     {/* PASO 4: Precio de Venta */}
                     {step === 4 && (
                         <div>
-                            <h3 className="text-lg font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200">4. Precio de Venta</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-6 max-w-xl mx-auto">
+                            <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-200">4. Precio de Venta</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2 md:gap-y-3 mb-4 max-w-xl mx-auto">
                                 <Field name="fechaVenta" type="date" />
                                 <Field
                                     name="medioPago"
@@ -1534,8 +1667,8 @@ export default function SalesForm({ onClose, onSubmit }) {
                                 <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
                             </div>
 
-                            <div className="p-4 bg-blue-50 border border-blue-300 rounded-xl shadow-inner text-gray-800 max-w-xl mx-auto">
-                                <h4 className="text-base font-extrabold mb-2 text-blue-800 border-b border-blue-200 pb-1">Resumen de la Propiedad</h4>
+                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl shadow-inner text-gray-800 max-w-xl mx-auto">
+                                <h4 className="text-base font-semibold mb-2 text-slate-900 border-b border-slate-200 pb-1">Resumen de la Propiedad</h4>
                                 <div className="space-y-1 text-sm">
                                     <div className="flex justify-between">
                                         <p className="font-medium text-gray-700">Tipo/Nombre:</p>
@@ -1545,9 +1678,9 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         <p className="font-medium text-gray-700">Ubicación:</p>
                                         <p className="text-right font-medium text-gray-900">{valuesRef.current.inmuebleCiudad || "N/A"}</p>
                                     </div>
-                                    <div className="border-t border-blue-400 pt-2 flex justify-between items-center font-extrabold text-lg mt-2">
+                                    <div className="border-t border-slate-300 pt-2 flex justify-between items-center font-bold text-lg mt-2">
                                         <span className="text-gray-900">PRECIO FINAL:</span>
-                                        <span className="text-blue-700">$ {formattedPrice}</span>
+                                        <span className="text-indigo-700">$ {formattedPrice}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1597,3 +1730,11 @@ export default function SalesForm({ onClose, onSubmit }) {
         </AnimatePresence>
     );
 }
+
+
+
+
+
+
+
+

@@ -15,13 +15,35 @@ const splitNames = (fullName = '') => {
   return { first, rest: parts.slice(1).join(' ') || second || '' };
 };
 
-const normalizeDoc = (value = '') =>
-  value
-    .toString()
-    .replace(/\D/g, '')
-    .trim();
+const normalizeDocByType = (tipo = '', value = '') => {
+  const upper = (tipo || '').toString().trim().toUpperCase();
+  const raw = (value || '').toString().trim();
+  if (upper === 'PAS' || upper === 'PASAPORTE') return raw.replace(/\s+/g, '');
+  return raw.replace(/\D/g, '').trim();
+};
+const normalizeDoc = (value = '') => String(value || '').replace(/\D/g, '').trim();
 
 const normalizeTipo = (value = '') => value.toString().trim().toUpperCase();
+
+// Mapea al formato esperado por el backend/BD (Pasaporte capitalizado)
+const mapTipoToBackend = (value = '') => {
+  const upper = normalizeTipo(value);
+  if (upper === 'PAS' || upper === 'PASAPORTE') return 'Pasaporte';
+  return upper;
+};
+const getTipoVariants = (value = '') => {
+  const upper = normalizeTipo(value);
+  const variants = [upper];
+  const mapLong = {
+    CC: 'Cedula de Ciudadania',
+    CE: 'Cedula de Extranjeria',
+    TI: 'Tarjeta de Identidad',
+    PAS: 'Pasaporte',
+    PASAPORTE: 'Pasaporte',
+  };
+  if (mapLong[upper]) variants.push(mapLong[upper]);
+  return Array.from(new Set(variants.filter(Boolean)));
+};
 
 const mapBuyerFromApi = (buyer = {}, formData = {}) => {
   const persona = buyer.persona || buyer.Persona || buyer;
@@ -96,43 +118,81 @@ const buildPayload = (payload = {}) => {
 };
 
 export const buyersApiService = {
+  async findPersonaByDocument(tipoDocumento, numeroDocumento) {
+    const numero = normalizeDocByType(tipoDocumento, numeroDocumento);
+    const tipo = mapTipoToBackend(tipoDocumento);
+    try {
+      const response = await apiClient.get('/personas/buscar', {
+        params: { tipo_documento: tipo, numero_documento: numero, _ts: Date.now() },
+        headers: { 'Cache-Control': 'no-store' }
+      });
+      let list = extractList(response);
+      if (!list.length && Array.isArray(response?.data)) list = response.data;
+      if (!list.length && Array.isArray(response?.personas)) list = response.personas;
+      if (!list.length) return null;
+      const row = list[0];
+      return mapBuyerFromApi({
+        ...row,
+        persona: row,
+        raw: row,
+        id_comprador: row.id_comprador,
+        buyerId: row.id_comprador
+      });
+    } catch (error) {
+      if (import.meta?.env?.DEV) {
+        console.warn('[buyersApiService] persona/buscar fallo', { tipo, numero, error: error?.message });
+      }
+      return null;
+    }
+  },
+
   async getAll(params = {}) {
-    const response = await apiClient.get('/sales/buyers', params);
+    const response = await apiClient.get('/sales/buyers', { params });
     return extractList(response).map((item) => mapBuyerFromApi(item));
   },
 
   async findByDocument(tipoDocumento, numeroDocumento) {
-    const params = {
-      tipo_documento: (tipoDocumento || '').trim(),
-      numero_documento: (numeroDocumento || '').trim(),
-    };
-    const response = await apiClient.get('/sales/buyers', params);
-    const list = extractList(response);
-    if (!list.length) return null;
+    try {
+      const params = {
+        tipo_documento: normalizeTipo(tipoDocumento),
+        numero_documento: normalizeDoc(numeroDocumento),
+      };
+      const response = await apiClient.get('/sales/buyers', { params });
+      const list = extractList(response);
+      if (!list.length) {
+        const personaMatch = await this.findPersonaByDocument(tipoDocumento, numeroDocumento);
+        return personaMatch || null;
+      }
 
-    const targetDoc = normalizeDoc(numeroDocumento);
-    const targetTipo = normalizeTipo(tipoDocumento);
+      const targetDoc = normalizeDoc(numeroDocumento);
+      const targetTipo = normalizeTipo(tipoDocumento);
 
-    const exactMatch = list.find((item) => {
-      const doc =
-        normalizeDoc(
-          item?.numero_documento ||
-          item?.documento ||
-          item?.persona?.numero_documento
-        );
+      const exactMatch = list.find((item) => {
+        const doc =
+          normalizeDoc(
+            item?.numero_documento ||
+            item?.documento ||
+            item?.persona?.numero_documento
+          );
 
-      const tipo =
-        normalizeTipo(
-          item?.tipo_documento ||
-          item?.tipoDocumento ||
-          item?.persona?.tipo_documento
-        );
+        const tipo =
+          normalizeTipo(
+            item?.tipo_documento ||
+            item?.tipoDocumento ||
+            item?.persona?.tipo_documento
+          );
 
-      return doc && doc === targetDoc && (!targetTipo || tipo === targetTipo);
-    });
+        return doc && doc === targetDoc && (!targetTipo || tipo === targetTipo);
+      });
 
-    if (!exactMatch) return null;
-    return mapBuyerFromApi(exactMatch);
+      if (!exactMatch) return null;
+      return mapBuyerFromApi(exactMatch);
+    } catch (error) {
+      if (import.meta?.env?.DEV) {
+        console.warn('[buyersApiService.findByDocument] fallo', { tipoDocumento, numeroDocumento, error: error?.message });
+      }
+      return null; // permite fallback a Personas
+    }
   },
 
   async getById(id) {
@@ -142,9 +202,21 @@ export const buyersApiService = {
   },
 
   async create(payload) {
-    const response = await apiClient.post('/sales/buyers', buildPayload(payload));
-    const data = response?.data?.data ?? response?.data ?? response;
-    return mapBuyerFromApi(data, payload);
+    try {
+      const response = await apiClient.post('/sales/buyers', buildPayload(payload));
+      const data = response?.data?.data ?? response?.data ?? response;
+      return mapBuyerFromApi(data, payload);
+    } catch (error) {
+      const status = error?.status || error?.response?.status;
+      if (status !== 409) throw error;
+
+      const existing = await this.findByDocument(payload?.tipoDocumento, payload?.documento);
+      if (existing?.id || existing?.compradorId || existing?.raw?.id_comprador) {
+        return existing;
+      }
+
+      throw error;
+    }
   },
 
   async update(id, payload) {
@@ -163,10 +235,39 @@ export const buyersApiService = {
     if (!buyerId) {
       throw new Error('Falta id del comprador para actualizar sus datos de compra.');
     }
-    await apiClient.patch(`/sales/buyers/${buyerId}`, {
-      ...purchaseData,
-      tipo_comprador: purchaseData.tipo_compra || purchaseData.tipo_comprador || 'Potencial',
-    });
+
+    const resolveTipoComprador = (value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (['potencial', 'en proceso', 'finalizado'].includes(normalized)) {
+        if (normalized === 'en proceso') return 'En Proceso';
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+      }
+      // Si ya se concretó una venta, dejamos el comprador como finalizado.
+      return 'Finalizado';
+    };
+
+    const payload = {
+      tipo_comprador: resolveTipoComprador(purchaseData.tipo_comprador || purchaseData.tipo_compra),
+      estado: 'Activo'
+    };
+
+    if (purchaseData.observaciones || purchaseData.valor_compra || purchaseData.fecha_compra) {
+      const notes = [];
+      if (purchaseData.valor_compra !== undefined && purchaseData.valor_compra !== null) {
+        notes.push(`Valor compra: ${purchaseData.valor_compra}`);
+      }
+      if (purchaseData.fecha_compra) {
+        notes.push(`Fecha compra: ${purchaseData.fecha_compra}`);
+      }
+      if (purchaseData.id_venta) {
+        notes.push(`Venta ID: ${purchaseData.id_venta}`);
+      }
+      const extra = String(purchaseData.observaciones || '').trim();
+      if (extra) notes.push(extra);
+      payload.observaciones = notes.join(' | ').slice(0, 1000);
+    }
+
+    await apiClient.patch(`/sales/buyers/${buyerId}`, payload);
     return true;
   },
 };

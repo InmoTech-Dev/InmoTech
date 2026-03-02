@@ -126,7 +126,6 @@ const DayCell = ({
                 <AppointmentCard
                   key={appointment.id}
                   appointment={appointment}
-                  compact={true}
                   onClick={(e) => {
                     e.stopPropagation();
                     onAppointmentClick(appointment, e);

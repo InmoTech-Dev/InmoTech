@@ -73,16 +73,27 @@ class LeaseService {
     });
 
     if (!persona) {
-      persona = await Persona.create({
-        tipo_documento,
-        numero_documento,
-        nombre_completo: nombre_completo || '',
-        apellido_completo: apellido_completo || '',
-        correo: correo || `${numero_documento}@placeholder.com`,
-        telefono: telefono || null,
-        tiene_cuenta: false,
-        estado: true
-      }, { transaction });
+      try {
+        persona = await Persona.create({
+          tipo_documento,
+          numero_documento,
+          nombre_completo: nombre_completo || '',
+          apellido_completo: apellido_completo || '',
+          correo: correo || `${numero_documento}@placeholder.com`,
+          telefono: telefono || null,
+          tiene_cuenta: false,
+          estado: true
+        }, { transaction });
+      } catch (error) {
+        if (error.name === 'SequelizeUniqueConstraintError') {
+          persona = await Persona.findOne({
+            where: { tipo_documento, numero_documento },
+            transaction
+          });
+        } else {
+          throw error;
+        }
+      }
     } else {
       // Actualizar datos básicos si vienen
       await persona.update({
@@ -170,11 +181,18 @@ class LeaseService {
         // 4. Actualizar estado del inmueble a "Arrendado"
         await inmueble.update({
           estado: false,
-          estado_frontend: 'Arrendado'
+          estado_frontend: 'Arrendado',
+          destacado: false
         }, { transaction: t });
 
         // 5. Generar cobros mensuales automáticamente
-        await this.generateMonthlyPayments(newLease.id_arrendamiento, t);
+        const chargeDay = (() => {
+          const src = leaseData.fecha_cobro || leaseData.fechaCobro;
+          if (!src) return null;
+          const d = this.parseDateOnly(src);
+          return d ? d.getUTCDate() : null;
+        })();
+        await this.generateMonthlyPayments(newLease.id_arrendamiento, t, { chargeDay });
 
         return await this.getLeaseById(newLease.id_arrendamiento, t);
 
@@ -186,36 +204,94 @@ class LeaseService {
     return result;
   }
 
-  async generateMonthlyPayments(leaseId, transaction = null) {
+  // Utilidades para fechas sin desfase de zona (DATEONLY)
+  formatDateOnly(dateObj) {
+    const year = dateObj.getUTCFullYear();
+    const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  parseDateOnly(value) {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value)) {
+      return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+    }
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const [, y, m, d] = match.map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+
+  // Acepta YYYY-MM-DD (ISO) y DD/MM/YYYY (formato usado en UI) y devuelve Date en UTC.
+  parseDateFlexible(value) {
+    if (!value) return null;
+
+    // Si viene como Date, usamos su ISO (UTC) para conservar el día elegido en el cliente
+    if (value instanceof Date && !Number.isNaN(value)) {
+      const iso = value.toISOString().slice(0, 10); // YYYY-MM-DD
+      return this.parseDateOnly(iso);
+    }
+
+    // Si es string o algo parseable por Date, usamos su ISO para quedarnos con YYYY-MM-DD
+    const maybeDate = new Date(value);
+    if (!Number.isNaN(maybeDate)) {
+      const isoFromDate = maybeDate.toISOString().slice(0, 10);
+      return this.parseDateOnly(isoFromDate);
+    }
+
+    const matchDMY = String(value).match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
+    if (matchDMY) {
+      const [, d, m, y] = matchDMY.map(Number);
+      return new Date(Date.UTC(y, m - 1, d));
+    }
+
+    return null;
+  }
+
+  async generateMonthlyPayments(leaseId, transaction = null, options = {}) {
     try {
+      const { chargeDay: requestedChargeDay = null, graceDays = 10 } = options;
+
       const lease = await this.getLeaseById(leaseId, transaction);
-      
-      const startDate = new Date(lease.fecha_inicio);
-      const endDate = new Date(lease.fecha_finalizacion);
-      
+      const startDate = this.parseDateOnly(lease.fecha_inicio);
+      const endDate = this.parseDateOnly(lease.fecha_finalizacion);
+      if (!startDate || !endDate) {
+        throw new Error('Fechas de arrendamiento inválidas');
+      }
+
       const payments = [];
-      let currentDate = new Date(startDate);
-      
-      while (currentDate <= endDate) {
-        const paymentDate = new Date(currentDate);
-        const dueDate = new Date(currentDate);
-        dueDate.setDate(dueDate.getDate() + 10); // 10 días para pagar
-        
+      const startDay = requestedChargeDay || startDate.getUTCDate();
+
+      // Primer cobro: mes de inicio; si el día cae antes del inicio, se mueve al mes siguiente
+      let cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDay));
+      if (cursor < startDate) {
+        cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, startDay));
+      }
+
+      while (cursor < endDate) {
+        const lastDayOfMonth = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
+        const chargeDate = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), Math.min(startDay, lastDayOfMonth)));
+
+        const dueDate = new Date(chargeDate);
+        dueDate.setUTCDate(dueDate.getUTCDate() + graceDays);
+
         payments.push({
           id_arrendamiento: leaseId,
-          fecha_cobro: paymentDate,
-          fecha_limite: dueDate,
+          fecha_cobro: this.formatDateOnly(chargeDate),
+          fecha_limite: this.formatDateOnly(dueDate),
           valor_pago: lease.valor_mensual,
           estado: 'Pendiente'
         });
-        
+
         // Siguiente mes
-        currentDate.setMonth(currentDate.getMonth() + 1);
+        cursor = new Date(chargeDate);
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
       }
-      
+
       await Payment.bulkCreate(payments, { transaction });
       logger.info(`✅ ${payments.length} cobros generados para arrendamiento ${leaseId}`);
-      
+
     } catch (error) {
       logger.error(`❌ Error generando cobros: ${error.message}`);
       throw error;
@@ -589,6 +665,21 @@ class LeaseService {
       const payments = await Payment.findAll({
         where: { id_arrendamiento: leaseId },
         order: [['fecha_cobro', 'ASC']],
+        include: [{
+          model: Receipt,
+          as: 'comprobante',
+          attributes: [
+            'id_comprobante',
+            'url_comprobante',
+            'entidad_bancaria',
+            'referencia_bancaria',
+            'monto_pagado',
+            'estado',
+            'fecha_pago',
+            'observaciones',
+            'fecha_creacion'
+          ]
+        }],
         logging: false
       });
 
@@ -622,16 +713,52 @@ class LeaseService {
 
   async createReceipt(receiptData) {
     try {
+      const payment = await Payment.findByPk(receiptData.id_cobro);
+      if (!payment) throw new Error('Cobro no encontrado');
+
+      // Normalizar y validar fecha de pago (usar solo la porción de fecha para evitar desfases horario)
+      const payDate = this.parseDateFlexible(receiptData.fecha_pago);
+      if (!payDate) {
+        throw new Error('Fecha de pago inválida. Usa formato YYYY-MM-DD o DD/MM/YYYY');
+      }
+      const payDateStr = this.formatDateOnly(payDate);
+
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const todayStr = this.formatDateOnly(today);
+      if (payDateStr > todayStr) {
+        throw new Error('La fecha de pago no puede ser futura');
+      }
+
+      // Validar contra fecha_cobro (CHECK CHK_Cobros_FechaPago) comparando epoch en UTC y logueando valores
+      const chargeDate = this.parseDateFlexible(payment.fecha_cobro);
+      if (chargeDate) {
+        const chargeDateStr = this.formatDateOnly(chargeDate);
+        if (payDateStr < chargeDateStr) {
+          logger.error(`createReceipt blocked: payDate=${payDateStr} chargeDate=${chargeDateStr} rawPay=${receiptData.fecha_pago} rawCobro=${payment.fecha_cobro}`);
+          throw new Error(`La fecha de pago no puede ser anterior a la fecha de cobro (${chargeDateStr})`);
+        }
+      }
+
+      const formattedPayDate = payDateStr;
+
       const newReceipt = await Receipt.create({
         id_cobro: receiptData.id_cobro,
         url_comprobante: receiptData.url_comprobante,
         entidad_bancaria: receiptData.entidad_bancaria,
         referencia_bancaria: receiptData.referencia_bancaria,
         monto_pagado: receiptData.monto_pagado,
-        fecha_pago: receiptData.fecha_pago,
+        fecha_pago: formattedPayDate,
+        // Default debe coincidir con el CHECK de la BD
         estado: receiptData.estado || 'En revisión',
         observaciones: receiptData.observaciones
       });
+
+      // Al subir comprobante, marcar el cobro como pagado y registrar fecha de pago
+      await Payment.update(
+        { estado: 'Pagado', fecha_pago: formattedPayDate },
+        { where: { id_cobro: receiptData.id_cobro } }
+      );
 
       return newReceipt;
     } catch (error) {

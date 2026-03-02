@@ -11,6 +11,9 @@ const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 
+const MAX_DESTACADOS = 6;
+const CATEGORIES_WITH_REQUIRED_AMENITIES = new Set(['casa', 'apartamento']);
+
 const VALID_ORDER_COLUMNS = [
   'id_inmueble',
   'registro_inmobiliario',
@@ -85,6 +88,44 @@ const normalizeAmenityPayload = (comodidades = []) =>
         })
         .filter((item) => item && item.nombre.length > 0)
     : [];
+
+const normalizeCategory = (value = '') =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const countSelectedAmenities = (comodidades = []) =>
+  normalizeAmenityPayload(comodidades).filter((item) => item.seleccionada !== false).length;
+
+const validateRequiredAmenitiesForCategory = ({ categoria, comodidades }) => {
+  const normalizedCategory = normalizeCategory(categoria);
+  if (!CATEGORIES_WITH_REQUIRED_AMENITIES.has(normalizedCategory)) return;
+
+  const selectedCount = countSelectedAmenities(comodidades);
+  if (selectedCount < 2) {
+    const error = new Error('Casa y Apartamento requieren minimo 2 comodidades seleccionadas.');
+    error.status = 400;
+    throw error;
+  }
+};
+
+const parseBooleanFilter = (valor) => {
+  if (valor === undefined || valor === null || valor === '') {
+    return undefined;
+  }
+
+  if (typeof valor === 'boolean') {
+    return valor;
+  }
+
+  const normalized = String(valor).trim().toLowerCase();
+  if (['true', '1', 'si', 'sí'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no'].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+};
 
 const mapComodidadesFromInstance = (comodidades = []) =>
   comodidades.map((comodidad) => ({
@@ -244,6 +285,103 @@ const syncImagenes = async (inmuebleId, imagenes = [], transaction) => {
   }
 };
 
+const isTruthyBoolean = (value) => {
+  if (value === true) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+  return value === 1;
+};
+
+const validateDestacadosLimit = async ({ transaction, excludeInmuebleId = null }) => {
+  const where = { destacado: true };
+  if (excludeInmuebleId) {
+    where.id_inmueble = { [Op.ne]: excludeInmuebleId };
+  }
+
+  const totalDestacados = await Inmueble.count({
+    where,
+    transaction
+  });
+
+  if (totalDestacados >= MAX_DESTACADOS) {
+    const error = new Error(`Solo se pueden destacar ${MAX_DESTACADOS} inmuebles.`);
+    error.status = 400;
+    throw error;
+  }
+};
+
+const clearPropietarioActual = async (inmuebleId, transaction) => {
+  await PropiedadInmueble.update(
+    {
+      estado: 'Inactivo',
+      es_propietario_actual: false,
+      fecha_final: new Date()
+    },
+    {
+      where: { id_inmueble: inmuebleId, es_propietario_actual: true },
+      transaction
+    }
+  );
+};
+
+const countSelectedAmenitiesByInmueble = async (inmuebleId, transaction) => {
+  return InmuebleComodidad.count({
+    where: {
+      id_inmueble: inmuebleId,
+      seleccionada: true
+    },
+    transaction
+  });
+};
+
+const normalizeEstadoFrontend = (value = '') =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const buildEstadoFrontendCondition = (valor, column = 'Inmuebles.estado_frontend') => {
+  if (valor === undefined || valor === null) {
+    return null;
+  }
+
+  if (typeof valor === 'string' && normalizeEstadoFrontend(valor) === 'todos') {
+    return null;
+  }
+
+  const normalized = normalizeEstadoFrontend(valor);
+  if (!normalized) return null;
+
+  const columnReference = sequelize.col(column);
+  return sequelize.where(
+    sequelize.fn('LOWER', sequelize.cast(columnReference, 'NVARCHAR(100)')),
+    normalized
+  );
+};
+
+const buildEstadoFrontendExclusionCondition = (values = [], column = 'Inmuebles.estado_frontend') => {
+  const normalizedValues = Array.isArray(values)
+    ? values
+        .map((value) => normalizeEstadoFrontend(value))
+        .filter(Boolean)
+    : [];
+
+  if (!normalizedValues.length) return null;
+
+  const columnReference = sequelize.col(column);
+  return sequelize.where(
+    sequelize.fn('LOWER', sequelize.cast(columnReference, 'NVARCHAR(100)')),
+    {
+      [Op.notIn]: normalizedValues
+    }
+  );
+};
+
+const shouldClearDestacadoByEstadoFrontend = (estadoFrontend) => {
+  if (typeof estadoFrontend !== 'string') return false;
+  const normalized = estadoFrontend.trim().toLowerCase();
+  return normalized === 'vendido' || normalized === 'arrendado';
+};
+
 class InmueblesService {
   /**
    * Crear un nuevo inmueble
@@ -266,6 +404,15 @@ class InmueblesService {
           propietario,
           propietario_id,
           propietarioId
+        });
+
+        if (isTruthyBoolean(payload.destacado)) {
+          await validateDestacadosLimit({ transaction: t });
+        }
+
+        validateRequiredAmenitiesForCategory({
+          categoria: payload.categoria || payload.tipo,
+          comodidades
         });
 
         // Crear inmueble
@@ -310,7 +457,11 @@ class InmueblesService {
         precio_max,
         area_min,
         categoria,
-        estado
+        estado,
+        estado_frontend,
+        excluir_estados_frontend,
+        destacado,
+        propietario_id
       } = filtros;
 
       const {
@@ -333,14 +484,36 @@ class InmueblesService {
         whereClause[Op.and].push(estadoCondition);
       }
 
+      const estadoFrontendCondition = buildEstadoFrontendCondition(estado_frontend, 'Inmuebles.estado_frontend');
+      if (estadoFrontendCondition) {
+        whereClause[Op.and] = whereClause[Op.and] || [];
+        whereClause[Op.and].push(estadoFrontendCondition);
+      }
+
+      const estadoFrontendExclusionCondition = buildEstadoFrontendExclusionCondition(
+        excluir_estados_frontend,
+        'Inmuebles.estado_frontend'
+      );
+      if (estadoFrontendExclusionCondition) {
+        whereClause[Op.and] = whereClause[Op.and] || [];
+        whereClause[Op.and].push(estadoFrontendExclusionCondition);
+      }
+
       if (ciudad) whereClause.ciudad = { [Op.iLike]: `%${ciudad}%` };
       if (categoria) whereClause.categoria = categoria;
+      const destacadoFilter = parseBooleanFilter(destacado);
+      if (destacadoFilter !== undefined) {
+        whereClause.destacado = destacadoFilter;
+      }
       if (precio_min || precio_max) {
         whereClause.precio_venta = {};
         if (precio_min) whereClause.precio_venta[Op.gte] = precio_min;
         if (precio_max) whereClause.precio_venta[Op.lte] = precio_max;
       }
       if (area_min) whereClause.area_construida = { [Op.gte]: area_min };
+
+      const propietarioIdFilter = Number.parseInt(propietario_id, 10);
+      const hasPropietarioFilter = Number.isInteger(propietarioIdFilter) && propietarioIdFilter > 0;
 
       const { count, rows } = await Inmueble.findAndCountAll({
         where: whereClause,
@@ -351,8 +524,11 @@ class InmueblesService {
           {
             model: PropiedadInmueble,
             as: 'propietarios',
-            required: false,
-            where: { es_propietario_actual: true },
+            required: hasPropietarioFilter,
+            where: {
+              es_propietario_actual: true,
+              ...(hasPropietarioFilter ? { id_persona: propietarioIdFilter } : {})
+            },
             attributes: [
               'id_propiedad_inmueble',
               'fecha_inicio',
@@ -557,46 +733,98 @@ class InmueblesService {
    * @returns {Promise<Object>} Inmueble actualizado
    */
   async actualizarInmueble(inmuebleId, updateData) {
-    const result = await sequelize.transaction(async (t) => {
+    const maxAttempts = 3;
+    let attempt = 0;
+
+    while (attempt < maxAttempts) {
       try {
-        const {
-          comodidades,
-          propietario,
-          propietario_id,
-          propietarioId,
-          imagenes,
-          ...payload
-        } = updateData;
-        const ownerId = resolveOwnerIdFromPayload({
-          propietario,
-          propietario_id,
-          propietarioId
+        const result = await sequelize.transaction(async (t) => {
+          const {
+            comodidades,
+            propietario,
+            propietario_id,
+            propietarioId,
+            desasignar_propietario,
+            imagenes,
+            ...payload
+          } = updateData;
+          const ownerId = resolveOwnerIdFromPayload({
+            propietario,
+            propietario_id,
+            propietarioId
+          });
+          const hasComodidadesInPayload = Object.prototype.hasOwnProperty.call(updateData, 'comodidades');
+
+          const inmueble = await Inmueble.findOne({
+            where: { id_inmueble: inmuebleId },
+            transaction: t
+          });
+
+          if (!inmueble) {
+            throw new Error('Inmueble no encontrado');
+          }
+
+          const targetCategory = payload.categoria || payload.tipo || inmueble.categoria;
+          const normalizedTargetCategory = normalizeCategory(targetCategory);
+          const requiresAmenities = CATEGORIES_WITH_REQUIRED_AMENITIES.has(normalizedTargetCategory);
+
+          if (hasComodidadesInPayload) {
+            validateRequiredAmenitiesForCategory({
+              categoria: targetCategory,
+              comodidades
+            });
+          } else if (requiresAmenities) {
+            const currentAmenitiesCount = await countSelectedAmenitiesByInmueble(inmuebleId, t);
+            if (currentAmenitiesCount < 2) {
+              const error = new Error('Casa y Apartamento requieren minimo 2 comodidades seleccionadas.');
+              error.status = 400;
+              throw error;
+            }
+          }
+
+          if (shouldClearDestacadoByEstadoFrontend(payload.estado_frontend)) {
+            payload.destacado = false;
+          }
+
+          const quiereDestacar = isTruthyBoolean(payload.destacado);
+          const estabaDestacado = isTruthyBoolean(inmueble.destacado);
+
+          if (quiereDestacar && !estabaDestacado) {
+            await validateDestacadosLimit({
+              transaction: t,
+              excludeInmuebleId: inmuebleId
+            });
+          }
+
+          await inmueble.update(payload, { transaction: t });
+          if (ownerId) {
+            await syncPropietario(inmuebleId, ownerId, t);
+          } else if (desasignar_propietario === true) {
+            await clearPropietarioActual(inmuebleId, t);
+          }
+          if (hasComodidadesInPayload) {
+            await syncComodidades(inmuebleId, comodidades, t);
+          }
+          await syncImagenes(inmuebleId, imagenes, t);
+
+          logger.info(`Inmueble actualizado: ${inmuebleId}`);
+          return await this.obtenerPorId(inmuebleId, t);
         });
 
-        const inmueble = await Inmueble.findOne({
-          where: { id_inmueble: inmuebleId },
-          transaction: t
-        });
+        return result;
+      } catch (error) {
+        attempt += 1;
+        const rawMessage = String(error?.message || '').toLowerCase();
+        const isDeadlock = rawMessage.includes('deadlock');
 
-        if (!inmueble) {
-          throw new Error('Inmueble no encontrado');
+        if (!isDeadlock || attempt >= maxAttempts) {
+          logger.error('Error actualizando inmueble:', error);
+          throw error;
         }
 
-        await inmueble.update(payload, { transaction: t });
-        await syncPropietario(inmuebleId, ownerId, t);
-        await syncComodidades(inmuebleId, comodidades, t);
-        await syncImagenes(inmuebleId, imagenes, t);
-
-        logger.info(`Inmueble actualizado: ${inmuebleId}`);
-
-        return await this.obtenerPorId(inmuebleId, t);
-      } catch (error) {
-        logger.error('Error actualizando inmueble:', error);
-        throw error;
+        logger.warn(`Deadlock al actualizar inmueble ${inmuebleId}. Reintento ${attempt}/${maxAttempts}`);
       }
-    });
-
-    return result;
+    }
   }
 
   /**

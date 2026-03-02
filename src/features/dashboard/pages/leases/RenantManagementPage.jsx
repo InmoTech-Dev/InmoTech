@@ -5,15 +5,32 @@ import { FaUserPlus, FaSearch, FaHome, FaCalendar, FaDollarSign } from "react-ic
 import { Plus, Search, Filter, Eye, ListChecks, Trash2, Home, Calendar, DollarSign, X, AlertCircle } from 'lucide-react';
 import RenantForm from "../../components/leases/RenantForm";
 import ViewRenant from "../../components/leases/ViewRenant"; 
+import LeaseStatusModal from "../../components/leases/LeaseStatusModal";
 import "../../../../shared/styles/globals.css";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 import { useToast } from "../../../../shared/hooks/use-toast";
+import { uploadToCloudinary } from "../../../../shared/services/cloudinary";
 
 const formatCurrency = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "";
   return `${numeric.toLocaleString("es-CO")} $`;
+};
+
+const normalizeDateString = (raw) => {
+  if (!raw) return "";
+  const str = String(raw);
+  const isoMatch = str.match(/\d{4}-\d{2}-\d{2}/);
+  if (isoMatch) return isoMatch[0];
+  const slashMatch = str.match(/\d{4}\/\d{2}\/\d{2}/);
+  if (slashMatch) return slashMatch[0].replace(/\//g, "-");
+  const date = new Date(str);
+  if (Number.isNaN(date)) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 };
 
 const mapApiArriendoToRow = (arriendo = {}) => {
@@ -46,23 +63,20 @@ const mapApiArriendoToRow = (arriendo = {}) => {
   const [primerApellidoCod = "", segundoApellidoCod = ""] = apellidosCod.split(" ");
 
   const valor = arriendo.valor_mensual || arriendo.valor_arriendo || arriendo.valor_arriendo_mensual || arriendo.precio_arriendo || 0;
-  const fechaInicio = arriendo.fecha_inicio || arriendo.fechaInicio || "";
-  const fechaFin = arriendo.fecha_finalizacion || arriendo.fecha_fin || "";
+  const fechaInicio = normalizeDateString(arriendo.fecha_inicio || arriendo.fechaInicio || "");
+  const fechaFin = normalizeDateString(arriendo.fecha_finalizacion || arriendo.fecha_fin || "");
   const cobros = arriendo.Cobros || arriendo.cobros || [];
   const cobroOrdenado = cobros
     .slice()
     .sort((a, b) => new Date(a.fecha_cobro) - new Date(b.fecha_cobro))[0];
 
   const fechaCobroRaw =
-    (cobroOrdenado && cobroOrdenado.fecha_cobro) ||
     arriendo.fecha_cobro ||
     arriendo.fechaCobro ||
+    (cobroOrdenado && cobroOrdenado.fecha_cobro) ||
     fechaInicio;
-  const fechaCobroDate = fechaCobroRaw ? new Date(fechaCobroRaw) : null;
-  const fechaCobroStr =
-    fechaCobroDate && !Number.isNaN(fechaCobroDate.getTime())
-      ? fechaCobroDate.toISOString().slice(0, 10).replace(/-/g, '/')
-      : "";
+
+  const fechaCobroStr = normalizeDateString(fechaCobroRaw);
 
   // Extraer comodidades para habitaciones y baÃ±os
   const comodidades = inmueble.comodidades || [];
@@ -146,8 +160,8 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     estrato: inmueble.estrato || "",
     direccion: inmueble.direccion || "",
     precioInmueble: formatCurrency(inmueble.precio_arriendo || inmueble.precio || valor),
-    fechaInicio: fechaInicio ? String(fechaInicio).slice(0, 10) : "",
-    fechaFinal: fechaFin ? String(fechaFin).slice(0, 10) : "",
+    fechaInicio: fechaInicio || "",
+    fechaFinal: fechaFin || "",
     fechaCobro: fechaCobroStr || "No especificada",
     precio: formatCurrency(valor),
     descripcion: descripcionContrato,
@@ -172,6 +186,9 @@ export function RenantManagementPage() {
   const [viewingRent, setViewingRent] = useState(null);
   const [statusRent, setStatusRent] = useState(null); // arriendo en seguimiento (solo estado)
   const [statusMessage, setStatusMessage] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [uploadingPaymentId, setUploadingPaymentId] = useState(null);
   const { toast } = useToast();
   const fetchArriendos = useCallback(async () => {
     setIsLoading(true);
@@ -183,7 +200,9 @@ export function RenantManagementPage() {
         // eslint-disable-next-line no-console
         console.log("DBG leases sample", list[0]);
       }
-      setArriendos(list.map(mapApiArriendoToRow));
+      const rowsBase = list.map(mapApiArriendoToRow);
+      const rowsSincronizados = await syncEstadosConCobro(rowsBase);
+      setArriendos(rowsSincronizados);
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage({
@@ -204,6 +223,24 @@ export function RenantManagementPage() {
     fetchArriendos();
   }, [fetchArriendos]);
 
+  const loadPayments = useCallback(async (leaseId) => {
+    if (!leaseId) return;
+    setLoadingPayments(true);
+    try {
+      const response = await arriendoApiService.obtenerCobros(leaseId);
+      const list = response?.data?.data || response?.data || [];
+      setPayments(list);
+    } catch (error) {
+      toast({
+        title: "Error al cargar cobros",
+        description: error?.message || "No fue posible cargar los cobros de este arriendo",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPayments(false);
+    }
+  }, [toast]);
+
   // CREAR NUEVO
   const handleNewRent = ({ renant, formData }) => {
     // Solo refrescamos desde API; crear arrendatario no debe agregar a la lista de arriendos
@@ -223,9 +260,14 @@ export function RenantManagementPage() {
       nuevoEstado: rent.estado || "Activo",
       comentario: "",
     });
+    loadPayments(rent.id);
   };
 
-  const closeStatusModal = () => setStatusRent(null);
+  const closeStatusModal = () => {
+    setStatusRent(null);
+    setPayments([]);
+    setUploadingPaymentId(null);
+  };
 
   const handleStatusSave = async () => {
     if (!statusRent) return;
@@ -293,6 +335,51 @@ export function RenantManagementPage() {
     } finally {
       setIsDeleting(false);
       setRentToDelete(null);
+    }
+  };
+
+  const handleUploadReceipt = async (payment, file, form) => {
+    if (!statusRent) return;
+    const paymentId = payment.id_cobro || payment.id;
+    setUploadingPaymentId(paymentId);
+    try {
+      // Validar que la fecha de pago no sea futura (el backend tiene CHECK)
+      if (form.fecha_pago) {
+        const payDate = new Date(form.fecha_pago);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        payDate.setHours(0, 0, 0, 0);
+        if (payDate > today) {
+          throw new Error("La fecha de pago no puede ser futura. Usa una fecha igual o anterior a hoy.");
+        }
+      }
+      // Usa carpeta permitida por backend (lista blanca en upload.controller)
+      const upload = await uploadToCloudinary(file, { folder: 'inmotech/comprobantes' });
+      const payload = {
+        url_comprobante: upload.url,
+        entidad_bancaria: form.entidad_bancaria,
+        referencia_bancaria: form.referencia_bancaria,
+        monto_pagado: Number(form.monto_pagado),
+        fecha_pago: form.fecha_pago,
+        // Estado debe coincidir con la restricción CHECK de la BD
+        estado: 'En revisión',
+        observaciones: form.observaciones,
+      };
+      await arriendoApiService.crearComprobante(statusRent.id, paymentId, payload);
+      toast({
+        title: "Comprobante registrado",
+        description: "El comprobante se cargó y registró correctamente.",
+        variant: "default",
+      });
+      await loadPayments(statusRent.id);
+    } catch (error) {
+      toast({
+        title: "Error al subir comprobante",
+        description: error?.message || "No fue posible registrar el comprobante.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPaymentId(null);
     }
   };
 
@@ -425,6 +512,39 @@ const renderDeleteModal = () => {
           );
         });
 
+  const parseDateSafe = (value) => {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d) ? null : d;
+  };
+
+  const isContractActiveToday = (rent) => {
+    const start = parseDateSafe(rent.fechaInicio);
+    const end = parseDateSafe(rent.fechaFinal);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (start && today < start) return false;
+    if (end && today > end) return false;
+    return true;
+  };
+
+  const computeEstadoConCobro = (rent) => {
+    const baseEstado = rent.estado || "Activo";
+    if (!isContractActiveToday(rent)) return baseEstado;
+
+    const fechaCobroDate = parseDateSafe(rent.fechaCobro);
+    if (!fechaCobroDate) return baseEstado;
+
+    const cobroDay = fechaCobroDate.getDate();
+    const today = new Date();
+    const todayDay = today.getDate();
+
+    if (todayDay >= cobroDay && baseEstado !== "Finalizado") {
+      return "Debe";
+    }
+    return baseEstado;
+  };
+
   const getEstadoBadge = (estado) => {
     switch (estado) {
       case "Pagado":
@@ -440,6 +560,29 @@ const renderDeleteModal = () => {
         return <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-700">{estado}</span>;
     }
   };
+
+  const syncEstadosConCobro = useCallback(async (rows) => {
+    const updates = rows.filter((r) => {
+      const estadoCalculado = computeEstadoConCobro(r);
+      return estadoCalculado && estadoCalculado !== r.estado && r.id;
+    });
+    if (!updates.length) return rows;
+
+    const updateMap = {};
+    await Promise.allSettled(
+      updates.map(async (r) => {
+        const nuevoEstado = computeEstadoConCobro(r);
+        updateMap[r.id] = nuevoEstado;
+        try {
+          await arriendoApiService.actualizarEstado(r.id, { estado: nuevoEstado, comentario: "Estado ajustado por fecha de cobro" });
+        } catch (error) {
+          console.error("No se pudo actualizar estado del arriendo", r.id, error?.message);
+        }
+      })
+    );
+
+    return rows.map((r) => (updateMap[r.id] ? { ...r, estado: updateMap[r.id] } : r));
+  }, []);
 
   // Calcular estadÃ­sticas
   const stats = {
@@ -489,87 +632,19 @@ const renderDeleteModal = () => {
     if (!statusRent) return null;
     const estados = ["Activo", "Al día", "Pendiente", "Recuperación", "Finalizado", "Cancelado"];
 
-    const modalContent = (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">Seguimiento de Arriendo</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Cambia únicamente el estado del contrato. Los demás datos son de solo lectura.
-              </p>
-            </div>
-            <button
-              onClick={closeStatusModal}
-              className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
-              aria-label="Cerrar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm text-slate-700 space-y-1">
-            <div className="flex justify-between">
-              <span className="font-semibold">Arrendatario:</span>
-              <span>{statusRent.primerNombreArrendatario} {statusRent.primerApellidoArrendatario}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-semibold">Inmueble:</span>
-              <span>{statusRent.tipoInmueble} · {statusRent.registroInmobiliario}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-semibold">Periodo:</span>
-              <span>{statusRent.fechaInicio} – {statusRent.fechaFinal}</span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-slate-700">
-              Estado del arriendo
-              <select
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={statusRent.nuevoEstado}
-                onChange={(e) => setStatusRent((prev) => ({ ...prev, nuevoEstado: e.target.value }))}
-              >
-                {estados.map((estado) => (
-                  <option key={estado} value={estado}>{estado}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block text-sm font-medium text-slate-700">
-              Descripción (opcional)
-              <textarea
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-                placeholder="Ej: Pago recibido, se cambia a 'Al día'"
-                value={statusRent.comentario}
-                onChange={(e) => setStatusRent((prev) => ({ ...prev, comentario: e.target.value }))}
-              />
-            </label>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
-              onClick={closeStatusModal}
-            >
-              Cancelar
-            </button>
-            <button
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md"
-              onClick={handleStatusSave}
-            >
-              Guardar estado
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-
-    return ReactDOM.createPortal(
-      modalContent,
-      document.getElementById('modal-root') || document.body
+    return (
+      <LeaseStatusModal
+        statusRent={statusRent}
+        estados={estados}
+        onClose={closeStatusModal}
+        onChangeEstado={(estado) => setStatusRent((prev) => ({ ...prev, nuevoEstado: estado }))}
+        onChangeComentario={(comentario) => setStatusRent((prev) => ({ ...prev, comentario }))}
+        onSave={handleStatusSave}
+        payments={payments}
+        loadingPayments={loadingPayments}
+        onUploadReceipt={handleUploadReceipt}
+        uploadingPaymentId={uploadingPaymentId}
+      />
     );
   };
 
@@ -702,7 +777,7 @@ const renderDeleteModal = () => {
                         <td className="px-6 py-4 text-center font-semibold text-purple-700">{r.valorMensual}</td>
                         
                         {/* ESTADO */}
-                        <td className="px-6 py-4 text-center">{getEstadoBadge(r.estado)}</td>
+                        <td className="px-6 py-4 text-center">{getEstadoBadge(computeEstadoConCobro(r))}</td>
                         
                         {/* ACCIONES */}
                         <td className="px-6 py-4 text-center">
@@ -766,4 +841,5 @@ const renderDeleteModal = () => {
     </>
   );
 }
+
 

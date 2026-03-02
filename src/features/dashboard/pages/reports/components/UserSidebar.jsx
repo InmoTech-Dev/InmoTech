@@ -28,7 +28,7 @@ const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, 
 
             <div className={cn("p-5", isCollapsed && "px-3 items-center flex flex-col")}>
                 {!isCollapsed && (
-                    <h2 className="text-[10px] uppercase font-bold text-slate-500 mb-5 px-1 tracking-[0.15em] opacity-70">
+                    <h2 className="text-[11px] uppercase font-black text-slate-400 mb-5 px-1 tracking-widest opacity-80">
                         Administrativos
                     </h2>
                 )}
@@ -102,15 +102,15 @@ const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, 
                                     {!isCollapsed && (
                                         <div className="flex-1 min-w-0">
                                             <p className={cn(
-                                                "text-sm font-semibold truncate leading-tight tracking-tight",
-                                                isSelected ? "text-indigo-900" : "text-slate-800"
+                                                "text-sm font-black uppercase truncate leading-tight tracking-tight",
+                                                isSelected ? "text-indigo-900" : "text-[#1E293B]"
                                             )}>
                                                 {user.nombre_completo} {user.apellido_completo}
                                             </p>
-                                            <p className="text-[11px] text-slate-500 font-medium truncate mt-1 tracking-tight opacity-90">
+                                            <p className="text-[10px] text-slate-400 font-bold truncate mt-1 uppercase tracking-wider opacity-80">
                                                 {user.rol || 'Administrativo'}
                                             </p>
-                                            <p className="text-[11px] text-slate-400 font-normal truncate mt-0.5">
+                                            <p className="text-[10px] text-slate-400/70 font-medium truncate mt-0.5">
                                                 {user.correo}
                                             </p>
                                         </div>

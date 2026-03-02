@@ -79,6 +79,7 @@ BEGIN
         -- Información de documento (permite identificación sin duplicados)
         tipo_documento VARCHAR(20) NOT NULL CHECK (tipo_documento IN ('CC', 'CE', 'NIT', 'Pasaporte', 'TI')),
         numero_documento VARCHAR(20) NOT NULL,
+
         -- Nombres completos (unificados para simplicidad y mejor ordenamiento)
         nombre_completo VARCHAR(100) NOT NULL,
         apellido_completo VARCHAR(100) NOT NULL,
@@ -2114,6 +2115,60 @@ GO
 PRINT '? Función fn_EsCompradorActivo creada correctamente';
 GO
 
+-- Procedimiento: sp_BuscarPersonaPorDocumento
+-- Descripción: dado tipo + número de documento, retorna la persona y, si existen,
+--              sus registros de Comprador y Arrendatario para autocompletar en front.
+IF OBJECT_ID('dbo.sp_BuscarPersonaPorDocumento', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_BuscarPersonaPorDocumento;
+GO
+
+CREATE PROCEDURE dbo.sp_BuscarPersonaPorDocumento
+    @tipo_documento   VARCHAR(20),
+    @numero_documento VARCHAR(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @tipo_doc_trim VARCHAR(20)   = LTRIM(RTRIM(@tipo_documento));
+    DECLARE @num_doc_trim  VARCHAR(20)   = LTRIM(RTRIM(@numero_documento));
+
+    SELECT 
+        -- Persona
+        p.id_persona,
+        p.tipo_documento,
+        p.numero_documento,
+        p.nombre_completo,
+        p.apellido_completo,
+        p.correo,
+        p.telefono,
+        p.tiene_cuenta,
+        p.estado AS estado_persona,
+
+        -- Flags para el front
+        CASE WHEN c.id_comprador   IS NULL THEN 0 ELSE 1 END AS es_comprador,
+        CASE WHEN a.id_arrendatario IS NULL THEN 0 ELSE 1 END AS es_arrendatario,
+
+        -- Comprador (si existe)
+        c.id_comprador,
+        c.registro_comprador,
+        c.tipo_comprador,
+        c.estado AS estado_comprador,
+
+        -- Arrendatario (si existe)
+        a.id_arrendatario,
+        a.registro_arrendatario,
+        a.tipo_arrendatario,
+        a.estado AS estado_arrendatario
+    FROM Personas p
+    LEFT JOIN Compradores   c ON c.id_persona = p.id_persona
+    LEFT JOIN Arrendatarios a ON a.id_persona = p.id_persona
+    WHERE p.tipo_documento = @tipo_doc_trim
+      AND p.numero_documento = @num_doc_trim;
+END;
+GO
+PRINT '? Procedimiento sp_BuscarPersonaPorDocumento creado';
+GO
+
 -- Procedimiento: sp_CrearCompradorCompleto
 IF OBJECT_ID('dbo.sp_CrearCompradorCompleto', 'P') IS NOT NULL
     DROP PROCEDURE dbo.sp_CrearCompradorCompleto;
@@ -2692,6 +2747,27 @@ BEGIN
     ('Internet', 'Oficina');
 
     PRINT '? Comodidades insertadas por tipo de inmueble';
+END
+
+-- Super Administrador
+IF NOT EXISTS (SELECT 1 FROM Personas WHERE numero_documento = '999999999')
+BEGIN
+    INSERT INTO Personas (tipo_documento, numero_documento, nombre_completo, apellido_completo, correo, telefono, tiene_cuenta)
+    VALUES ('CC', '999999999', 'Super', 'Admin', 'admin@inmotech.com', '+57 300 000 0000', 1);
+
+    DECLARE @id_super_admin INT = SCOPE_IDENTITY();
+
+    INSERT INTO Acceso (id_persona, contrasena)
+    VALUES (@id_super_admin, '$2b$10$rKvFJZEJfRJdLx6jxL5zMeyPh8s9JZCvC.yMFNyV8HQKZ6yFN.JxC'); -- Contraseña: Admin123!
+
+    INSERT INTO Administrativos (id_persona, codigo_empleado, fecha_ingreso, cargo, departamento, estado_laboral)
+    VALUES (@id_super_admin, 'ADMIN-001', GETDATE(), 'Super Administrador', 'Tecnología', 'Activo');
+
+    DECLARE @id_rol_super INT = (SELECT id_rol FROM Roles WHERE nombre_rol = 'Super Administrador');
+    INSERT INTO Personas_rol (id_persona, id_rol)
+    VALUES (@id_super_admin, @id_rol_super);
+
+    PRINT '? Super Administrador creado exitosamente';
 END
 
 -- Propietarios de ejemplo

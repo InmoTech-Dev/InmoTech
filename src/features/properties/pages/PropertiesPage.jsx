@@ -49,8 +49,21 @@ export default function PropertiesPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const { items } = await inmueblesAPI.getPublicInmuebles(1, 60, { _t: Date.now() });
-        setProperties(items || []);
+        const allItems = [];
+        let page = 1;
+        const limit = 100;
+        const maxPages = 30;
+
+        while (page <= maxPages) {
+          const { items, pagination } = await inmueblesAPI.getPublicInmuebles(page, limit, { _t: Date.now() });
+          allItems.push(...(items || []));
+
+          const totalPages = pagination?.paginas_totales || pagination?.totalPages || 1;
+          if (page >= totalPages) break;
+          page += 1;
+        }
+
+        setProperties(allItems);
         setError(null);
       } catch (err) {
         console.error("Error cargando inmuebles:", err);

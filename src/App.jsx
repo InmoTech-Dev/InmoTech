@@ -73,7 +73,7 @@ function App() {
           }
         />
         <Route
-          path="/contactanos"
+          path="/contáctanos"
           element={
             <>
               <Navbar />

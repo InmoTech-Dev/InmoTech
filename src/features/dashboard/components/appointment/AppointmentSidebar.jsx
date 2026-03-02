@@ -17,7 +17,7 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
     }
 
     const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) return null;
+    if (isNaN(parsed.getTime())) return null;
     const year = parsed.getFullYear();
     const month = String(parsed.getMonth() + 1).padStart(2, '0');
     const day = String(parsed.getDate()).padStart(2, '0');
@@ -107,17 +107,39 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
   };
 
   const getClientName = (cita) => {
-    if (typeof cita.cliente === 'object') {
-      return `${cita.cliente.nombre_completo || ''} ${cita.cliente.apellido_completo || ''}`.trim();
+    if (!cita) return 'Sin cliente';
+    
+    // Si ya existe clienteNombreCompleto (caché o pre-calculado)
+    if (cita.clienteNombreCompleto) return cita.clienteNombreCompleto;
+
+    if (typeof cita.cliente === 'object' && cita.cliente) {
+      const nombre = (cita.cliente.nombre_completo || cita.cliente.nombre || '').trim();
+      const apellido = (cita.cliente.apellido_completo || cita.cliente.apellido || '').trim();
+      const completo = `${nombre} ${apellido}`.trim();
+      return completo || 'Sin nombre';
     }
+    
     return cita.cliente || 'Sin nombre';
   };
 
   const getPropertyName = (cita) => {
-    if (typeof cita.inmueble === 'object') {
+    if (!cita) return 'Sin propiedad';
+    
+    // Si ya existe direccion (caché o pre-calculado)
+    if (cita.direccion) return cita.direccion;
+
+    if (cita.inmueble && typeof cita.inmueble === 'object') {
       return cita.inmueble.direccion || 'Sin dirección';
     }
-    return cita.propiedad || 'Sin propiedad';
+    
+    // Caso de respaldo (propiedad puede ser string o un campo antiguo)
+    if (cita.propiedad) {
+       return typeof cita.propiedad === 'object' 
+        ? (cita.propiedad.direccion || 'Sin dirección') 
+        : cita.propiedad;
+    }
+
+    return 'Sin propiedad';
   };
 
   return (

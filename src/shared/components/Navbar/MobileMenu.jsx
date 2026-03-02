@@ -18,7 +18,7 @@ const MobileMenu = ({ isOpen, onClose }) => {
     { to: routes.about, label: 'Nosotros' },
     { to: routes.properties, label: 'Inmuebles' },
     { to: routes.services, label: 'Servicios' },
-    { to: routes.contact, label: 'Contactanos' }
+    { to: routes.contact, label: 'contáctanos' }
   ];
 
   const handleLogout = async () => {

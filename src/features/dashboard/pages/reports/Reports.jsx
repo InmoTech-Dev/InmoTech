@@ -28,6 +28,7 @@ const ReportsContent = () => {
   const [showCancelled, setShowCancelled] = useState(false)
   const [statusFilter, setStatusFilter] = useState('Todos los estados')
   const [todayOnly, setTodayOnly] = useState(false)
+  const [adminFilters, setAdminFilters] = useState({ year: '', month: '', city: '' })
   const [isStatusChangeConfirmOpen, setIsStatusChangeConfirmOpen] = useState(false)
   const [pendingStatusChange, setPendingStatusChange] = useState(null)
   const { createReport, updateReport, deleteReport } = useReports()
@@ -379,7 +380,8 @@ const ReportsContent = () => {
         for (const seg of activos) {
           const segPayload = {
             descripcion: (seg.descripcion || '').trim(),
-            estado: normalizeEstado(seg.estado || 'Pendiente')
+            estado: normalizeEstado(seg.estado || 'Pendiente'),
+            fecha: seg.fecha || null
           }
           await reportesInmobiliariosService.crearSeguimientoRubro(backendId, rubroId, segPayload)
 
@@ -496,7 +498,8 @@ const ReportsContent = () => {
       for (const s of segsToProcess) {
         const segPayload = {
           descripcion: (s.descripcion || '').trim(),
-          estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente'))
+          estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente')),
+          fecha: s.fecha || null
         }
 
         const segBackendId = Number(s.backendId ?? 0)
@@ -1079,7 +1082,7 @@ const ReportsContent = () => {
   const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
 
   return (
-    <div className='px-0 py-6 space-y-6'>
+    <div className='px-0 py-4 flex flex-col h-[calc(100vh-64px)] overflow-hidden'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
       {dbError && <div className='p-4 text-red-600'>{dbError}</div>}
 
@@ -1095,6 +1098,10 @@ const ReportsContent = () => {
         showCancelled={showCancelled}
         onToggleShowCancelled={() => setShowCancelled(v => !v)}
         hideFilters={isAdminView}
+        adminFilters={adminFilters}
+        setAdminFilters={setAdminFilters}
+        onSearchAdmin={setAdminFilters}
+        allReports={dbReports}
       />
 
       {user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r)) ? (
@@ -1104,6 +1111,8 @@ const ReportsContent = () => {
           onEditReport={handleEditReport}
           onDownloadPDF={handleDownloadReportPDF}
           loading={dbLoading}
+          filters={adminFilters}
+          setFilters={setAdminFilters}
         />
       ) : (
         <>

@@ -286,6 +286,24 @@ class ReportesInmobiliariosService {
       throw this.handleError(error, 'Error al agregar el archivo');
     }
   }
+
+  async eliminarImagen(reporteId, imagenId) {
+    try {
+      const response = await this.api.delete(`/reportes-inmobiliarios/${reporteId}/imagenes/${imagenId}`);
+      return this.unwrapResponseBody(response.data);
+    } catch (error) {
+      throw this.handleError(error, 'Error al eliminar la imagen');
+    }
+  }
+
+  async eliminarArchivo(reporteId, archivoId) {
+    try {
+      const response = await this.api.delete(`/reportes-inmobiliarios/${reporteId}/archivos/${archivoId}`);
+      return this.unwrapResponseBody(response.data);
+    } catch (error) {
+      throw this.handleError(error, 'Error al eliminar el archivo');
+    }
+  }
 }
 
 // Instancia singleton del servicio

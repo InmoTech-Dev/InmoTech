@@ -13,12 +13,25 @@ import {
     CheckCircle2,
     AlertCircle,
     FileText,
-    User as UserIcon
+    User as UserIcon,
+    Plus
 } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
+import { ImageViewer } from '@/shared/components/ui/ImageViewer';
 
 const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
+    const [viewerConfig, setViewerConfig] = React.useState({
+        isOpen: false,
+        currentIndex: 0
+    });
+
+    const openViewer = (index) => {
+        setViewerConfig({
+            isOpen: true,
+            currentIndex: index
+        });
+    };
     if (loading) {
         return (
             <div className="flex-1 h-full overflow-y-auto p-8 space-y-8 animate-pulse">
@@ -198,16 +211,39 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                                     Galería de Evidencias <span className="text-indigo-600 font-black">({report.imagenes.length})</span>
                                 </h4>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                    {report.imagenes.map((img, idx) => (
-                                        <div key={idx} className="group relative aspect-square rounded-3xl overflow-hidden border-4 border-white shadow-md hover:shadow-2xl transition-all cursor-pointer">
+                                    {report.imagenes.slice(0, 4).map((img, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="group relative aspect-square rounded-3xl overflow-hidden border-4 border-white shadow-md hover:shadow-2xl transition-all cursor-pointer"
+                                            onClick={() => openViewer(idx)}
+                                        >
                                             <img
                                                 src={img.url}
                                                 alt={`Evidencia ${idx + 1}`}
                                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                                             />
                                             <div className="absolute inset-0 bg-indigo-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                                                <Eye className="w-10 h-10 text-white" />
+                                                {idx === 3 && report.imagenes.length > 4 ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <Plus className="w-8 h-8 text-white" />
+                                                        <span className="text-white font-black text-xl">
+                                                            {report.imagenes.length - 3} MÁS
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <Eye className="w-10 h-10 text-white" />
+                                                )}
                                             </div>
+                                            {idx === 3 && report.imagenes.length > 4 && (
+                                                <div className="absolute inset-0 bg-indigo-900/60 flex items-center justify-center">
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <Plus className="w-8 h-8 text-white" />
+                                                        <span className="text-white font-black text-xl">
+                                                            {report.imagenes.length - 3} MÁS
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -360,6 +396,14 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                     </div>
                 </motion.div >
             </AnimatePresence >
+
+            <ImageViewer
+                isOpen={viewerConfig.isOpen}
+                onClose={() => setViewerConfig(prev => ({ ...prev, isOpen: false }))}
+                images={report.imagenes}
+                currentIndex={viewerConfig.currentIndex}
+                onIndexChange={(index) => setViewerConfig(prev => ({ ...prev, currentIndex: index }))}
+            />
         </div >
     );
 };

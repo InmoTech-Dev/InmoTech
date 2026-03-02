@@ -517,6 +517,13 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     id: sale.id ?? sale.id_venta ?? fallback.id ?? Date.now(),
 
+    id_inmueble:
+      sale.id_inmueble ??
+      inmueble.id_inmueble ??
+      fallback.id_inmueble ??
+      fallback?.raw?.id_inmueble ??
+      null,
+
     registro:
 
       fallback.inmuebleRegistro ??
@@ -837,6 +844,76 @@ const mapPaymentToPurchaseType = (medioPago = "") => {
 
   return normalized === "transferencia" ? "Directa" : "Directa";
 
+};
+
+const INMUEBLES_FICHAS_STORAGE_KEY = "inmuebles:fichas-tecnicas";
+
+const getFichaHistory = () => {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(INMUEBLES_FICHAS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_error) {
+    return {};
+  }
+};
+
+const saveFichaHistory = (history = {}) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(INMUEBLES_FICHAS_STORAGE_KEY, JSON.stringify(history));
+  } catch (_error) {
+    // noop
+  }
+};
+
+const buildFichaSnapshotFromSale = (sale = {}, overrides = {}) => ({
+  titulo: sale.inmuebleNombre || overrides.titulo || "",
+  direccion: sale.inmuebleDireccion || overrides.direccion || "",
+  ciudad: sale.inmuebleCiudad || overrides.ciudad || "",
+  departamento: sale.inmuebleDepartamento || overrides.departamento || "",
+  pais: sale.inmueblePais || overrides.pais || "",
+  tipo: sale.inmuebleTipo || overrides.tipo || "",
+  operacion: sale.tipo || overrides.operacion || "Venta",
+  estado: overrides.estado || sale.inmuebleEstado || "Disponible",
+  precio_venta: sale.inmueblePrecio || sale.valor || overrides.precio_venta || "",
+  precio_arriendo: overrides.precio_arriendo || "",
+  descripcion: overrides.descripcion || "",
+  comodidades: [],
+  imagenes: [],
+  propietario: null,
+  registro: sale.inmuebleRegistro || sale.registro || overrides.registro || "",
+  area_construida: sale.inmuebleArea || overrides.area_construida || ""
+});
+
+const appendFichaTecnicaToLocalHistory = ({ inmuebleId, snapshot, cambios = "" }) => {
+  if (!inmuebleId || !snapshot) return;
+  const key = String(inmuebleId);
+  const history = getFichaHistory();
+  const list = Array.isArray(history[key]) ? history[key] : [];
+  const lastVersion = Number(list?.[0]?.version || 0);
+  const currentEstado = String(snapshot.estado || "").trim();
+  const previousEstado = String(list?.[0]?.snapshot?.estado || "").trim();
+
+  if (
+    previousEstado &&
+    currentEstado &&
+    previousEstado.toLowerCase() === currentEstado.toLowerCase() &&
+    String(cambios || "").trim() === String(list?.[0]?.cambios || "").trim()
+  ) {
+    return;
+  }
+
+  const ficha = {
+    id: `ficha-${Date.now()}`,
+    version: lastVersion + 1,
+    fecha: new Date().toLocaleDateString("es-CO"),
+    cambios: cambios || "Actualización de seguimiento de venta",
+    snapshot,
+  };
+
+  history[key] = [ficha, ...list];
+  saveFichaHistory(history);
 };
 
 
@@ -1537,24 +1614,24 @@ export function SalesManagementPage() {
       const buyerIdForUpdate =
         buyerInfo?.id ||
         buyerInfo?.compradorId ||
-        buyerInfo?.raw?.id_comprador ||
-        buyerInfo?.personaId;
+        buyerInfo?.raw?.id_comprador;
 
       try {
+        if (buyerIdForUpdate) {
+          await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
 
-        await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
+            id_inmueble: payload.id_inmueble,
 
-          id_inmueble: payload.id_inmueble,
+            id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
 
-          id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
+            fecha_compra: payload.fecha_venta,
 
-          fecha_compra: payload.fecha_venta,
+            valor_compra: payload.valor_venta,
 
-          valor_compra: payload.valor_venta,
+            tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
 
-          tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
-
-        });
+          });
+        }
 
       } catch (error) {
 
@@ -1567,6 +1644,11 @@ export function SalesManagementPage() {
 
 
       setVentas((prev) => [...prev, normalizedSale]);
+      appendFichaTecnicaToLocalHistory({
+        inmuebleId: payload.id_inmueble,
+        snapshot: buildFichaSnapshotFromSale(normalizedSale, { estado: "Vendido" }),
+        cambios: "Cambio automático de estado a Vendido por registro de venta",
+      });
 
       const successText = buyerUpdateError
         ? MESSAGES.sale.create.partialBuyer
@@ -1702,6 +1784,28 @@ export function SalesManagementPage() {
         descripcionSeguimiento:
           mergedPayload.descripcionSeguimiento ?? normalized.descripcionSeguimiento,
       };
+
+      const inmuebleId =
+        merged?.id_inmueble ||
+        merged?.raw?.id_inmueble ||
+        merged?.raw?.inmueble?.id_inmueble ||
+        mergedPayload?.id_inmueble ||
+        existingSale?.id_inmueble ||
+        existingSale?.raw?.id_inmueble ||
+        existingSale?.raw?.inmueble?.id_inmueble;
+
+      if (inmuebleId) {
+        appendFichaTecnicaToLocalHistory({
+          inmuebleId,
+          snapshot: buildFichaSnapshotFromSale(
+            { ...existingSale, ...merged },
+            {
+              estado: merged?.raw?.inmueble?.estado_frontend || merged?.inmuebleEstado || "Disponible",
+            }
+          ),
+          cambios: `Seguimiento de venta actualizado: ${merged.estadoSeguimiento || merged.estado || "Sin estado"}`,
+        });
+      }
 
       setVentas((prevVentas) =>
         prevVentas.map((v) =>

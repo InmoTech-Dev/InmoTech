@@ -163,10 +163,39 @@ export const buyersApiService = {
     if (!buyerId) {
       throw new Error('Falta id del comprador para actualizar sus datos de compra.');
     }
-    await apiClient.patch(`/sales/buyers/${buyerId}`, {
-      ...purchaseData,
-      tipo_comprador: purchaseData.tipo_compra || purchaseData.tipo_comprador || 'Potencial',
-    });
+
+    const resolveTipoComprador = (value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (['potencial', 'en proceso', 'finalizado'].includes(normalized)) {
+        if (normalized === 'en proceso') return 'En Proceso';
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+      }
+      // Si ya se concretó una venta, dejamos el comprador como finalizado.
+      return 'Finalizado';
+    };
+
+    const payload = {
+      tipo_comprador: resolveTipoComprador(purchaseData.tipo_comprador || purchaseData.tipo_compra),
+      estado: 'Activo'
+    };
+
+    if (purchaseData.observaciones || purchaseData.valor_compra || purchaseData.fecha_compra) {
+      const notes = [];
+      if (purchaseData.valor_compra !== undefined && purchaseData.valor_compra !== null) {
+        notes.push(`Valor compra: ${purchaseData.valor_compra}`);
+      }
+      if (purchaseData.fecha_compra) {
+        notes.push(`Fecha compra: ${purchaseData.fecha_compra}`);
+      }
+      if (purchaseData.id_venta) {
+        notes.push(`Venta ID: ${purchaseData.id_venta}`);
+      }
+      const extra = String(purchaseData.observaciones || '').trim();
+      if (extra) notes.push(extra);
+      payload.observaciones = notes.join(' | ').slice(0, 1000);
+    }
+
+    await apiClient.patch(`/sales/buyers/${buyerId}`, payload);
     return true;
   },
 };

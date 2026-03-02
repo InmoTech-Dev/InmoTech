@@ -520,8 +520,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             const upload = await uploadToCloudinary(image.file, {
               folder: `inmotech/inmuebles/${form.registro || 'general'}`,
             });
-            if (upload?.secure_url) {
-              uploadedImages.push(upload.secure_url);
+            if (upload?.url) {
+              uploadedImages.push(upload.url);
             }
           } catch (uploadError) {
             console.warn('No se pudo subir una imagen a Cloudinary:', uploadError);

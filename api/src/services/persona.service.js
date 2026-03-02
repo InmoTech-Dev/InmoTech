@@ -148,37 +148,46 @@ class PersonaService {
         throw new Error('Persona no encontrada');
       }
 
-      // Si tiene rol Propietario, traer sus inmuebles actuales
+      // Traer inmuebles asociados como propietario.
       let inmuebles = [];
       try {
-        const esPropietario = (persona.roles || []).some((r) => r.nombre_rol === 'Propietario');
-        if (esPropietario) {
-          const [rows] = await sequelize.query(
-            `
-            SELECT
-              pi.id_inmueble,
-              i.titulo,
-              i.registro_inmobiliario,
-              i.direccion,
-              i.ciudad,
-              i.departamento,
-              i.pais,
-              i.operacion,
-              i.precio_venta,
-              i.precio_arriendo,
-              i.estado
-            FROM Propiedad_inmueble pi
-            INNER JOIN Inmuebles i ON pi.id_inmueble = i.id_inmueble
-            WHERE pi.es_propietario_actual = 1
-              AND pi.id_persona = :id
-            `,
-            {
-              replacements: { id: personaId },
-              type: sequelize.QueryTypes.SELECT
-            }
-          );
-          inmuebles = rows || [];
-        }
+        const [meta] = await sequelize.query(`
+          SELECT COL_LENGTH('dbo.Propiedad_inmueble', 'es_propietario_actual') AS has_es_propietario_actual
+        `);
+
+        const hasCurrentOwnerColumn = Boolean(meta?.[0]?.has_es_propietario_actual);
+        const whereOwnerClause = hasCurrentOwnerColumn
+          ? `(pi.es_propietario_actual = 1 OR pi.estado = 'Activo')`
+          : `pi.estado = 'Activo'`;
+
+        const rows = await sequelize.query(
+          `
+          SELECT
+            pi.id_inmueble,
+            i.titulo,
+            i.registro_inmobiliario,
+            i.direccion,
+            i.ciudad,
+            i.departamento,
+            i.pais,
+            i.operacion,
+            i.categoria,
+            i.precio_venta,
+            i.precio_arriendo,
+            i.estado,
+            i.estado_frontend
+          FROM Propiedad_inmueble pi
+          INNER JOIN Inmuebles i ON pi.id_inmueble = i.id_inmueble
+          WHERE ${whereOwnerClause}
+            AND pi.id_persona = :id
+          `,
+          {
+            replacements: { id: personaId },
+            type: sequelize.QueryTypes.SELECT
+          }
+        );
+
+        inmuebles = Array.isArray(rows) ? rows : [];
       } catch (propError) {
         logger.warn(`No se pudieron cargar inmuebles para persona ${personaId}: ${propError.message}`);
       }

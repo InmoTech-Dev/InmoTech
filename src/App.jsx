@@ -17,6 +17,7 @@ import AboutPage from './features/about/pages/AboutPage'
 import ServicesPage from './features/services/pages/ServicesPage'
 import LoginPage from './features/auth/pages/LoginPage'
 import UserAppointmentsPage from './features/appointments/pages/UserAppointmentsPage'
+import MyPropertiesPage from './features/properties/pages/MyPropertiesPage'
 import ActivateAccountPage from './features/auth/pages/ActivateAccountPage'
 import ResetPasswordPage from './features/auth/pages/ResetPasswordPage'
 
@@ -131,6 +132,16 @@ function App() {
             <ProtectedRoute>
               <Navbar />
               <UserAppointmentsPage />
+              <Footer />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/mis-inmuebles"
+          element={
+            <ProtectedRoute>
+              <Navbar />
+              <MyPropertiesPage />
               <Footer />
             </ProtectedRoute>
           }

@@ -4,6 +4,75 @@ const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
 
 class SaleService {
+  _isMissingVentaAdjuntosTable(error) {
+    const message = String(error?.original?.message || error?.message || '').toLowerCase();
+    return message.includes('invalid object name') && message.includes('ventaadjuntos');
+  }
+
+  _buildSaleIncludeOptions(includeAdjuntos = true) {
+    const includeOptions = [
+      {
+        association: 'inmueble',
+        attributes: [
+          'id_inmueble',
+          'registro_inmobiliario',
+          'direccion',
+          'ciudad',
+          'departamento',
+          'categoria',
+          'titulo',
+          'barrio',
+          'pais',
+          'precio_venta',
+          'precio_arriendo',
+          'area_construida'
+        ],
+        include: [
+          {
+            association: 'comodidades',
+            attributes: ['id_comodidad', 'nombre'],
+            through: { attributes: ['cantidad', 'seleccionada'] }
+          }
+        ]
+      },
+      {
+        association: 'comprador',
+        attributes: ['id_comprador', 'registro_comprador'],
+        include: [
+          {
+            association: 'persona',
+            attributes: [
+              'id_persona',
+              'nombre_completo',
+              'apellido_completo',
+              'correo',
+              'telefono',
+              'tipo_documento',
+              'numero_documento'
+            ]
+          }
+        ]
+      }
+    ];
+
+    if (includeAdjuntos) {
+      includeOptions.push({
+        association: 'adjuntos',
+        attributes: [
+          'id_adjunto',
+          'tipo',
+          'nombre_archivo',
+          'url',
+          'mime_type',
+          'tamano_bytes',
+          'fecha_creacion'
+        ]
+      });
+    }
+
+    return includeOptions;
+  }
+
   _mapEstadoToDb(estadoEntrada, estadoActual = 'Activa') {
     if (!estadoEntrada) return estadoActual;
     const normalized = String(estadoEntrada).trim().toLowerCase();
@@ -138,65 +207,22 @@ class SaleService {
   }
 
   async getSaleById(id, transaction = null) {
-    const sale = await Sale.findByPk(id, {
-      include: [
-        {
-          association: 'inmueble',
-          attributes: [
-            'id_inmueble',
-            'registro_inmobiliario',
-            'direccion',
-            'ciudad',
-            'departamento',
-            'categoria',
-            'titulo',
-            'barrio',
-            'pais',
-            'precio_venta',
-            'precio_arriendo',
-            'area_construida'
-          ],
-          include: [
-            {
-              association: 'comodidades',
-              attributes: ['id_comodidad', 'nombre'],
-              through: { attributes: ['cantidad', 'seleccionada'] }
-            }
-          ]
-        },
-        {
-          association: 'comprador',
-          attributes: ['id_comprador', 'registro_comprador'],
-          include: [
-            {
-              association: 'persona',
-              attributes: [
-                'id_persona',
-                'nombre_completo',
-                'apellido_completo',
-                'correo',
-                'telefono',
-                'tipo_documento',
-                'numero_documento'
-              ]
-            }
-          ]
-        },
-        {
-          association: 'adjuntos',
-          attributes: [
-            'id_adjunto',
-            'tipo',
-            'nombre_archivo',
-            'url',
-            'mime_type',
-            'tamano_bytes',
-            'fecha_creacion'
-          ]
-        }
-      ],
-      transaction
-    });
+    let sale;
+    try {
+      sale = await Sale.findByPk(id, {
+        include: this._buildSaleIncludeOptions(true),
+        transaction
+      });
+    } catch (error) {
+      if (!this._isMissingVentaAdjuntosTable(error)) {
+        throw error;
+      }
+      logger.warn('Tabla VentaAdjuntos no existe. Se continua sin adjuntos en getSaleById.');
+      sale = await Sale.findByPk(id, {
+        include: this._buildSaleIncludeOptions(false),
+        transaction
+      });
+    }
 
     if (!sale) throw new Error('Venta no encontrada');
 
@@ -249,62 +275,7 @@ class SaleService {
 
   async getAllSales(filters = {}) {
     try {
-      const includeOptions = [
-        {
-          association: 'inmueble',
-          attributes: [
-            'id_inmueble',
-            'registro_inmobiliario',
-            'direccion',
-            'ciudad',
-            'departamento',
-            'categoria',
-            'titulo',
-            'barrio',
-            'pais',
-            'precio_venta',
-            'precio_arriendo',
-            'area_construida'
-          ],
-          include: [
-            {
-              association: 'comodidades',
-              attributes: ['id_comodidad', 'nombre'],
-              through: { attributes: ['cantidad', 'seleccionada'] }
-            }
-          ]
-        },
-        {
-          association: 'comprador',
-          attributes: ['id_comprador', 'registro_comprador'],
-          include: [
-            {
-              association: 'persona',
-              attributes: [
-                'id_persona',
-                'nombre_completo',
-                'apellido_completo',
-                'correo',
-                'telefono',
-                'tipo_documento',
-                'numero_documento'
-              ]
-            }
-          ]
-        },
-        {
-          association: 'adjuntos',
-          attributes: [
-            'id_adjunto',
-            'tipo',
-            'nombre_archivo',
-            'url',
-            'mime_type',
-            'tamano_bytes',
-            'fecha_creacion'
-          ]
-        }
-      ];
+      const includeOptions = this._buildSaleIncludeOptions(true);
 
       const whereClause = {};
       if (filters.estado) whereClause.estado = filters.estado;
@@ -314,12 +285,26 @@ class SaleService {
         whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
       }
 
-      const sales = await Sale.findAll({
-        where: whereClause,
-        include: includeOptions,
-        order: [['fecha_venta', 'DESC']],
-        logging: false
-      });
+      let sales;
+      try {
+        sales = await Sale.findAll({
+          where: whereClause,
+          include: includeOptions,
+          order: [['fecha_venta', 'DESC']],
+          logging: false
+        });
+      } catch (error) {
+        if (!this._isMissingVentaAdjuntosTable(error)) {
+          throw error;
+        }
+        logger.warn('Tabla VentaAdjuntos no existe. Se continua sin adjuntos en getAllSales.');
+        sales = await Sale.findAll({
+          where: whereClause,
+          include: this._buildSaleIncludeOptions(false),
+          order: [['fecha_venta', 'DESC']],
+          logging: false
+        });
+      }
 
       const ventaIds = sales.map((s) => s.id_venta);
       let trackingMap = {};

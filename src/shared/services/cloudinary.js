@@ -34,6 +34,7 @@ export async function uploadToCloudinary(file, options = {}) {
 
   return {
     url: data?.url || data?.secure_url || '',
+    secure_url: data?.secure_url || data?.url || '',
     public_id: data?.public_id || '',
     format: data?.format || '',
     bytes: data?.bytes || 0,

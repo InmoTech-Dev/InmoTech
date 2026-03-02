@@ -99,7 +99,14 @@ const uploadSingle = (req, res, next) => {
 
 const subirImagen = async (req, res) => {
   try {
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    const hasCloudinaryUrl = Boolean(process.env.CLOUDINARY_URL);
+    const hasCloudinaryCredentials = Boolean(
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    );
+
+    if (!hasCloudinaryUrl && !hasCloudinaryCredentials) {
       logger.error('Subida abortada: Cloudinary no está configurado correctamente');
       return res.status(500).json({ success: false, message: 'Servicio de imágenes no configurado' });
     }

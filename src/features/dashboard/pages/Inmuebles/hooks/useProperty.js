@@ -45,6 +45,18 @@ const FIELD_LABELS = {
   descripcion: 'Descripción'
 };
 
+const normalizeEstado = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const isFinalInmuebleState = (value = '') => {
+  const normalized = normalizeEstado(value);
+  return normalized === 'arrendado' || normalized === 'vendido';
+};
+
 const captureSnapshot = (data = {}) => ({
   titulo: data.titulo,
   direccion: data.direccion,
@@ -220,13 +232,39 @@ export const useProperty = () => {
       const history = getLocalHistory();
       const enrichedItems = items.map((item) => {
         const localHistory = history[item.id];
-        if (Array.isArray(localHistory) && localHistory.length) {
-          return {
-            ...item,
-            fichasTecnicas: [...localHistory.map((f) => ({ ...f })), ...(item.fichasTecnicas || [])]
+        const remoteFichas = Array.isArray(item.fichasTecnicas) ? item.fichasTecnicas : [];
+        const mergedHistory = Array.isArray(localHistory) && localHistory.length
+          ? [...localHistory.map((f) => ({ ...f })), ...remoteFichas]
+          : [...remoteFichas];
+
+        let enrichedItem = {
+          ...item,
+          fichasTecnicas: mergedHistory
+        };
+
+        const latestFicha = mergedHistory[0];
+        const previousEstado = latestFicha?.snapshot?.estado;
+        const currentEstado = enrichedItem?.estado;
+        const stateChanged = previousEstado && normalizeEstado(previousEstado) !== normalizeEstado(currentEstado);
+        const becameFinalState = stateChanged && isFinalInmuebleState(currentEstado);
+
+        if (becameFinalState) {
+          const nuevaFicha = buildFichaTecnica(
+            { ...enrichedItem, fichasTecnicas: mergedHistory },
+            enrichedItem,
+            `Cambio automatico de estado a ${currentEstado}`
+          );
+          enrichedItem = {
+            ...enrichedItem,
+            fichasTecnicas: [nuevaFicha, ...mergedHistory]
           };
+          saveLocalHistory(enrichedItem.id, enrichedItem.fichasTecnicas);
         }
-        return item;
+
+        if (Array.isArray(localHistory) && localHistory.length) {
+          return enrichedItem;
+        }
+        return enrichedItem;
       });
       setInmuebles(enrichedItems);
       setPagination({

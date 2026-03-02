@@ -23,9 +23,9 @@ const MyPropertiesPage = () => {
     propietario: null,
     resumen: {
       total_inmuebles: 0,
-      inmuebles_con_arriendo: 0,
-      arriendos_activos: 0,
-      canon_total_estimado: 0
+      inmuebles_venta: 0,
+      inmuebles_arriendo: 0,
+      canon_total_esperado: 0
     },
     inmuebles: []
   });
@@ -61,9 +61,9 @@ const MyPropertiesPage = () => {
   const stats = useMemo(
     () => ({
       total: portfolio?.resumen?.total_inmuebles || 0,
-      conArriendo: portfolio?.resumen?.inmuebles_con_arriendo || 0,
-      activos: portfolio?.resumen?.arriendos_activos || 0,
-      canon: portfolio?.resumen?.canon_total_estimado || 0
+      venta: portfolio?.resumen?.inmuebles_venta || 0,
+      arriendo: portfolio?.resumen?.inmuebles_arriendo || 0,
+      canon: portfolio?.resumen?.canon_total_esperado || 0
     }),
     [portfolio]
   );
@@ -99,7 +99,7 @@ const MyPropertiesPage = () => {
             <div>
               <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">Mis Inmuebles</h1>
               <p className="text-sm lg:text-base text-white/80 mt-1">
-                Aqui puedes ver el estado de tus inmuebles y sus arriendos.
+                Aqui puedes ver los inmuebles que tienes asignados, su estado y valores esperados.
               </p>
             </div>
           </div>
@@ -119,18 +119,18 @@ const MyPropertiesPage = () => {
             </div>
             <div className="rounded-2xl border border-blue-200 p-4 text-center">
               <Building2 className="h-5 w-5 mx-auto text-blue-500 mb-2" />
-              <p className="text-3xl font-semibold text-blue-600">{stats.conArriendo}</p>
-              <p className="text-sm text-blue-600">Con arriendo</p>
+              <p className="text-3xl font-semibold text-blue-600">{stats.venta}</p>
+              <p className="text-sm text-blue-600">En venta</p>
             </div>
             <div className="rounded-2xl border border-emerald-200 p-4 text-center">
               <BadgeCheck className="h-5 w-5 mx-auto text-emerald-500 mb-2" />
-              <p className="text-3xl font-semibold text-emerald-600">{stats.activos}</p>
-              <p className="text-sm text-emerald-600">Arriendos activos</p>
+              <p className="text-3xl font-semibold text-emerald-600">{stats.arriendo}</p>
+              <p className="text-sm text-emerald-600">En arriendo</p>
             </div>
             <div className="rounded-2xl border border-amber-200 p-4 text-center">
               <HandCoins className="h-5 w-5 mx-auto text-amber-500 mb-2" />
               <p className="text-lg font-semibold text-amber-700">{formatCurrency(stats.canon)}</p>
-              <p className="text-sm text-amber-600">Canon estimado</p>
+              <p className="text-sm text-amber-600">Canon esperado total</p>
             </div>
           </div>
         </section>
@@ -144,7 +144,7 @@ const MyPropertiesPage = () => {
                   <p className="text-sm text-slate-500">Registro: {item.registro}</p>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                  {item.arriendo?.estado || 'Sin arriendo'}
+                  {item.estadoInmueble || 'Sin estado'}
                 </span>
               </div>
 
@@ -158,39 +158,44 @@ const MyPropertiesPage = () => {
                   <p className="text-slate-600">{item.ciudad}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-slate-500">Estado inmueble</p>
-                  <p className="font-medium text-slate-800">{item.estadoInmueble}</p>
-                  <p className="text-slate-600">{item.operacion}</p>
+                  <p className="text-slate-500">Operacion</p>
+                  <p className="font-medium text-slate-800">{item.operacion}</p>
+                  <p className="text-slate-600">Estado: {item.estadoInmueble}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-slate-500">Canon mensual</p>
-                  <p className="font-medium text-slate-800">{formatCurrency(item.canon)}</p>
-                  <p className="text-slate-600">Arrendatario: {item.arrendatario?.nombre || 'Sin asignar'}</p>
+                  <p className="text-slate-500">Precio venta</p>
+                  <p className="font-medium text-slate-800">{formatCurrency(item.precioVenta)}</p>
                 </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-slate-500">Canon esperado</p>
+                  <p className="font-medium text-slate-800">{formatCurrency(item.precioArriendo || item.canon)}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div className="rounded-xl bg-slate-50 p-3">
                   <p className="text-slate-500 flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    Periodo
+                    Periodo arriendo
                   </p>
                   <p className="font-medium text-slate-800">{formatDate(item.arriendo?.fechaInicio)}</p>
                   <p className="text-slate-600">hasta {formatDate(item.arriendo?.fechaFinalizacion)}</p>
                 </div>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-slate-200 p-3">
-                <p className="text-sm font-semibold text-slate-700 mb-1">Arrendatario</p>
-                {item.arrendatario ? (
-                  <div className="text-sm text-slate-600 space-y-1">
-                    <p className="font-medium text-slate-800 flex items-center gap-1">
-                      <UserRound className="h-4 w-4" />
-                      {item.arrendatario.nombre}
-                    </p>
-                    <p>{item.arrendatario.correo || 'Sin correo'}</p>
-                    <p>{item.arrendatario.telefono || 'Sin telefono'}</p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500">Sin arrendatario asignado.</p>
-                )}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <p className="text-sm font-semibold text-slate-700 mb-1">Arrendatario</p>
+                  {item.arrendatario ? (
+                    <div className="text-sm text-slate-600 space-y-1">
+                      <p className="font-medium text-slate-800 flex items-center gap-1">
+                        <UserRound className="h-4 w-4" />
+                        {item.arrendatario.nombre}
+                      </p>
+                      <p>{item.arrendatario.correo || 'Sin correo'}</p>
+                      <p>{item.arrendatario.telefono || 'Sin telefono'}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">Sin arrendatario asignado.</p>
+                  )}
+                </div>
               </div>
             </article>
           ))}

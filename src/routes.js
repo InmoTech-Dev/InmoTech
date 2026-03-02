@@ -6,6 +6,7 @@ export const routes = {
     propertyDetails: '/inmuebles/:id',
     contact: '/contactanos',
     userAppointments: '/mis-citas',
+    userProperties: '/mis-inmuebles',
 
     //Dashboard
 

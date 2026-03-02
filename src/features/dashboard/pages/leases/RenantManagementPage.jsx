@@ -201,8 +201,8 @@ export function RenantManagementPage() {
         console.log("DBG leases sample", list[0]);
       }
       const rowsBase = list.map(mapApiArriendoToRow);
-      const rowsSincronizados = await syncEstadosConCobro(rowsBase);
-      setArriendos(rowsSincronizados);
+      // Ya no forzamos sincronizaciÃ³n automÃ¡tica de estado para respetar cambios manuales
+      setArriendos(rowsBase);
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage({
@@ -528,22 +528,7 @@ const renderDeleteModal = () => {
     return true;
   };
 
-  const computeEstadoConCobro = (rent) => {
-    const baseEstado = rent.estado || "Activo";
-    if (!isContractActiveToday(rent)) return baseEstado;
-
-    const fechaCobroDate = parseDateSafe(rent.fechaCobro);
-    if (!fechaCobroDate) return baseEstado;
-
-    const cobroDay = fechaCobroDate.getDate();
-    const today = new Date();
-    const todayDay = today.getDate();
-
-    if (todayDay >= cobroDay && baseEstado !== "Finalizado") {
-      return "Debe";
-    }
-    return baseEstado;
-  };
+  const computeEstadoConCobro = (rent) => rent.estado || "Activo";
 
   const getEstadoBadge = (estado) => {
     switch (estado) {
@@ -560,29 +545,6 @@ const renderDeleteModal = () => {
         return <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-700">{estado}</span>;
     }
   };
-
-  const syncEstadosConCobro = useCallback(async (rows) => {
-    const updates = rows.filter((r) => {
-      const estadoCalculado = computeEstadoConCobro(r);
-      return estadoCalculado && estadoCalculado !== r.estado && r.id;
-    });
-    if (!updates.length) return rows;
-
-    const updateMap = {};
-    await Promise.allSettled(
-      updates.map(async (r) => {
-        const nuevoEstado = computeEstadoConCobro(r);
-        updateMap[r.id] = nuevoEstado;
-        try {
-          await arriendoApiService.actualizarEstado(r.id, { estado: nuevoEstado, comentario: "Estado ajustado por fecha de cobro" });
-        } catch (error) {
-          console.error("No se pudo actualizar estado del arriendo", r.id, error?.message);
-        }
-      })
-    );
-
-    return rows.map((r) => (updateMap[r.id] ? { ...r, estado: updateMap[r.id] } : r));
-  }, []);
 
   // Calcular estadÃ­sticas
   const stats = {

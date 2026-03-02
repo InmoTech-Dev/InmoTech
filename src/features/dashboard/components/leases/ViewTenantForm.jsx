@@ -249,28 +249,7 @@ export default function ViewTenantModal({ tenant, onClose }) {
                         <Field label="Estado contrato" value={tenant?.estadoContrato || tenant?.estado || "-"} />
                       </div>
 
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <p className="text-[11px] font-semibold text-gray-500 inline-flex items-center gap-2">
-                            <FaShieldAlt className="text-gray-500" />
-                            Garantía
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                          <Field label="Tipo" value={tenant?.tipoGarantia || "-"} />
-                          <Field label="Valor" value={tenant?.valorGarantia ? formatMoneyCOP(tenant.valorGarantia) : "-"} />
-                        </div>
-
-                        {tenant?.descripcionGarantia && (
-                          <div className="mt-3">
-                            <p className="text-[11px] font-semibold text-gray-500 mb-1">Descripción</p>
-                            <p className="text-sm text-gray-900 whitespace-pre-line leading-5">
-                              {tenant.descripcionGarantia}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                      {/* Bloque de garantía retirado a solicitud del usuario */}
                     </>
                   ) : (
                     <div className="text-center py-8">
@@ -340,7 +319,17 @@ export default function ViewTenantModal({ tenant, onClose }) {
                       <div className="min-w-0 flex-1">
                         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                           <Field label="Nombre" value={derivedInmueble.nombre || "Inmueble"} className="col-span-2" />
-                          <Field label="Registro" value={derivedInmueble.registro || "-"} />
+                          <Field
+                            label="Registro"
+                            value={
+                              derivedInmueble.registro ||
+                              derivedInmueble.registro_inmobiliario ||
+                              derivedInmueble.registroInmobiliario ||
+                              tenant?.registroInmobiliario ||
+                              raw?.registro_inmobiliario ||
+                              "-"
+                            }
+                          />
                           <Field label="Categoría" value={derivedInmueble.categoria || "-"} />
                           <Field label="Dirección" value={derivedInmueble.direccion || "-"} className="col-span-2" />
                           <Field

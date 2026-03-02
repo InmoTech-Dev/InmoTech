@@ -1,6 +1,7 @@
 ﻿const { Reporte, Persona } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { normalizarFechaCita } = require('../utils/date');
 
 class ReportesService {
   /**
@@ -167,16 +168,25 @@ class ReportesService {
           INNER JOIN Estados_Cita ec ON c.id_estado_cita = ec.id_estado_cita
           INNER JOIN Servicios_Cita sc ON c.id_servicio = sc.id_servicio
           LEFT JOIN Personas ag ON c.id_agente_asignado = ag.id_persona
-          WHERE c.fecha_cita BETWEEN '${fecha_desde}' AND '${fecha_hasta}'
+          WHERE c.fecha_cita BETWEEN :fecha_desde AND :fecha_hasta
         `;
 
-        if (id_estado_cita) query += ` AND c.id_estado_cita = ${id_estado_cita}`;
-        if (id_servicio) query += ` AND c.id_servicio = ${id_servicio}`;
-        if (id_agente) query += ` AND c.id_agente_asignado = ${id_agente}`;
+        if (id_estado_cita) query += ` AND c.id_estado_cita = :id_estado_cita`;
+        if (id_servicio) query += ` AND c.id_servicio = :id_servicio`;
+        if (id_agente) query += ` AND c.id_agente_asignado = :id_agente`;
 
         query += ' ORDER BY c.fecha_cita, c.hora_inicio';
 
-        const [results] = await sequelize.query(query, { transaction: t });
+        const [results] = await sequelize.query(query, {
+          replacements: {
+            fecha_desde: normalizarFechaCita(fecha_desde),
+            fecha_hasta: normalizarFechaCita(fecha_hasta),
+            id_estado_cita,
+            id_servicio,
+            id_agente
+          },
+          transaction: t
+        });
 
         // Crear reporte
         const reporte = await Reporte.create({

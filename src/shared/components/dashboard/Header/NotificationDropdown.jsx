@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, Check, X, Clock, FileText as FileTextIcon, ChevronRight } from 'lucide-react';
+import { Eye, Check, X, Clock, FileText as FileTextIcon, ChevronRight, User, Home } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import citaApiService from '../../../services/citaApiService';
 
@@ -17,7 +17,8 @@ const NotificationDropdown = ({
   onRejectAppointment,
   onViewAppointment,
   onOpenReport,
-  triggerRef
+  triggerRef,
+  userRole
 }) => {
   const dropdownRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0, anchorX: 28, transformOrigin: '90% 0%' });
@@ -397,15 +398,31 @@ const NotificationDropdown = ({
                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-600 flex-shrink-0" />
                                 )}
                                 <h4 className="text-xs font-bold text-slate-800 truncate">
-                                  {report.titulo || report.titulo_reporte || report.tipoReporte || 'Sin título'}
+                                  {report.titulo || report.titulo_reporte || (report.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento') || report.tipoReporte || 'Sin título'}
                                 </h4>
                               </div>
                               <p className="text-[10px] text-slate-500 font-medium mt-0.5">
                                 {formatAppointmentDate(report.fecha_creacion || report.fecha || report.createdAt)}
                               </p>
                               <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                                {report.descripcion || report.seguimiento_general || 'Sin descripción disponible'}
+                                {report.descripcion || report.descripcion_reporte || report.seguimiento_general || 'Sin descripción disponible'}
                               </p>
+
+                              {/* Admin/Super Admin extra info */}
+                              {(userRole === 'Super Administrador' || userRole === 'Administrador') && (
+                                <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                                  <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
+                                    <User size={10} className="text-blue-500 flex-shrink-0" />
+                                    <span className="font-medium whitespace-nowrap">Vía:</span>
+                                    <span className="text-slate-700 truncate">{report.reporta_nombre || 'Desconocido'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
+                                    <Home size={10} className="text-blue-500 flex-shrink-0" />
+                                    <span className="font-medium whitespace-nowrap">Inmueble:</span>
+                                    <span className="text-slate-700 truncate">{report.inmueble_direccion || report.direccion || 'Referencia: ' + (report.inmueble_referencia || '')}</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             
                             <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 transition-colors" />

@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { Op } = require('sequelize');
-const { Invitacion, Persona, Acceso, Rol, PersonasRol } = require('../models');
+const { Invitacion, Persona, Acceso, Rol, PersonasRol, sequelize } = require('../models');
 const bcryptUtils = require('../utils/bcrypt');
 const logger = require('../utils/logger');
 const emailService = require('./email.service');
@@ -222,69 +222,86 @@ class InvitacionService {
   }
 
   async aceptar({ token, codigo_6d, password, ip, userAgent }) {
-    const token_hash = this.hashToken(token);
-    const invitacion = await Invitacion.findOne({ where: { token_hash } });
-    if (!invitacion) throw new Error('Invitacion no encontrada o token invalido');
-    if (invitacion.usado_en) throw new Error('Invitacion ya utilizada');
-    if (new Date() > invitacion.expira_en) throw new Error('Invitacion expirada');
-    if (invitacion.intentos >= INVITE_MAX_INTENTOS) throw new Error('Invitacion bloqueada por intentos fallidos');
-
-    if (invitacion.codigo_6d !== codigo_6d) {
-      await Invitacion.update(
-        { intentos: invitacion.intentos + 1 },
-        { where: { id_invitacion: invitacion.id_invitacion } }
-      );
-      throw new Error('Codigo de verificacion incorrecto');
-    }
-
-    const hashedPassword = await bcryptUtils.hashPassword(password);
-
-    const existing = await Acceso.findOne({ where: { id_persona: invitacion.id_persona } });
-    if (existing) {
-      await existing.update({
-        contrasena: hashedPassword,
-        ultimo_cambio_password: new Date(),
-        password_change_required: false
+    const result = await sequelize.transaction(async (t) => {
+      const token_hash = this.hashToken(token);
+      const invitacion = await Invitacion.findOne({ 
+        where: { token_hash },
+        transaction: t 
       });
-    } else {
-      await Acceso.create({
-        id_persona: invitacion.id_persona,
-        contrasena: hashedPassword,
-        ultimo_cambio_password: new Date(),
-        password_change_required: false
-      });
-    }
 
-    await Persona.update(
-      { tiene_cuenta: true, correo_verificado: true },
-      { where: { id_persona: invitacion.id_persona } }
-    );
+      if (!invitacion) throw new Error('Invitacion no encontrada o token invalido');
+      if (invitacion.usado_en) throw new Error('Invitacion ya utilizada');
+      if (new Date() > invitacion.expira_en) throw new Error('Invitacion expirada');
+      if (invitacion.intentos >= INVITE_MAX_INTENTOS) throw new Error('Invitacion bloqueada por intentos fallidos');
 
-    // Asegurar rol Usuario asignado.
-    const rolUsuario = await Rol.findOne({ where: { nombre_rol: 'Usuario' } });
-    if (rolUsuario) {
-      const yaTieneRol = await PersonasRol.findOne({
-        where: { id_persona: invitacion.id_persona, id_rol: rolUsuario.id_rol }
-      });
-      if (!yaTieneRol) {
-        await PersonasRol.create({
-          id_persona: invitacion.id_persona,
-          id_rol: rolUsuario.id_rol
-        });
+      if (invitacion.codigo_6d !== codigo_6d) {
+        await Invitacion.update(
+          { intentos: invitacion.intentos + 1 },
+          { where: { id_invitacion: invitacion.id_invitacion }, transaction: t }
+        );
+        throw new Error('Codigo de verificacion incorrecto');
       }
-    }
 
-    await Invitacion.update(
-      {
-        usado_en: new Date(),
-        intentos: invitacion.intentos,
-        ip_uso: ip || null,
-        ua_uso: userAgent || null
-      },
-      { where: { id_invitacion: invitacion.id_invitacion } }
-    );
+      const hashedPassword = await bcryptUtils.hashPassword(password);
 
-    return { id_persona: invitacion.id_persona };
+      const existing = await Acceso.findOne({ 
+        where: { id_persona: invitacion.id_persona },
+        transaction: t
+      });
+
+      if (existing) {
+        await existing.update({
+          contrasena: hashedPassword,
+          ultimo_cambio_password: new Date(),
+          password_change_required: false
+        }, { transaction: t });
+      } else {
+        await Acceso.create({
+          id_persona: invitacion.id_persona,
+          contrasena: hashedPassword,
+          ultimo_cambio_password: new Date(),
+          password_change_required: false
+        }, { transaction: t });
+      }
+
+      await Persona.update(
+        { tiene_cuenta: true, correo_verificado: true },
+        { where: { id_persona: invitacion.id_persona }, transaction: t }
+      );
+
+      // Asegurar rol Usuario asignado.
+      const rolUsuario = await Rol.findOne({ 
+        where: { nombre_rol: 'Usuario' },
+        transaction: t
+      });
+
+      if (rolUsuario) {
+        const yaTieneRol = await PersonasRol.findOne({
+          where: { id_persona: invitacion.id_persona, id_rol: rolUsuario.id_rol },
+          transaction: t
+        });
+        if (!yaTieneRol) {
+          await PersonasRol.create({
+            id_persona: invitacion.id_persona,
+            id_rol: rolUsuario.id_rol
+          }, { transaction: t });
+        }
+      }
+
+      await Invitacion.update(
+        {
+          usado_en: new Date(),
+          intentos: invitacion.intentos,
+          ip_uso: ip || null,
+          ua_uso: userAgent || null
+        },
+        { where: { id_invitacion: invitacion.id_invitacion }, transaction: t }
+      );
+
+      return { id_persona: invitacion.id_persona };
+    });
+
+    return result;
   }
 }
 

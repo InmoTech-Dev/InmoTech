@@ -345,8 +345,13 @@ class EmailService {
           ctaLabel: 'Agregar en Google Calendar',
           nombre: nombreAgente,
           mensajeExtra: '',
-          mostrarDatosCliente: true
-        })
+          mostrarDatosCliente: true,
+          esAdmin: true,
+          idCita: ctx.idCita,
+          idInmueble: ctx.idInmueble,
+          registroInmobiliario: ctx.registroInmobiliario
+        }),
+        attachments: this._getLogoAttachment()
       };
 
       const info = await this.transporter.sendMail(mailOptions);
@@ -354,6 +359,88 @@ class EmailService {
       return { success: true, messageId: info.messageId };
     } catch (error) {
       logger.error('[EMAIL][CITA] Error enviando correo de confirmacion para agente:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Envia un correo de auditoría al administrativo que realizó una acción
+   * @param {Object} params - Parámetros: cita, administrador (ejecutor), accion
+   */
+  async enviarEmailAuditoriaAdministrativo({ cita, administrador, accion, timezone } = {}) {
+    try {
+      const ctx = this._buildCitaContexto(cita, { timezone });
+      const correoAdmin = administrador?.correo || administrador?.email || null;
+      const nombreAdmin = administrador
+        ? `${administrador.nombre_completo || ''} ${administrador.apellido_completo || ''}`.trim()
+        : 'Administrativo';
+
+      if (!correoAdmin) {
+        logger.warn('[EMAIL][AUDIT] Auditoria omitida: administrativo sin correo');
+        return { success: false, skipped: true, reason: 'sin_correo' };
+      }
+
+      const configAccion = {
+        'CREACION': {
+          subject: 'Confirmación: Has creado una nueva cita',
+          titulo: 'Cita creada exitosamente',
+          intro: `Has registrado correctamente una nueva cita para ${ctx.clienteNombreCompleto} para el día ${ctx.fechaHumana}.`,
+          estado: 'Solicitada'
+        },
+        'CONFIRMACION': {
+          subject: 'Confirmación: Has aprobado una cita',
+          titulo: 'Cita aprobada exitosamente',
+          intro: `Acabas de confirmar la cita de ${ctx.clienteNombreCompleto} programada para ${ctx.fechaHumana}.`,
+          estado: 'Confirmada'
+        },
+        'CANCELACION': {
+          subject: 'Confirmación: Has cancelado una cita',
+          titulo: 'Cita cancelada correctamente',
+          intro: `Has realizado la cancelación de la cita de ${ctx.clienteNombreCompleto} que estaba pactada para ${ctx.fechaHumana}.`,
+          estado: 'Cancelada'
+        },
+        'ASIGNACION': {
+          subject: 'Confirmación: Has asignado un agente',
+          titulo: 'Asignación de agente exitosa',
+          intro: `Has asignado correctamente a ${ctx.agenteNombre || 'un agente'} para atender la cita de ${ctx.clienteNombreCompleto}.`,
+          estado: ctx.estadoTexto
+        },
+        'REAGENDAMIENTO': {
+          subject: 'Confirmación: Has reagendado una cita',
+          titulo: 'Cita reagendada exitosamente',
+          intro: `Has modificado el horario de la cita de ${ctx.clienteNombreCompleto} para el nuevo bloque de ${ctx.fechaHumana}.`,
+          estado: 'Reagendada'
+        }
+      };
+
+      const config = configAccion[accion] || configAccion.CREACION;
+
+      const mailOptions = {
+        from: `"Matriz Inmobiliaria - Auditoría" <${process.env.EMAIL_FROM}>`,
+        to: correoAdmin,
+        subject: config.subject,
+        html: this.generarTemplateCitaSolicitada({
+          ...ctx,
+          estado: config.estado,
+          titulo: config.titulo,
+          intro: config.intro,
+          nombre: nombreAdmin,
+          mensajeExtra: 'Este es un correo automático de auditoría para tu registro personal.',
+          mostrarDatosCliente: true,
+          esAdmin: true,
+          idCita: ctx.idCita,
+          idInmueble: ctx.idInmueble,
+          registroInmobiliario: ctx.registroInmobiliario,
+          note: 'Puedes revisar los detalles completos en tu panel administrativo.'
+        }),
+        attachments: this._getLogoAttachment()
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      logger.info(`[EMAIL][AUDIT] Auditoria enviada a ${correoAdmin} (${accion})`, { messageId: info.messageId });
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      logger.error(`[EMAIL][AUDIT] Error enviando auditoria (${accion}):`, error);
       throw error;
     }
   }
@@ -498,6 +585,9 @@ class EmailService {
       observaciones: cita?.observaciones,
       calendarLink,
       timezone: zona,
+      idCita: cita?.id_cita || cita?.id || null,
+      idInmueble: cita?.id_inmueble || (cita?.inmueble?.id_inmueble) || null,
+      registroInmobiliario: cita?.inmueble?.registro_inmobiliario || null,
       agenteNombre,
       agenteDocumento,
       agenteCorreo,
@@ -640,7 +730,11 @@ class EmailService {
     clienteTipoDocumento,
     clienteNumeroDocumento,
     mostrarDatosCliente = false,
-    mensajeExtra = ''
+    mensajeExtra = '',
+    esAdmin = false,
+    idCita = null,
+    idInmueble = null,
+    registroInmobiliario = null
   }) {
     const estadoKey = (estado || 'solicitada').toLowerCase();
     
@@ -815,11 +909,37 @@ class EmailService {
             </div>
             
             <div class="content">
-              ${estadoKey === 'solicitada' ? `
+              ${mensajeExtra ? `<div style="background-color: #F8FAFC; border-left: 4px solid #3B82F6; padding: 15px; margin-bottom: 25px; font-size: 14px; color: #475569; font-style: italic;">${mensajeExtra}</div>` : ''}
+
+              ${esAdmin ? `
+              <div class="info-card" style="border: 1px dashed #3B82F6; background-color: #F0F9FF;">
+                <div class="card-title" style="color: #0369A1;">📋 Referencias Administrativas</div>
+                <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                  <div class="grid-item">
+                    <div class="detail-label" style="font-size: 10px;">ID Cita</div>
+                    <div class="detail-value" style="font-size: 14px; font-family: monospace;">#${idCita || 'N/A'}</div>
+                  </div>
+                  <div class="grid-item">
+                    <div class="detail-label" style="font-size: 10px;">ID Inmueble</div>
+                    <div class="detail-value" style="font-size: 14px; font-family: monospace;">#${idInmueble || 'N/A'}</div>
+                  </div>
+                  <div class="grid-item">
+                    <div class="detail-label" style="font-size: 10px;">Registro Inmobiliario</div>
+                    <div class="detail-value" style="font-size: 14px;">${registroInmobiliario || 'N/A'}</div>
+                  </div>
+                  <div class="grid-item">
+                    <div class="detail-label" style="font-size: 10px;">Documento Cliente</div>
+                    <div class="detail-value" style="font-size: 14px;">${clienteTipoDocumento || ''} ${clienteNumeroDocumento || 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+              ` : ''}
+
+              ${estadoKey === 'solicitada' && !mensajeExtra && !esAdmin ? `
               <div class="clarification-box">
-                <div class="clarification-icon">⚠️</div>
+                <div class="clarification-icon">âš ï¸ </div>
                 <div class="clarification-text">
-                  <strong>AVISO IMPORTANTE:</strong> Tu cita se encuentra actualmente en estado <strong>SOLICITADA</strong>. Esto significa que recibimos tu petición, pero aún <strong>NO ha sido aprobada oficialmente</strong>. <br><br> Por favor, espera un segundo correo de confirmación antes de dirigirte al inmueble. No asistir sin la aprobación definitiva.
+                  <strong>AVISO IMPORTANTE:</strong> Tu cita se encuentra actualmente en estado <strong>SOLICITADA</strong>. Esto significa que recibimos tu peticiÃ³n, pero aÃºn <strong>NO ha sido aprobada oficialmente</strong>. <br><br> Por favor, espera un segundo correo de confirmaciÃ³n antes de dirigirte al inmueble. No asistir sin la aprobaciÃ³n definitiva.
                 </div>
               </div>
               ` : ''}
@@ -856,7 +976,7 @@ class EmailService {
                 <div class="detail-row">
                   <div class="detail-icon">💬</div>
                   <div class="detail-content">
-                    <div class="detail-label">Notas del cliente</div>
+                    <div class="detail-label">Notas/Observaciones</div>
                     <div class="detail-value" style="font-weight: 400; font-size: 14px;">${observaciones}</div>
                   </div>
                 </div>
@@ -873,6 +993,7 @@ class EmailService {
                 ` : ''}
               </div>
 
+              ${!mensajeExtra && !esAdmin ? `
               <div class="instruction-banner">
                 <div class="instruction-title">🚀 Próximos pasos</div>
                 <ul class="instruction-list">
@@ -882,6 +1003,19 @@ class EmailService {
                   <li class="instruction-item"><span class="dot">●</span> Recomendamos llegar 5 minutos antes para aprovechar al máximo el tiempo.</li>
                 </ul>
               </div>
+              ` : ''}
+
+              ${esAdmin ? `
+              <div class="instruction-banner" style="background-color: #F8FAFC; border-color: #E2E8F0;">
+                <div class="instruction-title" style="color: #475569;">⚙️ Tips de Gestión Administrativa</div>
+                <ul class="instruction-list">
+                  <li class="instruction-item" style="color: #64748B;"><span class="dot">●</span> <strong>Disponibilidad:</strong> Verifica que las llaves estén disponibles en oficina o con el conserje.</li>
+                  <li class="instruction-item" style="color: #64748B;"><span class="dot">●</span> <strong>Coordinación:</strong> Asegúrate de que el agente tenga el número del cliente guardado.</li>
+                  <li class="instruction-item" style="color: #64748B;"><span class="dot">●</span> <strong>Estado:</strong> Confirma que el inmueble se encuentra aseado y listo para ser mostrado.</li>
+                  <li class="instruction-item" style="color: #64748B;"><span class="dot">●</span> <strong>Puntualidad:</strong> Recomienda al agente llegar 10 minutos antes para ventilar el inmueble.</li>
+                </ul>
+              </div>
+              ` : ''}
 
               ${mostrarDatosCliente ? `
               <div class="info-card" style="margin-top: -15px;">
@@ -894,6 +1028,10 @@ class EmailService {
                   <div class="grid-item">
                     <div class="label">Teléfono</div>
                     <div class="value" style="font-size: 15px;">${clienteTelefono || 'N/A'}</div>
+                  </div>
+                   <div class="grid-item">
+                    <div class="label">Correo Electrónico</div>
+                    <div class="value" style="font-size: 15px;">${clienteCorreo || 'N/A'}</div>
                   </div>
                 </div>
               </div>
@@ -1017,6 +1155,132 @@ class EmailService {
             </div>
             <div class="footer">
               <p>© 2026 Matriz Inmobiliaria. Si no reconoces esta solicitud, puedes ignorar este correo.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+  async enviarEmailContacto(contactData) {
+    try {
+      const { email, name, phone, subject, message, targetEmails } = contactData;
+
+      const mailOptions = {
+        from: `"Matriz Inmobiliaria - Contacto" <${process.env.EMAIL_FROM}>`,
+        to: targetEmails.join(','),
+        subject: `Nuevo mensaje de contacto: ${subject}`,
+        html: this.generarTemplateContacto({ name, email, phone, subject, message }),
+        attachments: this._getLogoAttachment()
+      };
+
+      const { info, intentos_envio } = await this._enviarConReintentos(mailOptions, {
+        logContext: 'CONTACTO',
+        metadata: { from_email: email, subject }
+      });
+
+      logger.info(`Email de contacto enviado exitosamente de ${email} a ${targetEmails.length} administradores`, {
+        messageId: info.messageId,
+        intentos_envio
+      });
+
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      logger.error('Error enviando email de contacto:', error);
+      throw error;
+    }
+  }
+
+  generarTemplateContacto({ name, email, phone, subject, message }) {
+    return `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Nuevo Mensaje de Contacto</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+        <style>
+          body { 
+            margin: 0; padding: 0; background-color: #F8FAFC; 
+            font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            color: #1E293B; -webkit-font-smoothing: antialiased;
+          }
+          .wrapper { width: 100%; padding: 40px 0; }
+          .container { 
+            max-width: 600px; margin: 0 auto; background-color: #ffffff; 
+            border-radius: 24px; overflow: hidden; 
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.1); 
+          }
+          .header { 
+            padding: 40px; background: linear-gradient(135deg, #0F172A 0%, #172554 100%); 
+            text-align: center; color: #FFFFFF;
+          }
+          .logo { max-height: 120px; width: auto; margin-bottom: 20px; }
+          .headline { font-size: 28px; font-weight: 800; margin: 0; line-height: 1.2; letter-spacing: -0.02em; }
+          .content { padding: 40px; }
+          .section-title { 
+            font-size: 14px; font-weight: 700; color: #64748B; 
+            text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px;
+            padding-bottom: 8px; border-bottom: 1px solid #E2E8F0;
+          }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+          .info-item { background-color: #F1F5F9; padding: 16px; border-radius: 12px; }
+          .label { font-size: 11px; color: #64748B; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+          .value { font-size: 15px; color: #0F172A; font-weight: 700; word-break: break-all; }
+          .message-box { 
+            background-color: #F8FAFC; padding: 24px; border-radius: 16px; 
+            border-left: 4px solid #3B82F6; margin-bottom: 30px;
+          }
+          .message-text { font-size: 16px; line-height: 1.6; color: #334155; white-space: pre-wrap; }
+          .footer {
+            padding: 30px; background-color: #F1F5F9; text-align: center; 
+            font-size: 13px; color: #64748B;
+          }
+          @media (max-width: 480px) {
+            .info-grid { grid-template-columns: 1fr; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          <div class="container">
+            <div class="header">
+              <img class="logo" src="cid:logo" alt="Matriz Inmobiliaria" />
+              <h1 class="headline">Nuevo Mensaje de Contacto</h1>
+            </div>
+            <div class="content">
+              <div class="section-title">Información del Remitente</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <div class="label">Nombre</div>
+                  <div class="value">${name}</div>
+                </div>
+                <div class="info-item">
+                  <div class="label">Correo Electrónico</div>
+                  <div class="value">${email}</div>
+                </div>
+                <div class="info-item">
+                  <div class="label">Teléfono</div>
+                  <div class="value">${phone || 'No proporcionado'}</div>
+                </div>
+                <div class="info-item">
+                  <div class="label">Asunto</div>
+                  <div class="value">${subject}</div>
+                </div>
+              </div>
+
+              <div class="section-title">Mensaje</div>
+              <div class="message-box">
+                <div class="message-text">${message}</div>
+              </div>
+
+              <div style="text-align: center; color: #94A3B8; font-size: 12px;">
+                Este mensaje fue enviado desde el formulario de contacto del sitio web.
+              </div>
+            </div>
+            <div class="footer">
+              <p>Matriz Inmobiliaria © 2026. Panel Administrativo.</p>
             </div>
           </div>
         </div>

@@ -137,7 +137,7 @@ export default function ServicesPage() {
                       asChild
                       className="bg-gradient-to-r from-[#00457B] to-[#1e40af] hover:from-[#0a3d68] hover:to-[#1e3a8a] text-white shadow-lg hover:shadow-xl transition-all duration-300"
                     >
-                      <Link to="/contacto">Solicitar</Link>
+                      <Link to="/contáctanos">Solicitar</Link>
                     </Button>
                   </div>
                 </CardContent>

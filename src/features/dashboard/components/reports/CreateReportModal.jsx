@@ -31,11 +31,13 @@ import {
   FileText,
   ClipboardList as ClipboardListIcon,
   Building,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '../../../../shared/contexts/AuthContext.jsx';
 import administrativosApiService from '../../../../shared/services/administrativosApiService';
 import rolesApiService from '../../../../shared/services/rolesApiService';
+import { ImageViewer } from '../../../../shared/components/ui/ImageViewer';
 
 const CreateReportModal = ({
   isOpen,
@@ -219,6 +221,12 @@ const CreateReportModal = ({
     variant: 'warning'
   });
 
+  // Estado para el visualizador de imágenes
+  const [viewerConfig, setViewerConfig] = useState({
+    isOpen: false,
+    currentIndex: 0
+  });
+
   // Referencias para los inputs de archivos
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -263,8 +271,19 @@ const CreateReportModal = ({
           })),
         }));
         setRubros(normalizedRubros);
-        setImagenes(initialData.imagenes || []);
-        setArchivos(initialData.archivos || []);
+
+        // Normalizar imágenes y archivos para asegurar que tengan un ID único
+        const normalizedImagenes = (initialData.imagenes || []).map((img, idx) => ({
+          ...img,
+          id: img.id || img.id_imagen || `img-${idx}-${Date.now()}`
+        }));
+        setImagenes(normalizedImagenes);
+
+        const normalizedArchivos = (initialData.archivos || []).map((file, idx) => ({
+          ...file,
+          id: file.id || file.id_archivo || `file-${idx}-${Date.now()}`
+        }));
+        setArchivos(normalizedArchivos);
         // Si hay una referencia inicial, buscar la propiedad y pre-seleccionarla para activar la UI de "Auto"
         if (initialData.referencia) {
           setSearchTerm(initialData.referencia);
@@ -494,9 +513,33 @@ const CreateReportModal = ({
     });
   };
 
-  // Eliminar imagen
-  const eliminarImagen = (id) => {
-    setImagenes(prev => prev.filter(img => img.id !== id));
+  // Eliminar imagen con confirmación
+  const eliminarImagen = (imgId) => {
+    if (!imgId) return; // Seguridad adicional
+
+    setConfirmConfig({
+      isOpen: true,
+      title: '¿Eliminar imagen?',
+      message: '¿Estás seguro de que deseas eliminar esta imagen de evidencia? Esta acción no se puede deshacer.',
+      variant: 'danger',
+      onConfirm: () => {
+        setImagenes(prev => prev.filter(img => img.id !== imgId));
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        toast({
+          title: 'Imagen eliminada',
+          description: 'La imagen se eliminó correctamente.',
+          variant: 'success',
+        });
+      }
+    });
+  };
+
+  // Abrir visualizador de imágenes
+  const openViewer = (index) => {
+    setViewerConfig({
+      isOpen: true,
+      currentIndex: index
+    });
   };
 
   // Eliminar archivo
@@ -1123,23 +1166,31 @@ const CreateReportModal = ({
                       </div>
 
                       {imagenes.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          {imagenes.map((imagen, index) => (
-                            <div key={imagen.id ?? index} className="relative group">
-                              <img
-                                src={imagen.url}
-                                alt={`Imagen ${index + 1}`}
-                                className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => eliminarImagen(imagen.id)}
-                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
+                        <div className="max-h-72 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                          <div className="grid grid-cols-2 gap-3">
+                            {imagenes.map((imagen, index) => (
+                              <div key={imagen.id ?? index} className="relative group cursor-pointer" onClick={() => openViewer(index)}>
+                                <img
+                                  src={imagen.url}
+                                  alt={`Imagen ${index + 1}`}
+                                  className="w-full h-24 object-cover rounded-lg border border-gray-200 shadow-sm transition-transform group-hover:scale-[1.02]"
+                                />
+                                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                  <Eye className="w-5 h-5 text-white drop-shadow-md" />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    eliminarImagen(imagen.id);
+                                  }}
+                                  className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-md z-10"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
@@ -1180,24 +1231,26 @@ const CreateReportModal = ({
                       </div>
 
                       {archivos.length > 0 ? (
-                        <div className="space-y-2">
-                          {archivos.map((archivo, index) => (
-                            <div key={archivo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                              <div className="flex items-center space-x-3">
-                                <FileIcon className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm font-medium text-gray-700 truncate">
-                                  {archivo.name}
-                                </span>
+                        <div className="max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                          <div className="space-y-2">
+                            {archivos.map((archivo, index) => (
+                              <div key={archivo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                                <div className="flex items-center space-x-3 overflow-hidden">
+                                  <FileIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                                  <span className="text-sm font-medium text-gray-700 truncate">
+                                    {archivo.name}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => eliminarArchivo(archivo.id)}
+                                  className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => eliminarArchivo(archivo.id)}
-                                className="text-red-500 hover:text-red-700 p-1"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
@@ -1647,6 +1700,14 @@ const CreateReportModal = ({
             variant={confirmConfig.variant}
             confirmText="Sí, continuar"
             cancelText="Cancelar"
+          />
+
+          <ImageViewer
+            isOpen={viewerConfig.isOpen}
+            onClose={() => setViewerConfig(prev => ({ ...prev, isOpen: false }))}
+            images={imagenes}
+            currentIndex={viewerConfig.currentIndex}
+            onIndexChange={(index) => setViewerConfig(prev => ({ ...prev, currentIndex: index }))}
           />
         </div >
       )}

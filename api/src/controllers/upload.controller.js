@@ -13,7 +13,8 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
 const DEFAULT_ALLOWED_FOLDERS = [
   'inmotech/inmuebles',
   'inmotech/perfiles',
-  'inmotech/reportes'
+  'inmotech/reportes',
+  'inmotech/comprobantes', // habilitado para recibos de pago de arriendos
 ];
 const ALLOWED_UPLOAD_FOLDERS = (
   process.env.UPLOAD_ALLOWED_FOLDERS

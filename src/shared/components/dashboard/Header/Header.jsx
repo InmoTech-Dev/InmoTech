@@ -538,6 +538,7 @@ const Header = () => {
             onViewAppointment={handleViewAppointment}
             onOpenReport={handleOpenReport}
             triggerRef={notificationButtonRef}
+            userRole={getUserRole()}
           />
         </div>
 

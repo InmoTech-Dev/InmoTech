@@ -338,6 +338,7 @@ const ReportsContent = () => {
       const payload = {
         id_inmueble: Number(reportData.id_inmueble),
         tipo_reporte: reportData.tipoReporte?.trim(),
+        titulo: reportData.titulo || reportData.tipoReporte?.trim() || 'Nuevo Reporte',
         estado: normalizeEstado(reportData.estado),
         descripcion: reportData.descripcion?.trim() || 'Sin descripción',
         id_persona_reporta: personaId,
@@ -458,6 +459,7 @@ const ReportsContent = () => {
     // 1) Actualizar campos del reporte (sin borrar nada)
     const patchPayload = {
       estado: normalizeEstado(reportData.estado),
+      titulo: reportData.titulo || reportData.titulo_reporte || reportData.tipoReporte,
       descripcion: (reportData.descripcion || '').trim(),
       seguimiento_general: (reportData.seguimientoGeneral || '').trim(),
       id_persona_reporta: reportData.id_persona_reporta

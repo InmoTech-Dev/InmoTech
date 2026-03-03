@@ -257,6 +257,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
     }
   }, [formData.fecha, isOpen]);
 
+
   // Función para validar nombre completo (igual que dashboard)
   // ✅ Validar nombres
   const validateNombres = (nombres) => {
@@ -366,24 +367,11 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
     if (!hora) return "La hora es requerida";
 
     // Lista de horas válidas según el horario de atención:
-    // Lunes - Sábado: 8:00 am - 1:00 pm y 2:00 pm - 5:30 pm
+    // Lunes - Sábado: 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm
     const validHours = [
-      "08:00 am",
-      "08:30 am",
-      "09:00 am",
-      "09:30 am",
-      "10:00 am",
-      "10:30 am",
-      "11:00 am",
-      "11:30 am",
-      "02:00 pm",
-      "02:30 pm",
-      "03:00 pm",
-      "03:30 pm",
-      "04:00 pm",
-      "04:30 pm",
-      "05:00 pm",
-      "05:30 pm",
+      "08:00 am", "08:30 am", "09:00 am", "09:30 am", "10:00 am", "10:30 am",
+      "11:00 am", "11:30 am", "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm",
+      "03:00 pm", "03:30 pm", "04:00 pm", "04:30 pm"
     ];
 
     if (!availableHours.includes(hora)) {

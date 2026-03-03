@@ -933,9 +933,16 @@ class CitaController {
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         }
 
+        // Función interna rápida para normalizar hora (HH:mm)
+        const formatTimeShort = (t) => {
+          if (!t) return t;
+          if (typeof t === 'string' && t.includes(':')) return t.substring(0, 5);
+          return t;
+        };
+
         // Extraer horarios ocupados
         const horariosOcupados = new Set(
-          citasExistentes.map(cita => cita.hora_inicio)
+          citasExistentes.map(cita => formatTimeShort(cita.hora_inicio))
         );
 
         // Filtrar horarios disponibles (no ocupados)

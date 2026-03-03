@@ -926,9 +926,12 @@ class CitaController {
         for (let hora = 8; hora <= 16; hora++) {
           if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+          if (hora === 12 || hora === 16) {
+            todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+            continue; // 12:30 y 16:30 son los últimos antes de los cierres
+          }
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         }
-        todosHorarios.push('17:00'); // Última hora permitida
 
         // Extraer horarios ocupados
         const horariosOcupados = new Set(
@@ -953,12 +956,21 @@ class CitaController {
         logger.info("├░┼©ÔÇáÔÇ£ Otro servicio: Sin restricciones de bloqueo para reagendamiento");
 
         const defaultHorarios = [];
-        for (let hora = 8; hora <= 16; hora++) {
-          if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
+        // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+        for (let hora = 8; hora <= 12; hora++) {
+          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+          if (hora !== 12) {
+            defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+          } else {
+            defaultHorarios.push(`12:30`);
+          }
+        }
+        // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+        for (let hora = 14; hora <= 16; hora++) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         }
-        defaultHorarios.push('17:00'); // Última hora permitida
+        // Nota: El bucle ya genera hasta 16:30.
 
         return res.status(200).json({
           success: true,
@@ -1098,12 +1110,21 @@ class CitaController {
 
       // Generar todos los horarios (8am - 5pm)
       const todosHorarios = [];
-      for (let hora = 8; hora <= 16; hora++) {
-        if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
+      // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+      for (let hora = 8; hora <= 12; hora++) {
+        todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+        if (hora !== 12) {
+          todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+        } else {
+          todosHorarios.push(`12:30`);
+        }
+      }
+      // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+      for (let hora = 14; hora <= 16; hora++) {
         todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
         todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
       }
-      todosHorarios.push('17:00'); // Última hora permitida
+      // Nota: El bucle ya genera hasta 16:30.
 
       // Solo aplicar restricciones para "Visita a Propiedad" (ID 1)
       if (idServicioParsed === 1) {

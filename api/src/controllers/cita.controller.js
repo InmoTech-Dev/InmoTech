@@ -923,12 +923,12 @@ class CitaController {
 
         // Generar todos los horarios disponibles inicialmente
         const todosHorarios = [];
-        for (let hora = 8; hora <= 17; hora++) {
+        for (let hora = 8; hora <= 16; hora++) {
+          if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora < 17) {
-            todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-          }
+          todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         }
+        todosHorarios.push('17:00'); // Última hora permitida
 
         // Extraer horarios ocupados
         const horariosOcupados = new Set(
@@ -953,12 +953,12 @@ class CitaController {
         logger.info("├░┼©ÔÇáÔÇ£ Otro servicio: Sin restricciones de bloqueo para reagendamiento");
 
         const defaultHorarios = [];
-        for (let hora = 8; hora <= 17; hora++) {
+        for (let hora = 8; hora <= 16; hora++) {
+          if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora < 17) {
-            defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-          }
+          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         }
+        defaultHorarios.push('17:00'); // Última hora permitida
 
         return res.status(200).json({
           success: true,
@@ -1098,12 +1098,12 @@ class CitaController {
 
       // Generar todos los horarios (8am - 5pm)
       const todosHorarios = [];
-      for (let hora = 8; hora <= 17; hora++) {
+      for (let hora = 8; hora <= 16; hora++) {
+        if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
         todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
-          todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
+        todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
       }
+      todosHorarios.push('17:00'); // Última hora permitida
 
       // Solo aplicar restricciones para "Visita a Propiedad" (ID 1)
       if (idServicioParsed === 1) {

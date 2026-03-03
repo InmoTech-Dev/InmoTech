@@ -217,8 +217,8 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
     const horaDecimal = horas + (minutos / 60);
 
     // Horario laboral: 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm
-    const isMorning = horaDecimal >= 8 && horaDecimal < 13;
-    const isAfternoon = horaDecimal >= 14 && horaDecimal < 17;
+    const isMorning = horaDecimal >= 8 && horaDecimal <= 13;
+    const isAfternoon = horaDecimal >= 14 && horaDecimal <= 17;
 
     if (!isMorning && !isAfternoon) {
       return 'Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm';

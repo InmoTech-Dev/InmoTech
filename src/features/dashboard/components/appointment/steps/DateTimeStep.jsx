@@ -148,7 +148,11 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
         // Mañana: 8:00 am - 1:00 pm (último inicio 12:30)
         for (let hora = 8; hora <= 12; hora++) {
           defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-          defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
+          if (hora !== 12) {
+            defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
+          } else {
+            defaultHours.push(`12:30`);
+          }
         }
         // Tarde: 2:00 pm - 5:00 pm (último inicio 16:30)
         for (let hora = 14; hora <= 16; hora++) {

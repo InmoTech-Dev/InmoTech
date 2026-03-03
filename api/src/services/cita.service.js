@@ -442,8 +442,8 @@ class CitaService {
           {
             where: {
               id_inmueble: cita.id_inmueble,
-              fecha_cita: cita.fecha_cita,
-              hora_inicio: cita.hora_inicio,
+              fecha_cita: normalizarFechaCita(cita.fecha_cita),
+              hora_inicio: normalizarHoraExacta(cita.hora_inicio),
               id_estado_cita: 1, // Solicitada
               id_cita: { [Op.ne]: idCita }
             },

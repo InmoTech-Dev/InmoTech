@@ -74,10 +74,10 @@ const RolesContent = () => {
       setRoles(rolesSorted);
     } catch (err) {
       console.error('Error al cargar roles:', err);
-      setError('Error al cargar los roles desde el servidor.');
+      setError(err.message || 'Error al cargar los roles desde el servidor.');
       toast({
         title: "Error al cargar roles",
-        description: "No se pudieron obtener los roles desde el servidor.",
+        description: err.message || "No se pudieron obtener los roles desde el servidor.",
         variant: "destructive",
       });
       setRoles([]);
@@ -87,7 +87,7 @@ const RolesContent = () => {
   };
 
 
-  
+
   // Efecto para filtrar roles
   useEffect(() => {
     if (roles.length === 0) {
@@ -124,9 +124,9 @@ const RolesContent = () => {
       setRoles([]);
     }
   }, [isAuthenticated, authLoading, isSuperAdmin, isAdmin]);
-  
 
-  
+
+
   const handleCrearRol = async (nuevoRol) => {
     if (!canManageRoles) {
       toast({
@@ -168,7 +168,7 @@ const RolesContent = () => {
     }
 
     try {
-      console.log('Actualizando rol:', {id: rolEditado.id, nombre_rol: rolEditado.nombre_rol});
+      console.log('Actualizando rol:', { id: rolEditado.id, nombre_rol: rolEditado.nombre_rol });
 
       const datosActualizados = {
         nombre_rol: rolEditado.nombre_rol,
@@ -244,7 +244,7 @@ const RolesContent = () => {
       console.error('Error al cambiar estado del rol:', error);
       toast({
         title: "Error al actualizar",
-        description: "No se pudo cambiar el estado del rol.",
+        description: error.message || "No se pudo cambiar el estado del rol.",
         variant: "destructive",
       });
     } finally {
@@ -312,7 +312,7 @@ const RolesContent = () => {
       console.error('Error al eliminar el rol:', error);
       toast({
         title: "Error al eliminar",
-        description: "No se pudo eliminar el rol.",
+        description: error.message || "No se pudo eliminar el rol.",
         variant: "destructive",
       });
     } finally {
@@ -413,7 +413,7 @@ const RolesContent = () => {
                         <label className="switch-container relative">
                           <input type="checkbox" checked={!!rol.estado} disabled={cannotChangeStatusRol(rol)} readOnly />
                           <span className="switch-slider"></span>
-                          { !cannotChangeStatusRol(rol) && (
+                          {!cannotChangeStatusRol(rol) && (
                             <div
                               className="absolute inset-0 cursor-pointer"
                               onClick={() => handleToggleEstadoRequest(rol)}
@@ -476,7 +476,7 @@ const RolesContent = () => {
                   <label className="switch-container relative">
                     <input type="checkbox" checked={!!rol.estado} disabled={cannotChangeStatusRol(rol)} readOnly />
                     <span className="switch-slider"></span>
-                    { !cannotChangeStatusRol(rol) && (
+                    {!cannotChangeStatusRol(rol) && (
                       <div
                         className="absolute inset-0 cursor-pointer"
                         onClick={() => handleToggleEstadoRequest(rol)}
@@ -548,31 +548,28 @@ const RolesContent = () => {
           <div className="flex gap-1">
             <button
               onClick={() => setFiltroEstado('todos')}
-              className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                filtroEstado === 'todos'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-              }`}
+              className={`px-3 py-1 text-sm rounded-lg transition-colors ${filtroEstado === 'todos'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
             >
               Todos
             </button>
             <button
               onClick={() => setFiltroEstado('activo')}
-              className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                filtroEstado === 'activo'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-              }`}
+              className={`px-3 py-1 text-sm rounded-lg transition-colors ${filtroEstado === 'activo'
+                ? 'bg-green-600 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
             >
               Activos
             </button>
             <button
               onClick={() => setFiltroEstado('inactivo')}
-              className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                filtroEstado === 'inactivo'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-              }`}
+              className={`px-3 py-1 text-sm rounded-lg transition-colors ${filtroEstado === 'inactivo'
+                ? 'bg-red-600 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
             >
               Inactivos
             </button>
@@ -583,46 +580,46 @@ const RolesContent = () => {
       {renderContent()}
 
       <CrearRolModal
-  isOpen={modalOpen}
-  onClose={() => setModalOpen(false)}
-  onSubmit={handleCrearRol}
-/>
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleCrearRol}
+      />
 
-<EditarRolModal
-  isOpen={editarModalOpen}
-  onClose={() => {
-    setEditarModalOpen(false);
-    setRolSeleccionado(null);
-  }}
-  rol={rolSeleccionado}
-  onSave={handleActualizarRol}
-/>
+      <EditarRolModal
+        isOpen={editarModalOpen}
+        onClose={() => {
+          setEditarModalOpen(false);
+          setRolSeleccionado(null);
+        }}
+        rol={rolSeleccionado}
+        onSave={handleActualizarRol}
+      />
 
-<VerRolModal
-  isOpen={verModalOpen}
-  onClose={() => {
-    setVerModalOpen(false);
-    setRolSeleccionado(null);
-  }}
-  rol={rolSeleccionado}
-/>
+      <VerRolModal
+        isOpen={verModalOpen}
+        onClose={() => {
+          setVerModalOpen(false);
+          setRolSeleccionado(null);
+        }}
+        rol={rolSeleccionado}
+      />
 
-<DeleteConfirmModal
-  isOpen={isDeleteModalOpen}
-  onClose={handleCloseDeleteModal}
-  onConfirm={handleConfirmEliminar}
-  isLoading={isDeletingRol}
-  itemName={rolSeleccionado?.nombre || "este rol"}
-/>
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmEliminar}
+        isLoading={isDeletingRol}
+        itemName={rolSeleccionado?.nombre || "este rol"}
+      />
 
-<ConfirmationDialog
-  isOpen={isStatusChangeDialogOpen}
-  onClose={handleCloseStatusDialog}
-  onConfirm={handleConfirmStatusChange}
-  isLoading={isChangingRolStatus}
-  title={`${rolSeleccionado?.estado ? 'Desactivar' : 'Activar'} rol`}
-  message={`Estas seguro de que deseas ${rolSeleccionado?.estado ? 'desactivar' : 'activar'} el rol "${rolSeleccionado?.nombre}"?`}
-/>
+      <ConfirmationDialog
+        isOpen={isStatusChangeDialogOpen}
+        onClose={handleCloseStatusDialog}
+        onConfirm={handleConfirmStatusChange}
+        isLoading={isChangingRolStatus}
+        title={`${rolSeleccionado?.estado ? 'Desactivar' : 'Activar'} rol`}
+        message={`Estas seguro de que deseas ${rolSeleccionado?.estado ? 'desactivar' : 'activar'} el rol "${rolSeleccionado?.nombre}"?`}
+      />
     </div>
   );
 }

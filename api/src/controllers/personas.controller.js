@@ -2,6 +2,12 @@ const personasService = require('../services/persona.service');
 const invitacionService = require('../services/invitacion.service');
 const logger = require('../utils/logger');
 
+const normalizeTipoDoc = (value = '') => {
+  const t = value.toString().trim().toUpperCase();
+  if (t === 'PAS' || t === 'PASAPORTE') return 'Pasaporte';
+  return t;
+};
+
 class PersonasController {
   /**
    * Buscar personas por documento
@@ -17,7 +23,10 @@ class PersonasController {
         });
       }
 
-      const personas = await personasService.buscarPorDocumento(tipo_documento, numero_documento);
+      const personas = await personasService.buscarPorDocumento(
+        normalizeTipoDoc(tipo_documento),
+        numero_documento
+      );
 
       return res.status(200).json({
         success: true,

@@ -3,25 +3,44 @@ import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '../../../../shared/components/ui/badge';
 import { Button } from '../../../../shared/components/ui/button';
-import { 
+import {
   XCircleIcon,
   X,
-  UserIcon, 
-  CalendarIcon, 
-  MapPinIcon, 
-  HomeIcon, 
-  FileTextIcon, 
+  UserIcon,
+  CalendarIcon,
+  MapPinIcon,
+  HomeIcon,
+  FileTextIcon,
   DollarSignIcon,
   ClipboardListIcon,
   ImageIcon,
   FileIcon,
   DownloadIcon,
-  EyeIcon
+  EyeIcon,
+  Plus
 } from 'lucide-react';
+import { ImageViewer } from '../../../../shared/components/ui/ImageViewer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useAuth } from '@/shared/contexts/AuthContext';
+import { cn } from '@/shared/utils/cn';
 
 function ViewReportModal({ isOpen, onClose, report, onEdit }) {
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission('reportes', 'editar');
+
+  const [viewerConfig, setViewerConfig] = React.useState({
+    isOpen: false,
+    currentIndex: 0
+  });
+
+  const openViewer = (index) => {
+    setViewerConfig({
+      isOpen: true,
+      currentIndex: index
+    });
+  };
+
   if (!isOpen || !report) return null;
 
   // Función para formatear la fecha
@@ -94,14 +113,14 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
     }, 0) + totalSeguimientos;
 
     const pendientes = rubrosActivos.filter(r => r.estado === 'Pendiente').length;
-    const enProceso = rubrosActivos.filter(r => r.estado === 'En proceso').length;
+    const enProceso = rubrosActivos.filter(r => r.estado === 'En Proceso').length;
 
-    return { 
-      totalRubros, 
-      totalSeguimientos, 
+    return {
+      totalRubros,
+      totalSeguimientos,
       totalProcesos: totalProcesos,
-      pendientes, 
-      enProceso 
+      pendientes,
+      enProceso
     };
   };
 
@@ -211,13 +230,20 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
               <div className="flex items-center gap-2">
                 {onEdit && (
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={canEdit ? { scale: 1.02 } : {}}
+                    whileTap={canEdit ? { scale: 0.98 } : {}}
+                    disabled={!canEdit}
                     onClick={() => {
-                      onEdit(report);
-                      onClose();
+                      if (canEdit) {
+                        onEdit(report);
+                        onClose();
+                      }
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${canEdit
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-60"
+                      }`}
+                    title={canEdit ? "Editar reporte" : "No tienes permiso para editar"}
                   >
                     <FileTextIcon className="w-4 h-4" />
                     Editar
@@ -286,7 +312,7 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                       {report.descripcion || 'Sin descripción disponible'}
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -299,7 +325,7 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                         </Badge>
                       </div>
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">
                         <CalendarIcon className="w-4 h-4 inline mr-1" />
@@ -324,7 +350,7 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                       <FileIcon className="w-5 h-5 text-slate-600" />
                       Archivos e Imágenes
                     </h3>
-                    
+
                     {/* Imágenes */}
                     {report.imagenes && report.imagenes.length > 0 && (
                       <div className="mb-4">
@@ -332,41 +358,48 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                           <ImageIcon className="w-4 h-4" />
                           Imágenes ({report.imagenes.length})
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {report.imagenes.map((imagen, index) => (
-                            <div key={imagen.id_imagen || imagen.id || `img-${index}`} className="relative group bg-white border border-slate-200 rounded-lg overflow-hidden">
-                              <div className="aspect-video bg-slate-100">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {report.imagenes.slice(0, 4).map((imagen, index) => (
+                            <div
+                              key={imagen.id_imagen || imagen.id || `img-${index}`}
+                              className="relative group bg-white border border-slate-200 rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-all"
+                              onClick={() => openViewer(index)}
+                            >
+                              <div className="aspect-square bg-slate-100">
                                 <img
                                   src={imagen.url || imagen.preview}
                                   alt={imagen.name || `Imagen ${index + 1}`}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                 />
                               </div>
-                              <div className="p-2">
-                                <p className="text-xs font-medium text-slate-900 truncate">{imagen.name}</p>
-                                <p className="text-xs text-slate-500">
-                                  {imagen.size ? `${(imagen.size / 1024).toFixed(2)} KB` : 'Tamaño desconocido'}
-                                </p>
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                {index === 3 && report.imagenes.length > 4 ? (
+                                  <div className="flex flex-col items-center gap-1">
+                                    <Plus className="w-8 h-8 text-white" />
+                                    <span className="text-white font-bold text-lg">
+                                      +{report.imagenes.length - 3}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <EyeIcon className="w-8 h-8 text-white" />
+                                )}
                               </div>
-                              {imagen.url && (
-                                <a
-                                  href={imagen.url}
-                                  download={imagen.name || `imagen-${index + 1}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <Button size="sm" variant="secondary" className="bg-white/90 hover:bg-white p-1">
-                                    <DownloadIcon className="w-3 h-3" />
-                                  </Button>
-                                </a>
+                              {index === 3 && report.imagenes.length > 4 && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <Plus className="w-8 h-8 text-white" />
+                                    <span className="text-white font-bold text-lg">
+                                      +{report.imagenes.length - 3}
+                                    </span>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
-                    
+
                     {/* Archivos */}
                     {report.archivos && report.archivos.length > 0 && (
                       <div>
@@ -450,97 +483,99 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                       {rubrosActivos.map((rubro, index) => {
                         const rubroKey = rubro.id_rubro || rubro.id || `rubro-${index}`;
                         return (
-                        <motion.div
-                          key={rubroKey}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="border border-slate-200 rounded-lg overflow-hidden bg-white"
-                        >
-                          {/* Rubro Header */}
-                          <div className="bg-slate-50 p-3 border-b border-slate-200">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <h4 className="font-medium text-slate-900 text-sm">{rubro.nombre || 'Rubro sin nombre'}</h4>
-                                <p className="text-xs text-slate-600 mt-1">{rubro.descripcion || 'Sin descripción'}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge className={`${getStatusColor(rubro.estado)} text-xs`}>
-                                  {rubro.estado || 'Sin estado'}
-                                </Badge>
-                                {rubro.seguimientos && rubro.seguimientos.length > 0 && (
-                                  <Badge className="bg-blue-100 text-blue-800 text-xs">
-                                    {rubro.seguimientos.length} seg.
+                          <motion.div
+                            key={rubroKey}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className="border border-slate-200 rounded-lg overflow-hidden bg-white"
+                          >
+                            {/* Rubro Header */}
+                            <div className="bg-slate-50 p-3 border-b border-slate-200">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-slate-900 text-sm">{rubro.nombre || 'Rubro sin nombre'}</h4>
+                                  <p className="text-xs text-slate-600 mt-1">{rubro.descripcion || 'Sin descripción'}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge className={`${getStatusColor(rubro.estado)} text-xs`}>
+                                    {rubro.estado || 'Sin estado'}
                                   </Badge>
-                                )}
+                                  {rubro.seguimientos && rubro.seguimientos.length > 0 && (
+                                    <Badge className="bg-blue-100 text-blue-800 text-xs">
+                                      {rubro.seguimientos.length} seg.
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Seguimientos del Rubro */}
-                          {rubro.seguimientos && rubro.seguimientos.length > 0 && (
-                            <div className="p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <h5 className="font-medium text-slate-800 text-sm flex items-center">
-                                  <ClipboardListIcon className="w-4 h-4 mr-2 text-blue-600" />
-                                  Seguimientos
-                                  <Badge className="ml-2 bg-blue-50 text-blue-700 border border-blue-200 text-xs rounded-full px-2">
-                                    {rubro.seguimientos.length}
-                                  </Badge>
-                                </h5>
+                            {/* Seguimientos del Rubro */}
+                            {rubro.seguimientos && rubro.seguimientos.length > 0 && (
+                              <div className="p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h5 className="font-medium text-slate-800 text-sm flex items-center">
+                                    <ClipboardListIcon className="w-4 h-4 mr-2 text-blue-600" />
+                                    Seguimientos
+                                    <Badge className="ml-2 bg-blue-50 text-blue-700 border border-blue-200 text-xs rounded-full px-2">
+                                      {rubro.seguimientos.length}
+                                    </Badge>
+                                  </h5>
+                                </div>
+                                <div className="space-y-2">
+                                  {rubro.seguimientos.map((seguimiento, segIndex) => {
+                                    const seguimientoKey = seguimiento.id_seguimiento_rubro || seguimiento.id || `seg-${rubroKey}-${segIndex}`;
+                                    return (
+                                      <div key={seguimientoKey} className="bg-white rounded-lg p-3 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 bg-blue-100 border border-blue-200 rounded-full flex items-center justify-center">
+                                              <span className="text-xs font-semibold text-blue-700">#{segIndex + 1}</span>
+                                            </div>
+                                            <span className="text-sm font-medium text-slate-800">Seguimiento {segIndex + 1}</span>
+                                          </div>
+                                          <Badge className={`${getFollowUpStatusColor(seguimiento.estado)} text-[11px] rounded-full px-2`}>
+                                            {seguimiento.estado || 'Sin estado'}
+                                          </Badge>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                                          <div>
+                                            <span className="font-medium text-slate-700">Descripción:</span>
+                                            <p className="text-slate-900">{seguimiento.descripcion || 'Sin descripción'}</p>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <CalendarIcon className="w-3 h-3 text-slate-500" />
+                                            <div>
+                                              <span className="font-medium text-slate-700">Fecha:</span>
+                                              <p className="text-slate-900">{seguimiento.fecha || 'Sin fecha'}</p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <UserIcon className="w-3 h-3 text-slate-500" />
+                                            <div>
+                                              <span className="font-medium text-slate-700">Responsable:</span>
+                                              <p className="text-slate-900">{seguimiento.responsable || 'No asignado'}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {seguimiento.subSeguimientos > 0 && (
+                                          <div className="mt-2 pt-2 border-t border-slate-200">
+                                            <span className="text-[11px] text-slate-600">
+                                              Sub-seguimientos: {seguimiento.subSeguimientos}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
                               </div>
-                              <div className="space-y-2">
-                                {rubro.seguimientos.map((seguimiento, segIndex) => {
-                                  const seguimientoKey = seguimiento.id_seguimiento_rubro || seguimiento.id || `seg-${rubroKey}-${segIndex}`;
-                                  return (
-                                  <div key={seguimientoKey} className="bg-white rounded-lg p-3 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 bg-blue-100 border border-blue-200 rounded-full flex items-center justify-center">
-                                          <span className="text-xs font-semibold text-blue-700">#{segIndex + 1}</span>
-                                        </div>
-                                        <span className="text-sm font-medium text-slate-800">Seguimiento {segIndex + 1}</span>
-                                      </div>
-                                      <Badge className={`${getFollowUpStatusColor(seguimiento.estado)} text-[11px] rounded-full px-2`}>
-                                        {seguimiento.estado || 'Sin estado'}
-                                      </Badge>
-                                    </div>
-                                
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                                      <div>
-                                        <span className="font-medium text-slate-700">Descripción:</span>
-                                        <p className="text-slate-900">{seguimiento.descripcion || 'Sin descripción'}</p>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <CalendarIcon className="w-3 h-3 text-slate-500" />
-                                        <div>
-                                          <span className="font-medium text-slate-700">Fecha:</span>
-                                          <p className="text-slate-900">{seguimiento.fecha || 'Sin fecha'}</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <UserIcon className="w-3 h-3 text-slate-500" />
-                                        <div>
-                                          <span className="font-medium text-slate-700">Responsable:</span>
-                                          <p className="text-slate-900">{seguimiento.responsable || 'No asignado'}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                
-                                    {seguimiento.subSeguimientos > 0 && (
-                                      <div className="mt-2 pt-2 border-t border-slate-200">
-                                        <span className="text-[11px] text-slate-600">
-                                          Sub-seguimientos: {seguimiento.subSeguimientos}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                )})}
-                              </div>
-                            </div>
-                          )}
-                        </motion.div>
-                      )})}
+                            )}
+                          </motion.div>
+                        )
+                      })}
                     </div>
                   </motion.div>
                 )}
@@ -571,7 +606,7 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                         <div className="text-xs text-slate-600 mb-1">Estados por rubro:</div>
                         <div className="space-y-1">
                           <div className="text-orange-600 text-xs">Pendiente: {resumen.pendientes}</div>
-                          <div className="text-blue-600 text-xs">En proceso: {resumen.enProceso}</div>
+                          <div className="text-blue-600 text-xs">En Proceso: {resumen.enProceso}</div>
                         </div>
                       </div>
                     </div>
@@ -579,16 +614,16 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                 )}
 
                 {/* Mensaje cuando no hay información adicional */}
-                {(!report.seguimientoGeneral) && 
-                 (!report.imagenes || report.imagenes.length === 0) && 
-                 (!report.archivos || report.archivos.length === 0) && 
-                 (!rubrosActivos || rubrosActivos.length === 0) && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                    <p className="text-yellow-800 text-sm">
-                      Este reporte no tiene seguimientos, imágenes, archivos o rubros adicionales registrados.
-                    </p>
-                  </div>
-                )}
+                {(!report.seguimientoGeneral) &&
+                  (!report.imagenes || report.imagenes.length === 0) &&
+                  (!report.archivos || report.archivos.length === 0) &&
+                  (!rubrosActivos || rubrosActivos.length === 0) && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                      <p className="text-yellow-800 text-sm">
+                        Este reporte no tiene seguimientos, imágenes, archivos o rubros adicionales registrados.
+                      </p>
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -603,6 +638,14 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                 Cerrar
               </motion.button>
             </div>
+
+            <ImageViewer
+              isOpen={viewerConfig.isOpen}
+              onClose={() => setViewerConfig(prev => ({ ...prev, isOpen: false }))}
+              images={report.imagenes}
+              currentIndex={viewerConfig.currentIndex}
+              onIndexChange={(index) => setViewerConfig(prev => ({ ...prev, currentIndex: index }))}
+            />
           </motion.div>
         </motion.div>
       )}

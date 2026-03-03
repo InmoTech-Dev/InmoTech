@@ -176,9 +176,178 @@ const buildPayload = (payload = {}) => {
   };
 };
 
+const normalizeDocByType = (tipo = '', value = '') => {
+  const upper = (tipo || '').toString().trim().toUpperCase();
+  const raw = (value || '').toString().trim();
+  if (upper === 'PAS' || upper === 'PASAPORTE') return raw.replace(/\s+/g, '');
+  return raw.replace(/\D/g, '').trim();
+};
+
+
+// Mapea al formato esperado por el backend/BD (Pasaporte capitalizado)
+const mapTipoToBackend = (value = '') => {
+  const upper = (value || '').toString().trim().toUpperCase();
+  if (upper === 'PAS' || upper === 'PASAPORTE') return 'Pasaporte';
+  return upper;
+};
+
+const pickExactMatch = (list = [], tipoDocumento, numeroDocumento) => {
+  const targetDoc = normalizeDoc(numeroDocumento);
+  const targetTipo = mapTipoToBackend(tipoDocumento);
+
+  return list.find((item) => {
+    const docItem = normalizeDoc(
+      item?.numero_documento ||
+      item?.documento ||
+      item?.persona?.numero_documento
+    );
+    const tipoItem = mapTipoToBackend(
+      item?.tipo_documento ||
+      item?.tipoDocumento ||
+      item?.persona?.tipo_documento
+    );
+    return docItem === targetDoc && (!targetTipo || tipoItem === targetTipo);
+  });
+};
+
+const getTipoVariants = (value = '') => {
+  const upper = (value || '').toString().trim().toUpperCase();
+  const variants = [upper];
+  const mapLong = {
+    CC: 'Cedula de Ciudadania',
+    CE: 'Cedula de Extranjeria',
+    TI: 'Tarjeta de Identidad',
+    PAS: 'Pasaporte',
+    PASAPORTE: 'Pasaporte',
+  };
+  if (mapLong[upper]) variants.push(mapLong[upper]);
+  return Array.from(new Set(variants.filter(Boolean)));
+};
+
 export const renantsApiService = {
+  async findByDocument(tipoDocumento, numeroDocumento) {
+    const params = {
+      // El SP espera 'Pasaporte' capitalizado y tipos exactos
+      tipo_documento: mapTipoToBackend(tipoDocumento),
+      numero_documento: normalizeDocByType(tipoDocumento, numeroDocumento),
+    };
+    try {
+      const response = await apiClient.get('/leases/renants', { params });
+      const list = extractList(response);
+      if (!Array.isArray(list) || !list.length) return null;
+      const exact = pickExactMatch(list, tipoDocumento, numeroDocumento);
+      if (!exact) return null;
+      return mapRenantFromApi(exact);
+    } catch (_err) {
+      return null;
+    }
+  },
+
+  async findPersonaByDocument(tipoDocumento, numeroDocumento) {
+    const numero = normalizeDocByType(tipoDocumento, numeroDocumento);
+    const tipo = mapTipoToBackend(tipoDocumento);
+    const debugCtx = { service: 'renantsApiService.findPersonaByDocument', tipo, numero };
+    const headers = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', Pragma: 'no-cache' };
+
+    const tryParseList = (payload) => {
+      if (!payload) return [];
+      let list = extractList(payload);
+      if (!list.length && Array.isArray(payload?.data)) list = payload.data;
+      if (!list.length && Array.isArray(payload?.personas)) list = payload.personas;
+      return Array.isArray(list) ? list : [];
+    };
+
+    // 1) /personas/buscar con tipo_documento exacto
+    try {
+      const resp = await apiClient.get('/personas/buscar', {
+        params: { tipo_documento: tipo, numero_documento: numero, _ts: Date.now() },
+        headers,
+      });
+      const list = tryParseList(resp);
+      const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
+      if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
+    } catch (err) {
+      if (import.meta?.env?.DEV) console.warn('[arr persona/buscar 1] fallo', { ...debugCtx, err: err?.message });
+    }
+
+    // 2) /personas/buscar con alias de tipo_doc
+    const altTipoKeys = ['tipo_doc', 'tipoDocumento', 'tipo'];
+    for (const key of altTipoKeys) {
+      try {
+        const resp = await apiClient.get('/personas/buscar', {
+          params: { numero_documento: numero, [key]: tipo, _ts: Date.now() },
+          headers,
+        });
+        const list = tryParseList(resp);
+        const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
+        if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
+      } catch (_err) {
+        if (import.meta?.env?.DEV) console.warn('[arr persona/buscar alt] fallo', { ...debugCtx, key, err: _err?.message });
+      }
+    }
+
+    // 3) /personas con parámetros variados
+    try {
+      const resp = await apiClient.get('/personas', {
+        params: {
+          numero,
+          documento: numero,
+          numero_documento: numero,
+          tipo,
+          tipo_documento: tipo,
+          _ts: Date.now(),
+        },
+        headers,
+      });
+      const list = tryParseList(resp);
+      const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
+      if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
+    } catch (_err) {
+      if (import.meta?.env?.DEV) console.warn('[arr personas] fallo', { ...debugCtx, err: _err?.message });
+    }
+
+    // 4) /personas/{numero}
+    try {
+      const resp = await apiClient.get(`/personas/${numero}`, { headers, params: { _ts: Date.now() } });
+      const list = tryParseList(resp);
+      const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
+      if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
+    } catch (_err) {}
+
+    // 5) /personas/documento/{numero}
+    try {
+      const resp = await apiClient.get(`/personas/documento/${numero}`, { headers, params: { _ts: Date.now() } });
+      const list = tryParseList(resp);
+      const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
+      if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
+    } catch (_err) {}
+
+    // 6) /personas/numero/{numero}
+    try {
+      const resp = await apiClient.get(`/personas/numero/${numero}`, { headers, params: { _ts: Date.now() } });
+      const list = tryParseList(resp);
+      const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
+      if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
+    } catch (_err) {}
+
+    // 7) POST /personas/buscar
+    try {
+      const resp = await apiClient.post('/personas/buscar', {
+        tipo_documento: tipo,
+        numero_documento: numero,
+      }, headers);
+      const list = tryParseList(resp);
+      const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
+      if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
+    } catch (_err) {
+      if (import.meta?.env?.DEV) console.warn('[arr persona/buscar POST] fallo', { ...debugCtx, err: _err?.message });
+    }
+
+    return null;
+  },
+
   async getAll(params = {}) {
-    const response = await apiClient.get('/leases/renants', params);
+    const response = await apiClient.get('/leases/renants', { params });
     return extractList(response).map(mapRenantFromApi);
   },
 
@@ -208,3 +377,4 @@ export const renantsApiService = {
 };
 
 export default renantsApiService;
+const normalizeDoc = (value = '') => value.toString().replace(/\D/g, '').trim();

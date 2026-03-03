@@ -13,7 +13,8 @@ const AdminReportsView = ({
     onDownloadPDF,
     loading: reportsLoading,
     filters,
-    setFilters
+    setFilters,
+    refreshTrigger
 }) => {
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -198,15 +199,31 @@ const AdminReportsView = ({
         }
     };
 
-    // Reset selected report when user changes or reports are reloaded
+    // Sync selectedReport if allReports changes (e.g. from global fetchReports refresh)
     useEffect(() => {
-        if (selectedReport) {
-            const isStillInList = userReports.some(r => r.id === selectedReport.id);
-            if (!isStillInList) {
-                setSelectedReport(null);
+        if (selectedReport && allReports.length > 0) {
+            const currentId = Number(selectedReport.id_reporte || selectedReport.id);
+            const updated = allReports.find(r => Number(r.id_reporte || r.id) === currentId);
+
+            if (updated && updated.estado !== selectedReport.estado) {
+                // Update basic fields from the list while maintaining the enriched detailed data
+                setSelectedReport(prev => ({
+                    ...prev,
+                    ...updated,
+                    // Preserve the enriched details that fetchReports doesn't have but handleSelectReport does
+                    rubros: prev.rubros,
+                    imagenes: prev.imagenes,
+                    archivos: prev.archivos
+                }));
             }
         }
-    }, [selectedUser, allReports]);
+    }, [allReports]);
+
+    useEffect(() => {
+        if (selectedReport && refreshTrigger > 0) {
+            handleSelectReport(selectedReport);
+        }
+    }, [refreshTrigger]);
 
     return (
         <div className="bg-white border-y border-slate-100 shadow-xl overflow-hidden flex flex-1 min-h-0 w-full mt-4">

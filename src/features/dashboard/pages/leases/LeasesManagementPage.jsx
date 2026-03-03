@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaPhone, FaEnvelope } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Home, Phone, Mail, X } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Home, Phone, Mail, X } from 'lucide-react';
 import "../../../../shared/styles/globals.css";
 import LeasesPersonForm from "../../components/leases/TenantForm";
 import ViewTenantModal from "../../components/leases/ViewTenantForm";
@@ -28,9 +28,61 @@ export function LeasesManagementPage() {
     setTenantToView(tenant);
     try {
       const full = await renantsApiService.getById(tenant.id || tenant.id_arrendatario || tenant.personaId);
+
+      // Obtener arriendos para este arrendatario (reutilizamos mapping de compradores)
+      const tenantId =
+        full.id_arrendatario ||
+        full.id_cliente ||
+        full.idCliente ||
+        full.id ||
+        full.personaId ||
+        tenant.id_arrendatario ||
+        tenant.id ||
+        tenant.personaId;
+
+      let leaseData = {};
+      const pickBestLease = (arrList = []) => {
+        const matches = arrList.filter((a) => {
+          const arr = a.arrendatario || a.Arrendatario || {};
+          const persona = arr.persona || arr.Persona || {};
+          const ids = [
+            arr.id_arrendatario,
+            arr.id,
+            arr.idCliente,
+            arr.id_cliente,
+            persona.id_persona,
+          ].filter(Boolean);
+          return ids.includes(tenantId);
+        });
+        if (!matches.length) return null;
+        // elegir el más reciente por fecha_inicio
+        return matches
+          .map((m) => ({
+            m,
+            ts: new Date(m.fecha_inicio || m.fechaInicio || m.fecha_cobro || m.fechaCobro || 0).getTime(),
+          }))
+          .sort((a, b) => b.ts - a.ts)[0].m;
+      };
+
+      if (tenant.rawLease) {
+        leaseData = mapArriendoToLeaseData(tenant.rawLease);
+      } else {
+        try {
+          const arriendosResp = await arriendoApiService.obtenerArriendos();
+          const arriendosList = arriendosResp?.data?.data || arriendosResp?.data || arriendosResp || [];
+          const match = pickBestLease(arriendosList);
+          if (match) {
+            leaseData = mapArriendoToLeaseData(match);
+          }
+        } catch (_err) {
+          // si falla la carga de arriendos, seguimos mostrando datos básicos
+        }
+      }
+
       const merged = {
         ...tenant,
         ...full,
+        ...leaseData,
       };
       // Conservar inmueble y codeudor si el detalle no los trae
       if (!merged.inmueble && tenant.inmueble) merged.inmueble = tenant.inmueble;
@@ -57,12 +109,34 @@ export function LeasesManagementPage() {
     const inmueble = arriendo.Inmueble || arriendo.inmueble || {};
     const codeudor = arriendo.codeudor || arriendo.Codeudor || {};
     const codeudorPersona = codeudor.persona || codeudor.Persona || codeudor;
+    const inmuebleNombre =
+      inmueble.nombre ||
+      inmueble.titulo ||
+      inmueble.registro_inmobiliario ||
+      inmueble.registro ||
+      inmueble.direccion ||
+      null;
+    const inmuebleRegistro = inmueble.registro_inmobiliario || inmueble.registro || null;
+    const inmuebleDireccion = inmueble.direccion || null;
+    const inmuebleId = inmueble.id || inmueble.id_inmueble || null;
+    const inmuebleSimple =
+      inmuebleNombre || inmuebleRegistro || inmuebleId
+        ? [
+            {
+              id: inmuebleId,
+              nombre: inmuebleNombre || "Inmueble",
+              direccion: inmuebleDireccion || "",
+              registro: inmuebleRegistro || "",
+            },
+          ]
+        : [];
     return {
       inmueble,
-      registroInmobiliario: inmueble.registro_inmobiliario || inmueble.registro || null,
+      inmueblesArrendados: inmuebleSimple,
+      registroInmobiliario: inmuebleRegistro,
       tipoInmueble: inmueble.categoria || inmueble.tipo || null,
-      nombreInmueble: inmueble.nombre || inmueble.titulo || inmueble.registro_inmobiliario || null,
-      direccion: inmueble.direccion || null,
+      nombreInmueble: inmuebleNombre,
+      direccion: inmuebleDireccion,
       ciudad: inmueble.ciudad || null,
       departamento: inmueble.departamento || null,
       valorMensual: arriendo.valor_mensual || arriendo.valor_arriendo || arriendo.precio_arriendo || null,
@@ -249,7 +323,7 @@ export function LeasesManagementPage() {
   };
 
 const renderDeleteModal = () => {
-  if (!tenantToDelete) return null;
+  return null;
 
   const modalContent = (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -543,15 +617,7 @@ const renderDeleteModal = () => {
                             >
                               <Edit className="w-4 h-4" />
                             </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              onClick={() => setTenantToDelete(tenant)}
-                              className="p-2 text-red-600 hover:text-red-800 transition-colors"
-                              aria-label="Eliminar arrendatario"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </motion.button>
+                            {/* Acción de eliminar temporalmente deshabilitada */}
                           </div>
                         </td>
                       </tr>

@@ -31,11 +31,14 @@ import {
   FileText,
   ClipboardList as ClipboardListIcon,
   Building,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '../../../../shared/contexts/AuthContext.jsx';
 import administrativosApiService from '../../../../shared/services/administrativosApiService';
 import rolesApiService from '../../../../shared/services/rolesApiService';
+import { ImageViewer } from '../../../../shared/components/ui/ImageViewer';
+import { cn } from '../../../../shared/utils/cn';
 
 const CreateReportModal = ({
   isOpen,
@@ -56,7 +59,11 @@ const CreateReportModal = ({
   } = usePropertyAutocomplete();
 
   // Usuario actual desde contexto de autenticación
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+
+  const canCreate = hasPermission('reportes', 'crear');
+  const canEdit = hasPermission('reportes', 'editar');
+  const canAnular = hasPermission('reportes', 'eliminar');
 
   const getUserFullName = () => {
     if (!user) return 'No asignado';
@@ -194,7 +201,7 @@ const CreateReportModal = ({
     descripcion: '',
     fecha: getCurrentDate(),
     fechaCreacion: getCurrentDateTime(),
-    estado: 'En proceso',
+    estado: 'En Proceso',
     seguimientoGeneral: '',
     responsable: '',
     id_persona_reporta: null
@@ -217,6 +224,12 @@ const CreateReportModal = ({
     message: '',
     onConfirm: () => { },
     variant: 'warning'
+  });
+
+  // Estado para el visualizador de imágenes
+  const [viewerConfig, setViewerConfig] = useState({
+    isOpen: false,
+    currentIndex: 0
   });
 
   // Referencias para los inputs de archivos
@@ -263,8 +276,19 @@ const CreateReportModal = ({
           })),
         }));
         setRubros(normalizedRubros);
-        setImagenes(initialData.imagenes || []);
-        setArchivos(initialData.archivos || []);
+
+        // Normalizar imágenes y archivos para asegurar que tengan un ID único
+        const normalizedImagenes = (initialData.imagenes || []).map((img, idx) => ({
+          ...img,
+          id: img.id || img.id_imagen || `img-${idx}-${Date.now()}`
+        }));
+        setImagenes(normalizedImagenes);
+
+        const normalizedArchivos = (initialData.archivos || []).map((file, idx) => ({
+          ...file,
+          id: file.id || file.id_archivo || `file-${idx}-${Date.now()}`
+        }));
+        setArchivos(normalizedArchivos);
         // Si hay una referencia inicial, buscar la propiedad y pre-seleccionarla para activar la UI de "Auto"
         if (initialData.referencia) {
           setSearchTerm(initialData.referencia);
@@ -494,9 +518,33 @@ const CreateReportModal = ({
     });
   };
 
-  // Eliminar imagen
-  const eliminarImagen = (id) => {
-    setImagenes(prev => prev.filter(img => img.id !== id));
+  // Eliminar imagen con confirmación
+  const eliminarImagen = (imgId) => {
+    if (!imgId) return; // Seguridad adicional
+
+    setConfirmConfig({
+      isOpen: true,
+      title: '¿Eliminar imagen?',
+      message: '¿Estás seguro de que deseas eliminar esta imagen de evidencia? Esta acción no se puede deshacer.',
+      variant: 'danger',
+      onConfirm: () => {
+        setImagenes(prev => prev.filter(img => img.id !== imgId));
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        toast({
+          title: 'Imagen eliminada',
+          description: 'La imagen se eliminó correctamente.',
+          variant: 'success',
+        });
+      }
+    });
+  };
+
+  // Abrir visualizador de imágenes
+  const openViewer = (index) => {
+    setViewerConfig({
+      isOpen: true,
+      currentIndex: index
+    });
   };
 
   // Eliminar archivo
@@ -996,10 +1044,10 @@ const CreateReportModal = ({
                                 Pendiente
                               </div>
                             </SelectItem>
-                            <SelectItem value="En proceso">
+                            <SelectItem value="En Proceso">
                               <div className="flex items-center">
                                 <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                                En proceso
+                                En Proceso
                               </div>
                             </SelectItem>
                             <SelectItem value="Completado">
@@ -1047,7 +1095,7 @@ const CreateReportModal = ({
                                 className={`font-medium px-2 py-1 rounded-full text-[10px] inline-block
                               ${formData.estado === 'Pendiente'
                                     ? 'bg-yellow-100 text-yellow-700'
-                                    : formData.estado === 'En proceso'
+                                    : formData.estado === 'En Proceso'
                                       ? 'bg-blue-100 text-blue-700'
                                       : formData.estado === 'Completado'
                                         ? 'bg-green-100 text-green-700'
@@ -1114,8 +1162,13 @@ const CreateReportModal = ({
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={initialData ? !canEdit : !canCreate}
                           onClick={() => imageInputRef.current?.click()}
-                          className="flex items-center space-x-2 border-green-300 text-green-700 hover:bg-green-50"
+                          className={cn(
+                            "flex items-center space-x-2 border-green-300 text-green-700 hover:bg-green-50",
+                            (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                          )}
+                          title={initialData ? (canEdit ? "Subir imagen" : "No tienes permiso para editar") : (canCreate ? "Subir imagen" : "No tienes permiso para crear")}
                         >
                           <UploadIcon className="w-4 h-4" />
                           <span>Subir</span>
@@ -1123,23 +1176,31 @@ const CreateReportModal = ({
                       </div>
 
                       {imagenes.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          {imagenes.map((imagen, index) => (
-                            <div key={imagen.id ?? index} className="relative group">
-                              <img
-                                src={imagen.url}
-                                alt={`Imagen ${index + 1}`}
-                                className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => eliminarImagen(imagen.id)}
-                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
+                        <div className="max-h-72 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                          <div className="grid grid-cols-2 gap-3">
+                            {imagenes.map((imagen, index) => (
+                              <div key={imagen.id ?? index} className="relative group cursor-pointer" onClick={() => openViewer(index)}>
+                                <img
+                                  src={imagen.url}
+                                  alt={`Imagen ${index + 1}`}
+                                  className="w-full h-24 object-cover rounded-lg border border-gray-200 shadow-sm transition-transform group-hover:scale-[1.02]"
+                                />
+                                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                  <Eye className="w-5 h-5 text-white drop-shadow-md" />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    eliminarImagen(imagen.id);
+                                  }}
+                                  className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-md z-10"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
@@ -1171,8 +1232,13 @@ const CreateReportModal = ({
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={initialData ? !canEdit : !canCreate}
                           onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center space-x-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                          className={cn(
+                            "flex items-center space-x-2 border-blue-300 text-blue-700 hover:bg-blue-50",
+                            (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                          )}
+                          title={initialData ? (canEdit ? "Subir archivo" : "No tienes permiso para editar") : (canCreate ? "Subir archivo" : "No tienes permiso para crear")}
                         >
                           <UploadIcon className="w-4 h-4" />
                           <span>Subir</span>
@@ -1180,24 +1246,26 @@ const CreateReportModal = ({
                       </div>
 
                       {archivos.length > 0 ? (
-                        <div className="space-y-2">
-                          {archivos.map((archivo, index) => (
-                            <div key={archivo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                              <div className="flex items-center space-x-3">
-                                <FileIcon className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm font-medium text-gray-700 truncate">
-                                  {archivo.name}
-                                </span>
+                        <div className="max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                          <div className="space-y-2">
+                            {archivos.map((archivo, index) => (
+                              <div key={archivo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                                <div className="flex items-center space-x-3 overflow-hidden">
+                                  <FileIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                                  <span className="text-sm font-medium text-gray-700 truncate">
+                                    {archivo.name}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => eliminarArchivo(archivo.id)}
+                                  className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => eliminarArchivo(archivo.id)}
-                                className="text-red-500 hover:text-red-700 p-1"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
@@ -1236,9 +1304,14 @@ const CreateReportModal = ({
                       </h3>
                       <Button
                         type="button"
+                        disabled={initialData ? !canEdit : !canCreate}
                         onClick={agregarRubro}
                         size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors px-4"
+                        className={cn(
+                          "bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors px-4",
+                          (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                        )}
+                        title={initialData ? (canEdit ? "Agregar rubro" : "No tienes permiso para editar") : (canCreate ? "Agregar rubro" : "No tienes permiso para crear")}
                       >
                         <PlusIcon className="w-4 h-4 mr-2" />
                         Agregar Rubro
@@ -1268,10 +1341,15 @@ const CreateReportModal = ({
                             <div className="flex items-center space-x-2">
                               <Button
                                 type="button"
-                                onClick={() => toggleRubroActivo(rubro.id)}
+                                disabled={!canAnular}
+                                onClick={() => canAnular && toggleRubroActivo(rubro.id)}
                                 size="sm"
                                 variant="outline"
-                                className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                                className={cn(
+                                  "text-orange-600 border-orange-600 hover:bg-orange-50",
+                                  !canAnular && "opacity-50 cursor-not-allowed"
+                                )}
+                                title={canAnular ? "Anular rubro" : "No tienes permiso para anular"}
                               >
                                 Anular
                               </Button>
@@ -1322,10 +1400,15 @@ const CreateReportModal = ({
                                   </h4>
                                   <Button
                                     type="button"
-                                    onClick={() => agregarSeguimientoRubro(rubro.id)}
+                                    disabled={initialData ? !canEdit : !canCreate}
+                                    onClick={() => (initialData ? canEdit : canCreate) && agregarSeguimientoRubro(rubro.id)}
                                     size="sm"
                                     variant="outline"
-                                    className="text-white bg-blue-600 hover:bg-blue-700 border-blue-600 text-xs px-3 py-1 rounded-md shadow-sm"
+                                    className={cn(
+                                      "text-white bg-blue-600 hover:bg-blue-700 border-blue-600 text-xs px-3 py-1 rounded-md shadow-sm",
+                                      (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    title={initialData ? (canEdit ? "Nuevo seguimiento" : "No tienes permiso para editar") : (canCreate ? "Nuevo seguimiento" : "No tienes permiso para crear")}
                                   >
                                     <PlusIcon className="w-3 h-3 mr-1" />
                                     Nuevo Seguimiento
@@ -1374,10 +1457,15 @@ const CreateReportModal = ({
                                             </span>
                                             <Button
                                               type="button"
-                                              onClick={() => toggleSeguimientoActivo(rubro.id, seguimiento.id)}
+                                              disabled={!canAnular}
+                                              onClick={() => canAnular && toggleSeguimientoActivo(rubro.id, seguimiento.id)}
                                               size="sm"
                                               variant="outline"
-                                              className="text-red-600 border-red-200 hover:bg-red-50 text-xs px-2 py-1 rounded-md"
+                                              className={cn(
+                                                "text-red-600 border-red-200 hover:bg-red-50 text-xs px-2 py-1 rounded-md",
+                                                !canAnular && "opacity-50 cursor-not-allowed"
+                                              )}
+                                              title={canAnular ? "Anular seguimiento" : "No tienes permiso para anular"}
                                             >
                                               <XCircleIcon className="w-3 h-3 mr-1" />
                                               Anular
@@ -1589,10 +1677,15 @@ const CreateReportModal = ({
                                   </div>
                                   <Button
                                     type="button"
-                                    onClick={() => toggleRubroActivo(rubro.id)}
+                                    disabled={!canAnular}
+                                    onClick={() => canAnular && toggleRubroActivo(rubro.id)}
                                     size="sm"
                                     variant="outline"
-                                    className="text-green-600 border-green-600 hover:bg-green-50"
+                                    className={cn(
+                                      "text-green-600 border-green-600 hover:bg-green-50",
+                                      !canAnular && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    title={canAnular ? "Reactivar rubro" : "No tienes permiso para anular"}
                                   >
                                     Reactivar
                                   </Button>
@@ -1629,8 +1722,12 @@ const CreateReportModal = ({
               <Button
                 type="submit"
                 onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all ease-in-out duration-200"
+                disabled={isSubmitting || (initialData ? !canEdit : !canCreate)}
+                className={cn(
+                  "px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all ease-in-out duration-200",
+                  (isSubmitting || (initialData ? !canEdit : !canCreate)) && "opacity-50 cursor-not-allowed"
+                )}
+                title={initialData ? (canEdit ? submitLabel : "No tienes permiso para editar") : (canCreate ? submitLabel : "No tienes permiso para crear")}
               >
                 {isSubmitting ? 'Guardando...' : submitLabel}
               </Button>
@@ -1647,6 +1744,14 @@ const CreateReportModal = ({
             variant={confirmConfig.variant}
             confirmText="Sí, continuar"
             cancelText="Cancelar"
+          />
+
+          <ImageViewer
+            isOpen={viewerConfig.isOpen}
+            onClose={() => setViewerConfig(prev => ({ ...prev, isOpen: false }))}
+            images={imagenes}
+            currentIndex={viewerConfig.currentIndex}
+            onIndexChange={(index) => setViewerConfig(prev => ({ ...prev, currentIndex: index }))}
           />
         </div >
       )}

@@ -24,6 +24,7 @@ import MESSAGES from "../../../../shared/constants/messages";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
+import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { useToast } from "../../../../shared/hooks/use-toast";
 
 
@@ -733,7 +734,17 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
       "Sin nombre",
 
-    inmuebleArea: fallback.inmuebleArea ?? inmueble.area ?? "N/D",
+    inmuebleArea:
+      fallback.inmuebleArea ??
+      inmueble.area ??
+      inmueble.area_total ??
+      inmueble.area_construida ??
+      inmueble.area_privada ??
+      inmueble.area_lote ??
+      (inmueble.metadata?.raw?.area_total) ??
+      (inmueble.metadata?.raw?.area_construida) ??
+      (inmueble.metadata?.raw?.area) ??
+      "N/D",
 
     inmuebleHabitaciones:
 
@@ -784,9 +795,6 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
         numericPrice
       )
     ),
-
-    inmuebleGaraje: fallback.inmuebleGaraje ?? Boolean(inmueble.garaje),
-
     inmuebleEstado:
 
       fallback.inmuebleEstado ?? inmueble.estado ?? sale.estado ?? "Pendiente",
@@ -869,9 +877,25 @@ const buildSalePayload = (saleData = {}, buyerInfo, propertyInfo) => {
 
   return {
 
-    id_comprador: buyerInfo?.id ?? buyerInfo?.compradorId ?? buyerInfo?.raw?.id_comprador ?? buyerInfo?.raw?.buyerId ?? null,
+    id_comprador:
+      buyerInfo?.id !== undefined && buyerInfo?.id !== null
+        ? Number(buyerInfo.id)
+        : buyerInfo?.compradorId !== undefined && buyerInfo?.compradorId !== null
+          ? Number(buyerInfo.compradorId)
+          : buyerInfo?.raw?.id_comprador !== undefined && buyerInfo?.raw?.id_comprador !== null
+            ? Number(buyerInfo.raw.id_comprador)
+            : buyerInfo?.raw?.buyerId !== undefined && buyerInfo?.raw?.buyerId !== null
+              ? Number(buyerInfo.raw.buyerId)
+              : null,
 
-    id_persona: buyerInfo?.personaId ?? buyerInfo?.raw?.personaId ?? buyerInfo?.raw?.persona?.id_persona,
+    id_persona:
+      buyerInfo?.personaId !== undefined && buyerInfo?.personaId !== null
+        ? Number(buyerInfo.personaId)
+        : buyerInfo?.raw?.personaId !== undefined && buyerInfo?.raw?.personaId !== null
+          ? Number(buyerInfo.raw.personaId)
+          : buyerInfo?.raw?.persona?.id_persona !== undefined && buyerInfo?.raw?.persona?.id_persona !== null
+            ? Number(buyerInfo.raw.persona.id_persona)
+            : null,
 
     id_inmueble: Number(propertyInfo?.id ?? propertyInfo?.raw?.id_inmueble),
 
@@ -1100,6 +1124,45 @@ export function SalesManagementPage() {
   );
 
 
+
+  const liberarInmueblePorVenta = useCallback(
+    async (saleData = {}) => {
+      try {
+        const property =
+          resolvePropertyFromSale(saleData) ||
+          (saleData.property ? { ...saleData.property, raw: saleData.property } : null);
+
+        let propertyId =
+          property?.id ||
+          property?.raw?.id ||
+          property?.raw?.id_inmueble ||
+          property?.raw?.idInmueble ||
+          null;
+
+        // Si no tenemos id pero sÃ­ registro, intentamos resolverlo
+        if (!propertyId && saleData.inmuebleRegistro) {
+          const fetched = await inmueblesAPI.getInmuebleByRegistro(saleData.inmuebleRegistro);
+          propertyId = fetched?.id || fetched?.id_inmueble || null;
+        }
+
+        if (!propertyId) return;
+
+        await inmueblesAPI.updateInmueble(propertyId, {
+          estado: 'Disponible',
+          estado_frontend: 'Disponible',
+          estado_venta: 'Disponible',
+          estadoVenta: 'Disponible',
+          operacion: 'Venta',
+          id_cliente: null,
+          clienteId: null,
+          compradorId: null,
+        });
+      } catch (error) {
+        console.warn('No se pudo liberar el inmueble al cancelar la venta', error?.message);
+      }
+    },
+    [resolvePropertyFromSale]
+  );
 
   const loadProperties = useCallback(async () => {
 
@@ -1336,6 +1399,42 @@ export function SalesManagementPage() {
 
       return;
 
+    }
+
+    const buyerId =
+      buyerInfo?.id ??
+      buyerInfo?.compradorId ??
+      buyerInfo?.raw?.id_comprador ??
+      buyerInfo?.raw?.buyerId ??
+      null;
+
+    if (!buyerId || Number.isNaN(Number(buyerId))) {
+      setSavingVenta(false);
+      setStatusMessage({
+        type: "error",
+        text: "No se pudo obtener el identificador del comprador. Guarda o selecciona un comprador válido antes de crear la venta.",
+      });
+      toast({
+        title: "Comprador requerido",
+        description: "Selecciona un comprador válido antes de registrar la venta.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const numericPrice = toNumericValue(saleData.inmueblePrecio);
+    if (!numericPrice || numericPrice <= 0) {
+      setSavingVenta(false);
+      setStatusMessage({
+        type: "error",
+        text: "Ingresa un precio de venta válido (mayor a 0) antes de guardar.",
+      });
+      toast({
+        title: "Precio requerido",
+        description: "El precio de venta debe ser mayor a 0.",
+        variant: "destructive",
+      });
+      return;
     }
 
 
@@ -1646,21 +1745,6 @@ export function SalesManagementPage() {
       mergedPayload.estadoSeguimiento = mergedPayload.estado || "Iniciada";
 
     try {
-      setStatusMessage({ type: "info", text: "Guardando cambios..." });
-
-      setVentas((prevVentas) =>
-        prevVentas.map((v) =>
-          String(v.id) === String(saleId)
-            ? {
-                ...v,
-                estado: mergedPayload.estado,
-                estadoSeguimiento: mergedPayload.estadoSeguimiento,
-                descripcionSeguimiento: mergedPayload.descripcionSeguimiento,
-              }
-            : v
-        )
-      );
-
       const trackingPayload = buildTrackingPayload(mergedPayload, statusCatalog);
 
       if (!trackingPayload) {
@@ -1671,19 +1755,7 @@ export function SalesManagementPage() {
         return;
       }
 
-      const isCompleting =
-        STATUS_NORMALIZE(
-          mergedPayload.estadoSeguimiento || trackingPayload.descripcion || ""
-        ) === STATUS_NORMALIZE("Completada");
-      if (isCompleting) {
-        const confirmed = window.confirm(
-          "Vas a marcar el seguimiento como 'Completada'. ¿Confirmas que quieres guardar este cambio?"
-        );
-        if (!confirmed) {
-          setStatusMessage(null);
-          return;
-        }
-      }
+      setStatusMessage({ type: "info", text: "Guardando cambios..." });
 
       await ventaApiService.cambiarEstado(saleId, {
         ...trackingPayload,
@@ -1703,21 +1775,46 @@ export function SalesManagementPage() {
           mergedPayload.descripcionSeguimiento ?? normalized.descripcionSeguimiento,
       };
 
+      const finalEstado = (merged.estadoSeguimiento || merged.estado || "").toString().toLowerCase();
+      const mergedForState = finalEstado.includes("cancel")
+        ? {
+            ...merged,
+            estado: "Cancelado",
+            estadoSeguimiento: "Cancelado",
+            comprador: "Sin comprador",
+            compradorNombreCompleto: "Sin comprador",
+            id_comprador: null,
+          }
+        : merged;
+
       setVentas((prevVentas) =>
         prevVentas.map((v) =>
-          String(v.id) === String(saleId) ? { ...v, ...merged, raw: apiSale } : v
+          String(v.id) === String(saleId) ? { ...v, ...mergedForState, raw: apiSale } : v
         )
       );
 
-      setStatusMessage({
-        type: "success",
-        text: "Estados guardados correctamente.",
-      });
-      toast({
-        title: "Seguimiento actualizado",
-        description: MESSAGES.sale.tracking.success,
-        variant: "default",
-      });
+      if (finalEstado.includes("cancel")) {
+        await liberarInmueblePorVenta(mergedForState);
+        setStatusMessage({
+          type: "success",
+          text: "Venta cancelada y cerrada. El inmueble quedó disponible.",
+        });
+        toast({
+          title: "Venta cancelada",
+          description: "Se cerró la venta y el inmueble quedó disponible para nueva venta.",
+          variant: "default",
+        });
+      } else {
+        setStatusMessage({
+          type: "success",
+          text: "Estados guardados correctamente.",
+        });
+        toast({
+          title: "Seguimiento actualizado",
+          description: MESSAGES.sale.tracking.success,
+          variant: "default",
+        });
+      }
     } catch (error) {
       console.error("Error actualizando estados:", error);
       setStatusMessage({

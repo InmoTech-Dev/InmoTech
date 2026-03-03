@@ -142,16 +142,13 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
 
         hoursToShow = await citaApiService.obtenerHorariosDisponibles(data);
       } else {
-        // Sin servicio seleccionado: horarios predeterminados (excluyendo almuerzo 12:00-14:00)
+        // Sin servicio seleccionado: horarios predeterminados
         console.log('Loading default hours (no service restriction)');
         const defaultHours = [];
-        for (let hora = 8; hora <= 17; hora++) {
-          // Saltar horario de almuerzo: 12:00 pm - 2:00 pm
-          if (hora >= 12 && hora < 14) continue;
+        for (let hora = 8; hora <= 16; hora++) {
+          if (hora === 13) continue;
           defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora < 17) {
-            defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
-          }
+          defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
         }
         hoursToShow = defaultHours;
       }
@@ -179,13 +176,10 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
       console.error('Error loading available hours:', error);
       // Fallback: horarios predeterminados filtrados si es hoy
       const defaultHours = [];
-      for (let hora = 8; hora <= 17; hora++) {
-        // Saltar horario de almuerzo: 12:00 pm - 2:00 pm
-        if (hora >= 12 && hora < 14) continue;
+      for (let hora = 8; hora <= 16; hora++) {
+        if (hora === 13) continue;
         defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
-          defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
+        defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
       }
 
       let filteredFallback = defaultHours;

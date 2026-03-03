@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
 import { DownloadIcon, FileTextIcon, ChevronDownIcon, FileSpreadsheet, PlusIcon, SearchIcon, Filter, Calendar, MapPin, X } from 'lucide-react'
+import { useAuth } from '@/shared/contexts/AuthContext'
 
 export function ReportsHeader({
   searchTerm,
@@ -25,8 +26,12 @@ export function ReportsHeader({
   onSearchAdmin,
   allReports = []
 }) {
+  const { hasPermission } = useAuth()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
+
+  const canCreate = hasPermission('reportes', 'crear')
+  const canDownload = hasPermission('reportes', 'descargar')
 
   // Local state for admin filters (uncommitted)
   const [localAdminFilters, setLocalAdminFilters] = useState(adminFilters)
@@ -54,6 +59,7 @@ export function ReportsHeader({
   }, [])
 
   const handleDownloadOption = (type) => {
+    if (!canDownload) return
     setIsDropdownOpen(false)
     if (type === 'pdf') {
       onDownloadPDF?.(reports)
@@ -186,17 +192,22 @@ export function ReportsHeader({
           {/* Download Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={canDownload ? { scale: 1.02 } : {}}
+              whileTap={canDownload ? { scale: 0.98 } : {}}
+              disabled={!canDownload}
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="border border-blue-600 text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white"
+              className={`border px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white ${canDownload
+                ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
+                : 'border-slate-300 text-slate-400 cursor-not-allowed opacity-60'
+                }`}
+              title={canDownload ? "Descargar reportes" : "No tienes permiso para descargar"}
             >
               <DownloadIcon className="h-4 w-4" />
               <span>Descargar</span>
               <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </motion.button>
 
-            {isDropdownOpen && (
+            {isDropdownOpen && canDownload && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -228,10 +239,15 @@ export function ReportsHeader({
 
           {/* New Report Button */}
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onNewReport}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm hover:shadow transition-all"
+            whileHover={canCreate ? { scale: 1.02 } : {}}
+            whileTap={canCreate ? { scale: 0.98 } : {}}
+            disabled={!canCreate}
+            onClick={() => canCreate && onNewReport?.()}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm transition-all ${canCreate
+              ? 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow'
+              : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+              }`}
+            title={canCreate ? "Crear nuevo reporte" : "No tienes permiso para crear reportes"}
           >
             <PlusIcon className="h-4 w-4" />
             Nuevo reporte

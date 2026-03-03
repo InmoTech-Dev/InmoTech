@@ -6,14 +6,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/shared/components/ui/badge'
 import { PlusIcon, EditIcon, TrashIcon, UploadIcon, FileIcon, ImageIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, UserIcon, CalendarIcon, SaveIcon, XCircleIcon, ClipboardListIcon, ClockIcon, BuildingIcon, MapPinIcon, FileTextIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useAuth } from '@/shared/contexts/AuthContext'
+import { cn } from '@/shared/utils/cn'
 
-export function ReportForm({ 
-  initialData = {}, 
-  onSubmit, 
+export function ReportForm({
+  initialData = {},
+  onSubmit,
   onCancel,
   submitLabel = 'Guardar Reporte',
   isSubmitting = false
 }) {
+  const { hasPermission } = useAuth()
+  const canAnular = hasPermission('reportes', 'eliminar')
+
   // Determinar si estamos en modo edición basándose en si hay un ID o datos específicos del reporte
   const isEditMode = initialData && (initialData.id || initialData.tipoReporte || initialData.propietario)
   // Función para obtener la fecha actual en formato ISO
@@ -44,18 +49,18 @@ export function ReportForm({
     descripcion: '',
     fecha: getCurrentDate(), // Fecha automática
     fechaCreacion: getCurrentDateTime(), // Fecha y hora de creación
-    estado: 'En proceso',
+    estado: 'En Proceso',
     seguimientoGeneral: ''
   }
 
   // Estados del formulario
-  const [formData, setFormData] = useState({...defaultFormData, ...(initialData || {})})
+  const [formData, setFormData] = useState({ ...defaultFormData, ...(initialData || {}) })
   const [rubros, setRubros] = useState((initialData && initialData.rubros) || (isEditMode ? [
     {
       id: 1,
       nombre: 'Baños',
       descripcion: 'Inspección y reparaciones de baños',
-      estado: 'En proceso',
+      estado: 'En Proceso',
       activo: true,
       fechaAnulacion: null,
       seguimientos: [
@@ -91,7 +96,7 @@ export function ReportForm({
   const [archivos, setArchivos] = useState([])
   const [expandedRubros, setExpandedRubros] = useState({})
   const rubroInputRefs = useRef({})
-  const [errors, setErrors] = useState({})  
+  const [errors, setErrors] = useState({})
   const formRef = useRef(null)
 
   // Estados para seguimientos específicos
@@ -142,7 +147,7 @@ export function ReportForm({
   useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
       setFormData({
-        ...defaultFormData, 
+        ...defaultFormData,
         ...initialData,
         // Asegurar que siempre tenga fecha actual si no viene en initialData
         fecha: initialData.fecha || getCurrentDate(),
@@ -190,7 +195,7 @@ export function ReportForm({
       seguimientos: []
     }
     setRubros([...rubros, nuevoRubro])
-    
+
     // Enfocar automáticamente el campo de nombre del nuevo rubro
     setTimeout(() => {
       if (rubroInputRefs.current[nuevoRubro.id]) {
@@ -200,20 +205,20 @@ export function ReportForm({
   }
 
   const editarRubro = (id, campo, valor) => {
-    setRubros(rubros.map(rubro => 
+    setRubros(rubros.map(rubro =>
       rubro.id === id ? { ...rubro, [campo]: valor } : rubro
     ))
   }
 
   // Anular/Reactivar rubro (soft delete)
   const toggleRubroActivo = (id) => {
-    setRubros(rubros.map(rubro => 
-      rubro.id === id 
-        ? { 
-            ...rubro, 
-            activo: !rubro.activo,
-            fechaAnulacion: !rubro.activo ? null : new Date().toISOString()
-          } 
+    setRubros(rubros.map(rubro =>
+      rubro.id === id
+        ? {
+          ...rubro,
+          activo: !rubro.activo,
+          fechaAnulacion: !rubro.activo ? null : new Date().toISOString()
+        }
         : rubro
     ))
   }
@@ -226,7 +231,7 @@ export function ReportForm({
       setRubros(rubros.filter(rubro => rubro.id !== id))
     }
   }
-  
+
   const eliminarRubro = (id) => {
     setRubros(rubros.filter(rubro => rubro.id !== id))
   }
@@ -240,34 +245,34 @@ export function ReportForm({
       descripcion: '',
       subSeguimientos: 0
     }
-    
-    setRubros(rubros.map(rubro => 
-      rubro.id === rubroId 
+
+    setRubros(rubros.map(rubro =>
+      rubro.id === rubroId
         ? { ...rubro, seguimientos: [...rubro.seguimientos, nuevoSeguimiento] }
         : rubro
     ))
   }
 
   const editarSeguimiento = (rubroId, seguimientoId, campo, valor) => {
-    setRubros(rubros.map(rubro => 
-      rubro.id === rubroId 
+    setRubros(rubros.map(rubro =>
+      rubro.id === rubroId
         ? {
-            ...rubro,
-            seguimientos: rubro.seguimientos.map(seg =>
-              seg.id === seguimientoId ? { ...seg, [campo]: valor } : seg
-            )
-          }
+          ...rubro,
+          seguimientos: rubro.seguimientos.map(seg =>
+            seg.id === seguimientoId ? { ...seg, [campo]: valor } : seg
+          )
+        }
         : rubro
     ))
   }
 
   const eliminarSeguimiento = (rubroId, seguimientoId) => {
-    setRubros(rubros.map(rubro => 
-      rubro.id === rubroId 
+    setRubros(rubros.map(rubro =>
+      rubro.id === rubroId
         ? {
-            ...rubro,
-            seguimientos: rubro.seguimientos.filter(seg => seg.id !== seguimientoId)
-          }
+          ...rubro,
+          seguimientos: rubro.seguimientos.filter(seg => seg.id !== seguimientoId)
+        }
         : rubro
     ))
   }
@@ -278,7 +283,7 @@ export function ReportForm({
       [rubroId]: !prev[rubroId]
     }))
   }
-  
+
   const toggleRubroExpansion = toggleRubro
 
   // Obtener color del estado
@@ -311,7 +316,7 @@ export function ReportForm({
   // Filtrar rubros para mostrar
   const rubrosActivos = rubros.filter(rubro => rubro.activo !== false)
   const rubrosAnulados = rubros.filter(rubro => rubro.activo === false)
-  
+
   // Calcular resumen de progreso
   const calcularResumen = () => {
     const totalRubros = rubrosActivos.length
@@ -321,14 +326,14 @@ export function ReportForm({
     }, 0) + totalSeguimientos
 
     const pendientes = rubrosActivos.filter(r => r.estado === 'Pendiente').length
-    const enProceso = rubrosActivos.filter(r => r.estado === 'En proceso').length
+    const enProceso = rubrosActivos.filter(r => r.estado === 'En Proceso').length
 
-    return { 
-      totalRubros, 
-      totalSeguimientos, 
+    return {
+      totalRubros,
+      totalSeguimientos,
       totalProcesos: totalProcesos,
-      pendientes, 
-      enProceso 
+      pendientes,
+      enProceso
     }
   }
 
@@ -352,7 +357,7 @@ export function ReportForm({
     if (!formData.propietario.trim()) newErrors.propietario = 'El propietario es obligatorio'
     if (!formData.tipoReporte.trim()) newErrors.tipoReporte = 'El título del reporte es obligatorio'
     if (!formData.descripcion.trim()) newErrors.descripcion = 'La descripción es obligatoria'
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -388,7 +393,7 @@ export function ReportForm({
                 {initialData && Object.keys(initialData).length > 0 ? 'Editar Reporte' : 'Nuevo Reporte'}
               </h2>
               <p className="text-slate-600 mt-1">
-                {initialData && Object.keys(initialData).length > 0 
+                {initialData && Object.keys(initialData).length > 0
                   ? 'Modifique la información del reporte inmobiliario'
                   : 'Complete la información para crear un nuevo reporte inmobiliario'
                 }
@@ -424,7 +429,7 @@ export function ReportForm({
               <BuildingIcon className="w-5 h-5 text-slate-600" />
               Información Básica
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -471,8 +476,8 @@ export function ReportForm({
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Referencia *
                 </label>
-                <Input 
-                  type="text" 
+                <Input
+                  type="text"
                   placeholder="Ej: Apto 502"
                   value={formData.referencia}
                   onChange={(e) => handleChange('referencia', e.target.value)}
@@ -488,8 +493,8 @@ export function ReportForm({
                   <UserIcon className="w-4 h-4 inline mr-2" />
                   Propietario *
                 </label>
-                <Input 
-                  type="text" 
+                <Input
+                  type="text"
                   placeholder="Nombre del propietario"
                   value={formData.propietario}
                   onChange={(e) => handleChange('propietario', e.target.value)}
@@ -504,8 +509,8 @@ export function ReportForm({
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Título Reporte *
                 </label>
-                <Input 
-                  type="text" 
+                <Input
+                  type="text"
                   placeholder="Ej: Reparación integral apartamento"
                   value={formData.tipoReporte}
                   onChange={(e) => handleChange('tipoReporte', e.target.value)}
@@ -520,7 +525,7 @@ export function ReportForm({
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Descripción *
                 </label>
-                <Textarea 
+                <Textarea
                   placeholder="Descripción general del reporte..."
                   rows={4}
                   value={formData.descripcion}
@@ -542,7 +547,7 @@ export function ReportForm({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Pendiente">Pendiente</SelectItem>
-                    <SelectItem value="En proceso">En proceso</SelectItem>
+                    <SelectItem value="En Proceso">En Proceso</SelectItem>
                     <SelectItem value="Completado">Completado</SelectItem>
                   </SelectContent>
                 </Select>
@@ -561,7 +566,7 @@ export function ReportForm({
               <FileTextIcon className="w-5 h-5 text-slate-600" />
               Archivos e Imágenes
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-slate-400 transition-colors bg-slate-50">
                 <ImageIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
@@ -617,7 +622,7 @@ export function ReportForm({
               <FileTextIcon className="w-5 h-5 text-slate-600" />
               Seguimiento General
             </h3>
-            
+
             <Textarea
               placeholder="Escriba aquí el seguimiento general del reporte..."
               rows={4}
@@ -686,8 +691,8 @@ export function ReportForm({
                             value={rubro.descripcion}
                             onChange={(e) => editarRubro(rubro.id, 'descripcion', e.target.value)}
                           />
-                          <Select 
-                            value={rubro.estado} 
+                          <Select
+                            value={rubro.estado}
                             onValueChange={(value) => editarRubro(rubro.id, 'estado', value)}
                           >
                             <SelectTrigger>
@@ -695,7 +700,7 @@ export function ReportForm({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Pendiente">Pendiente</SelectItem>
-                              <SelectItem value="En proceso">En proceso</SelectItem>
+                              <SelectItem value="En Proceso">En Proceso</SelectItem>
                               <SelectItem value="Completado">Completado</SelectItem>
                             </SelectContent>
                           </Select>
@@ -707,10 +712,15 @@ export function ReportForm({
                         </Badge>
                         {isEditMode && (
                           <Button
-                            onClick={() => toggleRubroActivo(rubro.id)}
+                            disabled={!canAnular}
+                            onClick={() => canAnular && toggleRubroActivo(rubro.id)}
                             variant="outline"
                             size="sm"
-                            className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                            className={canAnular
+                              ? "text-orange-600 border-orange-600 hover:bg-orange-50"
+                              : "text-slate-400 border-slate-200 cursor-not-allowed opacity-50"
+                            }
+                            title={canAnular ? "Anular rubro" : "No tienes permiso para anular"}
                           >
                             Anular
                           </Button>
@@ -760,11 +770,11 @@ export function ReportForm({
                                 <TrashIcon className="w-4 h-4" />
                               </Button>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                               <div>
-                                <Select 
-                                  value={seguimiento.tipo} 
+                                <Select
+                                  value={seguimiento.tipo}
                                   onValueChange={(value) => editarSeguimiento(rubro.id, seguimiento.id, 'tipo', value)}
                                 >
                                   <SelectTrigger className="h-8">
@@ -773,7 +783,7 @@ export function ReportForm({
                                   <SelectContent>
                                     <SelectItem value="Iniciado">Iniciado</SelectItem>
                                     <SelectItem value="Cotizando">Cotizando</SelectItem>
-                                    <SelectItem value="En proceso">En proceso</SelectItem>
+                                    <SelectItem value="En Proceso">En Proceso</SelectItem>
                                     <SelectItem value="Completado">Completado</SelectItem>
                                   </SelectContent>
                                 </Select>
@@ -804,7 +814,7 @@ export function ReportForm({
                                 />
                               </div>
                             </div>
-                            
+
                             <div>
                               <Textarea
                                 placeholder="Descripción del seguimiento"
@@ -816,7 +826,7 @@ export function ReportForm({
                             </div>
                           </div>
                         ))}
-                        
+
                         {rubro.seguimientos.length === 0 && (
                           <div className="text-center py-6 text-slate-500 border-2 border-dashed border-slate-200 rounded-lg">
                             <p className="text-sm">No hay seguimientos para este rubro</p>
@@ -827,7 +837,7 @@ export function ReportForm({
                   )}
                 </motion.div>
               ))}
-              
+
               {/* Rubros Anulados */}
               {rubrosAnulados.length > 0 && (
                 <div className="mt-6">
@@ -864,7 +874,7 @@ export function ReportForm({
                   </div>
                 </div>
               )}
-              
+
               {rubrosActivos.length === 0 && rubrosAnulados.length === 0 && (
                 <div className="text-center py-8 text-slate-500 border-2 border-dashed border-slate-300 rounded-lg">
                   <ClipboardListIcon className="w-12 h-12 mx-auto mb-4 text-slate-400" />
@@ -901,7 +911,7 @@ export function ReportForm({
                   <div className="text-sm text-slate-600 mb-2">Estados por rubro:</div>
                   <div className="space-y-1">
                     <div className="text-orange-600">Pendiente: {resumen.pendientes}</div>
-                    <div className="text-blue-600">En proceso: {resumen.enProceso}</div>
+                    <div className="text-blue-600">En Proceso: {resumen.enProceso}</div>
                   </div>
                 </div>
               </div>
@@ -926,11 +936,10 @@ export function ReportForm({
           whileTap={{ scale: 0.98 }}
           onClick={handleFormSubmit}
           disabled={isSubmitting}
-          className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-            isSubmitting
-              ? 'bg-slate-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700'
-          } text-white`}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isSubmitting
+            ? 'bg-slate-400 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-700'
+            } text-white`}
         >
           <SaveIcon className="w-4 h-4" />
           {isSubmitting ? 'Guardando...' : submitLabel}

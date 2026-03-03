@@ -61,7 +61,7 @@ const modulesData = [
   {
     name: "Reportes Inmobiliarios",
     key: "reportes",
-    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    permisos: ["Crear", "Editar", "Anular", "Ver"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
     iconColor: "text-slate-600",
@@ -73,6 +73,7 @@ const permissionConfig = {
   "Crear": { icon: Plus, color: "text-green-600", bg: "bg-green-50" },
   "Editar": { icon: Edit, color: "text-blue-600", bg: "bg-blue-50" },
   "Eliminar": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
+  "Anular": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
   "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
@@ -154,14 +155,14 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
       prev.map((mod, i) =>
         i === index
           ? {
-              ...mod,
-              enabled: !mod.enabled,
-              permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
-              permissions: mod.permisos.reduce((acc, permiso) => {
-                acc[permiso] = !mod.enabled;
-                return acc;
-              }, {})
-            }
+            ...mod,
+            enabled: !mod.enabled,
+            permisosSeleccionados: !mod.enabled ? [...mod.permisos] : [],
+            permissions: mod.permisos.reduce((acc, permiso) => {
+              acc[permiso] = !mod.enabled;
+              return acc;
+            }, {})
+          }
           : mod
       )
     );
@@ -173,9 +174,9 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
       prev.map((mod, i) =>
         i === index
           ? {
-              ...mod,
-              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
-            }
+            ...mod,
+            permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
+          }
           : mod
       )
     );
@@ -193,12 +194,12 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
               return acc;
             }, {});
 
-              return {
-                ...mod,
-                permissions: nextPermissions,
-                permisosSeleccionados: nextSelection,
-              };
-            })()
+            return {
+              ...mod,
+              permissions: nextPermissions,
+              permisosSeleccionados: nextSelection,
+            };
+          })()
           : mod
       )
     );
@@ -409,8 +410,8 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.03 }}
                         className={`border-2 rounded-xl transition-all duration-200 hover:shadow-md ${module.enabled
-                            ? 'bg-white border-slate-300 shadow-sm'
-                            : 'bg-gray-50 border-gray-200'
+                          ? 'bg-white border-slate-300 shadow-sm'
+                          : 'bg-gray-50 border-gray-200'
                           }`}
                       >
                         {/* Header del módulo */}
@@ -418,13 +419,13 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-3 flex-1">
                               <div className={`p-2.5 rounded-lg transition-colors ${module.enabled
-                                  ? 'bg-slate-100 border border-slate-200'
-                                  : 'bg-gray-100 border border-gray-200'
+                                ? 'bg-slate-100 border border-slate-200'
+                                : 'bg-gray-100 border border-gray-200'
                                 }`}>
                                 <IconComponent
                                   className={`w-5 h-5 ${module.enabled
-                                      ? module.iconColor || 'text-slate-600'
-                                      : 'text-gray-400'
+                                    ? module.iconColor || 'text-slate-600'
+                                    : 'text-gray-400'
                                     }`}
                                 />
                               </div>
@@ -464,8 +465,8 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                                   <label
                                     key={permiso}
                                     className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all duration-200 ${isChecked
-                                        ? `${config.bg} ${config.color.replace('text-', 'border-')} border-opacity-30`
-                                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                      ? `${config.bg} ${config.color.replace('text-', 'border-')} border-opacity-30`
+                                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                                       }`}
                                   >
                                     <input
@@ -515,8 +516,8 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
               onClick={handleSubmit}
               disabled={isSubmitting}
               className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isSubmitting
-                  ? 'bg-slate-400 cursor-not-allowed'
-                  : 'bg-slate-600 hover:bg-slate-700'
+                ? 'bg-slate-400 cursor-not-allowed'
+                : 'bg-slate-600 hover:bg-slate-700'
                 } text-white`}
             >
               <Save className="w-4 h-4" />

@@ -86,7 +86,8 @@ class ReportesInmobiliariosService {
 
   async listarReportes(filtros = {}, opciones = {}) {
     try {
-      const params = { ...filtros, ...opciones };
+      // Agregar cache-buster 't' para asegurar datos frescos
+      const params = { ...filtros, ...opciones, t: Date.now() };
       const response = await this.api.get('/reportes-inmobiliarios', { params });
       const body = this.unwrapResponseBody(response.data);
       return Array.isArray(body) ? body : body?.data || []; // soporta ambos esquemas

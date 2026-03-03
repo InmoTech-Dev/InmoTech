@@ -58,7 +58,7 @@ const modulesData = [
   {
     name: "Reportes Inmobiliarios",
     key: "reportes",
-    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    permisos: ["Crear", "Editar", "Anular", "Ver"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
     description: "Generacion de informes y analisis de mercado"
@@ -69,6 +69,7 @@ const permissionConfig = {
   "crear": { icon: Plus, color: "text-green-600", bg: "bg-green-50", label: "Crear" },
   "editar": { icon: Edit, color: "text-blue-600", bg: "bg-blue-50", label: "Editar" },
   "eliminar": { icon: Trash2, color: "text-red-600", bg: "bg-red-50", label: "Eliminar" },
+  "anular": { icon: Trash2, color: "text-red-600", bg: "bg-red-50", label: "Anular" },
   "ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50", label: "Ver" }
 };
 

@@ -57,7 +57,7 @@ const modulesData = [
   {
     name: "Reportes Inmobiliarios",
     key: "reportes",
-    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    permisos: ["Crear", "Editar", "Anular", "Ver"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
     description: "Generacion de informes y analisis de mercado"
@@ -68,6 +68,7 @@ const permissionConfig = {
   "Crear": { icon: Plus, color: "text-green-600", bg: "bg-green-50" },
   "Editar": { icon: Edit, color: "text-blue-600", bg: "bg-blue-50" },
   "Eliminar": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
+  "Anular": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
   "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
@@ -173,9 +174,9 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       prev.map((mod, i) =>
         i === index
           ? {
-              ...mod,
-              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
-            }
+            ...mod,
+            permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
+          }
           : mod
       )
     );
@@ -337,8 +338,8 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.03 }}
                         className={`border-2 rounded-lg transition-all duration-200 ${module.enabled
-                            ? `${module.color} shadow-sm`
-                            : 'bg-gray-50 border-gray-200'
+                          ? `${module.color} shadow-sm`
+                          : 'bg-gray-50 border-gray-200'
                           }`}
                       >
                         {/* Header del mรณdulo */}
@@ -389,8 +390,8 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                                     type="button"
                                     onClick={() => togglePermiso(index, permiso)}
                                     className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all text-xs font-medium ${isSelected
-                                        ? `${config.bg} ${config.color} border-current shadow-sm`
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                      ? `${config.bg} ${config.color} border-current shadow-sm`
+                                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
                                       }`}
                                   >
                                     <IconPermiso className="w-3 h-3" />
@@ -426,8 +427,8 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               onClick={handleSubmit}
               disabled={isSubmitting}
               className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isSubmitting
-                  ? 'bg-slate-400 cursor-not-allowed'
-                  : 'bg-slate-600 hover:bg-slate-700'
+                ? 'bg-slate-400 cursor-not-allowed'
+                : 'bg-slate-600 hover:bg-slate-700'
                 } text-white`}
             >
               <Save className="w-4 h-4" />

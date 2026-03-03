@@ -216,14 +216,12 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
 
     const horaDecimal = horas + (minutos / 60);
 
-    // Horario laboral: 8:00 am - 6:00 pm (con descanso de 12:00 pm a 2:00 pm)
-    if (horaDecimal < 8 || horaDecimal >= 18) {
-      return 'Las citas solo se pueden agendar entre las 8:00 am y las 6:00 pm';
-    }
+    // Horario laboral: 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm
+    const isMorning = horaDecimal >= 8 && horaDecimal < 13;
+    const isAfternoon = horaDecimal >= 14 && horaDecimal < 17;
 
-    // Bloquear horario de almuerzo: 12:00 pm - 2:00 pm
-    if (horaDecimal >= 12 && horaDecimal < 14) {
-      return 'No hay citas disponibles entre las 12:00 pm y las 2:00 pm (horario de almuerzo)';
+    if (!isMorning && !isAfternoon) {
+      return 'Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm';
     }
 
     // Verificar que sea en intervalos de 30 minutos

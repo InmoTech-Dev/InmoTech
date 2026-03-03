@@ -57,11 +57,10 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
       console.error('Error cargando horarios disponibles:', error);
       // En caso de error, mostrar horarios predeterminados
       const defaultTimes = [];
-      for (let hora = 8; hora <= 17; hora++) {
+      for (let hora = 8; hora <= 16; hora++) {
+        if (hora === 13) continue;
         defaultTimes.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
-          defaultTimes.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
+        defaultTimes.push(`${hora.toString().padStart(2, '0')}:30`);
       }
       setAvailableTimes(defaultTimes);
     } finally {
@@ -409,7 +408,7 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                               if ((appointmentTotalMinutes - currentTotalMinutes) < 120) return false;
                             }
 
-                            return h >= 8 && h < 12;
+                            return h < 13;
                           })
                           .map(time => {
                             const isSelected = formData.hora_inicio === time;
@@ -463,7 +462,7 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                               if ((appointmentTotalMinutes - currentTotalMinutes) < 120) return false;
                             }
 
-                            return h >= 12 && h <= 17;
+                            return h >= 14 && h <= 16;
                           })
                           .map(time => {
                             const isSelected = formData.hora_inicio === time;

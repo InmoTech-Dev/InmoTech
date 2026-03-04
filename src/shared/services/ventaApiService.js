@@ -52,6 +52,17 @@ export const ventaApiService = {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('tipo', tipo);
+    // Ayudas para el backend/Cloudinary: folder organizado y tipo correcto
+    formData.append('folder', `inmotech/ventas/${idVenta}`);
+    if (file && file.type) formData.append('content_type', file.type);
+    if (file && /\.pdf$/i.test(file.name)) {
+      formData.append('resource_type', 'raw');
+      formData.append('type', 'upload'); // asegurar público
+    } else {
+      // imágenes u otros: dejar auto
+      formData.append('resource_type', 'auto');
+      formData.append('type', 'upload');
+    }
     // No enviar cabecera headers anidada; fetch infiere multipart con FormData
     return apiClient.post(`/sales/${idVenta}/attachments`, formData);
   },

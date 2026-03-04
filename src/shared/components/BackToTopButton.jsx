@@ -4,7 +4,7 @@ import { ArrowUp } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/shared/utils/cn"
 
-const landingPrefixes = ["/inmuebles", "/contáctanos", "/nosotros", "/servicios"]
+const landingPrefixes = ["/inmuebles", "/contactanos", "/nosotros", "/servicios"]
 
 export default function BackToTopButton() {
   const { pathname } = useLocation()

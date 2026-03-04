@@ -59,13 +59,11 @@ La API sigue una arquitectura en capas para separación de responsabilidades:
 ### 2. Seguridad de Clase Empresarial
 
 #### Rate Limiting
-
 - **General**: 100 requests por 15 minutos
 - **Creación de citas**: 20 requests por hora
 - **Operaciones sensibles**: 30 requests por 15 minutos
 
 #### Protecciones Implementadas
-
 - Helmet para headers de seguridad
 - CORS configurado con whitelist
 - Sanitización de inputs (prevención XSS)
@@ -101,29 +99,28 @@ Winston gestiona logs en múltiples niveles:
 Respuestas consistentes en toda la API:
 
 **Éxito**:
-
 ```json
 {
   "success": true,
   "message": "Operación exitosa",
-  "data": {}
+  "data": { }
 }
 ```
 
 **Error**:
-
 ```json
 {
   "success": false,
   "message": "Error de validación",
-  "errors": [{ "field": "correo", "message": "Email inválido" }]
+  "errors": [
+    { "field": "correo", "message": "Email inválido" }
+  ]
 }
 ```
 
 ### 6. Optimización de Base de Datos
 
 #### Índices Estratégicos
-
 ```sql
 -- Optimización para búsquedas frecuentes
 IX_Citas_Estado (id_estado_cita, fecha_cita, hora_inicio)
@@ -134,7 +131,6 @@ IX_Personas_Documento (tipo_documento, numero_documento)
 ```
 
 #### Pool de Conexiones
-
 ```javascript
 pool: {
   max: 10,      // Máximo 10 conexiones
@@ -151,7 +147,6 @@ pool: {
 #### Característica: Auto-registro y Autocompletado
 
 Cuando una persona solicita una cita:
-
 1. La API busca si existe por tipo y número de documento
 2. Si existe: actualiza sus datos y retorna información completa
 3. Si no existe: crea registro nuevo automáticamente
@@ -159,7 +154,6 @@ Cuando una persona solicita una cita:
 Esto permite el **autocompletado inteligente** en formularios.
 
 **Endpoint**:
-
 ```
 GET /api/v1/citas/buscar-persona?tipo_documento=CC&numero_documento=123
 ```
@@ -200,7 +194,6 @@ POST /api/v1/citas
 #### Automáticas y en Tiempo Real
 
 La API crea notificaciones automáticamente cuando:
-
 - Se solicita una cita nueva → Notifica a TODOS los agentes
 - Se confirma una cita → Notifica al cliente
 - Se cancela una cita → Notifica al cliente
@@ -208,7 +201,6 @@ La API crea notificaciones automáticamente cuando:
 - Se completa una cita → Notifica al cliente
 
 **Obtener notificaciones**:
-
 ```javascript
 GET /api/v1/notificaciones?id_rol=2  // Rol 2 = Agente Inmobiliario
 ```
@@ -239,32 +231,29 @@ POST /api/v1/citas/1/confirmar
 
 La API gestiona 6 estados diferentes:
 
-| ID  | Estado     | Descripción                           | Puede cambiar a                   |
-| --- | ---------- | ------------------------------------- | --------------------------------- |
-| 1   | Solicitada | Recién creada, pendiente confirmación | Confirmada, Cancelada             |
-| 2   | Confirmada | Aceptada por agente                   | Programada, Reagendada, Cancelada |
-| 3   | Programada | Lista para realizarse                 | Completada, Reagendada, Cancelada |
-| 4   | Reagendada | Cambió fecha/hora                     | Confirmada, Completada, Cancelada |
-| 5   | Completada | Finalizada exitosamente               | _(estado final)_                  |
-| 6   | Cancelada  | Cancelada por cliente/agente          | _(estado final)_                  |
+| ID | Estado | Descripción | Puede cambiar a |
+|----|--------|-------------|-----------------|
+| 1 | Solicitada | Recién creada, pendiente confirmación | Confirmada, Cancelada |
+| 2 | Confirmada | Aceptada por agente | Programada, Reagendada, Cancelada |
+| 3 | Programada | Lista para realizarse | Completada, Reagendada, Cancelada |
+| 4 | Reagendada | Cambió fecha/hora | Confirmada, Completada, Cancelada |
+| 5 | Completada | Finalizada exitosamente | *(estado final)* |
+| 6 | Cancelada | Cancelada por cliente/agente | *(estado final)* |
 
 ### 6. Operaciones Disponibles
 
 #### Confirmar Cita
-
 ```
 POST /api/v1/citas/:id/confirmar
 ```
 
 #### Cancelar Cita
-
 ```
 POST /api/v1/citas/:id/cancelar
 { "motivo_cancelacion": "Razón de cancelación" }
 ```
 
 #### Reagendar Cita
-
 ```
 POST /api/v1/citas/:id/reagendar
 {
@@ -275,20 +264,17 @@ POST /api/v1/citas/:id/reagendar
 ```
 
 #### Completar Cita
-
 ```
 POST /api/v1/citas/:id/completar
 ```
 
 #### Actualizar Cita
-
 ```
 PATCH /api/v1/citas/:id
 { "observaciones": "Nueva observación" }
 ```
 
 #### Eliminar Cita
-
 ```
 DELETE /api/v1/citas/:id
 ```
@@ -315,35 +301,31 @@ GET /api/v1/citas?estado=1&fecha=2025-10-25
 
 La API soporta 4 tipos de servicios:
 
-| ID  | Nombre                | Duración | Descripción                   |
-| --- | --------------------- | -------- | ----------------------------- |
-| 1   | Visita a Propiedad    | 45 min   | Visita presencial al inmueble |
-| 2   | Avalúos               | 60 min   | Tasación y avalúo profesional |
-| 3   | Gestión de Alquileres | 30 min   | Asesoría sobre alquileres     |
-| 4   | Asesoría Legal        | 45 min   | Consulta legal inmobiliaria   |
+| ID | Nombre | Duración | Descripción |
+|----|--------|----------|-------------|
+| 1 | Visita a Propiedad | 45 min | Visita presencial al inmueble |
+| 2 | Avalúos | 60 min | Tasación y avalúo profesional |
+| 3 | Gestión de Alquileres | 30 min | Asesoría sobre alquileres |
+| 4 | Asesoría Legal | 45 min | Consulta legal inmobiliaria |
 
 ## Inicio Rápido
 
 ### 1. Instalar Dependencias
-
 ```bash
 cd api
 npm install
 ```
 
 ### 2. Configurar Base de Datos
-
 1. Ejecutar script: `api/database/Bd relacional Inmotech copy copy.txt`
 2. Editar `.env` con credenciales
 
 ### 3. Iniciar Servidor
-
 ```bash
 npm run dev
 ```
 
 ### 4. Verificar
-
 ```bash
 curl http://localhost:5000/api/v1/health
 ```
@@ -353,14 +335,14 @@ curl http://localhost:5000/api/v1/health
 ### Ejemplo React
 
 ```javascript
-const API_URL = "http://localhost:5000/api/v1";
+const API_URL = 'http://localhost:5000/api/v1';
 
 // Crear cita
 const crearCita = async (datos) => {
   const response = await fetch(`${API_URL}/citas`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos)
   });
   return await response.json();
 };
@@ -368,7 +350,7 @@ const crearCita = async (datos) => {
 // Buscar persona
 const buscarPersona = async (tipo, numero) => {
   const response = await fetch(
-    `${API_URL}/citas/buscar-persona?tipo_documento=${tipo}&numero_documento=${numero}`,
+    `${API_URL}/citas/buscar-persona?tipo_documento=${tipo}&numero_documento=${numero}`
   );
   return await response.json();
 };

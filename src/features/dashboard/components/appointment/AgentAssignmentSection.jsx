@@ -347,26 +347,22 @@ const AgentAssignmentSection = ({
           </div>
 
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" />
-              {agenteMostrado ? 'Motivo de reasignación' : 'Notas de asignación'}
-              {agenteMostrado && <span className="text-red-500">*</span>}
-            </label>
-            <textarea
-              value={comentario}
-              onChange={(e) => setComentario(e.target.value)}
-              placeholder={agenteMostrado ? "Explica por qué se está reasignando este agente..." : "Agrega una nota opcional..."}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required={!!agenteMostrado}
-            />
-            {!agenteMostrado && (
-              <p className="mt-1 text-xs text-gray-500">
-                Esta nota es opcional ya que es la primera asignación.
-              </p>
-            )}
-          </div>
+          {agenteMostrado && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Motivo de reagendamiento del agente <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={comentario}
+                onChange={(e) => setComentario(e.target.value)}
+                placeholder="Explica por qu   se est   reasignando este agente..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+          )}
 
 
           <div className="flex items-center gap-3 pt-4">
@@ -614,26 +610,25 @@ const AgentAssignmentSection = ({
       </div>
 
 
-     <div>
+     {agenteMostrado && (
+      <div>
        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
         <MessageSquare className="w-4 h-4" />
-        {agenteMostrado ? 'Motivo de reasignación' : 'Notas de asignación'}
-        {agenteMostrado && <span className="text-red-500">*</span>}
+        Motivo de reagendamiento del agente <span className="text-red-500">*</span>
        </label>
        <textarea
         value={comentario}
         onChange={(e) => setComentario(e.target.value)}
-        placeholder={agenteMostrado ? "Explica por qué se está reasignando este agente..." : "Agrega una nota opcional..."}
+        placeholder="Explica por qu   se est   reasignando este agente..."
         rows={3}
         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        required={!!agenteMostrado}
+        required
        />
-       {!agenteMostrado && (
-        <p className="mt-1 text-xs text-gray-500">
-         Esta nota es opcional ya que es la primera asignación.
-        </p>
-       )}
+       <p className="mt-1 text-xs text-gray-500">
+        Este comentario se guardar   en el historial de asignaciones
+       </p>
       </div>
+     )}
 
 
      <div className="flex items-center gap-3 pt-4">

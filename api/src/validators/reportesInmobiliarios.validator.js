@@ -24,7 +24,6 @@ const listarReportesSchema = Joi.object({
   estado: Joi.string().valid('Pendiente', 'En Proceso', 'Completado', 'Cancelado').optional(),
   tipo_reporte: Joi.string().optional(),
   id_inmueble: Joi.number().integer().positive().optional(),
-  id_propietario: Joi.number().integer().positive().optional(),
   pagina: Joi.number().integer().min(1).default(1),
   limite: Joi.number().integer().min(1).max(100).default(20),
   ordenar_por: Joi.string().valid('fecha_creacion', 'estado', 'tipo_reporte').default('fecha_creacion'),
@@ -65,14 +64,12 @@ const actualizarRubroSchema = Joi.object({
 
 const crearSeguimientoRubroSchema = Joi.object({
   descripcion: Joi.string().required(),
-  estado: Joi.string().valid('Pendiente', 'En Proceso', 'Completado', 'Cancelado').required(),
-  fecha: Joi.string().allow('', null).optional()
+  estado: Joi.string().valid('Pendiente', 'En Proceso', 'Completado', 'Cancelado').required()
 });
 
 const actualizarSeguimientoRubroSchema = Joi.object({
   estado: Joi.string().valid('Pendiente', 'En Proceso', 'Completado', 'Cancelado').required(),
-  descripcion: Joi.string().optional(),
-  fecha: Joi.string().allow('', null).optional()
+  descripcion: Joi.string().optional()
 });
 
 const autocompleteInmuebleSchema = Joi.object({

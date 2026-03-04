@@ -33,6 +33,11 @@ router.get('/me',
   personasController.obtenerPerfil
 );
 
+// Obtener resumen propietario de la persona autenticada
+router.get('/me/inmuebles',
+  personasController.obtenerResumenPropietario
+);
+
 // Actualizar perfil de la persona autenticada (solo el propio usuario)
 router.patch('/me',
   validate(actualizarPersonaSchema),

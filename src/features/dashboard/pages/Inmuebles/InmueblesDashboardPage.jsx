@@ -14,6 +14,35 @@ import { VerFichaTecnicaModal } from '../Inmuebles/components/inmuebles/verFicha
 // Hooks
 import { useInmuebles } from '../Inmuebles/hooks/useInmuebles';
 
+const ESTADOS_POR_OPERACION = {
+  Arriendo: ['Disponible', 'En proceso de arrendamiento', 'Arrendado'],
+  Venta: ['Disponible', 'En proceso de venta', 'Vendido'],
+  'Venta y Arriendo': [
+    'Disponible',
+    'En proceso de arrendamiento',
+    'Arrendado',
+    'En proceso de venta',
+    'Vendido'
+  ]
+};
+
+const resolveEstadoFrontend = (operacion, estadoActual) => {
+  const estadosPermitidos = ESTADOS_POR_OPERACION[operacion] || ESTADOS_POR_OPERACION['Venta y Arriendo'];
+  if (estadosPermitidos.includes(estadoActual)) {
+    return estadoActual;
+  }
+  return 'Disponible';
+};
+
+const isFinalStatusForFeatured = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'arrendado' || normalized === 'vendido';
+};
+
 const InmuebleDashboardPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -45,7 +74,12 @@ const InmuebleDashboardPage = () => {
   const handleSaveInmueble = async (inmuebleData, esEdicion) => {
     try {
       if (esEdicion) {
-        await actualizarInmueble(inmuebleData.id, inmuebleData);
+        const estadoActual = inmuebleEditar?.estado || 'Disponible';
+        const estadoFrontend = resolveEstadoFrontend(inmuebleData.operacion, estadoActual);
+        await actualizarInmueble(inmuebleData.id, {
+          ...inmuebleData,
+          estado_frontend: estadoFrontend
+        });
       } else {
         await crearInmueble(inmuebleData);
       }
@@ -84,9 +118,34 @@ const InmuebleDashboardPage = () => {
 
   const handleEstadoChange = async (inmueble, nuevoEstado) => {
     try {
-      await actualizarInmueble(inmueble.id, { ...inmueble, estado: nuevoEstado });
+      await actualizarInmueble(inmueble.id, {
+        operacion: inmueble.operacion,
+        estado_frontend: nuevoEstado
+      });
     } catch (err) {
       console.error('Error actualizando estado del inmueble:', err);
+    }
+  };
+
+  const handleToggleFeatured = async (inmueble) => {
+    try {
+      if (isFinalStatusForFeatured(inmueble.estado)) {
+        return;
+      }
+
+      const currentValue = inmueble.destacado ?? inmueble.featured ?? false;
+      if (!currentValue) {
+        const destacadosCount = inmuebles.filter((item) => (item.destacado ?? item.featured ?? false)).length;
+        if (destacadosCount >= 6) {
+          window.alert('Solo se pueden destacar 6 inmuebles. Quita uno antes de destacar otro.');
+          return;
+        }
+      }
+      await actualizarInmueble(inmueble.id, { destacado: !currentValue });
+    } catch (err) {
+      const message = err?.message || 'Error actualizando destacado del inmueble.';
+      window.alert(message);
+      console.error('Error actualizando destacado del inmueble:', err);
     }
   };
 
@@ -170,6 +229,7 @@ const InmuebleDashboardPage = () => {
         onEdit={handleEditar}
         onDocument={handleVerFichas}
         onStatusChange={handleEstadoChange}
+        onToggleFeatured={handleToggleFeatured}
       />
 
       {totalPages > 1 && (

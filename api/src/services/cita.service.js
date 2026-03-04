@@ -7,15 +7,100 @@ const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { isSuperAdministrator } = require('../middlewares/auth.middleware');
 const logger = require('../utils/logger');
-const {
-  normalizarFechaCita,
-  normalizarHoraExacta,
-  normalizarHoraTexto,
-  horaEnMinutos,
-  sumarMinutosHora,
-  resolverRangoHorario
-} = require('../utils/date');
 
+const normalizarFechaCita = (fecha) => {
+  if (!fecha) return fecha;
+  if (typeof fecha === 'string') return fecha;
+
+  const parsed = new Date(fecha);
+  if (Number.isNaN(parsed.getTime())) return fecha;
+
+  return parsed.toISOString().slice(0, 10);
+};
+
+const normalizarHoraTexto = (hora) => {
+  if (typeof hora === 'undefined' || hora === null) return null;
+
+  const match = String(hora).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+
+  const horas = Number(match[1]);
+  const minutos = Number(match[2]);
+  if (Number.isNaN(horas) || Number.isNaN(minutos) || horas < 0 || horas > 23 || minutos < 0 || minutos > 59) {
+    return null;
+  }
+
+  return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+};
+
+const normalizarHoraComparable = (hora) => {
+  if (hora instanceof Date && !Number.isNaN(hora.getTime())) {
+    const horas = String(hora.getUTCHours()).padStart(2, '0');
+    const minutos = String(hora.getUTCMinutes()).padStart(2, '0');
+    const segundos = String(hora.getUTCSeconds()).padStart(2, '0');
+    return `${horas}:${minutos}:${segundos}`;
+  }
+
+  if (typeof hora === 'string') {
+    const horaLimpia = hora.trim();
+    const hhmmss = horaLimpia.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+    if (hhmmss) {
+      const horas = String(Number(hhmmss[1])).padStart(2, '0');
+      return `${horas}:${hhmmss[2]}:${hhmmss[3]}`;
+    }
+
+    const hhmm = horaLimpia.match(/^(\d{1,2}):(\d{2})$/);
+    if (hhmm) {
+      const horas = String(Number(hhmm[1])).padStart(2, '0');
+      return `${horas}:${hhmm[2]}:00`;
+    }
+  }
+
+  return hora;
+};
+
+const horaEnMinutos = (hora) => {
+  const horaNormalizada = normalizarHoraTexto(hora);
+  if (!horaNormalizada) return null;
+
+  const [horas, minutos] = horaNormalizada.split(':').map(Number);
+  return (horas * 60) + minutos;
+};
+
+const sumarMinutosHora = (hora, minutosASumar = 30) => {
+  const totalActual = horaEnMinutos(hora);
+  if (totalActual === null) return null;
+
+  const totalFinal = totalActual + minutosASumar;
+  if (totalFinal >= 24 * 60) return null;
+
+  const horas = Math.floor(totalFinal / 60);
+  const minutos = totalFinal % 60;
+  return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+};
+
+const resolverRangoHorario = ({ horaInicio, horaFin }) => {
+  const inicioNormalizado = normalizarHoraTexto(horaInicio);
+  if (!inicioNormalizado) {
+    return { horaInicio: null, horaFin: null };
+  }
+
+  const finNormalizado = normalizarHoraTexto(horaFin);
+  const inicioMinutos = horaEnMinutos(inicioNormalizado);
+  const finMinutos = finNormalizado ? horaEnMinutos(finNormalizado) : null;
+
+  if (finMinutos === null || finMinutos <= inicioMinutos) {
+    return {
+      horaInicio: inicioNormalizado,
+      horaFin: sumarMinutosHora(inicioNormalizado, 30)
+    };
+  }
+
+  return {
+    horaInicio: inicioNormalizado,
+    horaFin: finNormalizado
+  };
+};
 class CitaService {
 
   async crearCita(dataCita) {
@@ -141,9 +226,9 @@ class CitaService {
             id_persona: persona.id_persona,
             ...(dataCita.id_inmueble !== null ? { id_inmueble: dataCita.id_inmueble } : {}),
             id_servicio: idServicio,
-            fecha_cita: normalizarFechaCita(dataCita.fecha_cita),
-            hora_inicio: normalizarHoraExacta(dataCita.hora_inicio),
-            hora_fin: normalizarHoraExacta(dataCita.hora_fin)
+            fecha_cita: dataCita.fecha_cita,
+            hora_inicio: dataCita.hora_inicio,
+            hora_fin: dataCita.hora_fin
           },
           transaction: t
         });
@@ -156,7 +241,7 @@ class CitaService {
         const citasPendientes = await Cita.count({
           where: {
             id_persona: persona.id_persona,
-            id_estado_cita: { [Op.in]: [1, 2, 3, 4] } // Solicitada, Confirmada,Reagendada
+            id_estado_cita: { [Op.in]: [1, 2, 3, 4] } // Solicitada, Confirmada, Programada, Reagendada
           },
           transaction: t
         });
@@ -170,7 +255,7 @@ class CitaService {
             where: {
               id_inmueble: dataCita.id_inmueble,
               fecha_cita: normalizarFechaCita(dataCita.fecha_cita),
-              hora_inicio: normalizarHoraExacta(dataCita.hora_inicio),
+              hora_inicio: dataCita.hora_inicio,
               id_estado_cita: 1 // Solicitada
             },
             transaction: t
@@ -187,8 +272,8 @@ class CitaService {
           id_inmueble: dataCita.id_inmueble,
           id_servicio: dataCita.id_servicio,
           fecha_cita: normalizarFechaCita(dataCita.fecha_cita),
-          hora_inicio: normalizarHoraExacta(dataCita.hora_inicio),
-          hora_fin: normalizarHoraExacta(dataCita.hora_fin),
+          hora_inicio: dataCita.hora_inicio,
+          hora_fin: dataCita.hora_fin,
           id_estado_cita: dataCita.id_estado_cita || 1, // 1 = Solicitada
           observaciones: dataCita.observaciones || null,
           id_agente_asignado: null,
@@ -275,21 +360,7 @@ class CitaService {
       ];
 
       const whereClause = {};
-      if (filtros.id_estado_cita) {
-        if (Array.isArray(filtros.id_estado_cita)) {
-          whereClause.id_estado_cita = { [Op.in]: filtros.id_estado_cita };
-        } else if (typeof filtros.id_estado_cita === 'string' && filtros.id_estado_cita.includes(',')) {
-          whereClause.id_estado_cita = { [Op.in]: filtros.id_estado_cita.split(',').map(Number) };
-        } else {
-          whereClause.id_estado_cita = filtros.id_estado_cita;
-        }
-      } else if (filtros.estado_in) {
-        // Soporte para el filtro alternativo usado en algunos controladores
-        const states = Array.isArray(filtros.estado_in)
-          ? filtros.estado_in
-          : String(filtros.estado_in).split(',').map(Number);
-        whereClause.id_estado_cita = { [Op.in]: states };
-      }
+      if (filtros.id_estado_cita) whereClause.id_estado_cita = filtros.id_estado_cita;
       if (filtros.fecha_cita) whereClause.fecha_cita = filtros.fecha_cita;
       if (filtros.id_agente_asignado) whereClause.id_agente_asignado = filtros.id_agente_asignado;
       if (filtros.id_inmueble) whereClause.id_inmueble = filtros.id_inmueble;
@@ -385,6 +456,7 @@ class CitaService {
 
       // Retornar array simple si no hay paginaciÃ³n
       return citasFormateadas;
+
     } catch (error) {
       logger.error(`âŒ Error en obtenerTodasLasCitas: ${error.message}`);
       throw error;
@@ -411,28 +483,24 @@ class CitaService {
     }
   }
 
-  async confirmarCita(idCita, idAgente) {
-    return await sequelize.transaction(async (t) => {
-      const cita = await Cita.findByPk(idCita, {
-        include: [{ association: 'servicio' }],
-        transaction: t
-      });
-
-      if (!cita) throw new Error('Cita no encontrada');
-      
-      // Estado ID 1: Solicitada, 4: Re Agendada
-      if (![1, 4].includes(cita.id_estado_cita)) {
-        throw new Error(`No se puede confirmar una cita en estado ${cita.id_estado_cita}`);
+  async confirmarCita(id, idAgenteAsignado) {
+    try {
+      // Tomar instancia directa para poder usar update
+      const cita = await Cita.findByPk(id);
+      if (!cita) {
+        throw new Error('Cita no encontrada');
       }
 
-      const citaActualizada = await cita.update({
+      await cita.update({
         id_estado_cita: 2, // Confirmada
-        id_agente_asignado: idAgente,
+        id_agente_asignado: idAgenteAsignado,
         fecha_confirmacion: new Date()
-      }, { transaction: t });
+      });
 
-      // Lógica de "Bloqueo Inteligente": Si es visita, cancelar otras solicitudes
-      if (cita.servicio?.nombre_servicio === 'Visita a Propiedad' && cita.id_inmueble) {
+      // Bloqueo Inteligente: Cancelar otras solicitudes para el mismo espacio
+      if (cita.id_inmueble && cita.id_servicio === 1) { // Solo para Visitas
+        const horaInicioComparable = normalizarHoraComparable(cita.hora_inicio);
+
         await Cita.update(
           {
             id_estado_cita: 6, // Cancelada
@@ -453,8 +521,10 @@ class CitaService {
       }
 
       // Retornar la cita con includes completos
-      return await this.obtenerCitaPorId(idCita, t);
-    });
+      return await this.obtenerCitaPorId(id);
+    } catch (error) {
+      throw error;
+    }
   }
 
   async cancelarCita(id, motivoCancelacion) {
@@ -494,8 +564,8 @@ class CitaService {
         // Actualizar la cita con los nuevos datos
         const datosActualizados = {
           fecha_cita: normalizarFechaCita(nuevosDatos.fecha_cita),
-          hora_inicio: normalizarHoraExacta(nuevosDatos.hora_inicio),
-          hora_fin: normalizarHoraExacta(nuevosDatos.hora_fin),
+          hora_inicio: nuevosDatos.hora_inicio,
+          hora_fin: nuevosDatos.hora_fin,
           motivo_reagendamiento: nuevosDatos.motivo_reagendamiento,
           id_agente_asignado: nuevosDatos.id_agente_asignado,
           id_estado_cita: 4, // Reagendada
@@ -551,6 +621,12 @@ class CitaService {
 
   async actualizarCita(id, nuevosDatos) {
     try {
+      const cita = await this.obtenerCitaPorId(id);
+
+      if (!cita) {
+        throw new Error('Cita no encontrada');
+      }
+
       const datosActualizados = {
         ...nuevosDatos,
         fecha_actualizacion: new Date()
@@ -560,13 +636,7 @@ class CitaService {
         datosActualizados.fecha_cita = normalizarFechaCita(nuevosDatos.fecha_cita);
       }
 
-      // ├ó┼ôÔÇª Obtener instancia directa de Sequelize para que tenga el m├â┬®todo .update()
-      const citaModel = await Cita.findByPk(id);
-      if (!citaModel) {
-        throw new Error('Cita no encontrada');
-      }
-
-      await citaModel.update(datosActualizados);
+      await cita.update(datosActualizados);
 
       return await this.obtenerCitaPorId(id);
     } catch (error) {
@@ -623,8 +693,8 @@ class CitaService {
               {
                 where: {
                   id_inmueble: cita.id_inmueble,
-                  fecha_cita: normalizarFechaCita(cita.fecha_cita),
-                  hora_inicio: normalizarHoraExacta(cita.hora_inicio),
+                  fecha_cita: cita.fecha_cita,
+                  hora_inicio: cita.hora_inicio,
                   id_estado_cita: 1, // Solicitada
                   id_cita: { [Op.ne]: idCita }
                 },
@@ -818,38 +888,46 @@ class CitaService {
    * Reduce el tiempo de respuesta de ~1 segundo a ~50-100ms
    */
   async actualizarEstadoCitaOptimizado(idCita, idEstadoCita) {
-    return await sequelize.transaction(async (t) => {
-      logger.info(`🔄 Actualizando estado de cita ${idCita} a ${idEstadoCita} (optimizado)`);
+    try {
+      logger.info(`ðŸ”„ Actualizando estado de cita ${idCita} a ${idEstadoCita} (optimizado)`);
 
-      const cita = await Cita.findByPk(idCita, {
-        attributes: ['id_cita', 'id_estado_cita'],
-        transaction: t
+      // Validar que la cita existe
+      const citaExiste = await Cita.findByPk(idCita, {
+        attributes: ['id_cita', 'id_estado_cita']
       });
 
-      if (!cita) {
+      if (!citaExiste) {
         throw new Error('Cita no encontrada');
       }
 
-      // 5: Completada, 6: Cancelada
-      const ESTADOS_FINALES = [5, 6];
+      // Actualizar solo el estado sin cargar asociaciones
+      const [affectedRows] = await Cita.update(
+        {
+          id_estado_cita: idEstadoCita,
+          fecha_actualizacion: new Date()
+        },
+        {
+          where: { id_cita: idCita },
+          returning: false // No necesitamos devolver los datos actualizados
+        }
+      );
 
-      if (ESTADOS_FINALES.includes(cita.id_estado_cita) && !ESTADOS_FINALES.includes(Number(idEstadoCita))) {
-        throw new Error('No se puede reactivar una cita que ya ha sido completada o cancelada');
+      if (affectedRows === 0) {
+        throw new Error('No se pudo actualizar el estado de la cita');
       }
 
-      await cita.update({
-        id_estado_cita: idEstadoCita,
-        fecha_actualizacion: new Date()
-      }, { transaction: t });
+      logger.info(`âœ… Estado de cita ${idCita} actualizado a ${idEstadoCita} (optimizado)`);
 
-      logger.info(`✅ Estado de cita ${idCita} actualizado a ${idEstadoCita} (optimizado)`);
-
+      // Retornar solo los datos mÃ­nimos necesarios para la actualizaciÃ³n optimista
       return {
         id_cita: idCita,
         id_estado_cita: idEstadoCita,
         fecha_actualizacion: new Date()
       };
-    });
+    } catch (error) {
+      logger.error(`âŒ Error en actualizarEstadoCitaOptimizado: ${error.message}`);
+      throw error;
+    }
   }
 
   /**
@@ -1135,7 +1213,7 @@ class CitaService {
       return true;
 
     } catch (error) {
-      logger.error(`â Œ Error incrementando contador de ediciones para cita ${idCita}: ${error.message}`);
+      logger.error(`âŒ Error incrementando contador de ediciones para cita ${idCita}: ${error.message}`);
       throw error;
     }
   }
@@ -1146,7 +1224,7 @@ class CitaService {
    * @param {Object} nuevosDatos - Datos para actualizar
    * @returns {Promise<Object>} Cita actualizada con contador incrementado
    */
-  async incrementarContadorEdicionesActualizar(idCita, nuevosDatos, options = { increment: true }) {
+  async incrementarContadorEdicionesActualizar(idCita, nuevosDatos = {}) {
 
     const result = await sequelize.transaction(async (t) => {
       try {
@@ -1191,9 +1269,9 @@ class CitaService {
         }
 
         const valorActual = citaActual.ediciones_realizadas || 0;
-        const nuevoValor = options.increment ? valorActual + 1 : valorActual;
+        const nuevoValor = valorActual + 1;
 
-        logger.info(`OK [DEBUG] Valor actual del contador: ${valorActual}, nuevo valor: ${nuevoValor} (incremento: ${options.increment})`);
+        logger.info(`OK [DEBUG] Valor actual del contador: ${valorActual}, nuevo valor: ${nuevoValor}`);
 
         const fechaFinal = typeof nuevosDatos.fecha_cita !== 'undefined'
           ? normalizarFechaCita(nuevosDatos.fecha_cita)
@@ -1373,7 +1451,7 @@ class CitaService {
         const citaFinal = await this.obtenerCitaPorId(idCita, t);
 
         // Bloqueo Inteligente: Si el nuevo estado es 'Reagendada' (4), cancelar otras solicitudes en el mismo slot
-        if (estadoFinal === 4 && citaFinal.id_inmueble && citaFinal.id_servicio === 1) {
+        if (dataUpdate.id_estado_cita === 4 && citaFinal.id_inmueble && citaFinal.id_servicio === 1) {
           await Cita.update(
             {
               id_estado_cita: 6, // Cancelada
@@ -1383,8 +1461,8 @@ class CitaService {
             {
               where: {
                 id_inmueble: citaFinal.id_inmueble,
-                fecha_cita: normalizarFechaCita(citaFinal.fecha_cita),
-                hora_inicio: normalizarHoraExacta(citaFinal.hora_inicio),
+                fecha_cita: citaFinal.fecha_cita,
+                hora_inicio: citaFinal.hora_inicio,
                 id_estado_cita: { [Op.in]: [1, 4] }, // Solicitada o Reagendada
                 id_cita: { [Op.ne]: idCita }
               },

@@ -183,6 +183,7 @@ const ReportsContent = () => {
         ''
       )
       await fetchReports()
+      setRefreshDetailedView(v => v + 1)
       toast({
         title: 'Estado actualizado',
         description: `El reporte pasó a ${estadoNormalizado}`,
@@ -586,10 +587,11 @@ const ReportsContent = () => {
       }
     }
 
-    setIsEditModalOpen(false)
-    setSelectedReport(null)
-    setRefreshDetailedView(prev => prev + 1)
     await fetchReports()
+    setRefreshDetailedView(prev => prev + 1)
+    setIsEditModalOpen(false)
+    // No reseteamos selectedReport para que la vista detallada se mantenga abierta con la nueva info
+    // setSelectedReport(null) 
   }
 
   const handleDeleteReport = async (reportToDelete) => {
@@ -614,7 +616,7 @@ const ReportsContent = () => {
       switch (estado) {
         case 'Completado':
           return 'status-completado';
-        case 'En proceso':
+        case 'En Proceso':
           return 'status-proceso';
         case 'Cotizando':
           return 'status-cotizando';

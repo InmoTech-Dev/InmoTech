@@ -131,14 +131,23 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
   };
 
   const getPropertyName = (cita) => {
-    const inmueble = cita?.inmueble;
-    if (inmueble && typeof inmueble === 'object') {
-      return inmueble.direccion || 'Sin dirección';
+    if (!cita) return 'Sin propiedad';
+    
+    // Si ya existe direccion (caché o pre-calculado)
+    if (cita.direccion) return cita.direccion;
+
+    if (cita.inmueble && typeof cita.inmueble === 'object') {
+      return cita.inmueble.direccion || 'Sin dirección';
     }
-    if (typeof cita?.propiedad === 'object') {
-      return cita.propiedad?.direccion || 'Sin dirección';
+    
+    // Caso de respaldo (propiedad puede ser string o un campo antiguo)
+    if (cita.propiedad) {
+       return typeof cita.propiedad === 'object' 
+        ? (cita.propiedad.direccion || 'Sin dirección') 
+        : cita.propiedad;
     }
-    return cita?.propiedad || 'Sin propiedad';
+
+    return 'Sin propiedad';
   };
 
   return (

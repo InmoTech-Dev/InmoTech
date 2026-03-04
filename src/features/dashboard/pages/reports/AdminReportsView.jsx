@@ -199,6 +199,26 @@ const AdminReportsView = ({
         }
     };
 
+    // Sync selectedReport if allReports changes (e.g. from global fetchReports refresh)
+    useEffect(() => {
+        if (selectedReport && allReports.length > 0) {
+            const currentId = Number(selectedReport.id_reporte || selectedReport.id);
+            const updated = allReports.find(r => Number(r.id_reporte || r.id) === currentId);
+
+            if (updated && updated.estado !== selectedReport.estado) {
+                // Update basic fields from the list while maintaining the enriched detailed data
+                setSelectedReport(prev => ({
+                    ...prev,
+                    ...updated,
+                    // Preserve the enriched details that fetchReports doesn't have but handleSelectReport does
+                    rubros: prev.rubros,
+                    imagenes: prev.imagenes,
+                    archivos: prev.archivos
+                }));
+            }
+        }
+    }, [allReports]);
+
     useEffect(() => {
         if (selectedReport && refreshTrigger > 0) {
             handleSelectReport(selectedReport);

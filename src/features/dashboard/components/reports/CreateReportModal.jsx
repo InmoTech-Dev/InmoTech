@@ -36,6 +36,7 @@ import { useAuth } from '../../../../shared/contexts/AuthContext.jsx';
 import administrativosApiService from '../../../../shared/services/administrativosApiService';
 import rolesApiService from '../../../../shared/services/rolesApiService';
 import { ImageViewer } from '../../../../shared/components/ui/ImageViewer';
+import { cn } from '../../../../shared/utils/cn';
 
 const CreateReportModal = ({
   isOpen,
@@ -56,7 +57,11 @@ const CreateReportModal = ({
   } = usePropertyAutocomplete();
 
   // Usuario actual desde contexto de autenticación
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+
+  const canCreate = hasPermission('reportes', 'crear');
+  const canEdit = hasPermission('reportes', 'editar');
+  const canAnular = hasPermission('reportes', 'eliminar');
 
   const getUserFullName = () => {
     if (!user) return 'No asignado';
@@ -173,7 +178,7 @@ const CreateReportModal = ({
     descripcion: '',
     fecha: getCurrentDate(),
     fechaCreacion: getCurrentDateTime(),
-    estado: 'En proceso',
+    estado: 'En Proceso',
     seguimientoGeneral: '',
     responsable: '',
     id_persona_reporta: null
@@ -953,10 +958,10 @@ const CreateReportModal = ({
                                 Pendiente
                               </div>
                             </SelectItem>
-                            <SelectItem value="En proceso">
+                            <SelectItem value="En Proceso">
                               <div className="flex items-center">
                                 <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                                En proceso
+                                En Proceso
                               </div>
                             </SelectItem>
                             <SelectItem value="Completado">
@@ -1004,7 +1009,7 @@ const CreateReportModal = ({
                                 className={`font-medium px-2 py-1 rounded-full text-[10px] inline-block
                               ${formData.estado === 'Pendiente'
                                     ? 'bg-yellow-100 text-yellow-700'
-                                    : formData.estado === 'En proceso'
+                                    : formData.estado === 'En Proceso'
                                       ? 'bg-blue-100 text-blue-700'
                                       : formData.estado === 'Completado'
                                         ? 'bg-green-100 text-green-700'
@@ -1071,8 +1076,13 @@ const CreateReportModal = ({
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={initialData ? !canEdit : !canCreate}
                           onClick={() => imageInputRef.current?.click()}
-                          className="flex items-center space-x-2 border-green-300 text-green-700 hover:bg-green-50"
+                          className={cn(
+                            "flex items-center space-x-2 border-green-300 text-green-700 hover:bg-green-50",
+                            (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                          )}
+                          title={initialData ? (canEdit ? "Subir imagen" : "No tienes permiso para editar") : (canCreate ? "Subir imagen" : "No tienes permiso para crear")}
                         >
                           <UploadIcon className="w-4 h-4" />
                           <span>Subir</span>
@@ -1136,8 +1146,13 @@ const CreateReportModal = ({
                           type="button"
                           variant="outline"
                           size="sm"
+                          disabled={initialData ? !canEdit : !canCreate}
                           onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center space-x-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                          className={cn(
+                            "flex items-center space-x-2 border-blue-300 text-blue-700 hover:bg-blue-50",
+                            (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                          )}
+                          title={initialData ? (canEdit ? "Subir archivo" : "No tienes permiso para editar") : (canCreate ? "Subir archivo" : "No tienes permiso para crear")}
                         >
                           <UploadIcon className="w-4 h-4" />
                           <span>Subir</span>
@@ -1203,9 +1218,14 @@ const CreateReportModal = ({
                       </h3>
                       <Button
                         type="button"
+                        disabled={initialData ? !canEdit : !canCreate}
                         onClick={agregarRubro}
                         size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors px-4"
+                        className={cn(
+                          "bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors px-4",
+                          (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                        )}
+                        title={initialData ? (canEdit ? "Agregar rubro" : "No tienes permiso para editar") : (canCreate ? "Agregar rubro" : "No tienes permiso para crear")}
                       >
                         <PlusIcon className="w-4 h-4 mr-2" />
                         Agregar Rubro
@@ -1235,10 +1255,15 @@ const CreateReportModal = ({
                             <div className="flex items-center space-x-2">
                               <Button
                                 type="button"
-                                onClick={() => toggleRubroActivo(rubro.id)}
+                                disabled={!canAnular}
+                                onClick={() => canAnular && toggleRubroActivo(rubro.id)}
                                 size="sm"
                                 variant="outline"
-                                className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                                className={cn(
+                                  "text-orange-600 border-orange-600 hover:bg-orange-50",
+                                  !canAnular && "opacity-50 cursor-not-allowed"
+                                )}
+                                title={canAnular ? "Anular rubro" : "No tienes permiso para anular"}
                               >
                                 Anular
                               </Button>
@@ -1289,10 +1314,15 @@ const CreateReportModal = ({
                                   </h4>
                                   <Button
                                     type="button"
-                                    onClick={() => agregarSeguimientoRubro(rubro.id)}
+                                    disabled={initialData ? !canEdit : !canCreate}
+                                    onClick={() => (initialData ? canEdit : canCreate) && agregarSeguimientoRubro(rubro.id)}
                                     size="sm"
                                     variant="outline"
-                                    className="text-white bg-blue-600 hover:bg-blue-700 border-blue-600 text-xs px-3 py-1 rounded-md shadow-sm"
+                                    className={cn(
+                                      "text-white bg-blue-600 hover:bg-blue-700 border-blue-600 text-xs px-3 py-1 rounded-md shadow-sm",
+                                      (initialData ? !canEdit : !canCreate) && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    title={initialData ? (canEdit ? "Nuevo seguimiento" : "No tienes permiso para editar") : (canCreate ? "Nuevo seguimiento" : "No tienes permiso para crear")}
                                   >
                                     <PlusIcon className="w-3 h-3 mr-1" />
                                     Nuevo Seguimiento
@@ -1526,10 +1556,15 @@ const CreateReportModal = ({
                                   </div>
                                   <Button
                                     type="button"
-                                    onClick={() => toggleRubroActivo(rubro.id)}
+                                    disabled={!canAnular}
+                                    onClick={() => canAnular && toggleRubroActivo(rubro.id)}
                                     size="sm"
                                     variant="outline"
-                                    className="text-green-600 border-green-600 hover:bg-green-50"
+                                    className={cn(
+                                      "text-green-600 border-green-600 hover:bg-green-50",
+                                      !canAnular && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    title={canAnular ? "Reactivar rubro" : "No tienes permiso para anular"}
                                   >
                                     Reactivar
                                   </Button>
@@ -1566,8 +1601,12 @@ const CreateReportModal = ({
               <Button
                 type="submit"
                 onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all ease-in-out duration-200"
+                disabled={isSubmitting || (initialData ? !canEdit : !canCreate)}
+                className={cn(
+                  "px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all ease-in-out duration-200",
+                  (isSubmitting || (initialData ? !canEdit : !canCreate)) && "opacity-50 cursor-not-allowed"
+                )}
+                title={initialData ? (canEdit ? submitLabel : "No tienes permiso para editar") : (canCreate ? submitLabel : "No tienes permiso para crear")}
               >
                 {isSubmitting ? 'Guardando...' : submitLabel}
               </Button>

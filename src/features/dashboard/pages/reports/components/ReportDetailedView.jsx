@@ -16,11 +16,16 @@ import {
     User as UserIcon,
     Plus
 } from 'lucide-react';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
 import { ImageViewer } from '@/shared/components/ui/ImageViewer';
 
 const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
+    const { hasPermission } = useAuth();
+    const canEdit = hasPermission('reportes', 'editar');
+    const canDownload = hasPermission('reportes', 'descargar');
+
     const [viewerConfig, setViewerConfig] = React.useState({
         isOpen: false,
         currentIndex: 0
@@ -64,7 +69,7 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
     const getStatusInfo = (estado) => {
         const configs = {
             'Completado': { color: 'text-green-600', bg: 'bg-green-50', icon: CheckCircle2, label: 'Finalizado' },
-            'En proceso': { color: 'text-blue-600', bg: 'bg-blue-50', icon: Clock, label: 'Procesando' },
+            'En Proceso': { color: 'text-blue-600', bg: 'bg-blue-50', icon: Clock, label: 'Procesando' },
             'Pendiente': { color: 'text-amber-600', bg: 'bg-amber-50', icon: AlertCircle, label: 'En espera' },
         };
         return configs[estado] || configs['Pendiente'];
@@ -183,14 +188,28 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                         </div>
                         <div className="flex items-center gap-3">
                             <button
-                                onClick={() => onEdit(report)}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-black text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-lg transition-all uppercase tracking-widest shadow-sm"
+                                disabled={!canEdit}
+                                onClick={() => canEdit && onEdit(report)}
+                                className={cn(
+                                    "flex items-center gap-2 px-5 py-2.5 border rounded-2xl text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all",
+                                    canEdit
+                                        ? "bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-lg"
+                                        : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                                )}
+                                title={canEdit ? "Editar reporte" : "No tienes permiso para editar"}
                             >
                                 <Edit2 className="w-3.5 h-3.5" /> Editar
                             </button>
                             <button
-                                onClick={() => onDownload(report)}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 rounded-2xl text-[11px] font-black text-white hover:bg-indigo-700 hover:shadow-xl shadow-md transition-all uppercase tracking-widest"
+                                disabled={!canDownload}
+                                onClick={() => canDownload && onDownload(report)}
+                                className={cn(
+                                    "flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[11px] font-bold uppercase tracking-wider transition-all",
+                                    canDownload
+                                        ? "bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-xl shadow-md"
+                                        : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-60"
+                                )}
+                                title={canDownload ? "Descargar PDF" : "No tienes permiso para descargar"}
                             >
                                 <Download className="w-3.5 h-3.5" /> Descargar PDF
                             </button>
@@ -337,7 +356,7 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                                                                 <div className={cn(
                                                                     "absolute left-0 top-1 w-6 h-6 rounded-lg flex items-center justify-center shadow-sm z-10 transition-transform group-hover/item:scale-110 border-2 border-white",
                                                                     seg.estado === 'Completado' ? "bg-emerald-50 text-emerald-500" :
-                                                                        seg.estado === 'En proceso' ? "bg-blue-50 text-blue-500" :
+                                                                        seg.estado === 'En Proceso' ? "bg-blue-50 text-blue-500" :
                                                                             "bg-slate-50 text-slate-400"
                                                                 )}>
                                                                     <div className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -351,7 +370,7 @@ const ReportDetailedView = ({ report, onEdit, onDownload, loading }) => {
                                                                         <Badge variant="outline" className={cn(
                                                                             "rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-widest shrink-0 border-0 shadow-sm",
                                                                             seg.estado === 'Completado' ? "bg-emerald-50 text-emerald-600" :
-                                                                                seg.estado === 'En proceso' ? "bg-blue-50 text-blue-600" :
+                                                                                seg.estado === 'En Proceso' ? "bg-blue-50 text-blue-600" :
                                                                                     "bg-slate-100 text-slate-400"
                                                                         )}>
                                                                             {seg.estado}

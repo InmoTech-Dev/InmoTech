@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
-import { DownloadIcon, FileTextIcon, ChevronDownIcon, FileSpreadsheet, PlusIcon, SearchIcon } from 'lucide-react'
+import { DownloadIcon, FileTextIcon, ChevronDownIcon, FileSpreadsheet, PlusIcon, SearchIcon, Filter, Calendar, MapPin, X } from 'lucide-react'
+import { useAuth } from '@/shared/contexts/AuthContext'
 
 export function ReportsHeader({
   searchTerm,
@@ -20,8 +21,20 @@ export function ReportsHeader({
   onToggleShowCancelled,
   hideFilters = false
 }) {
+  const { hasPermission } = useAuth()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
+
+  const canCreate = hasPermission('reportes', 'crear')
+  const canDownload = hasPermission('reportes', 'descargar')
+
+  // Local state for admin filters (uncommitted)
+  const [localAdminFilters, setLocalAdminFilters] = useState(adminFilters)
+
+  // Update local state when parent adminFilters change (e.g. on clear)
+  useEffect(() => {
+    setLocalAdminFilters(adminFilters)
+  }, [adminFilters])
 
   // NUEVO: dropdown de estado
   const [isStatusOpen, setIsStatusOpen] = useState(false)
@@ -41,6 +54,7 @@ export function ReportsHeader({
   }, [])
 
   const handleDownloadOption = (type) => {
+    if (!canDownload) return
     setIsDropdownOpen(false)
     if (type === 'pdf') {
       onDownloadPDF?.(reports)
@@ -86,7 +100,49 @@ export function ReportsHeader({
               Todos los estados
               <ChevronDownIcon className={`h-4 w-4 transition-transform ${isStatusOpen ? 'rotate-180' : ''}`} />
             </motion.button>
-            {isStatusOpen && (
+          )}
+
+          {/* Show Cancelled (non-admin) */}
+          {onToggleShowCancelled && !hideFilters && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={onToggleShowCancelled}
+              className={`px-3 py-2 text-sm rounded-lg border transition-all ${showCancelled
+                ? 'bg-slate-800 text-white border-slate-800'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z" />
+                </svg>
+                Ver cancelados
+              </span>
+            </motion.button>
+          )}
+
+          {/* Download Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <motion.button
+              whileHover={canDownload ? { scale: 1.02 } : {}}
+              whileTap={canDownload ? { scale: 0.98 } : {}}
+              disabled={!canDownload}
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className={`border px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white ${canDownload
+                ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
+                : 'border-slate-300 text-slate-400 cursor-not-allowed opacity-60'
+                }`}
+              title={canDownload ? "Descargar reportes" : "No tienes permiso para descargar"}
+            >
+              <DownloadIcon className="h-4 w-4" />
+              <span>Descargar</span>
+              <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            </motion.button>
+
+            {isDropdownOpen && canDownload && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -110,8 +166,82 @@ export function ReportsHeader({
         {/* Today Filter */}
         {onToggleToday && (
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={canCreate ? { scale: 1.02 } : {}}
+            whileTap={canCreate ? { scale: 0.98 } : {}}
+            disabled={!canCreate}
+            onClick={() => canCreate && onNewReport?.()}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm transition-all ${canCreate
+              ? 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow'
+              : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+              }`}
+            title={canCreate ? "Crear nuevo reporte" : "No tienes permiso para crear reportes"}
+          >
+            <PlusIcon className="h-4 w-4" />
+            Nuevo reporte
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Row 2: Admin Filters (only for admin view) */}
+      {isAdmin && (
+        <div className="flex items-center gap-3 bg-slate-50/80 border border-slate-100 rounded-xl px-4 py-2.5">
+          <div className="flex items-center gap-2 mr-1">
+            <Filter className="w-4 h-4 text-indigo-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Filtrar:</span>
+          </div>
+
+          {/* City Filter */}
+          <div className="relative group">
+            <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 transition-colors pointer-events-none" />
+            <select
+              value={localAdminFilters.city || ''}
+              onChange={(e) => setLocalAdminFilters(prev => ({ ...prev, city: e.target.value }))}
+              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all cursor-pointer hover:border-indigo-300 hover:shadow-sm min-w-[160px]"
+            >
+              <option value="">Todas las ciudades</option>
+              {filterOptions.cities.map(city => (
+                <option key={city} value={city}>{city}</option>
+              ))}
+            </select>
+            <ChevronDownIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300 pointer-events-none" />
+          </div>
+
+          {/* Year Filter */}
+          <div className="relative group">
+            <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 transition-colors pointer-events-none" />
+            <select
+              value={localAdminFilters.year || ''}
+              onChange={(e) => setLocalAdminFilters(prev => ({ ...prev, year: e.target.value }))}
+              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all cursor-pointer hover:border-indigo-300 hover:shadow-sm min-w-[100px]"
+            >
+              <option value="">Año</option>
+              {filterOptions.years.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <ChevronDownIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300 pointer-events-none" />
+          </div>
+
+          {/* Month Filter */}
+          <div className="relative group">
+            <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 transition-colors pointer-events-none" />
+            <select
+              value={localAdminFilters.month || ''}
+              onChange={(e) => setLocalAdminFilters(prev => ({ ...prev, month: e.target.value }))}
+              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all cursor-pointer hover:border-indigo-300 hover:shadow-sm min-w-[130px]"
+            >
+              <option value="">Mes</option>
+              {months.map((name, idx) => (
+                <option key={idx} value={idx + 1}>{name}</option>
+              ))}
+            </select>
+            <ChevronDownIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300 pointer-events-none" />
+          </div>
+
+          {/* Search Button */}
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             type="button"
             onClick={onToggleToday}
             className={`px-3 py-2 text-sm rounded-lg border transition-all ${todayOnly

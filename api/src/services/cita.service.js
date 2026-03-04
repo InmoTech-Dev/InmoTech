@@ -510,11 +510,12 @@ class CitaService {
           {
             where: {
               id_inmueble: cita.id_inmueble,
-              fecha_cita: cita.fecha_cita,
-              hora_inicio: horaInicioComparable,
-              id_estado_cita: { [Op.in]: [1, 4] }, // Solicitada o Reagendada
-              id_cita: { [Op.ne]: id }
-            }
+              fecha_cita: normalizarFechaCita(cita.fecha_cita),
+              hora_inicio: normalizarHoraExacta(cita.hora_inicio),
+              id_estado_cita: 1, // Solicitada
+              id_cita: { [Op.ne]: idCita }
+            },
+            transaction: t
           }
         );
       }

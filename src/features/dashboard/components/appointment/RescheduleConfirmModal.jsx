@@ -466,7 +466,7 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
               </div>
 
               {availableTimes.length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   {availableTimes.map(hour => {
                     const isSelected = formData.hora_inicio === hour;
                     return (

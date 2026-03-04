@@ -22,8 +22,13 @@ import {
 import { ImageViewer } from '../../../../shared/components/ui/ImageViewer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useAuth } from '@/shared/contexts/AuthContext';
+import { cn } from '@/shared/utils/cn';
 
 function ViewReportModal({ isOpen, onClose, report, onEdit }) {
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission('reportes', 'editar');
+
   const [viewerConfig, setViewerConfig] = React.useState({
     isOpen: false,
     currentIndex: 0
@@ -108,7 +113,7 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
     }, 0) + totalSeguimientos;
 
     const pendientes = rubrosActivos.filter(r => r.estado === 'Pendiente').length;
-    const enProceso = rubrosActivos.filter(r => r.estado === 'En proceso').length;
+    const enProceso = rubrosActivos.filter(r => r.estado === 'En Proceso').length;
 
     return {
       totalRubros,
@@ -225,13 +230,20 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
               <div className="flex items-center gap-2">
                 {onEdit && (
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={canEdit ? { scale: 1.02 } : {}}
+                    whileTap={canEdit ? { scale: 0.98 } : {}}
+                    disabled={!canEdit}
                     onClick={() => {
-                      onEdit(report);
-                      onClose();
+                      if (canEdit) {
+                        onEdit(report);
+                        onClose();
+                      }
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${canEdit
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : "bg-slate-300 text-slate-500 cursor-not-allowed opacity-60"
+                      }`}
+                    title={canEdit ? "Editar reporte" : "No tienes permiso para editar"}
                   >
                     <FileTextIcon className="w-4 h-4" />
                     Editar
@@ -594,7 +606,7 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                         <div className="text-xs text-slate-600 mb-1">Estados por rubro:</div>
                         <div className="space-y-1">
                           <div className="text-orange-600 text-xs">Pendiente: {resumen.pendientes}</div>
-                          <div className="text-blue-600 text-xs">En proceso: {resumen.enProceso}</div>
+                          <div className="text-blue-600 text-xs">En Proceso: {resumen.enProceso}</div>
                         </div>
                       </div>
                     </div>

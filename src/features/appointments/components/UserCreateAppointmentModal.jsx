@@ -67,8 +67,8 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
 
   const availableHours = [
     "08:00 am", "08:30 am", "09:00 am", "09:30 am", "10:00 am", "10:30 am",
-    "11:00 am", "11:30 am", "02:00 pm", "02:30 pm", "03:00 pm", "03:30 pm",
-    "04:00 pm", "04:30 pm", "05:00 pm", "05:30 pm",
+    "11:00 am", "11:30 am", "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm",
+    "03:00 pm", "03:30 pm", "04:00 pm", "04:30 pm"
   ];
 
   const servicios = [
@@ -163,7 +163,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
     if (!hora) return "La hora es requerida";
 
     if (!availableHours.includes(hora)) {
-      return "Las citas solo se pueden agendar entre las 8:00 am y las 6:00 pm";
+      return "Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm";
     }
 
     return "";

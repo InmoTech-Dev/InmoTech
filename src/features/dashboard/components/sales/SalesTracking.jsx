@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
 import ventaApiService from "../../../../shared/services/ventaApiService";
 import { useToast } from "../../../../shared/hooks/use-toast";
+import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 
 /**
  * Modal de seguimiento / cambio de estado de venta.
@@ -68,6 +69,8 @@ export default function PurchaseTrackingModal({
   const [pendingPayload, setPendingPayload] = useState(null);
 
   const [adjuntos, setAdjuntos] = useState(Array.isArray(venta.adjuntos) ? venta.adjuntos : []);
+  const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
+  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
 
   // Refrescar adjuntos al abrir modal / cambiar venta para que el cierre persista tras recarga
   useEffect(() => {
@@ -86,6 +89,14 @@ export default function PurchaseTrackingModal({
   }, [venta]);
 
   const existingAdjuntos = adjuntos;
+  const imageAdjuntos = existingAdjuntos.filter((a) =>
+    (a.mime_type || a.url || "").toLowerCase().match(/(image\/|\.png$|\.jpe?g$|\.webp$|\.jfif$)/)
+  );
+  const buildImageItems = () =>
+    imageAdjuntos.map((a) => ({
+      url: a.url,
+      name: a.nombre_archivo || a.filename || a.url?.split("/").pop(),
+    }));
   const hasComprobante = existingAdjuntos.some((a) => (a.tipo || "").toLowerCase() === "comprobante");
   const hasContrato = existingAdjuntos.some((a) => (a.tipo || "").toLowerCase() === "contrato");
   const statusNorm = (venta.estado_seguimiento || venta.estado || "").toString().trim().toLowerCase();
@@ -94,6 +105,14 @@ export default function PurchaseTrackingModal({
   const handleFileChange = (tipo, event) => {
     const file = event.target.files?.[0] || null;
     setFiles((prev) => ({ ...prev, [tipo]: file }));
+  };
+
+  const openImageViewer = (index) => {
+    setViewer({ isOpen: true, index, items: buildImageItems() });
+  };
+
+  const openPdfViewer = (url, name) => {
+    setPdfViewer({ isOpen: true, url, name });
   };
 
   const uploadSelectedAttachments = async (ventaId) => {
@@ -487,21 +506,36 @@ export default function PurchaseTrackingModal({
                       </p>
 
                       <ul className="space-y-2 text-sm">
-                        {existingAdjuntos.map((adj) => (
-                          <li key={adj.id_adjunto} className="flex justify-between items-center">
-                            <span className="text-gray-900">
-                              {adj.tipo.toUpperCase()} — {adj.nombre_archivo}
-                            </span>
-                            <a
-                              href={adj.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              Ver
-                            </a>
-                          </li>
-                        ))}
+                        {existingAdjuntos.map((adj) => {
+                          const isPdf =
+                            (adj.mime_type || adj.url || "").toLowerCase().includes("pdf") ||
+                            /\.pdf$/i.test(adj.url || "");
+                          const imgIndex = imageAdjuntos.findIndex(
+                            (a) => a.id_adjunto === adj.id_adjunto
+                          );
+                          return (
+                            <li key={adj.id_adjunto} className="flex justify-between items-center">
+                              <span className="text-gray-900">
+                                {adj.tipo.toUpperCase()} — {adj.nombre_archivo}
+                              </span>
+                              <button
+                                type="button"
+                                className="text-blue-600 hover:underline"
+                                onClick={() => {
+                                  if (isPdf) {
+                                    openPdfViewer(adj.url, adj.nombre_archivo);
+                                  } else if (imgIndex >= 0) {
+                                    openImageViewer(imgIndex);
+                                  } else {
+                                    window.open(adj.url, "_blank", "noopener");
+                                  }
+                                }}
+                              >
+                                Ver
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
@@ -577,6 +611,53 @@ export default function PurchaseTrackingModal({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Visor de imágenes (mismo que Ver venta) */}
+      <ImageViewer
+        isOpen={viewer.isOpen}
+        onClose={() => setViewer((v) => ({ ...v, isOpen: false }))}
+        images={viewer.items}
+        currentIndex={viewer.index}
+        onIndexChange={(idx) => setViewer((v) => ({ ...v, index: idx }))}
+      />
+
+      {/* Visor PDF simple */}
+      {pdfViewer.isOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+              <span className="text-sm font-semibold text-gray-800 truncate">{pdfViewer.name || "Documento PDF"}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
+                  onClick={() => window.open(pdfViewer.url, "_blank", "noopener")}
+                >
+                  Abrir en nueva pestaña
+                </button>
+                <button
+                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                  onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-100">
+              <iframe
+                title={pdfViewer.name || "PDF"}
+                src={pdfViewer.url}
+                className="w-full h-full border-0"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

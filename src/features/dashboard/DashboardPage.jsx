@@ -173,7 +173,7 @@ const renderInmuebles = (data = {}) => {
     { name: 'Disponibles', total: Number(data.disponibles) || 0 },
     { name: 'Arrendados', total: Number(data.arrendados) || 0 },
     { name: 'Vendidos', total: Number(data.vendidos) || 0 },
-    { name: 'En proceso', total: Number(data.en_proceso_arrendamiento) || 0 }
+    { name: 'En Proceso', total: Number(data.en_proceso_arrendamiento) || 0 }
   ];
 
   const insights = pieData.map((item) => ({

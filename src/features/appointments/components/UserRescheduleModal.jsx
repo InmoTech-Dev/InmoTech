@@ -44,8 +44,8 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
 
   const availableHours = [
     "08:00 am", "08:30 am", "09:00 am", "09:30 am", "10:00 am", "10:30 am",
-    "11:00 am", "11:30 am", "02:00 pm", "02:30 pm", "03:00 pm", "03:30 pm",
-    "04:00 pm", "04:30 pm", "05:00 pm", "05:30 pm"
+    "11:00 am", "11:30 am", "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm",
+    "03:00 pm", "03:30 pm", "04:00 pm", "04:30 pm"
   ];
 
   // Cargar hora actual y datos iniciales

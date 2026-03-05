@@ -24,6 +24,7 @@ import MESSAGES from "../../../../shared/constants/messages";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
+import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { useToast } from "../../../../shared/hooks/use-toast";
 
 
@@ -740,7 +741,17 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
       "Sin nombre",
 
-    inmuebleArea: fallback.inmuebleArea ?? inmueble.area ?? "N/D",
+    inmuebleArea:
+      fallback.inmuebleArea ??
+      inmueble.area ??
+      inmueble.area_total ??
+      inmueble.area_construida ??
+      inmueble.area_privada ??
+      inmueble.area_lote ??
+      (inmueble.metadata?.raw?.area_total) ??
+      (inmueble.metadata?.raw?.area_construida) ??
+      (inmueble.metadata?.raw?.area) ??
+      "N/D",
 
     inmuebleHabitaciones:
 
@@ -1195,6 +1206,45 @@ export function SalesManagementPage() {
   );
 
 
+
+  const liberarInmueblePorVenta = useCallback(
+    async (saleData = {}) => {
+      try {
+        const property =
+          resolvePropertyFromSale(saleData) ||
+          (saleData.property ? { ...saleData.property, raw: saleData.property } : null);
+
+        let propertyId =
+          property?.id ||
+          property?.raw?.id ||
+          property?.raw?.id_inmueble ||
+          property?.raw?.idInmueble ||
+          null;
+
+        // Si no tenemos id pero sÃ­ registro, intentamos resolverlo
+        if (!propertyId && saleData.inmuebleRegistro) {
+          const fetched = await inmueblesAPI.getInmuebleByRegistro(saleData.inmuebleRegistro);
+          propertyId = fetched?.id || fetched?.id_inmueble || null;
+        }
+
+        if (!propertyId) return;
+
+        await inmueblesAPI.updateInmueble(propertyId, {
+          estado: 'Disponible',
+          estado_frontend: 'Disponible',
+          estado_venta: 'Disponible',
+          estadoVenta: 'Disponible',
+          operacion: 'Venta',
+          id_cliente: null,
+          clienteId: null,
+          compradorId: null,
+        });
+      } catch (error) {
+        console.warn('No se pudo liberar el inmueble al cancelar la venta', error?.message);
+      }
+    },
+    [resolvePropertyFromSale]
+  );
 
   const loadProperties = useCallback(async () => {
 
@@ -1812,43 +1862,46 @@ export function SalesManagementPage() {
           mergedPayload.descripcionSeguimiento ?? normalized.descripcionSeguimiento,
       };
 
-      const inmuebleId =
-        merged?.id_inmueble ||
-        merged?.raw?.id_inmueble ||
-        merged?.raw?.inmueble?.id_inmueble ||
-        mergedPayload?.id_inmueble ||
-        existingSale?.id_inmueble ||
-        existingSale?.raw?.id_inmueble ||
-        existingSale?.raw?.inmueble?.id_inmueble;
-
-      if (inmuebleId) {
-        appendFichaTecnicaToLocalHistory({
-          inmuebleId,
-          snapshot: buildFichaSnapshotFromSale(
-            { ...existingSale, ...merged },
-            {
-              estado: merged?.raw?.inmueble?.estado_frontend || merged?.inmuebleEstado || "Disponible",
-            }
-          ),
-          cambios: `Seguimiento de venta actualizado: ${merged.estadoSeguimiento || merged.estado || "Sin estado"}`,
-        });
-      }
+      const finalEstado = (merged.estadoSeguimiento || merged.estado || "").toString().toLowerCase();
+      const mergedForState = finalEstado.includes("cancel")
+        ? {
+            ...merged,
+            estado: "Cancelado",
+            estadoSeguimiento: "Cancelado",
+            comprador: "Sin comprador",
+            compradorNombreCompleto: "Sin comprador",
+            id_comprador: null,
+          }
+        : merged;
 
       setVentas((prevVentas) =>
         prevVentas.map((v) =>
-          String(v.id) === String(saleId) ? { ...v, ...merged, raw: apiSale } : v
+          String(v.id) === String(saleId) ? { ...v, ...mergedForState, raw: apiSale } : v
         )
       );
 
-      setStatusMessage({
-        type: "success",
-        text: "Estados guardados correctamente.",
-      });
-      toast({
-        title: "Seguimiento actualizado",
-        description: MESSAGES.sale.tracking.success,
-        variant: "default",
-      });
+      if (finalEstado.includes("cancel")) {
+        await liberarInmueblePorVenta(mergedForState);
+        setStatusMessage({
+          type: "success",
+          text: "Venta cancelada y cerrada. El inmueble quedó disponible.",
+        });
+        toast({
+          title: "Venta cancelada",
+          description: "Se cerró la venta y el inmueble quedó disponible para nueva venta.",
+          variant: "default",
+        });
+      } else {
+        setStatusMessage({
+          type: "success",
+          text: "Estados guardados correctamente.",
+        });
+        toast({
+          title: "Seguimiento actualizado",
+          description: MESSAGES.sale.tracking.success,
+          variant: "default",
+        });
+      }
     } catch (error) {
       console.error("Error actualizando estados:", error);
       setStatusMessage({
@@ -2403,34 +2456,6 @@ export function SalesManagementPage() {
   );
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

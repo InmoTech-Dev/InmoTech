@@ -57,11 +57,19 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
       console.error('Error cargando horarios disponibles:', error);
       // En caso de error, mostrar horarios predeterminados
       const defaultTimes = [];
-      for (let hora = 8; hora <= 17; hora++) {
+      // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+      for (let hora = 8; hora <= 12; hora++) {
         defaultTimes.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
+        if (hora !== 12) {
           defaultTimes.push(`${hora.toString().padStart(2, '0')}:30`);
+        } else {
+          defaultTimes.push(`12:30`);
         }
+      }
+      // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+      for (let hora = 14; hora <= 16; hora++) {
+        defaultTimes.push(`${hora.toString().padStart(2, '0')}:00`);
+        defaultTimes.push(`${hora.toString().padStart(2, '0')}:30`);
       }
       setAvailableTimes(defaultTimes);
     } finally {
@@ -409,14 +417,14 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                               if ((appointmentTotalMinutes - currentTotalMinutes) < 120) return false;
                             }
 
-                            return h >= 8 && h < 12;
+                            return h <= 12;
                           })
                           .map(time => {
                             const isSelected = formData.hora_inicio === time;
                             // Convertir hora a formato 12 horas para mostrar
                             const [hours24, minutes] = time.split(':').map(Number);
                             const hours12 = hours24 === 0 ? 12 : (hours24 > 12 ? hours24 - 12 : hours24);
-                            const period = hours24 >= 12 ? 'PM' : 'AM';
+                            const period = hours24 >= 12 ? 'pm' : 'am';
                             const displayTime = `${hours12}:${String(minutes).padStart(2, '0')} ${period}`;
 
                             return (
@@ -463,14 +471,14 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                               if ((appointmentTotalMinutes - currentTotalMinutes) < 120) return false;
                             }
 
-                            return h >= 12 && h <= 17;
+                            return h >= 14 && h <= 16;
                           })
                           .map(time => {
                             const isSelected = formData.hora_inicio === time;
                             // Convertir hora a formato 12 horas para mostrar
                             const [hours24, minutes] = time.split(':').map(Number);
                             const hours12 = hours24 === 0 ? 12 : (hours24 > 12 ? hours24 - 12 : hours24);
-                            const period = hours24 >= 12 ? 'PM' : 'AM';
+                            const period = hours24 >= 12 ? 'pm' : 'am';
                             const displayTime = `${hours12}:${String(minutes).padStart(2, '0')} ${period}`;
 
                             return (
@@ -511,7 +519,7 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
                             (() => {
                               const [hours24, minutes] = formData.hora_inicio.split(':').map(Number);
                               const hours12 = hours24 === 0 ? 12 : (hours24 > 12 ? hours24 - 12 : hours24);
-                              const period = hours24 >= 12 ? 'PM' : 'AM';
+                              const period = hours24 >= 12 ? 'pm' : 'am';
                               return `${hours12}:${String(minutes).padStart(2, '0')} ${period}`;
                             })()
                           }

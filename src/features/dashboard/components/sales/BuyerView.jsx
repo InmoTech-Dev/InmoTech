@@ -35,7 +35,7 @@ function Pill({ children, tone = "gray" }) {
 function estadoTone(estado) {
   const e = (estado || "").toLowerCase();
   if (["pagad", "complet", "aprob", "activa", "activo"].some((k) => e.includes(k))) return "green";
-  if (["pend", "proceso", "revision", "revisión"].some((k) => e.includes(k))) return "yellow";
+  if (["pend", "proceso", "revision", "rev"].some((k) => e.includes(k))) return "yellow";
   if (!estado) return "gray";
   if (["cancel", "rechaz", "anulad"].some((k) => e.includes(k))) return "red";
   return "blue";
@@ -58,6 +58,41 @@ function formatDateCompact(value) {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("es-CO");
 }
 
+// Busca recursivamente un posible valor de medio de pago con multiples alias
+function findPaymentValue(obj, depth = 0, visited = new Set()) {
+  if (!obj || typeof obj !== "object" || depth > 5 || visited.has(obj)) return null;
+  visited.add(obj);
+
+  const keyMatch = (key = "") => {
+    const k = key.toLowerCase();
+    return (
+      k.includes("medio_pago") ||
+      (k.includes("medio") && k.includes("pago")) ||
+      k.includes("metodo_pago") ||
+      k.includes("forma_pago") ||
+      k.includes("payment_method") ||
+      k === "medio" ||
+      k === "pago"
+    );
+  };
+
+  for (const [k, v] of Object.entries(obj)) {
+    if (keyMatch(k) && (typeof v === "string" || typeof v === "number")) {
+      const trimmed = typeof v === "string" ? v.trim() : v;
+      if (trimmed !== "" && trimmed !== null && trimmed !== undefined) return trimmed;
+    }
+  }
+
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === "object") {
+      const found = findPaymentValue(v, depth + 1, visited);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
 export default function BuyerView({ buyer, onClose }) {
   const fullName = [
     buyer?.primerNombre,
@@ -71,6 +106,8 @@ export default function BuyerView({ buyer, onClose }) {
 
   const operacion =
     buyer?.ultimaVenta || buyer?.compra || buyer?.venta || buyer?.sale || buyer?.raw?.venta || null;
+  const opRaw = operacion?.raw || operacion?.metadata?.raw || {};
+  const opSnapshot = operacion?.formSnapshot || operacion?.snapshot || operacion?.form_snapshot || {};
   const rawVenta = buyer?.raw?.venta || buyer?.raw || {};
 
   const inmueble = buyer?.inmueble || operacion?.inmueble || null;
@@ -93,21 +130,99 @@ export default function BuyerView({ buyer, onClose }) {
     operacion?.valor_venta || operacion?.valorCompra || operacion?.valor || buyer?.valorCompra || null;
 
   const medioPago =
-    operacion?.medio_pago ||
-    operacion?.medioPago ||
-    operacion?.descripcion_pago ||
-    operacion?.medio_pago_descripcion ||
+    findPaymentValue(operacion) ||
+    findPaymentValue(opRaw) ||
+    findPaymentValue(opSnapshot) ||
+    findPaymentValue(rawVenta) ||
+    findPaymentValue(buyer) ||
+    null;
+
+  const medioPagoDescripcion =
     operacion?.medioPagoDescripcion ||
-    rawVenta?.medio_pago ||
-    rawVenta?.medioPago ||
-    rawVenta?.descripcion_pago ||
-    rawVenta?.medio_pago_descripcion ||
+    operacion?.medio_pago_descripcion ||
+    operacion?.descripcion_pago ||
+    operacion?.descripcionPagoMixto ||
+    operacion?.medio_pago_desc ||
+    operacion?.medioPagoDesc ||
+    operacion?.detalle_pago ||
+    operacion?.detallePago ||
+    opRaw?.medioPagoDescripcion ||
+    opRaw?.medio_pago_descripcion ||
+    opRaw?.descripcion_pago ||
+    opRaw?.descripcionPagoMixto ||
+    opRaw?.medio_pago_desc ||
+    opRaw?.medioPagoDesc ||
+    opRaw?.detalle_pago ||
+    opRaw?.detallePago ||
+    opSnapshot?.medioPagoDescripcion ||
+    opSnapshot?.medio_pago_descripcion ||
+    opSnapshot?.descripcion_pago ||
+    opSnapshot?.descripcionPagoMixto ||
+    opSnapshot?.medio_pago_desc ||
+    opSnapshot?.medioPagoDesc ||
+    opSnapshot?.detalle_pago ||
+    opSnapshot?.detallePago ||
     rawVenta?.medioPagoDescripcion ||
-    buyer?.medioPago ||
-    buyer?.medio_pago ||
-    buyer?.descripcion_pago ||
+    rawVenta?.medio_pago_descripcion ||
+    rawVenta?.descripcion_pago ||
+    rawVenta?.descripcionPagoMixto ||
+    rawVenta?.medio_pago_desc ||
+    rawVenta?.medioPagoDesc ||
+    rawVenta?.detalle_pago ||
+    rawVenta?.detallePago ||
     buyer?.medioPagoDescripcion ||
     buyer?.medio_pago_descripcion ||
+    buyer?.descripcion_pago ||
+    buyer?.medio_pago_desc ||
+    buyer?.medioPagoDesc ||
+    buyer?.detalle_pago ||
+    buyer?.detallePago ||
+    buyer?.descripcionPagoMixto ||
+    buyer?.raw?.medioPagoDescripcion ||
+    buyer?.raw?.medio_pago_descripcion ||
+    buyer?.raw?.descripcion_pago ||
+    buyer?.raw?.medio_pago_desc ||
+    buyer?.raw?.medioPagoDesc ||
+    buyer?.raw?.detalle_pago ||
+    buyer?.raw?.detallePago ||
+    buyer?.raw?.descripcionPagoMixto ||
+    buyer?.raw?.compra?.medioPagoDescripcion ||
+    buyer?.raw?.compra?.medio_pago_descripcion ||
+    buyer?.raw?.compra?.descripcion_pago ||
+    buyer?.raw?.compra?.medio_pago_desc ||
+    buyer?.raw?.compra?.medioPagoDesc ||
+    buyer?.raw?.compra?.detalle_pago ||
+    buyer?.raw?.compra?.detallePago ||
+    buyer?.raw?.compra?.descripcionPagoMixto ||
+    buyer?.raw?.ultima_venta?.medioPagoDescripcion ||
+    buyer?.raw?.ultima_venta?.medio_pago_descripcion ||
+    buyer?.raw?.ultima_venta?.descripcion_pago ||
+    buyer?.raw?.ultima_venta?.medio_pago_desc ||
+    buyer?.raw?.ultima_venta?.medioPagoDesc ||
+    buyer?.raw?.ultima_venta?.detalle_pago ||
+    buyer?.raw?.ultima_venta?.detallePago ||
+    buyer?.raw?.ultima_venta?.descripcionPagoMixto ||
+    buyer?.raw?.venta?.medioPagoDescripcion ||
+    buyer?.raw?.venta?.medio_pago_descripcion ||
+    buyer?.raw?.venta?.descripcion_pago ||
+    buyer?.raw?.venta?.medio_pago_desc ||
+    buyer?.raw?.venta?.medioPagoDesc ||
+    buyer?.raw?.venta?.detalle_pago ||
+    buyer?.raw?.venta?.detallePago ||
+    buyer?.raw?.venta?.descripcionPagoMixto ||
+    buyer?.raw?.operacion?.medioPagoDescripcion ||
+    buyer?.raw?.operacion?.medio_pago_descripcion ||
+    buyer?.raw?.operacion?.descripcion_pago ||
+    buyer?.raw?.operacion?.medio_pago_desc ||
+    buyer?.raw?.operacion?.medioPagoDesc ||
+    buyer?.raw?.operacion?.detalle_pago ||
+    buyer?.raw?.operacion?.detallePago ||
+    buyer?.raw?.operacion?.descripcionPagoMixto ||
+    findPaymentValue(operacion) ||
+    findPaymentValue(opRaw) ||
+    findPaymentValue(opSnapshot) ||
+    findPaymentValue(rawVenta) ||
+    findPaymentValue(buyer) ||
     null;
 
   const estadoVenta =
@@ -117,6 +232,17 @@ export default function BuyerView({ buyer, onClose }) {
     if (!inmueble) return "-";
     return inmueble?.categoria || inmueble?.tipo || inmueble?.categoriaInmueble || "N/D";
   }, [inmueble]);
+
+  const medioPagoDisplay = useMemo(() => {
+    const base = medioPago ?? "";
+    const desc = medioPagoDescripcion ?? "";
+    if (!base && !desc) return "-";
+    if (!base) return desc;
+    if (!desc) return base;
+    const lowerBase = base.toString().toLowerCase();
+    if (lowerBase === "mixto") return `${base}: ${desc}`;
+    return `${base} - ${desc}`;
+  }, [medioPago, medioPagoDescripcion]);
 
   return (
     <AnimatePresence>
@@ -141,10 +267,10 @@ export default function BuyerView({ buyer, onClose }) {
               <div className="px-4 sm:px-5 py-3.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
-                    Información del comprador
+                    Informacion del comprador
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
-                    Detalles del comprador, el inmueble y la operación realizada.
+                    Detalles del comprador, el inmueble y la operacion realizada.
                   </p>
                 </div>
 
@@ -164,45 +290,45 @@ export default function BuyerView({ buyer, onClose }) {
             <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {/* Personal (sin pill CC) */}
-<section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-  <div className="flex items-center justify-between gap-2 mb-3">
-    <h3 className="text-sm font-semibold text-gray-900">Información personal</h3>
-    {/* quitado el Pill de tipoDocumento */}
-  </div>
+                <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Informacion personal</h3>
+                    {/* quitado el Pill de tipoDocumento */}
+                  </div>
 
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
-    <Field label="Nombre" value={fullName || "-"} className="sm:col-span-2" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                    <Field label="Nombre" value={fullName || "-"} className="sm:col-span-2" />
 
-    <Field
-      label="Documento"
-      value={
-        (buyer?.tipoDocumento ? `${buyer.tipoDocumento} - ` : "") + (buyer?.documento || "-")
-      }
-    />
+                    <Field
+                      label="Documento"
+                      value={
+                        (buyer?.tipoDocumento ? `${buyer.tipoDocumento} - ` : "") + (buyer?.documento || "-")
+                      }
+                    />
 
-    <Field label="Teléfono" value={buyer?.telefono || "-"} />
+                    <Field label="Telefono" value={buyer?.telefono || "-"} />
 
-    <div className="sm:col-span-2">
-      <p className="text-[11px] font-semibold text-gray-500">Correo</p>
-      <div className="mt-0.5 text-sm break-words">
-        {buyer?.correo ? (
-          <a href={`mailto:${buyer.correo}`} className="text-blue-600 hover:text-blue-800 underline">
-            {buyer.correo}
-          </a>
-        ) : (
-          <span className="text-gray-400">-</span>
-        )}
-      </div>
-    </div>
-  </div>
-</section>
+                    <div className="sm:col-span-2">
+                      <p className="text-[11px] font-semibold text-gray-500">Correo</p>
+                      <div className="mt-0.5 text-sm break-words">
+                        {buyer?.correo ? (
+                          <a href={`mailto:${buyer.correo}`} className="text-blue-600 hover:text-blue-800 underline">
+                            {buyer.correo}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
 
-                {/* Operación */}
+                {/* Operacion */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                       <FaMoneyBillWave className="text-green-600" />
-                      Operación
+                      Operacion
                     </h3>
                     <Pill tone={estadoTone(estadoVenta)}>{estadoVenta || "-"}</Pill>
                   </div>
@@ -212,7 +338,7 @@ export default function BuyerView({ buyer, onClose }) {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                         <Field label="Fecha" value={formatDateCompact(fechaCompra)} />
                         <Field label="Valor" value={formatMoneyCOP(valorCompra)} />
-                        <Field label="Medio de pago" value={medioPago || "-"} className="col-span-2" />
+                        <Field label="Medio de pago" value={medioPagoDisplay} className="col-span-2" />
                       </div>
 
                       {(operacion?.observaciones || buyer?.observaciones) && (
@@ -228,7 +354,7 @@ export default function BuyerView({ buyer, onClose }) {
                     <div className="text-center py-8">
                       <FaImage size={28} className="mx-auto text-gray-300 mb-2" />
                       <p className="text-gray-500 italic text-sm">
-                        Aún no se ha registrado una operación para este comprador.
+                        Aun no se ha registrado una operacion para este comprador.
                       </p>
                     </div>
                   )}
@@ -260,12 +386,16 @@ export default function BuyerView({ buyer, onClose }) {
                       <div className="min-w-0 flex-1">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
                           <Field label="Registro inmobiliario" value={registroInmobiliario} />
-                          <Field label="Categoría / Tipo" value={categoriaTipo} />
-                          <Field label="Dirección" value={inmueble?.direccion || "N/D"} className="sm:col-span-2" />
+                          <Field label="Categoria / Tipo" value={categoriaTipo} className="sm:col-start-2" />
                           <Field
-                            label="Ubicación"
+                            label="Ubicacion"
                             value={(inmueble?.ciudad || "N/D") + ", " + (inmueble?.departamento || "N/D")}
-                            className="sm:col-span-2"
+                            className="sm:col-start-2 sm:row-start-2"
+                          />
+                          <Field
+                            label="Direccion"
+                            value={inmueble?.direccion || "N/D"}
+                            className="sm:col-start-1 sm:row-start-2"
                           />
                         </div>
                       </div>

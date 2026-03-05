@@ -109,12 +109,34 @@ export function LeasesManagementPage() {
     const inmueble = arriendo.Inmueble || arriendo.inmueble || {};
     const codeudor = arriendo.codeudor || arriendo.Codeudor || {};
     const codeudorPersona = codeudor.persona || codeudor.Persona || codeudor;
+    const inmuebleNombre =
+      inmueble.nombre ||
+      inmueble.titulo ||
+      inmueble.registro_inmobiliario ||
+      inmueble.registro ||
+      inmueble.direccion ||
+      null;
+    const inmuebleRegistro = inmueble.registro_inmobiliario || inmueble.registro || null;
+    const inmuebleDireccion = inmueble.direccion || null;
+    const inmuebleId = inmueble.id || inmueble.id_inmueble || null;
+    const inmuebleSimple =
+      inmuebleNombre || inmuebleRegistro || inmuebleId
+        ? [
+            {
+              id: inmuebleId,
+              nombre: inmuebleNombre || "Inmueble",
+              direccion: inmuebleDireccion || "",
+              registro: inmuebleRegistro || "",
+            },
+          ]
+        : [];
     return {
       inmueble,
-      registroInmobiliario: inmueble.registro_inmobiliario || inmueble.registro || null,
+      inmueblesArrendados: inmuebleSimple,
+      registroInmobiliario: inmuebleRegistro,
       tipoInmueble: inmueble.categoria || inmueble.tipo || null,
-      nombreInmueble: inmueble.nombre || inmueble.titulo || inmueble.registro_inmobiliario || null,
-      direccion: inmueble.direccion || null,
+      nombreInmueble: inmuebleNombre,
+      direccion: inmuebleDireccion,
       ciudad: inmueble.ciudad || null,
       departamento: inmueble.departamento || null,
       valorMensual: arriendo.valor_mensual || arriendo.valor_arriendo || arriendo.precio_arriendo || null,

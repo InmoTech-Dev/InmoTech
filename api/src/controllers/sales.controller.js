@@ -2,11 +2,7 @@ const saleService = require('../services/sales.service');
 const logger = require('../utils/logger');
 const { VentaAdjunto } = require('../models');
 const cloudinary = require('../config/cloudinary');
-const multer = require('multer');
-
-// Reutilizamos storage en memoria
-const upload = multer({ storage: multer.memoryStorage() });
-const uploadSingle = upload.single('file');
+const { uploadSingleAny } = require('./upload.controller');
 
 class SalesController {
   async createSale(req, res, next) {
@@ -206,7 +202,7 @@ class SalesController {
 
   // Adjuntar comprobante/contrato a una venta
   attachMiddleware() {
-    return uploadSingle;
+    return uploadSingleAny;
   }
 
   async addAttachment(req, res, next) {

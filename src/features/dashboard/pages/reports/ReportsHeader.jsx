@@ -12,6 +12,10 @@ export function ReportsHeader({
   onDownloadPDF,
   onDownloadExcel,
   reports = [],
+  isAdmin = false,
+  adminFilters = {},
+  filterOptions = { cities: [], years: [] },
+  months = [],
   // Nuevos props opcionales (se muestran solo si vienen)
   statusFilter,
   onStatusChange,
@@ -100,49 +104,8 @@ export function ReportsHeader({
               Todos los estados
               <ChevronDownIcon className={`h-4 w-4 transition-transform ${isStatusOpen ? 'rotate-180' : ''}`} />
             </motion.button>
-          )}
 
-          {/* Show Cancelled (non-admin) */}
-          {onToggleShowCancelled && !hideFilters && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              onClick={onToggleShowCancelled}
-              className={`px-3 py-2 text-sm rounded-lg border transition-all ${showCancelled
-                ? 'bg-slate-800 text-white border-slate-800'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                }`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z" />
-                </svg>
-                Ver cancelados
-              </span>
-            </motion.button>
-          )}
-
-          {/* Download Dropdown */}
-          <div className="relative" ref={dropdownRef}>
-            <motion.button
-              whileHover={canDownload ? { scale: 1.02 } : {}}
-              whileTap={canDownload ? { scale: 0.98 } : {}}
-              disabled={!canDownload}
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className={`border px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white ${canDownload
-                ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
-                : 'border-slate-300 text-slate-400 cursor-not-allowed opacity-60'
-                }`}
-              title={canDownload ? "Descargar reportes" : "No tienes permiso para descargar"}
-            >
-              <DownloadIcon className="h-4 w-4" />
-              <span>Descargar</span>
-              <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-            </motion.button>
-
-            {isDropdownOpen && canDownload && (
+            {isStatusOpen && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -163,6 +126,28 @@ export function ReportsHeader({
           </div>
         )}
 
+        {/* Show Cancelled (non-admin) */}
+        {onToggleShowCancelled && !hideFilters && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={onToggleShowCancelled}
+              className={`px-3 py-2 text-sm rounded-lg border transition-all ${showCancelled
+                ? 'bg-slate-800 text-white border-slate-800'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z" />
+                </svg>
+                Ver cancelados
+              </span>
+            </motion.button>
+          )}
+
         {/* Today Filter */}
         {onToggleToday && (
           <motion.button
@@ -179,7 +164,61 @@ export function ReportsHeader({
             <PlusIcon className="h-4 w-4" />
             Nuevo reporte
           </motion.button>
+        )}
+
+        {/* Download Dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="border border-blue-600 text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white"
+          >
+            <DownloadIcon className="h-4 w-4" />
+            <span>Descargar</span>
+            <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+          </motion.button>
+
+          {isDropdownOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden"
+            >
+              <button
+                onClick={() => handleDownloadOption('pdf')}
+                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-red-50 flex items-center gap-2 transition-colors"
+              >
+                <FileTextIcon className="h-4 w-4 text-red-500" />
+                <div>
+                  <div className="font-medium text-slate-900">PDF</div>
+                  <div className="text-xs text-slate-500">Formato portable</div>
+                </div>
+              </button>
+              <button
+                onClick={() => handleDownloadOption('excel')}
+                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-green-50 flex items-center gap-2 transition-colors"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-green-500" />
+                <div>
+                  <div className="font-medium text-slate-900">Excel</div>
+                  <div className="text-xs text-slate-500">Hoja de cálculo</div>
+                </div>
+              </button>
+            </motion.div>
+          )}
         </div>
+
+        {/* New Report Button */}
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onNewReport}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm hover:shadow transition-all"
+        >
+          <PlusIcon className="h-4 w-4" />
+          Nuevo reporte
+        </motion.button>
       </div>
 
       {/* Row 2: Admin Filters (only for admin view) */}
@@ -257,83 +296,8 @@ export function ReportsHeader({
             </span>
           </motion.button>
         )}
-
-        {/* Show Cancelled */}
-        {onToggleShowCancelled && !hideFilters && (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            type="button"
-            onClick={onToggleShowCancelled}
-            className={`px-3 py-2 text-sm rounded-lg border transition-all ${showCancelled
-              ? 'bg-slate-800 text-white border-slate-800'
-              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-              }`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z" />
-              </svg>
-              Ver cancelados
-            </span>
-          </motion.button>
-        )}
-
-        {/* Download Dropdown */}
-        <div className="relative" ref={dropdownRef}>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="border border-blue-600 text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white"
-          >
-            <DownloadIcon className="h-4 w-4" />
-            <span>Descargar</span>
-            <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-          </motion.button>
-
-          {isDropdownOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden"
-            >
-              <button
-                onClick={() => handleDownloadOption('pdf')}
-                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-red-50 flex items-center gap-2 transition-colors"
-              >
-                <FileTextIcon className="h-4 w-4 text-red-500" />
-                <div>
-                  <div className="font-medium text-slate-900">PDF</div>
-                  <div className="text-xs text-slate-500">Formato portable</div>
-                </div>
-              </button>
-              <button
-                onClick={() => handleDownloadOption('excel')}
-                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-green-50 flex items-center gap-2 transition-colors"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-green-500" />
-                <div>
-                  <div className="font-medium text-slate-900">Excel</div>
-                  <div className="text-xs text-slate-500">Hoja de cálculo</div>
-                </div>
-              </button>
-            </motion.div>
-          )}
-        </div>
-
-        {/* New Report Button */}
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onNewReport}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm hover:shadow transition-all"
-        >
-          <PlusIcon className="h-4 w-4" />
-          Nuevo reporte
-        </motion.button>
       </div>
+      )}
     </div>
   )
 }

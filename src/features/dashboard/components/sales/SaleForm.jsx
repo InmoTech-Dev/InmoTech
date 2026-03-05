@@ -142,6 +142,16 @@ const propertyIsSold = (property = {}) => {
     return soldKeywords.some((kw) => estadoTexto.includes(kw));
 };
 
+const isActiveStatus = (estado = "") => {
+    const normalized = normalizeTextValue(estado);
+    return normalized === "activo" || normalized === "activa" || estado === true;
+};
+
+const getBuyerState = (buyer = {}) =>
+    buyer.estado ?? buyer.status ?? buyer.raw?.estado ?? buyer.persona?.estado;
+
+const buyerIsActive = (buyer = {}) => isActiveStatus(getBuyerState(buyer));
+
 const normalizeDocType = (value = "") => {
     const v = normalizeTextValue(value);
     if (!v) return "";
@@ -858,6 +868,21 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const applyBuyerData = useCallback((buyer) => {
         if (!buyer) return;
+        if (!buyerIsActive(buyer)) {
+            const inactiveMsg = "No se puede asociar una venta a un arrendatario en estado inactivo.";
+            setBuyerLookupState({
+                loading: false,
+                message: "",
+                error: inactiveMsg,
+            });
+            toast({
+                title: "Arrendatario inactivo",
+                description: inactiveMsg,
+                variant: "destructive",
+            });
+            resetBuyerSelection({ resetState: true, resetFields: true });
+            return;
+        }
 
         selectedBuyerRef.current = buyer;
 
@@ -1009,6 +1034,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 segundoApellido,
                 correo: valuesRef.current.compradorCorreo || "",
                 telefono: valuesRef.current.compradorTelefono || "",
+                estado: "Activo",
             });
 
             applyBuyerData(createdBuyer);
@@ -1131,12 +1157,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 setBuyerLookupState({
                     loading: false,
                     message: "",
-                    error: "No encontramos un comprador con ese documento. Ingresa el nombre para crearlo automáticamente.",
-                });
-                toast({
-                    title: "Comprador no encontrado",
-                    description: "Agrega el nombre completo para crear y seleccionar al comprador.",
-                    variant: "destructive",
+                    error: null,
                 });
                 return;
             }
@@ -1342,6 +1363,21 @@ export default function SalesForm({ onClose, onSubmit }) {
             } catch (_error) {
                 return;
             }
+        }
+
+        if (!buyerIsActive(buyerRef)) {
+            const inactiveMsg = "No se puede asociar una venta a un arrendatario en estado inactivo.";
+            setErrors((prev) => ({
+                ...prev,
+                compradorDocumento: inactiveMsg,
+            }));
+            setStep(3);
+            toast({
+                title: "Arrendatario inactivo",
+                description: inactiveMsg,
+                variant: "destructive",
+            });
+            return;
         }
 
         const normalizedValues = Object.keys(valuesRef.current).reduce((acc, fieldName) => {
@@ -1752,3 +1788,4 @@ export default function SalesForm({ onClose, onSubmit }) {
         </AnimatePresence>
     );
 }
+

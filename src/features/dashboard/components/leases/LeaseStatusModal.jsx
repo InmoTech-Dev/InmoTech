@@ -36,11 +36,22 @@ export default function LeaseStatusModal({
   };
 
   const ReceiptRow = ({ payment }) => {
+    const formatThousands = (raw) => {
+      const digits = String(raw ?? "").replace(/\D+/g, "");
+      if (!digits) return "";
+      return Number(digits).toLocaleString("es-CO");
+    };
+
+    const parseNumber = (raw) => {
+      const digits = String(raw ?? "").replace(/[^\d.-]/g, "");
+      return digits ? Number(digits) : 0;
+    };
+
     const [file, setFile] = useState(null);
     const [form, setForm] = useState({
       entidad_bancaria: payment?.comprobante?.entidad_bancaria || "",
       referencia_bancaria: payment?.comprobante?.referencia_bancaria || "",
-      monto_pagado: payment?.comprobante?.monto_pagado || payment?.valor_pago || "",
+      monto_pagado: formatThousands(payment?.comprobante?.monto_pagado || payment?.valor_pago || ""),
       fecha_pago: payment?.comprobante?.fecha_pago || payment?.fecha_cobro || "",
       observaciones: payment?.comprobante?.observaciones || "",
     });
@@ -52,27 +63,27 @@ export default function LeaseStatusModal({
       setForm({
         entidad_bancaria: payment.comprobante.entidad_bancaria || "",
         referencia_bancaria: payment.comprobante.referencia_bancaria || "",
-        monto_pagado: payment.comprobante.monto_pagado || "",
+        monto_pagado: formatThousands(payment.comprobante.monto_pagado || ""),
         fecha_pago: payment.comprobante.fecha_pago || "",
         observaciones: payment.comprobante.observaciones || "",
       });
     }, [hasReceipt, payment?.comprobante]);
 
-    const disabled =
-      hasReceipt ||
-      !file ||
-      !form.entidad_bancaria ||
-      !form.referencia_bancaria ||
-      uploadingPaymentId === payment.id_cobro;
+    const disabled = hasReceipt || uploadingPaymentId === payment.id_cobro || !file;
 
     const handleChange = (e) => {
       const { name, value } = e.target;
+      if (name === "monto_pagado") {
+        setForm((prev) => ({ ...prev, [name]: formatThousands(value) }));
+        return;
+      }
       setForm((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleSubmit = () => {
       if (!onUploadReceipt) return;
-      onUploadReceipt(payment, file, form);
+      const cleanedMonto = parseNumber(form.monto_pagado);
+      onUploadReceipt(payment, file, { ...form, monto_pagado: cleanedMonto });
     };
 
     return (

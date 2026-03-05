@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaPhone, FaEnvelope } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Home, Phone, Mail, X } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Home, Phone, Mail, X, ChevronDown } from 'lucide-react';
 import "../../../../shared/styles/globals.css";
 import LeasesPersonForm from "../../components/leases/TenantForm";
 import ViewTenantModal from "../../components/leases/ViewTenantForm";
@@ -10,6 +10,8 @@ import { renantsApiService } from "../../../../shared/services/arrendatarioApiSe
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 import { useToast } from "../../../../shared/hooks/use-toast";
+
+const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
 
 export function LeasesManagementPage() {
   const [arrendatarios, setArrendatarios] = useState([]);
@@ -21,6 +23,8 @@ export function LeasesManagementPage() {
   const [tenantToEdit, setTenantToEdit] = useState(null);
   const [tenantToView, setTenantToView] = useState(null);
   const [tenantToDelete, setTenantToDelete] = useState(null);
+  const [statusChangingId, setStatusChangingId] = useState(null);
+  const [statusMenuId, setStatusMenuId] = useState(null);
   const { toast } = useToast();
   const handleViewTenant = async (tenant) => {
     if (!tenant) return;
@@ -102,6 +106,55 @@ export function LeasesManagementPage() {
     } catch (error) {
       console.error("No se pudo cargar el detalle del arrendatario", error);
       // Keep basic tenant data already set
+    }
+  };
+
+  const handleToggleEstado = async (tenant, forcedEstado) => {
+    if (!tenant) return;
+    const targetId = tenant.id || tenant.id_arrendatario || tenant.personaId;
+    if (!targetId) {
+      setStatusMessage({ type: "error", message: "No se pudo identificar el arrendatario." });
+      return;
+    }
+    const current = normalizeEstado(tenant.estado || "Activo");
+    const nextEstado = forcedEstado || (current === "activo" ? "Inactivo" : "Activo");
+    try {
+      setStatusChangingId(targetId);
+      const payload = {
+        estado: nextEstado,
+        tipoDocumento: tenant.tipoDocumento || tenant.persona?.tipo_documento || "CC",
+        documento: tenant.documento || tenant.persona?.numero_documento || "",
+        primerNombre: tenant.primerNombre || tenant.primerNombreArrendatario || "",
+        segundoNombre: tenant.segundoNombre || tenant.segundoNombreArrendatario || "",
+        primerApellido: tenant.primerApellido || tenant.primerApellidoArrendatario || "",
+        segundoApellido: tenant.segundoApellido || tenant.segundoApellidoArrendatario || "",
+        correo: tenant.correo || tenant.correoArrendatario || "",
+        telefono: tenant.telefono || tenant.telefonoArrendatario || "",
+      };
+      const updated = await renantsApiService.update(targetId, payload);
+      setArrendatarios((prev) =>
+        prev.map((t) =>
+          (t.id === targetId || t.id_arrendatario === targetId || t.personaId === targetId)
+            ? { ...t, estado: updated.estado || nextEstado }
+            : t
+        )
+      );
+      toast({
+        title: "Estado actualizado",
+        description: `El arrendatario ahora está ${nextEstado}.`,
+        variant: "default",
+      });
+      setStatusMenuId(null);
+    } catch (error) {
+      const errMsg = error.message || "No se pudo cambiar el estado del arrendatario";
+      setStatusMessage({ type: "error", message: errMsg });
+      toast({
+        title: "Error al cambiar estado",
+        description: errMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setStatusChangingId(null);
     }
   };
 
@@ -286,8 +339,8 @@ export function LeasesManagementPage() {
   // Calcular estadísticas
   const stats = {
     total: filteredTenants.length,
-    activos: filteredTenants.filter(t => t.estado === 'Activo').length,
-    morosos: filteredTenants.filter(t => t.estado === 'Moroso').length,
+    activos: filteredTenants.filter(t => normalizeEstado(t.estado) === 'activo').length,
+    morosos: filteredTenants.filter(t => normalizeEstado(t.estado) === 'moroso').length,
     conInmuebles: filteredTenants.filter(t => t.inmueblesArrendados && t.inmueblesArrendados.length > 0).length
   };
 
@@ -479,7 +532,7 @@ const renderDeleteModal = () => {
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           {/* TABLA REORGANIZADA */}
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-visible">
             {/* CABECERA DE TABLA */}
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -512,7 +565,10 @@ const renderDeleteModal = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredTenants.map((tenant) => (
+                    filteredTenants.map((tenant) => {
+                      const estadoNormalized = normalizeEstado(tenant.estado);
+                      const estadoLabel = tenant.estado || "Pendiente";
+                      return (
                       <tr key={tenant.id} className="hover:bg-slate-50 transition-colors">
                         {/* INFORMACIÓN PERSONAL */}
                         <td className="px-6 py-4">
@@ -572,19 +628,46 @@ const renderDeleteModal = () => {
                         </td>
 
                         {/* ESTADO */}
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-6 py-4 text-center relative">
                           <div className="flex flex-col items-center justify-center space-y-2">
-                            <span
-                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
-                                tenant.estado === "Activo"
-                                  ? "bg-green-100 text-green-700 border-green-200"
-                                  : tenant.estado === "Moroso"
-                                  ? "bg-red-100 text-red-700 border-red-200"
-                                  : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                              }`}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setStatusMenuId((prev) =>
+                                  prev === (tenant.id || tenant.id_arrendatario || tenant.personaId)
+                                    ? null
+                                    : (tenant.id || tenant.id_arrendatario || tenant.personaId)
+                                )
+                              }
+                              disabled={statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId)}
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
+                                estadoNormalized === "activo"
+                                  ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
+                                  : estadoNormalized === "moroso"
+                                  ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200 hover:ring-2 hover:ring-red-200"
+                                  : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
+                              } ${statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId) ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === (tenant.id || tenant.id_arrendatario || tenant.personaId) ? "ring-2 ring-slate-200" : ""}`}
                             >
-                              {tenant.estado || "Pendiente"}
-                            </span>
+                              {statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId) && (
+                                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                              )}
+                              <span>{estadoLabel}</span>
+                              <ChevronDown className="w-3 h-3 ml-2" />
+                            </button>
+                            {statusMenuId === (tenant.id || tenant.id_arrendatario || tenant.personaId) && (
+                              <div className="absolute left-1/2 -translate-x-1/2 top-12 z-50 bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
+                                {["Activo", "Inactivo"].map((estadoOpcion) => (
+                                  <button
+                                    key={estadoOpcion}
+                                    type="button"
+                                    onClick={() => handleToggleEstado(tenant, estadoOpcion)}
+                                    className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                  >
+                                    {estadoOpcion}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                             {tenant.fechaInicio && (
                               <span className="text-xs text-slate-500">
                                 Desde: {new Date(tenant.fechaInicio).toLocaleDateString()}
@@ -621,7 +704,8 @@ const renderDeleteModal = () => {
                           </div>
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>

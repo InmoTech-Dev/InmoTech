@@ -41,6 +41,27 @@ const normalizeTextValue = (value = "") =>
 const getPropertySource = (property = {}) =>
     property?.metadata?.raw || property?.raw || property || {};
 
+const isActiveStatus = (estado = "") => {
+    // Soporta booleanos, números y cadenas frecuentes (activo/habilitado)
+    if (estado === true || estado === 1 || estado === "1" || String(estado).toLowerCase() === "true") return true;
+    const normalized = normalizeTextValue(estado);
+    return normalized === "activo" || normalized === "activa" || normalized === "habilitado" || normalized === "habilitada";
+};
+
+const getRenantState = (renant = {}) =>
+    renant.estado ??
+    renant.status ??
+    renant.persona?.estado ??
+    renant.raw?.estado ??
+    renant.estado_arrendatario ??
+    renant.raw?.estado_arrendatario ??
+    renant.raw?.persona?.estado ??
+    renant.activo ??
+    renant.isActive ??
+    renant.enabled;
+
+const renantIsActive = (renant = {}) => isActiveStatus(getRenantState(renant));
+
 const propertyHasActiveLease = (property = {}) => {
     const source = getPropertySource(property);
     const estadoTexto = normalizeTextValue(
@@ -548,6 +569,20 @@ export default function RentForm({ onClose, onSubmit }) {
 
     const applyArrendatarioData = useCallback((renant) => {
         if (!renant) return;
+        if (!renantIsActive(renant)) {
+            const inactiveMsg = "No se puede asociar un arriendo a un arrendatario en estado inactivo.";
+            setArrendatarioLookupState({
+                loading: false,
+                message: "",
+                error: inactiveMsg,
+            });
+            toast({
+                title: "Arrendatario inactivo",
+                description: inactiveMsg,
+                variant: "destructive",
+            });
+            return;
+        }
 
         const replacements = {
             primerNombreArrendatario: renant.primerNombre || "",
@@ -676,6 +711,11 @@ export default function RentForm({ onClose, onSubmit }) {
 
     const cleanDocument = (value = "") => value.toString().replace(/[^0-9]/g, "").trim();
 
+    const renantHasState = (renant = {}) => {
+        const estado = getRenantState(renant);
+        return estado !== undefined && estado !== null && String(estado).trim() !== "";
+    };
+
     const fetchArrendatarioByDocument = useCallback(async () => {
         const tipoDocumento = (valuesRef.current.tipoDocArrendatario || "").trim().toUpperCase();
         const numeroDocumento = cleanDocument(valuesRef.current.numeroDocArrendatario);
@@ -728,27 +768,44 @@ export default function RentForm({ onClose, onSubmit }) {
             if (arrendatarioLookupRequestId.current !== requestId) return;
 
             if (match) {
-                applyArrendatarioData(match);
-                setArrendatarioLookupState({
-                    loading: false,
-                    message: "Persona encontrada y datos autocompletados.",
-                    error: null
-                });
-                toast({
-                    title: "Arrendatario encontrado",
-                    description: "Datos autocompletados correctamente.",
-                    variant: "default",
-                });
+                // Si el match no trae estado, intentamos obtenerlo desde el servicio de arrendatarios
+                if (!renantHasState(match)) {
+                    const renantWithState = await renantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
+                    if (renantWithState) {
+                        match = { ...renantWithState, ...match };
+                    }
+                }
+
+                if (!renantIsActive(match)) {
+                    const inactiveMsg = "No se puede asociar un arriendo a un arrendatario en estado inactivo.";
+                    setArrendatarioLookupState({
+                        loading: false,
+                        message: "",
+                        error: inactiveMsg,
+                    });
+                    toast({
+                        title: "Arrendatario inactivo",
+                        description: inactiveMsg,
+                        variant: "destructive",
+                    });
+                } else {
+                    applyArrendatarioData(match);
+                    setArrendatarioLookupState({
+                        loading: false,
+                        message: "Persona encontrada y datos autocompletados.",
+                        error: null
+                    });
+                    toast({
+                        title: "Arrendatario encontrado",
+                        description: "Datos autocompletados correctamente.",
+                        variant: "default",
+                    });
+                }
             } else {
                 setArrendatarioLookupState({
                     loading: false,
                     message: "",
-                    error: "No encontramos un arrendatario con ese documento."
-                });
-                toast({
-                    title: "Arrendatario no encontrado",
-                    description: "No encontramos un arrendatario con ese documento.",
-                    variant: "destructive",
+                    error: null,
                 });
             }
         } catch (error) {
@@ -1352,6 +1409,10 @@ export default function RentForm({ onClose, onSubmit }) {
                 } else {
                     throw error;
                 }
+            }
+
+            if (!renantIsActive(renant)) {
+                throw new Error("No se puede asociar un arriendo a un arrendatario en estado inactivo.");
             }
 
             // 2ï¸âƒ£ Crear ARRIENDO ligado al arrendatario obtenido/creado

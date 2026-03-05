@@ -343,6 +343,24 @@ export function RenantManagementPage() {
     const paymentId = payment.id_cobro || payment.id;
     setUploadingPaymentId(paymentId);
     try {
+      let montoPagado = Number(String(form.monto_pagado ?? "").replace(/[^0-9.-]/g, ""));
+      if (!montoPagado || montoPagado <= 0) {
+        const fallbackMonto = Number(payment.valor_pago || payment.valor_cobro || payment.valor || 0);
+        montoPagado = fallbackMonto;
+      }
+      if (!montoPagado || montoPagado <= 0) {
+        throw new Error("Ingresa un monto pagado mayor a cero.");
+      }
+      if (!form.fecha_pago) {
+        throw new Error("Selecciona la fecha de pago.");
+      }
+      if (!form.entidad_bancaria?.trim()) {
+        throw new Error("Ingresa la entidad bancaria.");
+      }
+      if (!form.referencia_bancaria?.trim()) {
+        throw new Error("Ingresa la referencia bancaria.");
+      }
+
       // Validar que la fecha de pago no sea futura (el backend tiene CHECK)
       if (form.fecha_pago) {
         const payDate = new Date(form.fecha_pago);
@@ -359,7 +377,7 @@ export function RenantManagementPage() {
         url_comprobante: upload.url,
         entidad_bancaria: form.entidad_bancaria,
         referencia_bancaria: form.referencia_bancaria,
-        monto_pagado: Number(form.monto_pagado),
+        monto_pagado: montoPagado,
         fecha_pago: form.fecha_pago,
         // Estado debe coincidir con la restricción CHECK de la BD
         estado: 'En revisión',
@@ -528,7 +546,20 @@ const renderDeleteModal = () => {
     return true;
   };
 
-  const computeEstadoConCobro = (rent) => rent.estado || "Activo";
+  const computeEstadoConCobro = (rent) => {
+    const base = rent.estado || "Activo";
+    if (base === "Finalizado" || base === "Pagado") return base;
+
+    const fechaCobro = parseDateSafe(rent.fechaCobro);
+    if (fechaCobro) {
+      const cobroDay = new Date(fechaCobro);
+      cobroDay.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (cobroDay < today) return "Debe";
+    }
+    return base;
+  };
 
   const getEstadoBadge = (estado) => {
     switch (estado) {
@@ -762,15 +793,6 @@ const renderDeleteModal = () => {
                             >
                               <ListChecks className="w-4 h-4" />
                             </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              aria-label="Eliminar arriendo"
-                              className="text-red-600 hover:text-red-800 transition-colors p-1 rounded-lg hover:bg-red-50"
-                              onClick={() => handleDeleteRequest(r)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </motion.button>
                           </div>
                         </td>
                       </tr>
@@ -799,7 +821,6 @@ const renderDeleteModal = () => {
       {renderFormModal()}
       {renderViewModal()}
       {renderStatusModal()}
-      {renderDeleteModal()}
     </>
   );
 }

@@ -15,7 +15,7 @@ import React, {
   useRef,
 } from "react";
 import citaApiService, { actualizarEstadoCita } from '../services/citaApiService';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from './AuthContext';
 import realtimeBus from '../services/realtimeBus';
 
 const AppointmentContext = createContext(undefined);

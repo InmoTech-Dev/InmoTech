@@ -27,19 +27,33 @@ const ALLOWED_UPLOAD_FOLDERS = (
 );
 const DEFAULT_UPLOAD_FOLDER = ALLOWED_UPLOAD_FOLDERS[0] || 'inmotech/inmuebles';
 
+const normalizeFolderPath = (value = '') =>
+  String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+
 const resolveUploadFolder = (folderInput) => {
-  const candidate = typeof folderInput === 'string' ? folderInput.trim() : '';
+  const candidate = normalizeFolderPath(folderInput);
   if (!candidate) return DEFAULT_UPLOAD_FOLDER;
 
-  // Modificación: Permitir si la carpeta comienza con alguna de la lista permitida
-  // Esto permite estructuras como "inmotech/reportes/123/imagenes"
-  const isAllowed = ALLOWED_UPLOAD_FOLDERS.some(base =>
-    candidate === base || candidate.startsWith(`${base}/`)
-  );
-
-  if (!isAllowed) {
+  // Bloquear traversal o caracteres peligrosos.
+  if (
+    candidate.includes('..') ||
+    !/^[a-zA-Z0-9/_-]+$/.test(candidate)
+  ) {
     return null;
   }
+
+  const allowed = ALLOWED_UPLOAD_FOLDERS.map((folder) => normalizeFolderPath(folder)).filter(Boolean);
+  const isExactAllowed = allowed.includes(candidate);
+  const isAllowedSubfolder = allowed.some((folder) => candidate.startsWith(`${folder}/`));
+
+  if (!isExactAllowed && !isAllowedSubfolder) {
+    return null;
+  }
+
   return candidate;
 };
 
@@ -135,7 +149,14 @@ const uploadSingleAny = (req, res, next) => {
 
 const subirImagen = async (req, res) => {
   try {
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    const hasCloudinaryUrl = Boolean(process.env.CLOUDINARY_URL);
+    const hasCloudinaryCredentials = Boolean(
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    );
+
+    if (!hasCloudinaryUrl && !hasCloudinaryCredentials) {
       logger.error('Subida abortada: Cloudinary no está configurado correctamente');
       return res.status(500).json({ success: false, message: 'Servicio de imágenes no configurado' });
     }
@@ -148,8 +169,6 @@ const subirImagen = async (req, res) => {
       (req.body && req.body.folder) ||
       (req.query && req.query.folder) ||
       DEFAULT_UPLOAD_FOLDER;
-
-    logger.info(`Intento de subida a carpeta: "${requestedFolder}"`);
     const folder = resolveUploadFolder(requestedFolder);
     if (!folder) {
       return res.status(400).json({

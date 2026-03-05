@@ -7,11 +7,9 @@ import ViewAppointmentModal from '../../../../features/dashboard/components/appo
 import ConfirmationDialog from '../../../components/ui/ConfirmationDialog';
 import { useAppointments } from '../../../contexts/AppointmentContext';
 import { useToast } from '../../../hooks/use-toast';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '../../../contexts/AuthContext';
 import SettingsModal from '../Header/SettingsModal';
 import notificacionApiService from '../../../services/notificacionApiService';
-import reportesInmobiliariosService from '../../../../features/dashboard/services/reportesInmobiliarios.service';
-import ViewReportModal from '../../../../features/dashboard/components/reports/ViewReportModal';
 import realtimeBus from '../../../services/realtimeBus';
 
 const UNREAD_FETCH_COOLDOWN_MS = 15000;
@@ -32,10 +30,6 @@ const Header = () => {
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
   const [isMarkingRead, setIsMarkingRead] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [reports, setReports] = useState([]);
-  const [seenReportIds, setSeenReportIds] = useState([]);
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const notificationButtonRef = useRef(null);
   const userMenuRef = useRef(null);
   const userMenuButtonRef = useRef(null);
@@ -47,56 +41,7 @@ const Header = () => {
   // Filtrar citas solicitadas pendientes
   const pendingAppointments = Array.isArray(appointments) ? appointments.filter(cita => cita.estado === 'solicitada') : [];
   const notificationScopeKey = user?.id || user?.id_persona || user?.email || user?.correo || 'anon';
-  
-  const canViewCitas = hasPermission('citas', 'ver');
-  const canViewReportes = hasPermission('reportes', 'ver');
-  const canViewAnyNotifications = canViewCitas || canViewReportes;
-
-  // Cargar reportes vistos de localStorage
-  useEffect(() => {
-    if (!notificationScopeKey) return;
-    try {
-      const stored = localStorage.getItem(`inmotech_seen_reports_${notificationScopeKey}`);
-      if (stored) {
-        setSeenReportIds(JSON.parse(stored));
-      }
-    } catch (e) {
-      console.warn('Error cargando reportes vistos:', e);
-    }
-  }, [notificationScopeKey]);
-
-  // Guardar reportes vistos en localStorage
-  useEffect(() => {
-    if (!notificationScopeKey) return;
-    localStorage.setItem(`inmotech_seen_reports_${notificationScopeKey}`, JSON.stringify(seenReportIds));
-  }, [seenReportIds, notificationScopeKey]);
-
-  // Cargar reportes reales
-  const fetchReports = useCallback(async () => {
-    if (!canViewReportes) return;
-    try {
-      const response = await reportesInmobiliariosService.listarReportes();
-      const allReports = response.data || response || [];
-      // Ordenar por fecha desc (considerando varios posibles nombres de campo)
-      const sorted = [...allReports].sort((a, b) => {
-        const dateA = new Date(a.fecha_creacion || a.fecha || a.createdAt || 0);
-        const dateB = new Date(b.fecha_creacion || b.fecha || b.createdAt || 0);
-        return dateB - dateA;
-      });
-      setReports(sorted);
-    } catch (error) {
-      console.error('Error fetching reports for notifications:', error);
-    }
-  }, [canViewReportes]);
-
-  useEffect(() => {
-    if (canViewReportes) {
-      fetchReports();
-    }
-  }, [canViewReportes, fetchReports]);
-
-  const unseenReportsCount = reports.filter(r => !seenReportIds.includes(r.id_reporte || r.id)).length;
-  const totalNotificationsCount = (canViewCitas ? pendingAppointments.length : 0) + (canViewReportes ? unseenReportsCount : 0);
+  const canViewNotifications = hasPermission('citas', 'ver');
 
   const triggerBellFx = useCallback(() => {
     if (bellFxTimeoutRef.current) {
@@ -112,7 +57,7 @@ const Header = () => {
   }, []);
 
   const loadUnreadNotifications = useCallback(async ({ triggerAnimation = true, force = false } = {}) => {
-    if (!canViewCitas) {
+    if (!canViewNotifications) {
       setUnreadNotificationIds([]);
       setPreviousUnreadCount(0);
       unreadNotificationIdsRef.current = [];
@@ -158,7 +103,7 @@ const Header = () => {
     } finally {
       unreadFetchInFlightGlobal = null;
     }
-  }, [canViewCitas, triggerBellFx]);
+  }, [canViewNotifications, triggerBellFx]);
 
   const markUnreadAsReadOnOpen = useCallback(async (idsToMark = unreadNotificationIdsRef.current) => {
     if (isMarkingRead) return;
@@ -220,7 +165,7 @@ const Header = () => {
   }, [loadUnreadNotifications]);
 
   useEffect(() => {
-    if (!canViewCitas) return undefined;
+    if (!canViewNotifications) return undefined;
 
     const offNotificationChanged = realtimeBus.on('notification.changed', () => {
       loadUnreadNotifications({ triggerAnimation: true, force: true });
@@ -237,7 +182,7 @@ const Header = () => {
       offFallbackTick();
       offReconcile();
     };
-  }, [canViewCitas, loadUnreadNotifications]);
+  }, [canViewNotifications, loadUnreadNotifications]);
 
   useEffect(() => {
     return () => {
@@ -318,26 +263,11 @@ const Header = () => {
     setIsNotificationOpen(false);
   };
 
-  const handleOpenReport = (report) => {
-    const reportId = report.id_reporte || report.id;
-    if (!seenReportIds.includes(reportId)) {
-      setSeenReportIds(prev => [...prev, reportId]);
-    }
-    setSelectedReport(report);
-    setIsReportModalOpen(true);
-    setIsNotificationOpen(false);
-  };
-
   const handleNotificationToggle = async () => {
     const willOpen = !isNotificationOpen;
     setIsNotificationOpen(willOpen);
 
     if (!willOpen) return;
-
-    // Actualizar reportes al abrir
-    if (canViewReportes) {
-      fetchReports();
-    }
 
     const shouldRefreshBeforeMark = Date.now() - lastUnreadFetchAtGlobal >= UNREAD_FETCH_COOLDOWN_MS;
     const latestUnreadIds = shouldRefreshBeforeMark
@@ -514,13 +444,13 @@ const Header = () => {
               )}
             </AnimatePresence>
             <MdNotifications size={22} />
-            {totalNotificationsCount > 0 && (
+            {pendingAppointments.length > 0 && (
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white shadow-sm pointer-events-none"
+                className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium"
               >
-                {totalNotificationsCount}
+                {pendingAppointments.length}
               </motion.span>
             )}
           </motion.button>
@@ -529,16 +459,10 @@ const Header = () => {
             isOpen={isNotificationOpen}
             onClose={() => setIsNotificationOpen(false)}
             notifications={pendingAppointments}
-            reports={reports}
-            seenReportIds={seenReportIds}
-            canViewCitas={canViewCitas}
-            canViewReportes={canViewReportes}
             onAcceptAppointment={handleAcceptAppointmentRequest}
             onRejectAppointment={handleRejectAppointmentRequest}
             onViewAppointment={handleViewAppointment}
-            onOpenReport={handleOpenReport}
             triggerRef={notificationButtonRef}
-            userRole={getUserRole()}
           />
         </div>
 
@@ -605,16 +529,6 @@ const Header = () => {
           setSelectedAppointment(null);
         }}
         cita={selectedAppointment}
-      />
-
-      {/* View Report Modal */}
-      <ViewReportModal
-        isOpen={isReportModalOpen}
-        onClose={() => {
-          setIsReportModalOpen(false);
-          setSelectedReport(null);
-        }}
-        reporte={selectedReport}
       />
 
       {/* Accept Appointment Confirmation Dialog */}

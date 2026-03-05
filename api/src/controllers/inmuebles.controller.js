@@ -50,6 +50,43 @@ class InmueblesController {
   }
 
   /**
+   * Listar inmuebles por propietario
+   */
+  async listarInmueblesPorPropietario(req, res, next) {
+    try {
+      const propietarioId = parseInt(req.params.id, 10);
+      if (!Number.isInteger(propietarioId) || propietarioId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID de propietario invalido'
+        });
+      }
+
+      const filtros = {
+        ...req.query,
+        propietario_id: propietarioId
+      };
+      const opciones = {
+        pagina: parseInt(req.query.pagina) || 1,
+        limite: parseInt(req.query.limite) || 20,
+        ordenarPor: req.query.ordenar_por || 'id_inmueble',
+        orden: req.query.orden || 'DESC'
+      };
+
+      const resultado = await inmueblesService.listarInmuebles(filtros, opciones);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Inmuebles del propietario listados exitosamente',
+        data: resultado
+      });
+    } catch (error) {
+      logger.error('Error listando inmuebles por propietario:', error);
+      next(error);
+    }
+  }
+
+  /**
    * Obtener inmueble por ID
    */
   async obtenerInmueble(req, res, next) {
@@ -141,22 +178,28 @@ class InmueblesController {
    */
   async buscarInmuebles(req, res, next) {
     try {
+      const query = req.validatedQuery || req.query;
       const {
         ciudad,
         precio_min,
         precio_max,
         area_min,
         categoria,
+        destacado,
         pagina = 1,
         limite = 20
-      } = req.query;
+      } = query;
 
       const filtros = {
         ciudad,
         precio_min: precio_min ? parseFloat(precio_min) : undefined,
         precio_max: precio_max ? parseFloat(precio_max) : undefined,
         area_min: area_min ? parseFloat(area_min) : undefined,
-        categoria
+        categoria,
+        destacado,
+        estado: true,
+        // En catálogo público nunca mostrar inmuebles finalizados.
+        excluir_estados_frontend: ['Vendido', 'Arrendado']
       };
 
       const opciones = {

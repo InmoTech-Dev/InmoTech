@@ -181,7 +181,8 @@ class LeaseService {
         // 4. Actualizar estado del inmueble a "Arrendado"
         await inmueble.update({
           estado: false,
-          estado_frontend: 'Arrendado'
+          estado_frontend: 'Arrendado',
+          destacado: false
         }, { transaction: t });
 
         // 5. Generar cobros mensuales automáticamente

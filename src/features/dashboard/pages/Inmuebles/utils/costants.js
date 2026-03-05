@@ -1,16 +1,16 @@
 export const COMODIDADES_POR_TIPO = {
-  Casa: ['Habitaciones', 'Baños', 'Parqueaderos', 'Cocina integral', 'Sala-comedor', 'Patio', 'Jardín', 'Lavandería', 'Balcón'],
-  Apartamento: ['Habitaciones', 'Baños', 'Parqueaderos', 'Cocina integral', 'Balcón', 'Zona de lavandería', 'Ascensor', 'Portería'],
-  Apartaestudio: ['Baños', 'Parqueaderos', 'Cocina integral', 'Balcón', 'Zona de lavandería', 'Ascensor', 'Portería'],
-  Finca: ['Habitaciones', 'Baños', 'Parqueaderos', 'Cocina', 'Piscina', 'Kiosco', 'Establos', 'Cultivos', 'Lago'],
-  Lote: ['Área construible', 'Servicios públicos', 'Acceso vehicular', 'Documentación al día'],
-  Oficina: ['Baños', 'Parqueaderos', 'Recepción', 'Sala de juntas', 'Cocina', 'Aire acondicionado', 'Internet']
+  Casa: ['Habitaciones', 'Banos', 'Parqueaderos', 'Balcon', 'Cuarto util', 'Cocina'],
+  Apartamento: ['Habitaciones', 'Banos', 'Parqueaderos', 'Balcon', 'Cuarto util', 'Cocina'],
+  Apartaestudio: ['Habitaciones', 'Banos', 'Parqueaderos', 'Balcon', 'Cuarto util', 'Cocina'],
+  Finca: ['Habitaciones', 'Banos', 'Parqueaderos', 'Cocina', 'Piscina', 'Kiosco', 'Establos', 'Cultivos', 'Lago'],
+  Lote: ['Area construible', 'Servicios publicos', 'Acceso vehicular', 'Documentacion al dia'],
+  Oficina: ['Banos', 'Parqueaderos', 'Recepcion', 'Sala de juntas', 'Cocina', 'Aire acondicionado', 'Internet']
 };
 
 export const PROPIETARIOS_EJEMPLO = [
-  { id: 1, nombre: 'Juan Carlos Pérez García', email: 'juan.perez@email.com', telefono: '3001234567' },
-  { id: 2, nombre: 'María González López', email: 'maria.gonzalez@email.com', telefono: '3009876543' },
-  { id: 3, nombre: 'Pedro Luis Martínez', email: 'pedro.martinez@email.com', telefono: '3005556789' }
+  { id: 1, nombre: 'Juan Carlos Perez Garcia', email: 'juan.perez@email.com', telefono: '3001234567' },
+  { id: 2, nombre: 'Maria Gonzalez Lopez', email: 'maria.gonzalez@email.com', telefono: '3009876543' },
+  { id: 3, nombre: 'Pedro Luis Martinez', email: 'pedro.martinez@email.com', telefono: '3005556789' }
 ];
 
 export const ESTADOS_INMUEBLE = {

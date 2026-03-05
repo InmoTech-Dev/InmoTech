@@ -145,8 +145,17 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
         // Sin servicio seleccionado: horarios predeterminados
         console.log('Loading default hours (no service restriction)');
         const defaultHours = [];
-        for (let hora = 8; hora <= 16; hora++) {
-          if (hora === 13) continue;
+        // Mañana: 8:00 am - 1:00 pm (último inicio 12:30)
+        for (let hora = 8; hora <= 12; hora++) {
+          defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
+          if (hora !== 12) {
+            defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
+          } else {
+            defaultHours.push(`12:30`);
+          }
+        }
+        // Tarde: 2:00 pm - 5:00 pm (último inicio 16:30)
+        for (let hora = 14; hora <= 16; hora++) {
           defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
           defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
         }
@@ -177,7 +186,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
       // Fallback: horarios predeterminados filtrados si es hoy
       const defaultHours = [];
       for (let hora = 8; hora <= 16; hora++) {
-        if (hora === 13) continue;
+        if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
         defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
         defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
       }
@@ -367,25 +376,25 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
               </div>
             </div>
           ) : availableHours.length > 0 ? (
-            <div className="grid grid-cols-4 gap-3">
-              {availableHours.map(hour => (
-                <motion.button
-                  key={hour}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleHourSelect(hour)}
-                  className={`
-                    py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
-                    ${formData.hora === hour
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-blue-50'
-                    }
-                  `}
-                >
-                  {formatTimeTo12Hour(hour)}
-                </motion.button>
-              ))}
-            </div>
+                <div className="grid grid-cols-4 gap-3">
+                  {availableHours.map(hour => (
+                    <motion.button
+                      key={hour}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleHourSelect(hour)}
+                      className={`
+                        py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
+                        ${formData.hora === hour
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-blue-50'
+                        }
+                      `}
+                    >
+                      {formatTimeTo12Hour(hour).toLowerCase()}
+                    </motion.button>
+                  ))}
+                </div>
           ) : (
             <div className="flex items-center justify-center py-8 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="text-center text-yellow-700">

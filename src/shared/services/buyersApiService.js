@@ -21,6 +21,7 @@ const normalizeDocByType = (tipo = '', value = '') => {
   if (upper === 'PAS' || upper === 'PASAPORTE') return raw.replace(/\s+/g, '');
   return raw.replace(/\D/g, '').trim();
 };
+const normalizeDoc = (value = '') => String(value || '').replace(/\D/g, '').trim();
 
 const normalizeTipo = (value = '') => value.toString().trim().toUpperCase();
 
@@ -201,9 +202,21 @@ export const buyersApiService = {
   },
 
   async create(payload) {
-    const response = await apiClient.post('/sales/buyers', buildPayload(payload));
-    const data = response?.data?.data ?? response?.data ?? response;
-    return mapBuyerFromApi(data, payload);
+    try {
+      const response = await apiClient.post('/sales/buyers', buildPayload(payload));
+      const data = response?.data?.data ?? response?.data ?? response;
+      return mapBuyerFromApi(data, payload);
+    } catch (error) {
+      const status = error?.status || error?.response?.status;
+      if (status !== 409) throw error;
+
+      const existing = await this.findByDocument(payload?.tipoDocumento, payload?.documento);
+      if (existing?.id || existing?.compradorId || existing?.raw?.id_comprador) {
+        return existing;
+      }
+
+      throw error;
+    }
   },
 
   async update(id, payload) {
@@ -222,10 +235,39 @@ export const buyersApiService = {
     if (!buyerId) {
       throw new Error('Falta id del comprador para actualizar sus datos de compra.');
     }
-    await apiClient.patch(`/sales/buyers/${buyerId}`, {
-      ...purchaseData,
-      tipo_comprador: purchaseData.tipo_compra || purchaseData.tipo_comprador || 'Potencial',
-    });
+
+    const resolveTipoComprador = (value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (['potencial', 'en proceso', 'finalizado'].includes(normalized)) {
+        if (normalized === 'en proceso') return 'En Proceso';
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+      }
+      // Si ya se concretó una venta, dejamos el comprador como finalizado.
+      return 'Finalizado';
+    };
+
+    const payload = {
+      tipo_comprador: resolveTipoComprador(purchaseData.tipo_comprador || purchaseData.tipo_compra),
+      estado: 'Activo'
+    };
+
+    if (purchaseData.observaciones || purchaseData.valor_compra || purchaseData.fecha_compra) {
+      const notes = [];
+      if (purchaseData.valor_compra !== undefined && purchaseData.valor_compra !== null) {
+        notes.push(`Valor compra: ${purchaseData.valor_compra}`);
+      }
+      if (purchaseData.fecha_compra) {
+        notes.push(`Fecha compra: ${purchaseData.fecha_compra}`);
+      }
+      if (purchaseData.id_venta) {
+        notes.push(`Venta ID: ${purchaseData.id_venta}`);
+      }
+      const extra = String(purchaseData.observaciones || '').trim();
+      if (extra) notes.push(extra);
+      payload.observaciones = notes.join(' | ').slice(0, 1000);
+    }
+
+    await apiClient.patch(`/sales/buyers/${buyerId}`, payload);
     return true;
   },
 };

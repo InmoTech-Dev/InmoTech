@@ -23,7 +23,6 @@ const uploadRoutes = require('./upload.routes');
 const arriendoRoutes = require('./arriendo.routes');
 const dashboardRoutes = require('./dashboard.route');
 const securityRoutes = require('./security.routes');
-const contactRoutes = require('./contact.routes');
 
 const parsePositiveInt = (rawValue, fallbackValue) => {
   const parsed = Number.parseInt(rawValue, 10);
@@ -77,7 +76,6 @@ router.use('/files', uploadRoutes);
 router.use('/arriendos', arriendoRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/security', securityRoutes);
-router.use('/contact', contactRoutes);
 
 // Ruta de salud
 router.get('/health', async (req, res) => {

@@ -10,7 +10,6 @@ const AppointmentCard = ({
   isDragging = false,
   onClick,
   className = '',
-  compact = false,
   ...props
 }) => {
   const cardRef = useRef(null);
@@ -29,6 +28,9 @@ const AppointmentCard = ({
   const remainingEdits = (appointment?.ediciones_maximas ?? 2) - (appointment?.ediciones_realizadas ?? 0);
   const userCanDrag = user && !canEdit && remainingEdits > 0;
 
+  // Permitir drag si:
+  // 1. Es admin con permisos, O
+  // 2. Es usuario normal y aún tiene ediciones disponibles
   const canDrag = canEdit || userCanDrag;
 
   const {
@@ -49,12 +51,12 @@ const AppointmentCard = ({
 
   const getStatusColor = (status) => {
     const colors = {
+      programada: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       confirmada: 'bg-green-100 text-green-800 border-green-200',
       completada: 'bg-purple-100 text-purple-800 border-purple-200',
       cancelada: 'bg-red-100 text-red-800 border-red-200',
       're agendada': 'bg-orange-100 text-orange-800 border-orange-200',
-      solicitada: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-      programada: 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      solicitada: 'bg-indigo-100 text-indigo-800 border-indigo-200'
     };
     return colors[status?.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
@@ -70,49 +72,11 @@ const AppointmentCard = ({
 
   const clienteNombre = cliente.nombre_completo && cliente.apellido_completo
     ? `${cliente.nombre_completo} ${cliente.apellido_completo}`
-    : cliente.nombre_completo || 'Sin nombre';
+    : cliente.nombre_completo || 'Cliente no especificado';
 
-  const servicioNombre = servicio.nombre_servicio || 'Servicio';
-  const horaRaw = appointment.hora_inicio || appointment.hora || '';
-  const hora = formatTime(horaRaw);
+  const servicioNombre = servicio.nombre_servicio || 'Servicio no especificado';
+  const hora = formatTime(appointment.hora_inicio || appointment.hora || '');
   const fechaCita = appointment.fecha_cita || appointment.fecha || '';
-
-  if (compact) {
-    return (
-      <motion.div
-        ref={(node) => {
-          setNodeRef(node);
-          cardRef.current = node;
-        }}
-        {...listeners}
-        {...attributes}
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 10 }}
-        className={`
-          px-1.5 py-0.5 rounded border text-[9.5px] leading-tight ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
-          transition-all duration-200 hover:shadow-sm select-none
-          ${getStatusColor(appointment.estado)}
-          ${isDndDragging ? 'opacity-50' : ''}
-          ${className}
-        `}
-        onClick={onClick}
-        role="button"
-        tabIndex={0}
-        {...props}
-      >
-        <div className="flex items-center justify-between gap-1 overflow-hidden">
-          <div className="flex items-center gap-0.5 min-w-0 flex-1">
-            {hora && <span className="font-bold flex-shrink-0">{hora}</span>}
-            <span className="truncate flex-1">{clienteNombre}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-0.5 mt-0.5 opacity-90">
-          <span className="truncate font-medium">{servicioNombre}</span>
-        </div>
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div
@@ -144,16 +108,19 @@ const AppointmentCard = ({
       }}
       {...props}
     >
+      {/* ✅ CORREGIDO: Usar variable hora */}
       <div className="flex items-center gap-0.5 mb-0.5">
         <Clock className="w-2.5 h-2.5 flex-shrink-0" />
         <span className="font-medium truncate">{hora}</span>
       </div>
 
+      {/* ✅ CORREGIDO: Usar variable clienteNombre */}
       <div className="flex items-center gap-0.5 mb-0.5">
         <User className="w-2.5 h-2.5 flex-shrink-0" />
         <span className="truncate">{clienteNombre}</span>
       </div>
 
+      {/* ✅ CORREGIDO: Usar variable servicioNombre */}
       <div className="flex items-center gap-0.5">
         <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
         <span className="truncate">{servicioNombre}</span>

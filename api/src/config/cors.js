@@ -12,6 +12,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'http://127.0.0.1:52599',
       'http://localhost:9101',
       'http://127.0.0.1:9101',
+      'capacitor://localhost',
+      'ionic://localhost',
     ];
 
 const isDevelopment = process.env.NODE_ENV !== 'production';

@@ -9,7 +9,7 @@ export const ReportsProvider = ({ children }) => {
   const nextId = useCallback(() => {
     const lastNumeric = reports.length > 0
       ? Math.max(...reports
-          .map(r => parseInt((r.id || '0').toString().replace(/\D/g, '') || '0')))
+        .map(r => parseInt((r.id || '0').toString().replace(/\D/g, '') || '0')))
       : 0;
     return `J${String(lastNumeric + 1).padStart(3, '0')}`;
   }, [reports]);

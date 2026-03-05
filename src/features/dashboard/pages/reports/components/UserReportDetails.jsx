@@ -38,14 +38,14 @@ const UserReportDetails = ({ selectedUser, reports, loading, onView, onEdit, onD
     const stats = {
         total: reports.length,
         pendientes: reports.filter(r => r.estado === 'Pendiente').length,
-        enProceso: reports.filter(r => r.estado === 'En proceso').length,
+        enProceso: reports.filter(r => r.estado === 'En Proceso').length,
         completados: reports.filter(r => r.estado === 'Completado').length,
     };
 
     const getStatusConfig = (estado) => {
         const configs = {
             'Completado': { color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle },
-            'En proceso': { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock },
+            'En Proceso': { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock },
             'Pendiente': { color: 'bg-amber-100 text-amber-700 border-amber-200', icon: AlertCircle },
             'Cancelado': { color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
         };

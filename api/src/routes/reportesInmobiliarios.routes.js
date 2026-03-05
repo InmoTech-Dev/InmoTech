@@ -23,7 +23,24 @@ const {
 } = require('../validators/reportesInmobiliarios.validator');
 
 router.use(auth.authenticateToken);
-router.use(auth.authorizePermissions('reportes', 'ver'));
+
+// Middleware de acceso: admins/super-admins pasan libremente,
+// propietarios pueden listar sus propios reportes, el resto requiere permiso explícito.
+router.use((req, res, next) => {
+  const roles = req.user?.roles || [];
+  const isPropietario = roles.some(r => r.toLowerCase() === 'propietario');
+  const isAdmin = roles.includes('Super Administrador') || roles.includes('Administrador');
+
+  if (isAdmin) return next();
+  if (isPropietario) {
+    // Propietario: sólo puede leer su propia data; marcar para inyectar filtro
+    req.esPropietario = true;
+    req.propietarioId = req.user.id;
+    return next();
+  }
+  // Para otros roles, requerir permiso 'ver'
+  return auth.authorizePermissions('reportes', 'ver')(req, res, next);
+});
 
 // Búsqueda de inmuebles para el módulo de reportes
 router.get('/inmuebles/autocomplete', validateQuery(autocompleteInmuebleSchema), controller.autocompleteInmuebles);

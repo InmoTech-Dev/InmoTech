@@ -152,7 +152,7 @@ function App() {
           path="/dashboard"
           element={
             <DashboardRoute>
-              <DashboardLayout>
+              <DashboardLayout fullWidth={true}>
                 <DashboardPage />
               </DashboardLayout>
             </DashboardRoute>
@@ -247,7 +247,7 @@ function App() {
           element={
             <DashboardRoute>
               <ModulePermissionRoute moduleName="reportes" action="ver">
-                <DashboardLayout>
+                <DashboardLayout fullWidth={true}>
                   <Reports />
                 </DashboardLayout>
               </ModulePermissionRoute>

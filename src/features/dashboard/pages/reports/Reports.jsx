@@ -30,13 +30,9 @@ const ReportsContent = () => {
   const [showCancelled, setShowCancelled] = useState(false)
   const [statusFilter, setStatusFilter] = useState('Todos los estados')
   const [todayOnly, setTodayOnly] = useState(false)
+  const [adminFilters, setAdminFilters] = useState({ year: '', month: '', city: '' })
   const [isStatusChangeConfirmOpen, setIsStatusChangeConfirmOpen] = useState(false)
   const [pendingStatusChange, setPendingStatusChange] = useState(null)
-  const [adminFilters, setAdminFilters] = useState({
-    city: '',
-    year: '',
-    month: '',
-  })
   const { createReport, updateReport, deleteReport } = useReports()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -343,6 +339,7 @@ const ReportsContent = () => {
       const payload = {
         id_inmueble: Number(reportData.id_inmueble),
         tipo_reporte: reportData.tipoReporte?.trim(),
+        titulo: reportData.titulo || reportData.tipoReporte?.trim() || 'Nuevo Reporte',
         estado: normalizeEstado(reportData.estado),
         descripcion: reportData.descripcion?.trim() || 'Sin descripción',
         id_persona_reporta: personaId,
@@ -386,7 +383,8 @@ const ReportsContent = () => {
         for (const seg of activos) {
           const segPayload = {
             descripcion: (seg.descripcion || '').trim(),
-            estado: normalizeEstado(seg.estado || 'Pendiente')
+            estado: normalizeEstado(seg.estado || 'Pendiente'),
+            fecha: seg.fecha || null
           }
           await reportesInmobiliariosService.crearSeguimientoRubro(backendId, rubroId, segPayload)
 
@@ -462,6 +460,7 @@ const ReportsContent = () => {
     // 1) Actualizar campos del reporte (sin borrar nada)
     const patchPayload = {
       estado: normalizeEstado(reportData.estado),
+      titulo: reportData.titulo || reportData.titulo_reporte || reportData.tipoReporte,
       descripcion: (reportData.descripcion || '').trim(),
       seguimiento_general: (reportData.seguimientoGeneral || '').trim(),
       id_persona_reporta: reportData.id_persona_reporta
@@ -502,7 +501,8 @@ const ReportsContent = () => {
       for (const s of segsToProcess) {
         const segPayload = {
           descripcion: (s.descripcion || '').trim(),
-          estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente'))
+          estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente')),
+          fecha: s.fecha || null
         }
 
         const segBackendId = Number(s.backendId ?? 0)
@@ -1122,7 +1122,7 @@ const ReportsContent = () => {
   const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
 
   return (
-    <div className='p-6 space-y-6'>
+    <div className='px-8 py-4 flex flex-col h-[calc(100vh-64px)] overflow-hidden'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
       {dbError && <div className='p-4 text-red-600'>{dbError}</div>}
 
@@ -1138,6 +1138,10 @@ const ReportsContent = () => {
         showCancelled={showCancelled}
         onToggleShowCancelled={() => setShowCancelled(v => !v)}
         hideFilters={isAdminView}
+        adminFilters={adminFilters}
+        setAdminFilters={setAdminFilters}
+        onSearchAdmin={setAdminFilters}
+        allReports={dbReports}
       />
 
       {user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r)) ? (

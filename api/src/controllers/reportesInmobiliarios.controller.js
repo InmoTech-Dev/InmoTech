@@ -49,7 +49,13 @@ class ReportesInmobiliariosController {
    */
   async listarReportes(req, res, next) {
     try {
-      const filtros = req.query;
+      const filtros = { ...req.query };
+
+      // Si es propietario, forzar el filtro por su propio id
+      if (req.esPropietario && req.propietarioId) {
+        filtros.id_propietario = req.propietarioId;
+      }
+
       const result = await reportesInmobiliariosService.listarReportes(filtros);
 
       return res.status(result.success ? 200 : 400).json(result);

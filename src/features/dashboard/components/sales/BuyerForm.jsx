@@ -14,6 +14,7 @@ const defaultFormData = {
   segundoApellido: "",
   correo: "",
   telefono: "",
+  estado: "Activo",
   observaciones: ""
 };
 
@@ -86,6 +87,7 @@ export default function BuyerForm({
     setValue("segundoApellido", buyer.segundoApellido || "");
     setValue("correo", buyer.correo || "");
     setValue("telefono", normalizePhone(buyer.telefono));
+    setValue("estado", buyer.estado || "Activo");
   }, []);
 
   const cleanDocument = (value = "") => value.replace(/\\D/g, "").trim();
@@ -416,6 +418,7 @@ export default function BuyerForm({
       segundoApellido: "Segundo Apellido",
       correo: "Correo Electrónico",
       telefono: "Teléfono",
+      estado: "Estado",
       observaciones: "Observaciones"
     };
     return labels[name] ?? name;

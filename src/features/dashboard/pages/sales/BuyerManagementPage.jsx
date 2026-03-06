@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { FaUserPlus, FaSearch, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone, X } from 'lucide-react';
+import { FaUserPlus, FaSearch, FaCalendar, FaExclamationTriangle } from "react-icons/fa";
+import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, AlertCircle, Mail, Home, Phone, ChevronDown } from 'lucide-react';
 import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
@@ -59,12 +59,16 @@ const filterRealBuyers = (list = []) => {
     });
 };
 
+const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
+
 export function BuyersManagementPage() {
     const [compradores, setCompradores] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [statusMessage, setStatusMessage] = useState(null);
+    const [statusChangingId, setStatusChangingId] = useState(null);
+    const [statusMenuId, setStatusMenuId] = useState(null);
 
     // --- ESTADOS DE ACCION ---
     const [searchTerm, setSearchTerm] = useState("");
@@ -227,6 +231,60 @@ export function BuyersManagementPage() {
             return handleUpdateBuyer(formData);
         }
         return handleCreateBuyer(formData);
+    };
+
+    const handleToggleEstado = async (buyer, estadoOpcion) => {
+        if (!buyer) return;
+        const targetId =
+            buyer.id ||
+            buyer.buyerId ||
+            buyer.id_buyer ||
+            buyer.id_comprador ||
+            buyer.personaId;
+
+        if (!targetId) {
+            showStatus("error", "No se pudo determinar el comprador para cambiar el estado.");
+            return;
+        }
+
+        const currentEstado = normalizeEstado(buyer.estado || "Activo");
+        const nextEstado = estadoOpcion || (currentEstado === "activo" ? "Inactivo" : "Activo");
+
+        try {
+            setStatusChangingId(targetId);
+            const payload = {
+                estado: nextEstado,
+                tipoDocumento: buyer.tipoDocumento || buyer.persona?.tipo_documento || "CC",
+                documento: buyer.documento || buyer.persona?.numero_documento || "",
+                primerNombre: buyer.primerNombre || buyer.persona?.nombre_completo?.split(" ")?.[0] || "",
+                segundoNombre: buyer.segundoNombre || "",
+                primerApellido: buyer.primerApellido || buyer.persona?.apellido_completo?.split(" ")?.[0] || "",
+                segundoApellido: buyer.segundoApellido || "",
+                correo: buyer.correo || buyer.persona?.correo || "",
+                telefono: buyer.telefono || buyer.persona?.telefono || "",
+            };
+            const updated = await buyersApiService.update(targetId, payload);
+            const mapped = mapApiBuyerToRow({ ...buyer, ...updated, estado: nextEstado }, buyer.formData);
+            setCompradores((prev) =>
+                prev.map((c) => (c.id === mapped.id ? { ...c, estado: mapped.estado || nextEstado } : c))
+            );
+            toast({
+                title: "Estado actualizado",
+                description: `El comprador ahora está ${nextEstado}.`,
+                variant: "default",
+            });
+        } catch (error) {
+            const errMsg = error.message || "No se pudo cambiar el estado del comprador";
+            showStatus("error", errMsg);
+            toast({
+                title: "Error al cambiar estado",
+                description: errMsg,
+                variant: "destructive",
+            });
+        } finally {
+            setStatusMenuId(null);
+            setStatusChangingId(null);
+        }
     };
 
     // --- HANDLERS ELIMINAR ---
@@ -412,8 +470,8 @@ export function BuyersManagementPage() {
 // Calcular estadísticas
     const stats = {
         total: filteredBuyers.length,
-        activos: filteredBuyers.filter(b => b.estado === 'activo').length,
-        inactivos: filteredBuyers.filter(b => b.estado === 'inactivo').length,
+        activos: filteredBuyers.filter(b => normalizeEstado(b.estado) === 'activo').length,
+        inactivos: filteredBuyers.filter(b => normalizeEstado(b.estado) === 'inactivo').length,
     };
 
     // --- RENDERIZADO PRINCIPAL ---
@@ -483,7 +541,7 @@ export function BuyersManagementPage() {
                     transition={{ duration: 0.5, delay: 0.3 }}
                 >
                 {/* TABLA ESTILO ARRENDATARIOS */}
-                <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-visible">
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
@@ -513,8 +571,9 @@ export function BuyersManagementPage() {
                                         filteredBuyers.map((c) => {
                                             const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
                                             const estado = c.estado || 'Activo';
+                                            const estadoNormalized = normalizeEstado(estado);
                                             const estadoClass =
-                                              estado.toLowerCase() === 'activo'
+                                              estadoNormalized === 'activo'
                                                 ? 'bg-green-100 text-green-700 border-green-200'
                                                 : 'bg-yellow-100 text-yellow-700 border-yellow-200';
                                             return (
@@ -554,10 +613,41 @@ export function BuyersManagementPage() {
                                                         <span>{c.telefono || 'Sin teléfono'}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${estadoClass}`}>
-                                                        {estado}
-                                                    </span>
+                                                <td className="px-6 py-4 text-center relative">
+                                                    <div className="flex flex-col items-center justify-center space-y-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setStatusMenuId((prev) => prev === c.id ? null : c.id)
+                                                            }
+                                                            disabled={statusChangingId === c.id}
+                                                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
+                                                                estadoNormalized === "activo"
+                                                                    ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
+                                                                    : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
+                                                            } ${statusChangingId === c.id ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === c.id ? "ring-2 ring-slate-200" : ""}`}
+                                                        >
+                                                            {statusChangingId === c.id && (
+                                                                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                                            )}
+                                                            <span>{estado}</span>
+                                                            <ChevronDown className="w-3 h-3 ml-2" />
+                                                        </button>
+                                                        {statusMenuId === c.id && (
+                                                            <div className="absolute left-1/2 -translate-x-1/2 top-12 z-50 bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
+                                                                {["Activo", "Inactivo"].map((estadoOpcion) => (
+                                                                    <button
+                                                                        key={estadoOpcion}
+                                                                        type="button"
+                                                                        onClick={() => handleToggleEstado(c, estadoOpcion)}
+                                                                        className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                                                    >
+                                                                        {estadoOpcion}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
                                                     <div className="flex gap-2 justify-center">

@@ -50,10 +50,10 @@ class AuthService {
    * Get authenticated profile
    * @returns {Promise<Object>}
    */
-  async getProfile() {
+  async getProfile(params = {}) {
     try {
       console.log('[AUTH] Loading user profile...');
-      const response = await apiClient.get('/auth/me');
+      const response = await apiClient.get('/auth/me', { params });
       console.log('[AUTH] Profile loaded');
       return response;
     } catch (error) {

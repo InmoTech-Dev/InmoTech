@@ -53,7 +53,7 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
 
   const availableHours = useMemo(() => [
     '08:00 am', '08:30 am', '09:00 am', '09:30 am', '10:00 am', '10:30 am',
-    '11:00 am', '11:30 am', '12:00 pm', '12:30 pm', 
+    '11:00 am', '11:30 am', '12:00 pm', '12:30 pm',
     '02:00 pm', '02:30 pm', '03:00 pm', '03:30 pm',
     '04:00 pm', '04:30 pm'
   ], []);

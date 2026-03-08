@@ -1022,7 +1022,7 @@ BEGIN
         CONSTRAINT FK_Cobros_Arrendamiento FOREIGN KEY (id_arrendamiento) REFERENCES Arrendamientos(id_arrendamiento) ON DELETE CASCADE,
         CONSTRAINT CHK_Cobros_Valor CHECK (valor_pago > 0),
         CONSTRAINT CHK_Cobros_Fechas CHECK (fecha_limite >= fecha_cobro),
-        CONSTRAINT CHK_Cobros_FechaPago CHECK (fecha_pago IS NULL OR fecha_pago >= fecha_cobro)
+        CONSTRAINT CHK_Cobros_FechaPago CHECK (fecha_pago IS NULL OR fecha_pago <= CAST(GETDATE() AS DATE))
     );
     PRINT '? Tabla Cobros creada';
 END

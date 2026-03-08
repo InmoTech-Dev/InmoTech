@@ -8,6 +8,8 @@ const {
   createLeaseSchema,
   updateLeaseSchema,
   updateLeaseStatusSchema,
+  extendLeaseSchema,
+  registerPreNoticeSchema,
   createPaymentSchema,
   updatePaymentSchema,
   createReceiptSchema
@@ -50,6 +52,29 @@ router.patch(
   strictLimiter,
   validate(updateLeaseStatusSchema),
   leasesController.updateLeaseStatus
+);
+
+// PATCH /api/v1/leases/:id/extend - Aplicar prórroga al arrendamiento
+router.patch(
+  '/:id/extend',
+  strictLimiter,
+  validate(extendLeaseSchema),
+  leasesController.extendLease
+);
+
+// PATCH /api/v1/leases/:id/pre-notice - Registrar preaviso del arrendamiento
+router.patch(
+  '/:id/pre-notice',
+  strictLimiter,
+  validate(registerPreNoticeSchema),
+  leasesController.registerPreNotice
+);
+
+// DELETE /api/v1/leases/:id/pre-notice - Eliminar preaviso del arrendamiento
+router.delete(
+  '/:id/pre-notice',
+  strictLimiter,
+  leasesController.deletePreNotice
 );
 
 // PATCH /api/v1/leases/:id/cancel - Cancelar arrendamiento

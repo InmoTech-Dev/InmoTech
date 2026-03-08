@@ -12,10 +12,6 @@ export function ReportsHeader({
   onDownloadPDF,
   onDownloadExcel,
   reports = [],
-  isAdmin = false,
-  adminFilters = {},
-  filterOptions = { cities: [], years: [] },
-  months = [],
   // Nuevos props opcionales (se muestran solo si vienen)
   statusFilter,
   onStatusChange,
@@ -256,61 +252,7 @@ export function ReportsHeader({
             <PlusIcon className="h-4 w-4" />
             Nuevo reporte
           </motion.button>
-        )}
-
-        {/* Download Dropdown */}
-        <div className="relative" ref={dropdownRef}>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="border border-blue-600 text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white"
-          >
-            <DownloadIcon className="h-4 w-4" />
-            <span>Descargar</span>
-            <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-          </motion.button>
-
-          {isDropdownOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden"
-            >
-              <button
-                onClick={() => handleDownloadOption('pdf')}
-                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-red-50 flex items-center gap-2 transition-colors"
-              >
-                <FileTextIcon className="h-4 w-4 text-red-500" />
-                <div>
-                  <div className="font-medium text-slate-900">PDF</div>
-                  <div className="text-xs text-slate-500">Formato portable</div>
-                </div>
-              </button>
-              <button
-                onClick={() => handleDownloadOption('excel')}
-                className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-green-50 flex items-center gap-2 transition-colors"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-green-500" />
-                <div>
-                  <div className="font-medium text-slate-900">Excel</div>
-                  <div className="text-xs text-slate-500">Hoja de cálculo</div>
-                </div>
-              </button>
-            </motion.div>
-          )}
         </div>
-
-        {/* New Report Button */}
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onNewReport}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm hover:shadow transition-all"
-        >
-          <PlusIcon className="h-4 w-4" />
-          Nuevo reporte
-        </motion.button>
       </div>
 
       {/* Row 2: Admin Filters (only for admin view) */}

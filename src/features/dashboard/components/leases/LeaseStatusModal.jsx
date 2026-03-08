@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import ReactDOM from "react-dom";
-import { X, Paperclip, UploadCloud, Wallet, CalendarDays, CheckCircle2, Loader2 } from "lucide-react";
+import { X, Paperclip, UploadCloud, Wallet, CalendarDays, CheckCircle2, Loader2, ChevronDown } from "lucide-react";
+import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 
 const formatCurrency = (value) => {
   const n = Number(value);
@@ -21,6 +22,65 @@ export default function LeaseStatusModal({
   uploadingPaymentId = null,
 }) {
   if (!statusRent) return null;
+
+  const [paymentsTab, setPaymentsTab] = useState("current");
+  const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
+  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
+
+  const paymentGroups = useMemo(() => {
+    const sortedPayments = [...payments].sort((a, b) => new Date(a.fecha_cobro) - new Date(b.fecha_cobro));
+    const paidPayments = sortedPayments.filter((payment) => payment.comprobante || payment.estado === "Pagado");
+    const unpaidPayments = sortedPayments.filter((payment) => !payment.comprobante && payment.estado !== "Pagado");
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const overduePayment =
+      unpaidPayments.find((payment) => String(payment.fecha_cobro || "").slice(0, 10) <= todayStr) ||
+      null;
+    const currentMonthPayment =
+      overduePayment ||
+      unpaidPayments.find((payment) => String(payment.fecha_cobro || "").slice(0, 7) === currentMonth) ||
+      unpaidPayments[0] ||
+      null;
+
+    return {
+      currentPayment: currentMonthPayment ? [currentMonthPayment] : [],
+      paidPayments,
+    };
+  }, [payments]);
+
+  const existingReceipts = useMemo(
+    () =>
+      payments
+        .filter((payment) => payment?.comprobante?.url_comprobante)
+        .map((payment) => ({
+          id: payment.comprobante.id_comprobante || payment.id_cobro || payment.id,
+          paymentId: payment.id_cobro || payment.id,
+          url: payment.comprobante.url_comprobante,
+          name: `Comprobante ${String(payment.fecha_cobro || "").slice(0, 10) || payment.id_cobro || ""}`,
+          fechaCobro: payment.fecha_cobro,
+          fechaPago: payment.comprobante.fecha_pago,
+          monto: payment.comprobante.monto_pagado || payment.valor_pago,
+          estado: payment.comprobante.estado,
+        })),
+    [payments]
+  );
+
+  const imageReceipts = useMemo(
+    () =>
+      existingReceipts.filter((receipt) =>
+        (receipt.url || "").toLowerCase().match(/(image\/|\.png$|\.jpe?g$|\.webp$|\.jfif$)/)
+      ),
+    [existingReceipts]
+  );
+
+  const openImageViewer = (index) => {
+    setViewer({ isOpen: true, index, items: imageReceipts });
+  };
+
+  const openPdfViewer = (url, name) => {
+    setPdfViewer({ isOpen: true, url, name });
+  };
 
   const Field = ({ label, value, className = "" }) => {
     const v = value ?? "";
@@ -47,17 +107,17 @@ export default function LeaseStatusModal({
       return digits ? Number(digits) : 0;
     };
 
+    const hasReceipt = Boolean(payment?.comprobante);
+    const [expanded, setExpanded] = useState(false);
     const [file, setFile] = useState(null);
     const [form, setForm] = useState({
       entidad_bancaria: payment?.comprobante?.entidad_bancaria || "",
       referencia_bancaria: payment?.comprobante?.referencia_bancaria || "",
       monto_pagado: formatThousands(payment?.comprobante?.monto_pagado || payment?.valor_pago || ""),
       fecha_pago: payment?.comprobante?.fecha_pago || payment?.fecha_cobro || "",
-      observaciones: payment?.comprobante?.observaciones || "",
     });
 
     // Sincroniza el formulario cuando llega un comprobante desde el backend
-    const hasReceipt = Boolean(payment?.comprobante);
     React.useEffect(() => {
       if (!hasReceipt) return;
       setForm({
@@ -65,7 +125,6 @@ export default function LeaseStatusModal({
         referencia_bancaria: payment.comprobante.referencia_bancaria || "",
         monto_pagado: formatThousands(payment.comprobante.monto_pagado || ""),
         fecha_pago: payment.comprobante.fecha_pago || "",
-        observaciones: payment.comprobante.observaciones || "",
       });
     }, [hasReceipt, payment?.comprobante]);
 
@@ -88,39 +147,49 @@ export default function LeaseStatusModal({
 
     return (
       <div className="border border-slate-200 rounded-xl p-3 space-y-2 bg-white">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-slate-700">
-            <Wallet className="w-4 h-4 text-amber-600" />
-            <span>{formatCurrency(payment.valor_pago)}</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <CalendarDays className="w-3.5 h-3.5" />
-            <span>Fecha cobro: {payment.fecha_cobro}</span>
-          </div>
-          <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700 border border-slate-200">
-            {payment.estado}
-          </span>
-          {payment.comprobante ? (
-            <span className="flex items-center gap-2 text-xs text-green-700">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Comprobante cargado</span>
-              {payment.comprobante.url_comprobante && (
-                <a
-                  href={payment.comprobante.url_comprobante}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-700 underline hover:text-blue-800"
-                >
-                  Ver
-                </a>
-              )}
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="w-full flex items-start justify-between gap-3 text-left"
+          aria-expanded={expanded}
+        >
+          <div className="min-w-0 flex-1 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <Wallet className="w-4 h-4 text-amber-600" />
+              <span>{formatCurrency(payment.valor_pago)}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>Fecha cobro: {payment.fecha_cobro}</span>
+            </div>
+            <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700 border border-slate-200">
+              {payment.estado}
             </span>
-          ) : (
-            <span className="text-xs text-amber-700">Sin comprobante</span>
-          )}
-        </div>
+            {payment.comprobante ? (
+              <span className="flex items-center gap-2 text-xs text-green-700">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Comprobante cargado</span>
+                {payment.comprobante.url_comprobante && (
+                  <a
+                    href={payment.comprobante.url_comprobante}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-700 underline hover:text-blue-800"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Ver
+                  </a>
+                )}
+              </span>
+            ) : (
+              <span className="text-xs text-amber-700">Sin comprobante</span>
+            )}
+          </div>
+          <ChevronDown className={`w-4 h-4 mt-1 shrink-0 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </button>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {expanded && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           <div className="flex flex-col">
             <label className="text-xs font-semibold text-slate-600">Entidad bancaria *</label>
             <input
@@ -165,18 +234,6 @@ export default function LeaseStatusModal({
               className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
             />
           </div>
-          <div className="sm:col-span-2 flex flex-col">
-            <label className="text-xs font-semibold text-slate-600">Observaciones</label>
-            <textarea
-              name="observaciones"
-              value={form.observaciones}
-              onChange={handleChange}
-              readOnly={hasReceipt}
-              rows={2}
-              className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-              placeholder="Comentario opcional"
-            />
-          </div>
           {!hasReceipt && (
             <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3">
               <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -208,7 +265,8 @@ export default function LeaseStatusModal({
               </button>
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -320,11 +378,91 @@ export default function LeaseStatusModal({
               <p className="text-sm text-slate-500">No hay cobros generados para este arriendo.</p>
             )}
 
-            <div className="space-y-3">
-              {payments.map((payment) => (
-                <ReceiptRow key={payment.id_cobro || payment.id} payment={payment} />
-              ))}
-            </div>
+            {payments.length > 0 && (
+              <>
+                <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentsTab("current")}
+                    className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "current" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                  >
+                    Pago del mes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentsTab("history")}
+                    className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "history" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                  >
+                    Pagos realizados
+                  </button>
+                </div>
+
+                {paymentsTab === "current" && (
+                  <div className="space-y-3">
+                    {paymentGroups.currentPayment.length > 0 ? (
+                      paymentGroups.currentPayment.map((payment) => (
+                        <ReceiptRow key={payment.id_cobro || payment.id} payment={payment} />
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500">No hay una cuota pendiente para este mes.</p>
+                    )}
+                  </div>
+                )}
+
+                {paymentsTab === "history" && (
+                  <div className="space-y-3">
+                    {paymentGroups.paidPayments.length > 0 ? (
+                      paymentGroups.paidPayments.map((payment) => (
+                        <ReceiptRow key={payment.id_cobro || payment.id} payment={payment} />
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500">Aún no hay pagos registrados.</p>
+                    )}
+                  </div>
+                )}
+
+                {paymentsTab === "history" && existingReceipts.length > 0 && (
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="mb-3 text-sm font-semibold text-slate-900">Comprobantes registrados</p>
+                    <div className="space-y-2">
+                      {existingReceipts.map((receipt) => {
+                        const isPdf =
+                          (receipt.url || "").toLowerCase().includes(".pdf") ||
+                          (receipt.url || "").toLowerCase().includes("application/pdf");
+                        const imageIndex = imageReceipts.findIndex((item) => item.id === receipt.id);
+
+                        return (
+                          <div
+                            key={receipt.id}
+                            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-900">{receipt.name}</p>
+                              <p className="text-xs text-slate-500">
+                                Cobro: {receipt.fechaCobro || "-"} · Pago: {receipt.fechaPago || "-"} · {formatCurrency(receipt.monto)}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                              onClick={() => {
+                                if (isPdf || imageIndex === -1) {
+                                  openPdfViewer(receipt.url, receipt.name);
+                                  return;
+                                }
+                                openImageViewer(imageIndex);
+                              }}
+                            >
+                              Ver comprobante
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </section>
         </div>
 
@@ -349,5 +487,55 @@ export default function LeaseStatusModal({
     </div>
   );
 
-  return ReactDOM.createPortal(modal, document.getElementById("modal-root") || document.body);
+  return ReactDOM.createPortal(
+    <>
+      {modal}
+      <ImageViewer
+        isOpen={viewer.isOpen}
+        onClose={() => setViewer((prev) => ({ ...prev, isOpen: false }))}
+        images={viewer.items}
+        currentIndex={viewer.index}
+        onIndexChange={(index) => setViewer((prev) => ({ ...prev, index }))}
+      />
+      {pdfViewer.isOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm"
+          onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+        >
+          <div
+            className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-2">
+              <span className="truncate text-sm font-semibold text-gray-800">
+                {pdfViewer.name || "Documento PDF"}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
+                  onClick={() => window.open(pdfViewer.url, "_blank", "noopener")}
+                >
+                  Abrir en nueva pestaña
+                </button>
+                <button
+                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                  onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-100">
+              <iframe
+                title={pdfViewer.name || "PDF"}
+                src={pdfViewer.url}
+                className="h-full w-full border-0"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>,
+    document.getElementById("modal-root") || document.body
+  );
 }

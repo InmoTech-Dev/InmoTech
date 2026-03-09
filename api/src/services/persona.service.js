@@ -1,4 +1,15 @@
-const { Persona, Acceso, PersonasRol, Rol, PropiedadInmueble } = require('../models');
+const {
+  Persona,
+  Acceso,
+  PersonasRol,
+  Rol,
+  PropiedadInmueble,
+  Renant,
+  Lease,
+  Payment,
+  Receipt,
+  Inmueble
+} = require('../models');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const bcryptUtils = require('../utils/bcrypt');
@@ -223,6 +234,199 @@ class PersonaService {
       };
     } catch (error) {
       logger.error('Error obteniendo perfil:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene facturas/cobros del arrendatario autenticado
+   */
+  async obtenerResumenArrendatario(personaId) {
+    try {
+      const persona = await Persona.findOne({
+        where: { id_persona: personaId, estado: true },
+        attributes: [
+          'id_persona',
+          'tipo_documento',
+          'numero_documento',
+          'nombre_completo',
+          'apellido_completo',
+          'correo',
+          'telefono'
+        ]
+      });
+
+      if (!persona) {
+        throw new Error('Persona no encontrada');
+      }
+
+      const arrendatario = await Renant.findOne({
+        where: { id_persona: personaId },
+        attributes: ['id_arrendatario', 'registro_arrendatario', 'tipo_arrendatario', 'estado']
+      });
+
+      if (!arrendatario) {
+        return {
+          arrendatario: null,
+          resumen: {
+            total_facturas: 0,
+            facturas_pagadas: 0,
+            facturas_pendientes: 0,
+            facturas_vencidas: 0,
+            total_valor: 0,
+            total_pagado: 0,
+            total_pendiente: 0
+          },
+          facturas: []
+        };
+      }
+
+      const leases = await Lease.findAll({
+        where: { id_cliente: arrendatario.id_arrendatario },
+        attributes: ['id_arrendamiento', 'fecha_inicio', 'fecha_finalizacion', 'valor_mensual', 'estado'],
+        include: [
+          {
+            model: Inmueble,
+            as: 'inmueble',
+            attributes: [
+              'id_inmueble',
+              'titulo',
+              'registro_inmobiliario',
+              'direccion',
+              'ciudad',
+              'categoria'
+            ]
+          },
+          {
+            model: Payment,
+            as: 'cobros',
+            attributes: [
+              'id_cobro',
+              'fecha_cobro',
+              'fecha_limite',
+              'valor_pago',
+              'estado',
+              'fecha_pago',
+              'fecha_creacion'
+            ],
+            include: [
+              {
+                model: Receipt,
+                as: 'comprobante',
+                attributes: [
+                  'id_comprobante',
+                  'url_comprobante',
+                  'entidad_bancaria',
+                  'referencia_bancaria',
+                  'monto_pagado',
+                  'estado',
+                  'fecha_pago',
+                  'fecha_creacion',
+                  'observaciones'
+                ]
+              }
+            ],
+            required: false
+          }
+        ],
+        order: [
+          [{ model: Payment, as: 'cobros' }, 'fecha_cobro', 'DESC']
+        ]
+      });
+
+      const facturas = [];
+
+      leases.forEach((lease) => {
+        const inmueble = lease.inmueble || {};
+        const cobros = Array.isArray(lease.cobros) ? lease.cobros : [];
+        cobros.forEach((cobro) => {
+          const valorPago = Number(cobro.valor_pago) || 0;
+          const valorComprobante = Number(cobro?.comprobante?.monto_pagado) || null;
+
+          facturas.push({
+            id_cobro: cobro.id_cobro,
+            id_arrendamiento: lease.id_arrendamiento,
+            estado: cobro.estado,
+            fecha_cobro: cobro.fecha_cobro,
+            fecha_limite: cobro.fecha_limite,
+            fecha_pago: cobro.fecha_pago,
+            valor_pago: valorPago,
+            inmueble: {
+              id_inmueble: inmueble.id_inmueble || null,
+              titulo: inmueble.titulo || null,
+              registro_inmobiliario: inmueble.registro_inmobiliario || null,
+              direccion: inmueble.direccion || null,
+              ciudad: inmueble.ciudad || null,
+              categoria: inmueble.categoria || null
+            },
+            arrendamiento: {
+              id_arrendamiento: lease.id_arrendamiento,
+              fecha_inicio: lease.fecha_inicio,
+              fecha_finalizacion: lease.fecha_finalizacion,
+              valor_mensual: Number(lease.valor_mensual) || valorPago,
+              estado: lease.estado
+            },
+            comprobante: cobro.comprobante ? {
+              id_comprobante: cobro.comprobante.id_comprobante,
+              url_comprobante: cobro.comprobante.url_comprobante,
+              entidad_bancaria: cobro.comprobante.entidad_bancaria,
+              referencia_bancaria: cobro.comprobante.referencia_bancaria,
+              monto_pagado: valorComprobante,
+              estado: cobro.comprobante.estado,
+              fecha_pago: cobro.comprobante.fecha_pago,
+              fecha_creacion: cobro.comprobante.fecha_creacion,
+              observaciones: cobro.comprobante.observaciones
+            } : null
+          });
+        });
+      });
+
+      const resumen = facturas.reduce((acc, factura) => {
+        const valor = Number(factura.valor_pago) || 0;
+        acc.total_facturas += 1;
+        acc.total_valor += valor;
+
+        if (factura.estado === 'Pagado') {
+          acc.facturas_pagadas += 1;
+          acc.total_pagado += valor;
+        } else if (factura.estado === 'Vencido') {
+          acc.facturas_vencidas += 1;
+          acc.total_pendiente += valor;
+        } else if (factura.estado === 'Pendiente') {
+          acc.facturas_pendientes += 1;
+          acc.total_pendiente += valor;
+        }
+
+        return acc;
+      }, {
+        total_facturas: 0,
+        facturas_pagadas: 0,
+        facturas_pendientes: 0,
+        facturas_vencidas: 0,
+        total_valor: 0,
+        total_pagado: 0,
+        total_pendiente: 0
+      });
+
+      return {
+        arrendatario: {
+          id_arrendatario: arrendatario.id_arrendatario,
+          id_persona: persona.id_persona,
+          registro_arrendatario: arrendatario.registro_arrendatario,
+          tipo_arrendatario: arrendatario.tipo_arrendatario,
+          estado: arrendatario.estado,
+          nombre_completo: persona.nombre_completo,
+          apellido_completo: persona.apellido_completo,
+          correo: persona.correo,
+          telefono: persona.telefono,
+          tipo_documento: persona.tipo_documento,
+          numero_documento: persona.numero_documento
+        },
+        resumen,
+        facturas
+      };
+    } catch (error) {
+      logger.error('Error obteniendo resumen arrendatario:', error);
       throw error;
     }
   }

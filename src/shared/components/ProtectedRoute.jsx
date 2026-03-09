@@ -10,6 +10,16 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
+const isOwnerUser = (user) => {
+  if (!user) return false;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  return roles.some((role) => {
+    if (typeof role === 'string') return role.trim().toLowerCase() === 'propietario';
+    const roleName = role?.nombre_rol || role?.nombre || role?.name;
+    return typeof roleName === 'string' && roleName.trim().toLowerCase() === 'propietario';
+  });
+};
+
 /**
  * Componente que protege rutas basadas en autenticación y roles
  * @param {Object} props - Propiedades del componente
@@ -54,7 +64,11 @@ const ProtectedRoute = ({
   // Si no requiere autenticación pero está autenticado (ej: páginas de login/register)
   if (!requireAuth && isAuthenticated) {
     const hasAdministrativeAccess = user?.es_administrativo === true;
-    const redirectToAuthenticated = hasAdministrativeAccess ? '/dashboard' : '/';
+    const redirectToAuthenticated = hasAdministrativeAccess
+      ? '/dashboard'
+      : isOwnerUser(user)
+        ? '/dashboard/propietario/inmuebles'
+        : '/';
     console.log('✅ Usuario ya autenticado, redirigiendo según su tipo de acceso');
     return <Navigate to={redirectToAuthenticated} replace />;
   }
@@ -125,14 +139,16 @@ export const DashboardRoute = ({ children, ...props }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Verificar si el usuario tiene acceso administrativo
+  // Verificar si el usuario tiene acceso administrativo o es propietario
   const hasAdministrativeAccess = user?.es_administrativo === true;
+  const hasOwnerAccess = isOwnerUser(user);
 
-  if (!hasAdministrativeAccess) {
+  if (!hasAdministrativeAccess && !hasOwnerAccess) {
     console.log('🚫 Acceso denegado al dashboard: Usuario no tiene permisos administrativos', {
       es_administrativo: user?.es_administrativo,
       roles: user?.roles,
-      hasAdministrativeAccess
+      hasAdministrativeAccess,
+      hasOwnerAccess
     });
     // Redirigir a página de acceso denegado o home
     return <Navigate to="/" replace />;
@@ -196,4 +212,5 @@ export const PublicRoute = ({ children, ...props }) => (
 );
 
 export default ProtectedRoute;
+
 

@@ -281,7 +281,7 @@ function App() {
           element={
             <DashboardRoute>
               <ModulePermissionRoute moduleName="reportes" action="ver">
-                <DashboardLayout>
+                <DashboardLayout fullWidth={true}>
                   <Reports />
                 </DashboardLayout>
               </ModulePermissionRoute>

@@ -18,7 +18,8 @@ import {
   Eye,
   X,
   Save,
-  AlertCircle
+  AlertCircle,
+  Download
 } from "lucide-react";
 
 const modulesData = [
@@ -57,7 +58,7 @@ const modulesData = [
   {
     name: "Reportes Inmobiliarios",
     key: "reportes",
-    permisos: ["Crear", "Editar", "Anular", "Ver"],
+    permisos: ["Crear", "Editar", "Eliminar", "Ver", "Descargar"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
     description: "Generacion de informes y analisis de mercado"
@@ -68,8 +69,8 @@ const permissionConfig = {
   "Crear": { icon: Plus, color: "text-green-600", bg: "bg-green-50" },
   "Editar": { icon: Edit, color: "text-blue-600", bg: "bg-blue-50" },
   "Eliminar": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
-  "Anular": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
-  "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
+  "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" },
+  "Descargar": { icon: Download, color: "text-purple-600", bg: "bg-purple-50" }
 };
 
 const VIEW_PERMISSION = "Ver";
@@ -395,7 +396,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                                       }`}
                                   >
                                     <IconPermiso className="w-3 h-3" />
-                                    <span>{permiso}</span>
+                                    <span>{(module.key === 'reportes' && permiso === 'Eliminar') ? 'Anular' : permiso}</span>
                                   </button>
                                 );
                               })}

@@ -653,6 +653,7 @@ export default function TenantForm({
                     required={true}
                   />
                 </div>
+
               </section>
 
               {/* Observaciones Section - removed */}

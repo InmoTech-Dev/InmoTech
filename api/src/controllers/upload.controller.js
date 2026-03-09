@@ -10,11 +10,16 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/webp',
   'image/gif'
 ]);
+const ALLOWED_FILE_MIME_TYPES = new Set([
+  ...ALLOWED_IMAGE_MIME_TYPES,
+  'application/pdf'
+]);
 const DEFAULT_ALLOWED_FOLDERS = [
   'inmotech/inmuebles',
   'inmotech/perfiles',
   'inmotech/reportes',
   'inmotech/comprobantes', // habilitado para recibos de pago de arriendos
+  'inmotech/preavisos',
 ];
 const ALLOWED_UPLOAD_FOLDERS = (
   process.env.UPLOAD_ALLOWED_FOLDERS
@@ -69,9 +74,54 @@ const upload = multer({
   }
 });
 
+// Variante que permite imágenes y PDFs (para comprobantes/contratos)
+const uploadAny = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: UPLOAD_MAX_BYTES
+  },
+  fileFilter: (req, file, cb) => {
+    if (!file || !ALLOWED_FILE_MIME_TYPES.has(file.mimetype)) {
+      const invalidMimeTypeError = new Error('Tipo de archivo no permitido');
+      invalidMimeTypeError.code = 'INVALID_FILE_TYPE';
+      return cb(invalidMimeTypeError);
+    }
+    return cb(null, true);
+  }
+});
+
 // Middleware de multer para una sola imagen con manejo controlado de errores
 const uploadSingle = (req, res, next) => {
   upload.single('file')(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: `El archivo supera el limite permitido de ${Math.floor(UPLOAD_MAX_BYTES / (1024 * 1024))}MB`
+      });
+    }
+
+    if (error.code === 'INVALID_FILE_TYPE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Tipo de archivo no permitido'
+      });
+    }
+
+    logger.error('Error en procesamiento de upload:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error procesando archivo'
+    });
+  });
+};
+
+// Middleware para una sola imagen o PDF
+const uploadSingleAny = (req, res, next) => {
+  uploadAny.single('file')(req, res, (error) => {
     if (!error) {
       return next();
     }
@@ -163,5 +213,6 @@ const subirImagen = async (req, res) => {
 
 module.exports = {
   uploadSingle,
+  uploadSingleAny,
   subirImagen,
 };

@@ -386,6 +386,15 @@ class BuyerService {
         throw new Error('Comprador no encontrado');
       }
 
+      const salesCount = await Sale.count({ where: { id_comprador: id }, transaction });
+      if (salesCount > 0) {
+        const err = new Error(
+          'No puedes editar un comprador con ventas asociadas. Anula o elimina la venta antes de editar.'
+        );
+        err.status = 409;
+        throw err;
+      }
+
       await persona.update(
         {
           nombre_completo: updateData.nombre_completo ?? persona.nombre_completo,

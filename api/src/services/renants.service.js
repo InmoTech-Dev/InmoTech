@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Renant, Persona, Arriendo, Inmueble } = require('../models');
+const { Renant, Persona, Arriendo, Inmueble, Lease } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -245,6 +245,18 @@ class RenantService {
         transaction
       });
       if (!renant) throw new Error('Arrendatario no encontrado');
+
+      const [legacyArriendos, leaseRows] = await Promise.all([
+        Arriendo.count({ where: { id_arrendatario: id }, transaction }),
+        Lease ? Lease.count({ where: { id_cliente: id }, transaction }) : Promise.resolve(0)
+      ]);
+      if (legacyArriendos + leaseRows > 0) {
+        const err = new Error(
+          'No puedes editar un arrendatario con arriendos asociados. Finaliza o elimina el contrato primero.'
+        );
+        err.status = 409;
+        throw err;
+      }
 
       if (renant.persona) {
         await renant.persona.update(

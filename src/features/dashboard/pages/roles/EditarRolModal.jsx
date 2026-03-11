@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -214,7 +214,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       const rolEditado = {
         ...rol,
         nombre: nombre.trim(),       // Para el frontend
-        nombre_rol: nombre.trim(),   // โ�� Ahora se envรญa para el API
+        nombre_rol: nombre.trim(),   // Ahora se envía para el API
         permisos
       };
 
@@ -268,7 +268,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               <div className="flex gap-4 mt-3 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <span>{activeModulesCount} mรณdulos activos</span>
+                  <span>{activeModulesCount} módulos activos</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
@@ -322,10 +322,10 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                 </div>
               )}
 
-              {/* Mรณdulos y Permisos */}
+              {/* Módulos y Permisos */}
               <div>
                 <h3 className="text-lg font-semibold text-slate-800 mb-4">
-                  Configuraciรณn de Permisos por Mรณdulo
+                  Configuración de Permisos por Módulo
                 </h3>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -343,7 +343,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                           : 'bg-gray-50 border-gray-200'
                           }`}
                       >
-                        {/* Header del mรณdulo */}
+                        {/* Header del módulo */}
                         <div className="p-4 border-b border-gray-200">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-3 flex-1">

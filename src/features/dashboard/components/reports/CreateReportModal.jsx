@@ -413,8 +413,45 @@ const CreateReportModal = ({
       newErrors.tipoReporte = 'El tipo de reporte es requerido';
     }
 
+    // Validación de rubros y seguimientos
+    const activeRubros = rubros.filter(r => r.activo);
+    for (let i = 0; i < activeRubros.length; i++) {
+      const r = activeRubros[i];
+      if (!r.nombre?.trim() || !r.descripcion?.trim()) {
+        toast({
+          title: 'Error de validación',
+          description: `El rubro ${i + 1} requiere un título y una descripción.`,
+          variant: 'error',
+        });
+        return false;
+      }
+
+      const activeSegs = (r.seguimientos || []).filter(s => s.activo);
+      for (let j = 0; j < activeSegs.length; j++) {
+        const s = activeSegs[j];
+        if (!s.descripcion?.trim()) {
+          toast({
+            title: 'Error de validación',
+            description: `El seguimiento ${j + 1} del rubro "${r.nombre}" requiere una descripción.`,
+            variant: 'error',
+          });
+          return false;
+        }
+      }
+    }
+
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    if (Object.keys(newErrors).length > 0) {
+      toast({
+        title: 'Error de validación',
+        description: 'Por favor, complete todos los campos obligatorios del reporte.',
+        variant: 'error',
+      });
+      return false;
+    }
+
+    return true;
   };
 
   // Manejar cambios en el formulario
@@ -870,7 +907,7 @@ const CreateReportModal = ({
                         {/* Referencia del Inmueble - Destacado */}
                         <div className="mb-4">
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Referencia del Inmueble *
+                            Referencia del Inmueble <span className="text-red-500">*</span>
                           </label>
                           <PropertyAutocomplete
                             value={searchTerm}
@@ -893,7 +930,7 @@ const CreateReportModal = ({
                           {/* Ubicación */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Ubicación *
+                              Ubicación <span className="text-red-500">*</span>
                             </label>
                             <Input
                               value={formData.ubicacion}
@@ -910,7 +947,7 @@ const CreateReportModal = ({
                           {/* Tipo de Inmueble */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Tipo de Inmueble *
+                              Tipo de Inmueble <span className="text-red-500">*</span>
                             </label>
                             <Select
                               value={formData.tipoInmueble}
@@ -941,7 +978,7 @@ const CreateReportModal = ({
                           {/* Propietario */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Propietario *
+                              Propietario <span className="text-red-500">*</span>
                             </label>
                             <Input
                               value={formData.propietario}
@@ -958,7 +995,7 @@ const CreateReportModal = ({
                           {/* Tipo de Reporte */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Tipo de Reporte *
+                              Tipo de Reporte <span className="text-red-500">*</span>
                             </label>
                             <Input
                               value={formData.tipoReporte}
@@ -1037,31 +1074,11 @@ const CreateReportModal = ({
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccione el estado" />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Pendiente">
-                              <div className="flex items-center">
-                                <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></div>
-                                Pendiente
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="En Proceso">
-                              <div className="flex items-center">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                                En Proceso
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="Completado">
-                              <div className="flex items-center">
-                                <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                                Completado
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="Cancelado">
-                              <div className="flex items-center">
-                                <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                                Cancelado
-                              </div>
-                            </SelectItem>
+                          <SelectContent className="min-w-[140px]">
+                            <SelectItem value="Pendiente">Pendiente</SelectItem>
+                            <SelectItem value="En Proceso">En Proceso</SelectItem>
+                            <SelectItem value="Completado">Completado</SelectItem>
+                            <SelectItem value="Cancelado">Cancelado</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1328,11 +1345,7 @@ const CreateReportModal = ({
                               onClick={() => toggleRubro(rubro.id)}
                               className="flex items-center space-x-2 text-gray-700 hover:text-gray-900"
                             >
-                              {rubro.expandido ? (
-                                <ChevronDownIcon className="w-4 h-4" />
-                              ) : (
-                                <ChevronRightIcon className="w-4 h-4" />
-                              )}
+
                               <span className="font-medium">
                                 {rubro.nombre || 'Nuevo Rubro'}
                               </span>
@@ -1424,7 +1437,10 @@ const CreateReportModal = ({
                                         className={`bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group ${isCreated ? 'opacity-90 bg-slate-50/50' : ''}`}
                                       >
                                         {/* Header del seguimiento */}
-                                        <div className="flex items-center justify-between mb-3">
+                                        <div
+                                          className="flex items-center justify-between mb-3 cursor-pointer"
+                                          onClick={() => toggleSeguimientoExpansion(rubro.id, seguimiento.id)}
+                                        >
                                           <div className="flex items-center space-x-2">
                                             <div className="w-7 h-7 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-full flex items-center justify-center">
                                               <span className="text-xs font-semibold text-blue-700">#{index + 1}</span>
@@ -1433,18 +1449,7 @@ const CreateReportModal = ({
                                           </div>
 
                                           <div className="flex items-center space-x-2">
-                                            <button
-                                              type="button"
-                                              onClick={() => toggleSeguimientoExpansion(rubro.id, seguimiento.id)}
-                                              className="p-1 hover:bg-slate-100 rounded-md transition-colors text-slate-500"
-                                              title={seguimiento.expandido ? "Colapsar" : "Expandir"}
-                                            >
-                                              {seguimiento.expandido ? (
-                                                <ChevronUpIcon className="w-5 h-5" />
-                                              ) : (
-                                                <ChevronDownIcon className="w-5 h-5" />
-                                              )}
-                                            </button>
+
                                             <span
                                               className={`text-[11px] px-2 py-1 rounded-full border ${seguimiento.estado === 'completado'
                                                 ? 'bg-green-50 text-green-700 border-green-200'
@@ -1509,24 +1514,9 @@ const CreateReportModal = ({
                                                       <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent className="text-xs">
-                                                      <SelectItem value="pendiente">
-                                                        <div className="flex items-center">
-                                                          <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
-                                                          Pendiente
-                                                        </div>
-                                                      </SelectItem>
-                                                      <SelectItem value="en-proceso">
-                                                        <div className="flex items-center">
-                                                          <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
-                                                          En Proceso
-                                                        </div>
-                                                      </SelectItem>
-                                                      <SelectItem value="completado">
-                                                        <div className="flex items-center">
-                                                          <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                                                          Completado
-                                                        </div>
-                                                      </SelectItem>
+                                                      <SelectItem value="pendiente">Pendiente</SelectItem>
+                                                      <SelectItem value="en-proceso">En Proceso</SelectItem>
+                                                      <SelectItem value="completado">Completado</SelectItem>
                                                     </SelectContent>
                                                   </Select>
                                                 </div>

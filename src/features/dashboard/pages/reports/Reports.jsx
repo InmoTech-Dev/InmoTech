@@ -1154,6 +1154,8 @@ const ReportsContent = () => {
           filters={adminFilters}
           setFilters={setAdminFilters}
           refreshTrigger={refreshDetailedView}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
         />
       ) : (
         <>

@@ -9,6 +9,63 @@ const extractList = (response) => {
   return [];
 };
 
+const extractPagination = (response, fallback = {}) => {
+  const payload = response?.data ?? response ?? {};
+  const pagination = payload?.pagination || payload?.paginacion || {};
+  const page = fallback.page ?? 1;
+  const limit = fallback.limit ?? 5;
+  const total =
+    pagination.total ??
+    pagination.total_items ??
+    pagination.totalItems ??
+    pagination.count ??
+    payload?.total ??
+    payload?.total_items ??
+    payload?.totalItems ??
+    payload?.count ??
+    0;
+  const resolvedLimit = pagination.limite ?? pagination.limit ?? pagination.per_page ?? pagination.perPage ?? limit;
+  const totalPagesRaw =
+    pagination.paginas_totales ??
+    pagination.total_paginas ??
+    pagination.totalPages ??
+    pagination.pages ??
+    payload?.paginas_totales ??
+    payload?.total_paginas ??
+    payload?.totalPages ??
+    payload?.pages;
+  const resolvedTotalPages =
+    totalPagesRaw ?? (total > 0 ? Math.ceil(total / Math.max(resolvedLimit || limit, 1)) : 1);
+
+  return {
+    total,
+    pagina:
+      pagination.pagina ??
+      pagination.page ??
+      pagination.current_page ??
+      pagination.currentPage ??
+      payload?.pagina ??
+      payload?.page ??
+      payload?.current_page ??
+      payload?.currentPage ??
+      page,
+    limite: resolvedLimit,
+    paginas_totales: resolvedTotalPages,
+    has_next_page:
+      pagination.has_next_page ??
+      pagination.hasNextPage ??
+      payload?.has_next_page ??
+      payload?.hasNextPage ??
+      false,
+    has_prev_page:
+      pagination.has_prev_page ??
+      pagination.hasPrevPage ??
+      payload?.has_prev_page ??
+      payload?.hasPrevPage ??
+      false,
+  };
+};
+
 const splitNames = (fullName = '') => {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   const [first = '', second = ''] = parts;
@@ -48,6 +105,7 @@ const getTipoVariants = (value = '') => {
 const mapBuyerFromApi = (buyer = {}, formData = {}) => {
   const persona = buyer.persona || buyer.Persona || buyer;
   const compra = buyer.compra || buyer.purchase || null;
+  const ultimaVenta = buyer.ultima_venta || buyer.ultimaVenta || null;
   const rawBuyerId =
     buyer.id_comprador ??
     buyer.buyerId ??
@@ -83,6 +141,26 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
     fechaCompra: buyer.fechaCompra || compra?.fecha_compra || '',
     valorCompra: buyer.valorCompra || compra?.valor_compra || '',
     tipoCompra: buyer.tipoCompra || compra?.tipo_compra || '',
+    medioPago:
+      buyer.medioPago ||
+      buyer.medio_pago ||
+      compra?.medioPago ||
+      compra?.medio_pago ||
+      ultimaVenta?.medioPago ||
+      ultimaVenta?.medio_pago ||
+      compra?.tipo_compra ||
+      ultimaVenta?.tipo_compra ||
+      '',
+    medioPagoDescripcion:
+      buyer.medioPagoDescripcion ||
+      buyer.medio_pago_descripcion ||
+      compra?.medioPagoDescripcion ||
+      compra?.medio_pago_descripcion ||
+      compra?.descripcion_pago ||
+      ultimaVenta?.medioPagoDescripcion ||
+      ultimaVenta?.medio_pago_descripcion ||
+      ultimaVenta?.descripcion_pago ||
+      '',
     ciudadResidencia: buyer.ciudadResidencia || compra?.ciudad_residencia || '',
     direccionAnterior: buyer.direccionAnterior || compra?.direccion_anterior || '',
     entidadFinanciera: buyer.entidadFinanciera || compra?.entidad_financiera || '',
@@ -90,7 +168,7 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
     montoFinanciado: buyer.montoFinanciado || compra?.monto_financiado || '',
     observaciones: buyer.observaciones || compra?.observaciones || '',
     inmueble: buyer.inmueble || compra?.inmueble || null,
-    ultima_venta: buyer.ultima_venta || buyer.compra || null,
+    ultima_venta: ultimaVenta || buyer.compra || null,
     formData: buyer.formData || formData,
     compra,
     raw: buyer,
@@ -148,7 +226,10 @@ export const buyersApiService = {
 
   async getAll(params = {}) {
     const response = await apiClient.get('/sales/buyers', { params });
-    return extractList(response).map((item) => mapBuyerFromApi(item));
+    return {
+      data: extractList(response).map((item) => mapBuyerFromApi(item)),
+      pagination: extractPagination(response, params)
+    };
   },
 
   async findByDocument(tipoDocumento, numeroDocumento) {

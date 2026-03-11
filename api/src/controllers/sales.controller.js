@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const { VentaAdjunto } = require('../models');
 const cloudinary = require('../config/cloudinary');
 const { uploadSingleAny } = require('./upload.controller');
+const { normalizePagination } = require('../utils/pagination');
 
 class SalesController {
   async createSale(req, res, next) {
@@ -42,13 +43,20 @@ class SalesController {
         filters.fecha_fin = req.query.fecha_fin;
       }
 
-      const sales = await saleService.getAllSales(filters);
+      if (req.query.search) {
+        filters.search = req.query.search;
+      }
+
+      filters.pagination = normalizePagination(req.query);
+
+      const result = await saleService.getAllSales(filters);
 
       return res.status(200).json({
         success: true,
         message: 'Ventas obtenidas exitosamente',
-        data: sales,
-        total: sales.length
+        data: result.data,
+        total: result.pagination.total,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

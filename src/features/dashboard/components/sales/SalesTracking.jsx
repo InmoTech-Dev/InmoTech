@@ -468,36 +468,36 @@ export default function PurchaseTrackingModal({
                 {/* ADJUNTOS */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                    Adjuntar documentos
+                    {isClosed ? "Documentos adjuntos" : "Adjuntar documentos"}
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
-                      <span className="font-medium text-gray-700">
-                        Comprobante de pago
-                      </span>
-                      <input
-                        type="file"
-                        accept="application/pdf,image/*"
-                        className="mt-2 text-sm"
-                        onChange={(e) => handleFileChange("comprobante", e)}
-                        disabled={isClosed}
-                      />
-                    </label>
+                  {!isClosed && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
+                        <span className="font-medium text-gray-700">
+                          Comprobante de pago
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          className="mt-2 text-sm"
+                          onChange={(e) => handleFileChange("comprobante", e)}
+                        />
+                      </label>
 
-                    <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
-                      <span className="font-medium text-gray-700">
-                        Contrato de venta
-                      </span>
-                      <input
-                        type="file"
-                        accept="application/pdf,image/*"
-                        className="mt-2 text-sm"
-                        onChange={(e) => handleFileChange("contrato", e)}
-                        disabled={isClosed}
-                      />
-                    </label>
-                  </div>
+                      <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
+                        <span className="font-medium text-gray-700">
+                          Contrato de venta
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          className="mt-2 text-sm"
+                          onChange={(e) => handleFileChange("contrato", e)}
+                        />
+                      </label>
+                    </div>
+                  )}
 
                   {existingAdjuntos.length > 0 && (
                     <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-3">

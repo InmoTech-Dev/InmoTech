@@ -8,11 +8,68 @@ const extractList = (response) => {
   return [];
 };
 
+const extractPagination = (response, fallback = {}) => {
+  const payload = response?.data ?? response ?? {};
+  const pagination = payload?.pagination || payload?.paginacion || {};
+  const page = fallback.page ?? 1;
+  const limit = fallback.limit ?? 5;
+  const total =
+    pagination.total ??
+    pagination.total_items ??
+    pagination.totalItems ??
+    pagination.count ??
+    payload?.total ??
+    payload?.total_items ??
+    payload?.totalItems ??
+    payload?.count ??
+    0;
+  const resolvedLimit = pagination.limite ?? pagination.limit ?? pagination.per_page ?? pagination.perPage ?? limit;
+  const totalPagesRaw =
+    pagination.paginas_totales ??
+    pagination.total_paginas ??
+    pagination.totalPages ??
+    pagination.pages ??
+    payload?.paginas_totales ??
+    payload?.total_paginas ??
+    payload?.totalPages ??
+    payload?.pages;
+  const resolvedTotalPages =
+    totalPagesRaw ?? (total > 0 ? Math.ceil(total / Math.max(resolvedLimit || limit, 1)) : 1);
+
+  return {
+    total,
+    pagina:
+      pagination.pagina ??
+      pagination.page ??
+      pagination.current_page ??
+      pagination.currentPage ??
+      payload?.pagina ??
+      payload?.page ??
+      payload?.current_page ??
+      payload?.currentPage ??
+      page,
+    limite: resolvedLimit,
+    paginas_totales: resolvedTotalPages,
+    has_next_page:
+      pagination.has_next_page ??
+      pagination.hasNextPage ??
+      payload?.has_next_page ??
+      payload?.hasNextPage ??
+      false,
+    has_prev_page:
+      pagination.has_prev_page ??
+      pagination.hasPrevPage ??
+      payload?.has_prev_page ??
+      payload?.hasPrevPage ??
+      false,
+  };
+};
+
 export const ventaApiService = {
   async obtenerVentas(params = {}) {
-    const response = await apiClient.get('/sales', params);
+    const response = await apiClient.get('/sales', { params });
     const data = extractList(response);
-    return { data };
+    return { data, pagination: extractPagination(response, params) };
   },
 
   async obtenerVenta(id) {

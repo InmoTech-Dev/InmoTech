@@ -423,8 +423,8 @@ export default function RentForm({ onClose, onSubmit }) {
         
         switch (tipoDocumento) {
             case 'CC': // Cedula de Ciudadania
-                if (!/^[0-9]{8,10}$/.test(numeroLimpio)) {
-                    return 'La cedula de ciudadania debe tener entre 8 y 10 digitos';
+                if (!/^[0-9]{7,10}$/.test(numeroLimpio)) {
+                    return 'La cedula de ciudadania debe tener entre 7 y 10 digitos';
                 }
                 break;
 
@@ -757,8 +757,8 @@ export default function RentForm({ onClose, onSubmit }) {
                 match = await renantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
             }
             if (!match) {
-                const results = await renantsApiService.getAll();
-                match = results.find((renant) => {
+                const result = await renantsApiService.getAll();
+                match = (result?.data || []).find((renant) => {
                     const storedDoc = cleanDocument(renant.documento);
                     const tipo = (renant.tipoDocumento || "").toString().trim().toUpperCase();
                     return storedDoc === numeroDocumento && tipo === tipoDocumento;
@@ -1401,7 +1401,7 @@ export default function RentForm({ onClose, onSubmit }) {
                         numero_documento: numeroDocumento
                     });
 
-                    const matched = existing?.[0];
+                    const matched = existing?.data?.[0];
                     if (!matched) {
                         throw error; // no pudimos recuperarlo, dejamos que caiga al catch general
                     }

@@ -26,6 +26,7 @@ import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { useToast } from "../../../../shared/hooks/use-toast";
+import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
 
 
 const STATUS_NORMALIZE = (value = "") =>
@@ -1109,6 +1110,7 @@ const EstadoBadge = ({ estado }) => {
 
 
 export function SalesManagementPage() {
+  const PAGE_SIZE = 5;
 
   const [ventas, setVentas] = useState(INITIAL_VENTAS);
 
@@ -1125,6 +1127,13 @@ export function SalesManagementPage() {
   const [trackingSale, setTrackingSale] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    pagina: 1,
+    limite: PAGE_SIZE,
+    paginas_totales: 1,
+  });
 
   const [showInterestedPeople, setShowInterestedPeople] = useState(false);
 
@@ -1297,7 +1306,7 @@ export function SalesManagementPage() {
 
 
 
-  const fetchVentas = useCallback(async () => {
+  const fetchVentas = useCallback(async (query = "", page = 1) => {
 
     setLoadingVentas(true);
 
@@ -1305,21 +1314,13 @@ export function SalesManagementPage() {
 
     try {
 
-      const response = await ventaApiService.obtenerVentas();
+      const response = await ventaApiService.obtenerVentas({
+        page,
+        limit: PAGE_SIZE,
+        search: query || undefined,
+      });
 
-      const payload = Array.isArray(response?.data)
-
-        ? response.data
-
-        : Array.isArray(response?.data?.data)
-
-          ? response.data.data
-
-          : Array.isArray(response)
-
-            ? response
-
-            : [];
+      const payload = Array.isArray(response?.data) ? response.data : [];
 
 
 
@@ -1332,6 +1333,14 @@ export function SalesManagementPage() {
         );
 
         setVentas(normalized);
+        const pagination = response?.pagination || {
+          total: normalized.length,
+          pagina: page,
+          limite: PAGE_SIZE,
+          paginas_totales: 1,
+        };
+        setPagination(pagination);
+        setCurrentPage(pagination.pagina);
 
       }
 
@@ -1366,6 +1375,16 @@ export function SalesManagementPage() {
     fetchVentas();
 
   }, [fetchVentas]);
+
+  useEffect(() => {
+    const term = searchTerm.trim();
+    const timeoutId = setTimeout(() => {
+      setCurrentPage(1);
+      fetchVentas(term, 1);
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, fetchVentas]);
 
 
 
@@ -1748,6 +1767,7 @@ export function SalesManagementPage() {
 
 
       setVentas((prev) => [...prev, normalizedSale]);
+      fetchVentas(searchTerm.trim(), 1);
       appendFichaTecnicaToLocalHistory({
         inmuebleId: payload.id_inmueble,
         snapshot: buildFichaSnapshotFromSale(normalizedSale, { estado: "Vendido" }),
@@ -1879,6 +1899,7 @@ export function SalesManagementPage() {
           String(v.id) === String(saleId) ? { ...v, ...mergedForState, raw: apiSale } : v
         )
       );
+      fetchVentas(searchTerm.trim(), currentPage);
 
       if (finalEstado.includes("cancel")) {
         await liberarInmueblePorVenta(mergedForState);
@@ -1920,31 +1941,6 @@ export function SalesManagementPage() {
 
 
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  const filteredVentas = ventas.filter((v) => {
-    if (!normalizedSearch) return true;
-
-    const registro = v.registro ? v.registro.toLowerCase() : "";
-    const comprador = v.comprador ? v.comprador.toLowerCase() : "";
-    const compradorCorreo = v.compradorCorreo ? v.compradorCorreo.toLowerCase() : "";
-    const compradorDocumento = v.compradorDocumento ? String(v.compradorDocumento).toLowerCase() : "";
-    const tipo = v.tipo ? v.tipo.toLowerCase() : "";
-    const estado = v.estado ? v.estado.toLowerCase() : "";
-    const fecha = v.fecha ? String(v.fecha).toLowerCase() : "";
-    const valor = v.valor ? String(v.valor).toLowerCase() : "";
-
-    return (
-      registro.includes(normalizedSearch) ||
-      comprador.includes(normalizedSearch) ||
-      compradorCorreo.includes(normalizedSearch) ||
-      compradorDocumento.includes(normalizedSearch) ||
-      tipo.includes(normalizedSearch) ||
-      estado.includes(normalizedSearch) ||
-      fecha.includes(normalizedSearch) ||
-      valor.includes(normalizedSearch)
-    );
-  });
 
 
 
@@ -1952,13 +1948,13 @@ export function SalesManagementPage() {
 
   const stats = {
 
-    total: filteredVentas.length,
+    total: pagination.total,
 
-    pagadas: filteredVentas.filter(v => v.estado === 'Pagado').length,
+    pagadas: ventas.filter(v => v.estado === 'Pagado').length,
 
-    pendientes: filteredVentas.filter(v => v.estado === 'Pendiente').length,
+    pendientes: ventas.filter(v => v.estado === 'Pendiente').length,
 
-    totalValor: filteredVentas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
+    totalValor: ventas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
 
   };
 
@@ -2307,9 +2303,9 @@ export function SalesManagementPage() {
 
                     </tr>
 
-                  ) : filteredVentas.length > 0 ? (
+                  ) : ventas.length > 0 ? (
 
-                    filteredVentas.map((v) => (
+                    ventas.map((v) => (
 
                       <tr
 
@@ -2430,6 +2426,31 @@ export function SalesManagementPage() {
                 </tbody>
 
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={
+                  (Boolean(pagination?.has_next_page) ||
+                    ((pagination?.paginas_totales || 1) <= currentPage && ventas.length === PAGE_SIZE))
+                    ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
+                    : Math.max(pagination?.paginas_totales || 1, currentPage)
+                }
+                hasPrevPage={currentPage > 1}
+                hasNextPage={
+                  Boolean(pagination?.has_next_page) ||
+                  ((pagination?.paginas_totales || 1) <= currentPage && ventas.length === PAGE_SIZE)
+                }
+                onPageChange={(page) => {
+                  const hasNextPage =
+                    Boolean(pagination?.has_next_page) ||
+                    ((pagination?.paginas_totales || 1) <= currentPage && ventas.length === PAGE_SIZE);
+                  const totalPages = hasNextPage
+                    ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
+                    : Math.max(pagination?.paginas_totales || 1, currentPage);
+                  if (page === currentPage || page < 1 || (page > totalPages && !hasNextPage)) return;
+                  setCurrentPage(page);
+                  fetchVentas(searchTerm.trim(), page);
+                }}
+              />
 
             </div>
 

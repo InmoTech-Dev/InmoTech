@@ -27,6 +27,9 @@ const ALLOWED_UPLOAD_FOLDERS = (
     : DEFAULT_ALLOWED_FOLDERS
 );
 const DEFAULT_UPLOAD_FOLDER = ALLOWED_UPLOAD_FOLDERS[0] || 'inmotech/inmuebles';
+const DEFAULT_CLOUDINARY_TIMEOUT_MS = 120000;
+const CLOUDINARY_UPLOAD_TIMEOUT_MS =
+  Number.parseInt(process.env.CLOUDINARY_UPLOAD_TIMEOUT_MS || '', 10) || DEFAULT_CLOUDINARY_TIMEOUT_MS;
 
 const normalizeFolderPath = (value = '') =>
   String(value || '')
@@ -178,11 +181,14 @@ const subirImagen = async (req, res) => {
       });
     }
 
+    const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
+
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder,
-          resource_type: 'image',
+          resource_type: resourceType,
+          timeout: CLOUDINARY_UPLOAD_TIMEOUT_MS,
         },
         (error, result) => {
           if (error) return reject(error);
@@ -194,7 +200,7 @@ const subirImagen = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Imagen subida correctamente',
+      message: 'Archivo subido correctamente',
       data: {
         url: result.secure_url,
         public_id: result.public_id,
@@ -204,9 +210,17 @@ const subirImagen = async (req, res) => {
     });
   } catch (error) {
     logger.error('Error subiendo imagen a Cloudinary:', error);
+    const cloudinaryStatus = Number(error?.http_code || error?.statusCode || 0);
+    const isTimeout =
+      cloudinaryStatus === 499 ||
+      error?.name === 'TimeoutError' ||
+      String(error?.message || '').toLowerCase().includes('timeout');
+
     return res.status(500).json({
       success: false,
-      message: 'Error subiendo imagen',
+      message: isTimeout
+        ? 'La subida del archivo excedio el tiempo limite. Intenta con un archivo mas liviano.'
+        : 'Error subiendo archivo',
     });
   }
 };

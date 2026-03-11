@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Sale, Buyer, Inmueble, Persona, SeguimientoVenta, EstadosVenta, VentaAdjunto } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 class SaleService {
   _normalizeSaleDate(value) {
@@ -127,6 +128,70 @@ class SaleService {
     if (estadoDetalle.es_estado_final) return 'Finalizada';
     if (['pagado', 'pagada', 'completada', 'completado', 'finalizada'].includes(nombre)) return 'Finalizada';
     return 'Activa';
+  }
+
+  _buildSaleListQuery(filters = {}) {
+    const whereClause = {};
+    const andConditions = [];
+    const includeOptions = [
+      {
+        association: 'inmueble',
+        attributes: [],
+        required: false
+      },
+      {
+        association: 'comprador',
+        attributes: [],
+        required: false,
+        include: [
+          {
+            association: 'persona',
+            attributes: [],
+            required: false
+          }
+        ]
+      }
+    ];
+
+    if (filters.estado) whereClause.estado = filters.estado;
+    if (filters.id_persona) whereClause.id_comprador = filters.id_persona;
+    if (filters.id_comprador) whereClause.id_comprador = filters.id_comprador;
+    if (filters.fecha_inicio && filters.fecha_fin) {
+      whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
+    }
+
+    const rawSearch = String(filters.search || '').trim();
+    if (rawSearch) {
+      const search = `%${rawSearch}%`;
+      andConditions.push({
+        [Op.or]: [
+          { medio_pago: { [Op.like]: search } },
+          { estado: { [Op.like]: search } },
+          { estado_seguimiento: { [Op.like]: search } },
+          { nombre_vendedor: { [Op.like]: search } },
+          { correo_vendedor: { [Op.like]: search } },
+          { telefono_vendedor: { [Op.like]: search } },
+          { numero_doc_vendedor: { [Op.like]: search } },
+          { '$inmueble.registro_inmobiliario$': { [Op.like]: search } },
+          { '$inmueble.titulo$': { [Op.like]: search } },
+          { '$inmueble.direccion$': { [Op.like]: search } },
+          { '$inmueble.ciudad$': { [Op.like]: search } },
+          { '$inmueble.departamento$': { [Op.like]: search } },
+          { '$comprador.registro_comprador$': { [Op.like]: search } },
+          { '$comprador.persona.nombre_completo$': { [Op.like]: search } },
+          { '$comprador.persona.apellido_completo$': { [Op.like]: search } },
+          { '$comprador.persona.numero_documento$': { [Op.like]: search } },
+          { '$comprador.persona.correo$': { [Op.like]: search } },
+          { '$comprador.persona.telefono$': { [Op.like]: search } }
+        ]
+      });
+    }
+
+    if (andConditions.length) {
+      whereClause[Op.and] = andConditions;
+    }
+
+    return { whereClause, includeOptions };
   }
 
   async _getEstadoVentaActivo(idEstadoVenta, transaction) {
@@ -308,22 +373,54 @@ class SaleService {
 
   async getAllSales(filters = {}) {
     try {
-      const includeOptions = this._buildSaleIncludeOptions(true);
+      const pagination = {
+        enabled: Boolean(filters.pagination?.enabled),
+        page: filters.pagination?.page || 1,
+        limit: filters.pagination?.limit || null,
+        offset: filters.pagination?.offset || 0
+      };
+      const { whereClause, includeOptions } = this._buildSaleListQuery(filters);
 
-      const whereClause = {};
-      if (filters.estado) whereClause.estado = filters.estado;
-      if (filters.id_persona) whereClause.id_comprador = filters.id_persona;
-      if (filters.id_comprador) whereClause.id_comprador = filters.id_comprador;
-      if (filters.fecha_inicio && filters.fecha_fin) {
-        whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
+      const baseQuery = {
+        where: whereClause,
+        include: includeOptions,
+        distinct: true,
+        col: 'id_venta',
+        order: [
+          ['fecha_venta', 'DESC'],
+          ['id_venta', 'DESC']
+        ],
+        logging: false
+      };
+
+      if (pagination.enabled) {
+        baseQuery.limit = pagination.limit;
+        baseQuery.offset = pagination.offset;
+      }
+
+      const { count, rows } = await Sale.findAndCountAll(baseQuery);
+      const saleIds = rows.map((sale) => sale.id_venta);
+      if (!saleIds.length) {
+        return {
+          data: [],
+          pagination: buildPaginationMeta({
+            total: count,
+            page: pagination.page,
+            limit: pagination.limit,
+            enabled: pagination.enabled
+          })
+        };
       }
 
       let sales;
       try {
         sales = await Sale.findAll({
-          where: whereClause,
-          include: includeOptions,
-          order: [['fecha_venta', 'DESC']],
+          where: { id_venta: { [Op.in]: saleIds } },
+          include: this._buildSaleIncludeOptions(true),
+          order: [
+            ['fecha_venta', 'DESC'],
+            ['id_venta', 'DESC']
+          ],
           logging: false
         });
       } catch (error) {
@@ -332,12 +429,18 @@ class SaleService {
         }
         logger.warn('Tabla VentaAdjuntos no existe. Se continua sin adjuntos en getAllSales.');
         sales = await Sale.findAll({
-          where: whereClause,
+          where: { id_venta: { [Op.in]: saleIds } },
           include: this._buildSaleIncludeOptions(false),
-          order: [['fecha_venta', 'DESC']],
+          order: [
+            ['fecha_venta', 'DESC'],
+            ['id_venta', 'DESC']
+          ],
           logging: false
         });
       }
+
+      const orderMap = new Map(saleIds.map((id, index) => [id, index]));
+      sales.sort((a, b) => orderMap.get(a.id_venta) - orderMap.get(b.id_venta));
 
       const ventaIds = sales.map((s) => s.id_venta);
       let trackingMap = {};
@@ -366,7 +469,7 @@ class SaleService {
         }, {});
       }
 
-      return sales.map((sale) => ({
+      const data = sales.map((sale) => ({
         id_venta: sale.id_venta,
         id_estado_venta: sale.id_estado_venta,
         fecha_venta: sale.fecha_venta,
@@ -440,6 +543,16 @@ class SaleService {
           fecha_creacion: adj.fecha_creacion
         }))
       }));
+
+      return {
+        data,
+        pagination: buildPaginationMeta({
+          total: count,
+          page: pagination.page,
+          limit: pagination.limit,
+          enabled: pagination.enabled
+        })
+      };
     } catch (error) {
       const dbMsg = error.original?.message || error.message || 'Error consultando ventas';
       logger.error(`Error en getAllSales: ${dbMsg}`);

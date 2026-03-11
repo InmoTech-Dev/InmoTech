@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Renant, Persona, Arriendo, Inmueble, Lease } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 const PERSONA_ATTRS = [
   'id_persona',
@@ -227,14 +228,68 @@ class RenantService {
     const renantWhere = {};
     if (filters.status) renantWhere.estado = filters.status;
     if (filters.tipo_arrendatario) renantWhere.tipo_arrendatario = filters.tipo_arrendatario;
+    if (filters.tipo_documento) renantWhere['$persona.tipo_documento$'] = filters.tipo_documento;
+    if (filters.numero_documento) renantWhere['$persona.numero_documento$'] = filters.numero_documento;
 
-    const renants = await Renant.findAll({
+    const rawSearch = String(filters.search || filters.nombre || '').trim();
+    if (rawSearch) {
+      const search = `%${rawSearch}%`;
+      renantWhere[Op.and] = [
+        {
+          [Op.or]: [
+            { registro_arrendatario: { [Op.like]: search } },
+            { tipo_arrendatario: { [Op.like]: search } },
+            { ciudad_residencia: { [Op.like]: search } },
+            { direccion_anterior: { [Op.like]: search } },
+            { contacto_emergencia_nombre: { [Op.like]: search } },
+            { contacto_emergencia_telefono: { [Op.like]: search } },
+            { contacto_emergencia_parentesco: { [Op.like]: search } },
+            { observaciones: { [Op.like]: search } },
+            { '$persona.nombre_completo$': { [Op.like]: search } },
+            { '$persona.apellido_completo$': { [Op.like]: search } },
+            { '$persona.numero_documento$': { [Op.like]: search } },
+            { '$persona.correo$': { [Op.like]: search } },
+            { '$persona.telefono$': { [Op.like]: search } }
+          ]
+        }
+      ];
+    }
+
+    const pagination = {
+      enabled: Boolean(filters.pagination?.enabled),
+      page: filters.pagination?.page || 1,
+      limit: filters.pagination?.limit || null,
+      offset: filters.pagination?.offset || 0
+    };
+
+    const query = {
       where: Object.keys(renantWhere).length ? renantWhere : undefined,
       attributes: RENANT_ATTRS,
-      include: [{ association: 'persona', attributes: PERSONA_ATTRS }]
-    });
+      include: [{ association: 'persona', attributes: PERSONA_ATTRS }],
+      distinct: true,
+      col: 'id_arrendatario',
+      order: [
+        ['fecha_creacion', 'DESC'],
+        ['id_arrendatario', 'DESC']
+      ]
+    };
 
-    return renants.map((r) => this.normalizeRenant(r));
+    if (pagination.enabled) {
+      query.limit = pagination.limit;
+      query.offset = pagination.offset;
+    }
+
+    const { count, rows: renants } = await Renant.findAndCountAll(query);
+
+    return {
+      data: renants.map((r) => this.normalizeRenant(r)),
+      pagination: buildPaginationMeta({
+        total: count,
+        page: pagination.page,
+        limit: pagination.limit,
+        enabled: pagination.enabled
+      })
+    };
   }
 
   async updateRenant(id, updateData) {

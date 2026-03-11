@@ -10,6 +10,7 @@ const {
 } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 class LeaseService {
   getAutomaticTrackingComments() {
@@ -669,7 +670,14 @@ class LeaseService {
 
   async getAllLeases(filters = {}) {
     try {
-      logger.info(`🔍 Consultando arrendamientos con filtros: ${JSON.stringify(filters)}`);
+      logger.info(`Consultando arrendamientos con filtros: ${JSON.stringify(filters)}`);
+
+      const pagination = {
+        enabled: Boolean(filters.pagination?.enabled),
+        page: filters.pagination?.page || 1,
+        limit: filters.pagination?.limit || null,
+        offset: filters.pagination?.offset || 0
+      };
 
       const attributes = {
         include: [
@@ -722,90 +730,189 @@ class LeaseService {
           limit: 1,
           order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
           attributes: ['id_seguimiento', 'estado', 'comentario', 'fecha_creacion', 'id_persona']
+        }
+      ];
+
+      const searchIncludes = [
+        {
+          association: 'inmueble',
+          attributes: [],
+          required: false
         },
+        {
+          association: 'arrendatario',
+          attributes: [],
+          required: false,
+          include: [
+            {
+              association: 'persona',
+              attributes: [],
+              required: false
+            }
+          ]
+        },
+        {
+          association: 'codeudor',
+          attributes: [],
+          required: false
+        }
       ];
 
       const whereClause = {};
       if (filters.estado) whereClause.estado = filters.estado;
       if (filters.id_cliente) whereClause.id_cliente = filters.id_cliente;
-      if (filters.id_arrendatario) whereClause.id_cliente = filters.id_arrendatario; // id_cliente mapea a id_arrendatario en la tabla
+      if (filters.id_arrendatario) whereClause.id_cliente = filters.id_arrendatario;
       if (filters.fecha_inicio && filters.fecha_fin) {
         whereClause.fecha_inicio = {
           [Op.between]: [filters.fecha_inicio, filters.fecha_fin]
         };
       }
 
-        const leases = await Lease.findAll({
-          where: whereClause,
-          attributes,
-          include: includeOptions,
-          order: [['fecha_inicio', 'DESC']],
-          logging: false
-        });
+      const rawSearch = String(filters.search || '').trim();
+      if (rawSearch) {
+        const search = `%${rawSearch}%`;
+        whereClause[Op.and] = [
+          {
+            [Op.or]: [
+              { estado: { [Op.like]: search } },
+              { '$inmueble.registro_inmobiliario$': { [Op.like]: search } },
+              { '$inmueble.direccion$': { [Op.like]: search } },
+              { '$inmueble.ciudad$': { [Op.like]: search } },
+              { '$inmueble.departamento$': { [Op.like]: search } },
+              { '$inmueble.categoria$': { [Op.like]: search } },
+              { '$arrendatario.persona.nombre_completo$': { [Op.like]: search } },
+              { '$arrendatario.persona.apellido_completo$': { [Op.like]: search } },
+              { '$arrendatario.persona.numero_documento$': { [Op.like]: search } },
+              { '$arrendatario.persona.correo$': { [Op.like]: search } },
+              { '$arrendatario.persona.telefono$': { [Op.like]: search } },
+              { '$codeudor.nombre_completo$': { [Op.like]: search } },
+              { '$codeudor.apellido_completo$': { [Op.like]: search } },
+              { '$codeudor.numero_documento$': { [Op.like]: search } },
+              { '$codeudor.correo$': { [Op.like]: search } },
+              { '$codeudor.telefono$': { [Op.like]: search } }
+            ]
+          }
+        ];
+      }
 
-      logger.info(`âœ… ${leases.length} arrendamientos obtenidos exitosamente`);
+      const listQuery = {
+        where: whereClause,
+        attributes: ['id_arrendamiento', 'fecha_inicio'],
+        include: searchIncludes,
+        distinct: true,
+        col: 'id_arrendamiento',
+        order: [
+          ['fecha_inicio', 'DESC'],
+          ['id_arrendamiento', 'DESC']
+        ],
+        logging: false
+      };
 
-      logger.info(`✅ ${leases.length} arrendamientos obtenidos exitosamente`);
-      return await Promise.all(leases.map(async (lease) => {
+      if (pagination.enabled) {
+        listQuery.limit = pagination.limit;
+        listQuery.offset = pagination.offset;
+      }
+
+      const { count, rows } = await Lease.findAndCountAll(listQuery);
+      const leaseIds = rows.map((lease) => lease.id_arrendamiento);
+
+      if (!leaseIds.length) {
+        return {
+          data: [],
+          pagination: buildPaginationMeta({
+            total: count,
+            page: pagination.page,
+            limit: pagination.limit,
+            enabled: pagination.enabled
+          })
+        };
+      }
+
+      const leases = await Lease.findAll({
+        where: { id_arrendamiento: { [Op.in]: leaseIds } },
+        attributes,
+        include: includeOptions,
+        order: [
+          ['fecha_inicio', 'DESC'],
+          ['id_arrendamiento', 'DESC']
+        ],
+        logging: false
+      });
+
+      const orderMap = new Map(leaseIds.map((id, index) => [id, index]));
+      leases.sort((a, b) => orderMap.get(a.id_arrendamiento) - orderMap.get(b.id_arrendamiento));
+
+      logger.info(`${leases.length} arrendamientos obtenidos exitosamente`);
+
+      const data = await Promise.all(leases.map(async (lease) => {
         const latestPreNotice = await this.getLatestPreNoticeEntry(lease.id_arrendamiento);
 
-        return ({
-        id_arrendamiento: lease.id_arrendamiento,
-        id_arrendatario: lease.id_cliente, // columna id_arrendatario en BD, mapeada como id_cliente en el modelo
-        id_codeudor: lease.id_codeudor,
-        fecha_inicio: lease.fecha_inicio,
-        fecha_finalizacion: lease.fecha_finalizacion,
-        valor_mensual: lease.valor_mensual,
-        estado: await this.getDisplayedLeaseState(lease.id_arrendamiento, lease),
-        estado_base: lease.estado,
-        duracion_meses: lease.duracion_meses,
-        fecha_creacion: lease.fecha_creacion,
-        inmueble: lease.inmueble ? {
-          id_inmueble: lease.inmueble.id_inmueble,
-          registro_inmobiliario: lease.inmueble.registro_inmobiliario,
-          direccion: lease.inmueble.direccion,
-          ciudad: lease.inmueble.ciudad,
-          departamento: lease.inmueble.departamento,
-          categoria: lease.inmueble.categoria,
-          area_construida: lease.inmueble.area_construida,
-          area_terreno: lease.inmueble.area_terreno,
-          precio_arriendo: lease.inmueble.precio_arriendo,
-          comodidades: lease.inmueble.comodidades || []
-        } : null,
-        arrendatario: lease.arrendatario ? {
-          id_arrendatario: lease.arrendatario.id_arrendatario,
-          persona: lease.arrendatario.persona ? {
-            id_persona: lease.arrendatario.persona.id_persona,
-            nombre_completo: lease.arrendatario.persona.nombre_completo,
-            apellido_completo: lease.arrendatario.persona.apellido_completo,
-            correo: lease.arrendatario.persona.correo,
-            telefono: lease.arrendatario.persona.telefono,
-            tipo_documento: lease.arrendatario.persona.tipo_documento,
-            numero_documento: lease.arrendatario.persona.numero_documento
-          } : null
-        } : null,
-        codeudor: lease.codeudor ? {
-          id_persona: lease.codeudor.id_persona,
-          nombre_completo: lease.codeudor.nombre_completo,
-          apellido_completo: lease.codeudor.apellido_completo,
-          correo: lease.codeudor.correo,
-          telefono: lease.codeudor.telefono,
-          tipo_documento: lease.codeudor.tipo_documento,
-          numero_documento: lease.codeudor.numero_documento
-        } : null,
-        ultimo_seguimiento_estado: lease.seguimientos?.[0]?.estado || null,
-        ultimo_seguimiento_comentario: lease.seguimientos?.[0]?.comentario ?? lease.seguimientos?.[0]?.descripcion ?? null,
-        ultimo_seguimiento_descripcion: lease.seguimientos?.[0]?.descripcion ?? lease.seguimientos?.[0]?.comentario ?? null,
-        ultimo_seguimiento_fecha: lease.seguimientos?.[0]?.fecha_creacion || null,
-        preaviso_observacion: latestPreNotice?.observacion || null,
-        preaviso_url_soporte: latestPreNotice?.url_soporte || null,
-        preaviso_fecha: latestPreNotice?.fecha_creacion || null,
-        total_seguimientos: Number(lease.get('total_seguimientos')) || 0
-      });
+        return {
+          id_arrendamiento: lease.id_arrendamiento,
+          id_arrendatario: lease.id_cliente,
+          id_codeudor: lease.id_codeudor,
+          fecha_inicio: lease.fecha_inicio,
+          fecha_finalizacion: lease.fecha_finalizacion,
+          valor_mensual: lease.valor_mensual,
+          estado: await this.getDisplayedLeaseState(lease.id_arrendamiento, lease),
+          estado_base: lease.estado,
+          duracion_meses: lease.duracion_meses,
+          fecha_creacion: lease.fecha_creacion,
+          inmueble: lease.inmueble ? {
+            id_inmueble: lease.inmueble.id_inmueble,
+            registro_inmobiliario: lease.inmueble.registro_inmobiliario,
+            direccion: lease.inmueble.direccion,
+            ciudad: lease.inmueble.ciudad,
+            departamento: lease.inmueble.departamento,
+            categoria: lease.inmueble.categoria,
+            area_construida: lease.inmueble.area_construida,
+            area_terreno: lease.inmueble.area_terreno,
+            precio_arriendo: lease.inmueble.precio_arriendo,
+            comodidades: lease.inmueble.comodidades || []
+          } : null,
+          arrendatario: lease.arrendatario ? {
+            id_arrendatario: lease.arrendatario.id_arrendatario,
+            persona: lease.arrendatario.persona ? {
+              id_persona: lease.arrendatario.persona.id_persona,
+              nombre_completo: lease.arrendatario.persona.nombre_completo,
+              apellido_completo: lease.arrendatario.persona.apellido_completo,
+              correo: lease.arrendatario.persona.correo,
+              telefono: lease.arrendatario.persona.telefono,
+              tipo_documento: lease.arrendatario.persona.tipo_documento,
+              numero_documento: lease.arrendatario.persona.numero_documento
+            } : null
+          } : null,
+          codeudor: lease.codeudor ? {
+            id_persona: lease.codeudor.id_persona,
+            nombre_completo: lease.codeudor.nombre_completo,
+            apellido_completo: lease.codeudor.apellido_completo,
+            correo: lease.codeudor.correo,
+            telefono: lease.codeudor.telefono,
+            tipo_documento: lease.codeudor.tipo_documento,
+            numero_documento: lease.codeudor.numero_documento
+          } : null,
+          ultimo_seguimiento_estado: lease.seguimientos?.[0]?.estado || null,
+          ultimo_seguimiento_comentario: lease.seguimientos?.[0]?.comentario ?? lease.seguimientos?.[0]?.descripcion ?? null,
+          ultimo_seguimiento_descripcion: lease.seguimientos?.[0]?.descripcion ?? lease.seguimientos?.[0]?.comentario ?? null,
+          ultimo_seguimiento_fecha: lease.seguimientos?.[0]?.fecha_creacion || null,
+          preaviso_observacion: latestPreNotice?.observacion || null,
+          preaviso_url_soporte: latestPreNotice?.url_soporte || null,
+          preaviso_fecha: latestPreNotice?.fecha_creacion || null,
+          total_seguimientos: Number(lease.get('total_seguimientos')) || 0
+        };
       }));
 
+      return {
+        data,
+        pagination: buildPaginationMeta({
+          total: count,
+          page: pagination.page,
+          limit: pagination.limit,
+          enabled: pagination.enabled
+        })
+      };
     } catch (error) {
-      logger.error(`❌ Error en getAllLeases: ${error.message}`);
+      logger.error(`Error en getAllLeases: ${error.message}`);
       throw error;
     }
   }

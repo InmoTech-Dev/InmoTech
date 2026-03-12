@@ -17,7 +17,7 @@ const Sidebar = React.forwardRef(({
   onLogout,
   onGoToSite
 }, ref) => {
-  const { user, getAvailableModules } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   const sidebarVariants = {
     expanded: {
@@ -49,30 +49,17 @@ const Sidebar = React.forwardRef(({
       return navigationItems.filter(item => item.id === 'dashboard');
     }
 
-    const availableModules = getAvailableModules();
-    const moduleSet = new Set(availableModules);
-    const roleNames = user.roles || [];
-
-    if (roleNames.includes('Super Administrador') || roleNames.includes('Administrador')) {
-      return navigationItems;
-    }
-
-    if (roleNames.includes('Propietario')) {
-      return navigationItems.filter(item => item.id === 'dashboard');
-    }
-
     return navigationItems.filter(item => {
+      // El dashboard siempre es visible para usuarios autenticados
       if (item.id === 'dashboard') {
         return true;
       }
 
-      if (item.id === 'seguridad') {
-        return false;
-      }
-
-      return moduleSet.has(item.id);
+      // Usar el sistema de permisos centralizado del AuthContext.
+      // Esto asegura que si el rol tiene permiso de 'ver' el módulo, aparezca en el sidebar.
+      return hasPermission(item.id, 'ver');
     });
-  }, [user, getAvailableModules]);
+  }, [user, hasPermission]);
 
   useEffect(() => {
     if (navRef.current) {

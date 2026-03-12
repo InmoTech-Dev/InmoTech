@@ -132,9 +132,8 @@ const CustomerStep = ({
             >
               <SelectTrigger
                 ref={tipoDocumentoRef}
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                  errors.tipoDocumento ? "border-red-500" : "border-slate-300"
-                }`}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.tipoDocumento ? "border-red-500" : "border-slate-300"
+                  }`}
               >
                 <SelectValue placeholder="Seleccionar tipo de documento" />
               </SelectTrigger>
@@ -199,9 +198,8 @@ const CustomerStep = ({
                 }
               }}
               placeholder="Ej: 12345678"
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                errors.numeroDocumento ? "border-red-500" : "border-slate-300"
-              }`}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.numeroDocumento ? "border-red-500" : "border-slate-300"
+                }`}
             />
             {errors.numeroDocumento && (
               <motion.p
@@ -235,9 +233,8 @@ const CustomerStep = ({
               value={formData.nombre || ''}
               onChange={(e) => updateFormData("nombre", e.target.value)}
               placeholder="Ej: Juan"
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                errors.nombre ? "border-red-500" : "border-slate-300"
-              }`}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.nombre ? "border-red-500" : "border-slate-300"
+                }`}
             />
             {errors.nombre && (
               <motion.p
@@ -262,9 +259,8 @@ const CustomerStep = ({
               value={formData.apellido || ''}
               onChange={(e) => updateFormData("apellido", e.target.value)}
               placeholder="Ej: Pérez"
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                errors.apellido ? "border-red-500" : "border-slate-300"
-              }`}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.apellido ? "border-red-500" : "border-slate-300"
+                }`}
             />
             {errors.apellido && (
               <motion.p
@@ -291,9 +287,8 @@ const CustomerStep = ({
             onChange={handlePhoneChange}
             onKeyDown={handlePhoneKeyDown}
             placeholder="+57 300 123 4567"
-            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-              errors.telefono ? "border-red-500" : "border-slate-300"
-            }`}
+            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.telefono ? "border-red-500" : "border-slate-300"
+              }`}
           />
           {errors.telefono && (
             <motion.p
@@ -318,9 +313,8 @@ const CustomerStep = ({
             value={formData.email}
             onChange={(e) => updateFormData("email", e.target.value)}
             placeholder="Ej: juan.perez@email.com"
-            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-              errors.email ? "border-red-500" : "border-slate-300"
-            }`}
+            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.email ? "border-red-500" : "border-slate-300"
+              }`}
           />
           {errors.email && (
             <motion.p

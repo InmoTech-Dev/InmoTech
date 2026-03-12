@@ -701,15 +701,15 @@ class EmailService {
     };
     const horaRango12 = horaRango
       ? horaRango
-          .split('-')
-          .map(part => format24to12(part.trim()))
-          .join(' - ')
+        .split('-')
+        .map(part => format24to12(part.trim()))
+        .join(' - ')
       : '';
     const fechaSinHora = fechaHumana
       ? (() => {
-          const parts = fechaHumana.split(',');
-          return parts.length > 1 ? parts.slice(0, -1).join(',').trim() : fechaHumana;
-        })()
+        const parts = fechaHumana.split(',');
+        return parts.length > 1 ? parts.slice(0, -1).join(',').trim() : fechaHumana;
+      })()
       : '';
 
     return `
@@ -903,6 +903,95 @@ class EmailService {
     `;
   }
 
+
+  generarTemplateAuditoriaAdministrativo({ administrador, cita, accion, resumen = [] }) {
+    const logoUrl = process.env.EMAIL_LOGO_URL || "https://matrizinmobiliaria.com/images/logo-matriz-sin-fondo.png";
+    const fecha = new Date().toLocaleString('es-ES', { timeZone: 'America/Bogota' });
+
+    return `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
+          .header { background: #0f2b46; color: #fff; padding: 15px; border-radius: 6px 6px 0 0; text-align: center; }
+          .content { padding: 20px; }
+          .field { margin-bottom: 10px; border-bottom: 1px solid #f9f9f9; padding-bottom: 5px; }
+          .label { font-weight: bold; color: #666; width: 140px; display: inline-block; }
+          .value { color: #000; }
+          .footer { font-size: 12px; color: #999; text-align: center; margin-top: 20px; }
+          .badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 12px; text-transform: uppercase; }
+          .badge-info { background: #e3f2fd; color: #1976d2; }
+          .badge-warning { background: #fff3e0; color: #f57c00; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <img src="${logoUrl}" alt="Logo" style="width: 120px;">
+            <h2>Auditoría de Actividad</h2>
+          </div>
+          <div class="content">
+            <p>Se ha registrado una acción administrativa en el sistema:</p>
+            <div class="field">
+              <span class="label">Administrador:</span>
+              <span class="value">${administrador.nombre_completo || administrador.nombre || 'N/A'}</span>
+            </div>
+            <div class="field">
+              <span class="label">Acción:</span>
+              <span class="badge badge-info">${accion}</span>
+            </div>
+            <div class="field">
+              <span class="label">Fecha:</span>
+              <span class="value">${fecha}</span>
+            </div>
+            <h3>Detalles de la Cita</h3>
+            ${resumen.map(f => `
+              <div class="field">
+                <span class="label">${f.label}:</span>
+                <span class="value">${f.value}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="footer">
+            Este es un correo automático de auditoría.
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  async enviarEmailAuditoriaAdministrativo({ cita, administrador, accion }) {
+    try {
+      if (!process.env.EMAIL_AUDITORIA_DESTINO) {
+        logger.warn('[EMAIL][AUDIT] No se ha configurado EMAIL_AUDITORIA_DESTINO, se omite envio');
+        return;
+      }
+
+      // Reutilizar lógica de construcción de resumen del controlador o implementar algo local
+      const resumen = [
+        { label: 'Cita ID', value: cita?.id_cita || cita?.id || 'N/A' },
+        { label: 'Cliente', value: cita?.cliente?.nombre_completo || 'N/A' },
+        { label: 'Fecha Cita', value: cita?.fecha_cita || 'N/A' },
+        { label: 'Estado', value: cita?.id_estado_cita || 'N/A' }
+      ];
+
+      const mailOptions = {
+        from: `"Auditoría Matriz" <${process.env.EMAIL_FROM}>`,
+        to: process.env.EMAIL_AUDITORIA_DESTINO,
+        subject: `[AUDIT] ${accion} - Cita #${cita?.id_cita || cita?.id}`,
+        html: this.generarTemplateAuditoriaAdministrativo({ administrador, cita, accion, resumen })
+      };
+
+      await this.transporter.sendMail(mailOptions);
+      logger.info(`[EMAIL][AUDIT] Correo de auditoría por ${accion} enviado a ${process.env.EMAIL_AUDITORIA_DESTINO}`);
+    } catch (error) {
+      logger.error('[EMAIL][AUDIT] Error enviando correo de auditoría:', error);
+    }
+  }
 
   generarTemplateInvitacion(nombreCompleto = "", codigo6d, expiraEn, activationLink, correo, rolAsignado = null, esAdministrativo = false) {
     const primerNombre = nombreCompleto.trim().split(" ")[0] || "Hola";

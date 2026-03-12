@@ -284,11 +284,10 @@ const DetailsStep = ({
                               opacity: isActive ? 1 : 0.88,
                             }}
                             transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-                            className={`snap-center flex-none w-[86%] sm:w-[72%] md:w-[58%] lg:w-[48%] rounded-2xl border bg-white/80 backdrop-blur transition-all duration-300 ${
-                              isSelected
+                            className={`snap-center flex-none w-[86%] sm:w-[72%] md:w-[58%] lg:w-[48%] rounded-2xl border bg-white/80 backdrop-blur transition-all duration-300 ${isSelected
                                 ? 'border-blue-500 ring-2 ring-blue-200 shadow-xl shadow-blue-200/40'
                                 : 'border-slate-200 shadow-lg shadow-slate-200/50 hover:shadow-2xl hover:shadow-slate-300/40'
-                            } will-change-transform`}
+                              } will-change-transform`}
                           >
                             <div className="p-4">
                               <div className="relative h-36 rounded-xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
@@ -326,11 +325,10 @@ const DetailsStep = ({
                                     {property.registro ? `Registro: ${property.registro}` : 'Registro: —'}
                                   </p>
                                 </div>
-                                <div className={`h-10 w-10 rounded-full flex items-center justify-center border transition-colors ${
-                                  isSelected
+                                <div className={`h-10 w-10 rounded-full flex items-center justify-center border transition-colors ${isSelected
                                     ? 'bg-blue-600 border-blue-600 text-white'
                                     : 'bg-white border-slate-200 text-slate-700'
-                                }`}>
+                                  }`}>
                                   <ChevronRight className="h-5 w-5" />
                                 </div>
                               </div>
@@ -348,9 +346,8 @@ const DetailsStep = ({
                         key={property.id}
                         type="button"
                         onClick={() => scrollToCarouselIndex(idx)}
-                        className={`h-2 w-2 rounded-full transition-colors ${
-                          idx === carouselIndex ? 'bg-blue-600' : 'bg-slate-300 hover:bg-slate-400'
-                        }`}
+                        className={`h-2 w-2 rounded-full transition-colors ${idx === carouselIndex ? 'bg-blue-600' : 'bg-slate-300 hover:bg-slate-400'
+                          }`}
                         aria-label={`Ir al inmueble ${idx + 1}`}
                       />
                     ))}

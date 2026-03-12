@@ -5,6 +5,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import authService from '../services/authService';
 import { apiClient } from '../services/api.config';
+import realtimeBus from '../services/realtimeBus';
 import { canonicalizePermissions, normalizeModuleKey, normalizePermissionKey } from '../utils/permissions';
 
 const AuthContext = createContext(undefined);
@@ -173,6 +174,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [clearAuthData]);
 
+
   const refreshToken = async () => {
     try {
       const response = await authService.refreshToken();
@@ -220,6 +222,32 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  const refreshUser = useCallback(async () => {
+    if (!isAuthenticated) return null;
+    try {
+      setLoading(true);
+      console.log('[AUTH] Auto-refreshing user profile from API (real-time/demand)...');
+
+      // Añadimos un timestamp para evitar cache literal del navegador y asegurar datos frescos
+      const profileResp = await authService.getProfile({ _ts: Date.now() });
+      const profileUser = profileResp?.data?.user || profileResp?.data || profileResp?.user;
+
+      if (profileUser) {
+        const localStored = localStorage.getItem(USER_KEY);
+        const rememberMe = Boolean(localStored);
+        saveUserToStorage(profileUser, rememberMe);
+        setUser(profileUser);
+        console.log('[AUTH] User profile and permissions refreshed successfully');
+        return profileUser;
+      }
+    } catch (err) {
+      console.error('[AUTH] Error refreshing user profile:', err);
+    } finally {
+      setLoading(false);
+    }
+    return null;
+  }, [isAuthenticated, saveUserToStorage]);
 
   const changePassword = async (currentPassword, newPassword) => {
     try {
@@ -342,7 +370,25 @@ export const AuthProvider = ({ children }) => {
       console.log('Sesion expirada (401), limpiando autenticacion local...');
       clearAuthData();
     });
-  }, [loadAuthFromStorage, clearAuthData]);
+
+    // Escuchar cambios globales de usuario o roles para refrescar el perfil actual
+    const offUserChanged = realtimeBus.on('user.changed', (payload) => {
+      // Si el cambio afecta al usuario actual o es un cambio general de sistema
+      if (!payload?.id_persona || payload.id_persona === user?.id_persona) {
+        refreshUser();
+      }
+    });
+
+    const offRoleChanged = realtimeBus.on('role.changed', () => {
+      // Los cambios en roles pueden afectar a cualquier usuario, refrescamos siempre
+      refreshUser();
+    });
+
+    return () => {
+      offUserChanged();
+      offRoleChanged();
+    };
+  }, [loadAuthFromStorage, clearAuthData, refreshUser, user?.id_persona]);
 
   const value = {
     user,
@@ -363,6 +409,7 @@ export const AuthProvider = ({ children }) => {
     hasAccess,
     hasPermission,
     getAvailableModules,
+    refreshUser,
     clearError: () => setError(null),
   };
 

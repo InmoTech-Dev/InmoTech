@@ -1,5 +1,6 @@
 const personasService = require('../services/persona.service');
 const invitacionService = require('../services/invitacion.service');
+const sseService = require('../services/sse.service');
 const logger = require('../utils/logger');
 
 const normalizeTipoDoc = (value = '') => {
@@ -122,6 +123,8 @@ class PersonasController {
       const updateData = req.validatedData;
 
       const perfilActualizado = await personasService.actualizarPerfil(personaId, updateData, req.user?.id || null);
+
+      sseService.emitUserChanged({ action: 'profile_update', userId: personaId });
 
       return res.status(200).json({
         success: true,
@@ -258,6 +261,8 @@ class PersonasController {
 
       const personaActualizada = await personasService.actualizarPerfil(parseInt(id), updateData, req.user?.id || null);
 
+      sseService.emitUserChanged({ action: 'admin_update', userId: parseInt(id) });
+
       return res.status(200).json({
         success: true,
         message: 'Persona actualizada exitosamente',
@@ -285,6 +290,8 @@ class PersonasController {
       }
 
       const personaActualizada = await personasService.cambiarEstadoPersona(parseInt(id), estado);
+
+      sseService.emitUserChanged({ action: 'status_change', userId: parseInt(id) });
 
       return res.status(200).json({
         success: true,

@@ -8,11 +8,24 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
-  'image/gif'
+  'image/gif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.oasis.opendocument.text',
+  'text/plain'
 ]);
 const ALLOWED_FILE_MIME_TYPES = new Set([
   ...ALLOWED_IMAGE_MIME_TYPES,
-  'application/pdf'
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.oasis.opendocument.text',
+  'text/plain'
 ]);
 const DEFAULT_ALLOWED_FOLDERS = [
   'inmotech/inmuebles',
@@ -77,18 +90,14 @@ const upload = multer({
   }
 });
 
-// Variante que permite imágenes y PDFs (para comprobantes/contratos)
+// Variante sin restricción de tipo para reportes (acepta cualquier archivo)
 const uploadAny = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: UPLOAD_MAX_BYTES
   },
   fileFilter: (req, file, cb) => {
-    if (!file || !ALLOWED_FILE_MIME_TYPES.has(file.mimetype)) {
-      const invalidMimeTypeError = new Error('Tipo de archivo no permitido');
-      invalidMimeTypeError.code = 'INVALID_FILE_TYPE';
-      return cb(invalidMimeTypeError);
-    }
+    // Aceptar cualquier archivo
     return cb(null, true);
   }
 });

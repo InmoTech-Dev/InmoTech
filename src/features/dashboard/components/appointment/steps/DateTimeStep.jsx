@@ -376,25 +376,25 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
               </div>
             </div>
           ) : availableHours.length > 0 ? (
-                <div className="grid grid-cols-4 gap-3">
-                  {availableHours.map(hour => (
-                    <motion.button
-                      key={hour}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handleHourSelect(hour)}
-                      className={`
+            <div className="grid grid-cols-4 gap-3">
+              {availableHours.map(hour => (
+                <motion.button
+                  key={hour}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleHourSelect(hour)}
+                  className={`
                         py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
                         ${formData.hora === hour
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-blue-50'
-                        }
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-blue-50'
+                    }
                       `}
-                    >
-                      {formatTimeTo12Hour(hour).toLowerCase()}
-                    </motion.button>
-                  ))}
-                </div>
+                >
+                  {formatTimeTo12Hour(hour).toLowerCase()}
+                </motion.button>
+              ))}
+            </div>
           ) : (
             <div className="flex items-center justify-center py-8 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="text-center text-yellow-700">

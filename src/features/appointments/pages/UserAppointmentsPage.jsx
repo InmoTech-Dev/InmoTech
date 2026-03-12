@@ -63,8 +63,8 @@ const UserAppointmentsPage = () => {
     const isAffectedUserEvent = (payload = {}) => {
       const affectedIds = Array.isArray(payload?.affected_user_ids)
         ? payload.affected_user_ids
-            .map((value) => Number.parseInt(value, 10))
-            .filter((value) => Number.isInteger(value) && value > 0)
+          .map((value) => Number.parseInt(value, 10))
+          .filter((value) => Number.isInteger(value) && value > 0)
         : [];
       return Number.isInteger(currentUserId) && affectedIds.includes(currentUserId);
     };
@@ -271,7 +271,7 @@ const UserAppointmentsPage = () => {
 
   const handleRescheduleAppointment = async (appointmentId, rescheduleData) => {
     console.log('[INFO] handleRescheduleAppointment llamado con:', { appointmentId, rescheduleData });
-try {
+    try {
       if (!rescheduleData || typeof rescheduleData !== 'object') {
         throw new Error('Datos de reagendamiento invalidos');
       }
@@ -624,11 +624,10 @@ try {
 
               <button
                 onClick={() => setFilter(filter === 'hoy' ? 'todos' : 'hoy')}
-                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium shadow-sm hover:shadow-md transition-all whitespace-nowrap ${
-                  filter === 'hoy'
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium shadow-sm hover:shadow-md transition-all whitespace-nowrap ${filter === 'hoy'
                     ? 'bg-[#00457B] text-white border-[#00457B] hover:bg-[#005a9e]'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <Clock className="w-4 h-4" />
                 Citas de Hoy
@@ -639,22 +638,20 @@ try {
             <div className="inline-flex rounded-full bg-slate-100 p-1">
               <button
                 onClick={() => setViewMode('list')}
-                className={`flex rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  viewMode === 'list'
+                className={`flex rounded-full px-4 py-2 text-sm font-medium transition-colors ${viewMode === 'list'
                     ? 'bg-[#00457B] text-white shadow-sm'
                     : 'bg-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <List className="w-4 h-4 mr-2" />
                 Lista
               </button>
               <button
                 onClick={() => setViewMode('calendar')}
-                className={`flex rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  viewMode === 'calendar'
+                className={`flex rounded-full px-4 py-2 text-sm font-medium transition-colors ${viewMode === 'calendar'
                     ? 'bg-[#00457B] text-white shadow-sm'
                     : 'bg-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <Calendar className="w-4 h-4 mr-2" />
                 Calendario
@@ -699,8 +696,8 @@ try {
               onDeleteAppointment={handleCancelAppointment}
               onRescheduleAppointment={handleRescheduleAppointment}
               onCreateAppointment={handleCreateAppointment}
-              onAcceptAppointment={() => {}}
-              onRejectAppointment={() => {}}
+              onAcceptAppointment={() => { }}
+              onRejectAppointment={() => { }}
               onOpenRescheduleModal={handleOpenRescheduleModal}
             />
           </section>
@@ -733,13 +730,12 @@ try {
 
                     <div className="flex flex-wrap gap-2">
                       <div
-                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
-                          editLimitReached
+                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${editLimitReached
                             ? 'bg-red-50 text-red-600 border border-red-100'
                             : usedEdits === 0
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                               : 'bg-amber-50 text-amber-700 border border-amber-100'
-                        }`}
+                          }`}
                       >
                         <Edit className="h-3 w-3" />
                         {usedEdits} / {maxEdits} ediciones
@@ -810,11 +806,10 @@ try {
                           <button
                             onClick={() => !editLimitReached && handleEditAppointment(appointment)}
                             disabled={editLimitReached}
-                            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                              editLimitReached
+                            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${editLimitReached
                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                 : 'bg-[#00457B] text-white hover:bg-[#005a9e]'
-                            }`}
+                              }`}
                           >
                             <Edit className="h-4 w-4" />
                             {editLimitReached ? 'Sin cupo' : 'Reagendar'}
@@ -838,11 +833,10 @@ try {
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    currentPage === 1
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${currentPage === 1
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-                  }`}
+                    }`}
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Anterior
@@ -853,11 +847,10 @@ try {
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    currentPage === totalPages
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${currentPage === totalPages
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       : 'bg-[#00457B] text-white hover:bg-[#005a9e]'
-                  }`}
+                    }`}
                 >
                   Siguiente
                   <ChevronRight className="h-4 w-4" />

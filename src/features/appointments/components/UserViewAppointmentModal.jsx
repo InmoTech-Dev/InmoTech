@@ -299,8 +299,8 @@ const UserViewAppointmentModal = ({ isOpen, onClose, appointment }) => {
                   </div>
                 </div>
               </div>
-        </motion.div>
-      </div>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>,

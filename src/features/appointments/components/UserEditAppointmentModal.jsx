@@ -394,10 +394,10 @@ const UserEditAppointmentModal = ({
 
   const canSubmit = () => {
     return formData.fecha_cita.trim() !== "" &&
-           formData.hora_inicio.trim() !== "" &&
-           formData.servicio.trim() !== "" &&
-           formData.comentario.trim().length >= 10 &&
-           Object.values(errors).every((error) => !error);
+      formData.hora_inicio.trim() !== "" &&
+      formData.servicio.trim() !== "" &&
+      formData.comentario.trim().length >= 10 &&
+      Object.values(errors).every((error) => !error);
   };
 
   const validateField = (field, value) => {
@@ -533,12 +533,11 @@ const UserEditAppointmentModal = ({
                       )}
                       <span className="text-sm font-medium text-slate-700">Estado:</span>
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      appointment.estado_cita?.id === 1 ? 'bg-blue-100 text-blue-800' :
-                      appointment.estado_cita?.id === 2 ? 'bg-green-100 text-green-800' :
-                      appointment.estado_cita?.id === 3 ? 'bg-orange-100 text-orange-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${appointment.estado_cita?.id === 1 ? 'bg-blue-100 text-blue-800' :
+                        appointment.estado_cita?.id === 2 ? 'bg-green-100 text-green-800' :
+                          appointment.estado_cita?.id === 3 ? 'bg-orange-100 text-orange-800' :
+                            'bg-red-100 text-red-800'
+                      }`}>
                       {appointment.estado_cita?.nombre || "Solicitada"}
                     </span>
                   </div>
@@ -573,11 +572,10 @@ const UserEditAppointmentModal = ({
                   <div className="mt-4 pt-3 border-t border-slate-200">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-slate-600">Ediciones realizadas:</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        edicionesRealizadas >= maxEdiciones ? 'bg-red-100 text-red-800' :
-                        edicionesRealizadas === maxEdiciones - 1 ? 'bg-orange-100 text-orange-800' :
-                        'bg-green-100 text-green-800'
-                      }`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${edicionesRealizadas >= maxEdiciones ? 'bg-red-100 text-red-800' :
+                          edicionesRealizadas === maxEdiciones - 1 ? 'bg-orange-100 text-orange-800' :
+                            'bg-green-100 text-green-800'
+                        }`}>
                         {edicionesRealizadas} / {maxEdiciones}
                       </span>
                     </div>
@@ -632,18 +630,18 @@ const UserEditAppointmentModal = ({
                         <span className="font-medium text-slate-600">Nombre:</span>
                         <p className="text-slate-800 font-medium">
                           {user?.nombre_completo || appointment.nombre_completo ||
-                           (user?.primer_nombre && user?.primer_apellido
-                             ? `${user.primer_nombre} ${user.primer_apellido}`
-                             : appointment.nombre_completo)}
+                            (user?.primer_nombre && user?.primer_apellido
+                              ? `${user.primer_nombre} ${user.primer_apellido}`
+                              : appointment.nombre_completo)}
                         </p>
                       </div>
                       <div>
                         <span className="font-medium text-slate-600">Documento:</span>
                         <p className="text-slate-800 font-medium">
                           {user?.tipo_documento ? `${user.tipo_documento} ${user.numero_documento}` :
-                           (appointment.tipo_documento && appointment.numero_documento
-                             ? `${appointment.tipo_documento} ${appointment.numero_documento}`
-                             : "No disponible")}
+                            (appointment.tipo_documento && appointment.numero_documento
+                              ? `${appointment.tipo_documento} ${appointment.numero_documento}`
+                              : "No disponible")}
                         </p>
                       </div>
                       <div>
@@ -774,11 +772,10 @@ const UserEditAppointmentModal = ({
                             whileTap={!day.isDisabled ? { scale: 0.95 } : {}}
                             onClick={() => handleDateSelect(day)}
                             disabled={day.isDisabled || edicionesRealizadas >= maxEdiciones || isSubmitting}
-                            className={`h-10 w-10 rounded-lg text-sm font-medium transition-all duration-200 ${
-                              day.isDisabled || edicionesRealizadas >= maxEdiciones
+                            className={`h-10 w-10 rounded-lg text-sm font-medium transition-all duration-200 ${day.isDisabled || edicionesRealizadas >= maxEdiciones
                                 ? "text-slate-300 cursor-not-allowed"
                                 : "text-slate-700 hover:bg-orange-50"
-                            } ${!day.isCurrentMonth ? "text-slate-400" : ""}
+                              } ${!day.isCurrentMonth ? "text-slate-400" : ""}
                               ${day.isToday ? "bg-orange-100 text-orange-600 font-bold" : ""}
                               ${isSelected ? "bg-orange-600 text-white" : ""}
                               ${day.isSunday && day.isCurrentMonth ? "bg-red-50 text-red-400" : ""}
@@ -834,11 +831,10 @@ const UserEditAppointmentModal = ({
                             whileTap={{ scale: 0.95 }}
                             onClick={() => updateFormData("hora_inicio", hour)}
                             disabled={edicionesRealizadas >= maxEdiciones || isSubmitting}
-                            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                              formData.hora_inicio === hour
+                            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${formData.hora_inicio === hour
                                 ? "bg-orange-600 text-white"
                                 : "bg-white text-slate-700 hover:bg-orange-50 border border-slate-200"
-                            }`}
+                              }`}
                           >
                             {hour}
                           </motion.button>
@@ -878,9 +874,8 @@ const UserEditAppointmentModal = ({
                     value={formData.comentario}
                     onChange={(e) => updateFormData("comentario", e.target.value)}
                     rows={4}
-                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors resize-none ${
-                      errors.comentario ? 'border-red-500' : 'border-slate-300'
-                    }`}
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors resize-none ${errors.comentario ? 'border-red-500' : 'border-slate-300'
+                      }`}
                     placeholder="Explica detalladamente por qué necesitas editar esta cita. Mínimo 10 caracteres."
                     required
                     disabled={edicionesRealizadas >= maxEdiciones || isSubmitting}

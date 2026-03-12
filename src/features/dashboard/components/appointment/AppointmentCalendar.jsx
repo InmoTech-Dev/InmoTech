@@ -126,6 +126,7 @@ const DayCell = ({
                 <AppointmentCard
                   key={appointment.id}
                   appointment={appointment}
+                  compact={true}
                   onClick={(e) => {
                     e.stopPropagation();
                     onAppointmentClick(appointment, e);
@@ -233,7 +234,7 @@ const AppointmentCalendar = ({
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(day);
     }
-    
+
     // Fill remaining cells to ensure 6 rows (42 cells)
     while (days.length < 42) {
       days.push(null);
@@ -391,7 +392,7 @@ const AppointmentCalendar = ({
       handleNavigate(direction);
     }
   };
-      
+
   const handleRescheduleConfirm = async (reagendamientoData) => {
     if (rescheduleConfirm.appointment && reagendamientoData) {
       // ✅ CORREGIDO: Usar id_cita o id

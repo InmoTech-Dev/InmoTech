@@ -218,8 +218,8 @@ router.post(
   strictLimiter,
   validate(Joi.object({
     id_agente_nuevo: Joi.number().integer().required(),
-    comentario: Joi.string().max(500).allow('').optional(), // Permitir vac?o para primera asignaci?n
-    motivo_reagendamiento: Joi.string().min(5).max(500).allow('').optional()
+    comentario: Joi.string().max(500).allow('', null).optional(),
+    motivo_reagendamiento: Joi.string().max(500).allow('', null).optional()
   })),
   citaController.asignarAgente
 );

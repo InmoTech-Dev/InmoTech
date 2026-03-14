@@ -33,9 +33,6 @@ import {
   Search,
   Mail,
 } from "lucide-react";
-import { inmueblesAPI } from "@/shared/services/propertyApidervice";
-import { API_CONFIG } from "@/shared/services/api.config";
-import { PropertyCard } from "@/features/properties/components/PropertyCard";
 
 export default function HomePage() {
   const [isVisible, setIsVisible] = useState(false);
@@ -43,96 +40,11 @@ export default function HomePage() {
   const [servicesVisible, setServicesVisible] = useState(false);
   const [featuredVisible, setFeaturedVisible] = useState(false);
   const [whyChooseUsVisible, setWhyChooseUsVisible] = useState(false);
-  const [featuredProperties, setFeaturedProperties] = useState([]);
-  const [featuredLoading, setFeaturedLoading] = useState(true);
   const statsRef = useRef(null);
   const categoriesRef = useRef(null);
   const servicesRef = useRef(null);
   const featuredRef = useRef(null);
   const whyChooseUsRef = useRef(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const normalizeLabel = (value = "") =>
-      String(value)
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim();
-
-    const getAmenityQuantity = (item, labels = []) => {
-      const amenities = Array.isArray(item?.comodidades) ? item.comodidades : [];
-      const normalizedLabels = labels.map(normalizeLabel);
-      const match = amenities.find((amenity) => {
-        const name = normalizeLabel(amenity?.nombre || "");
-        return normalizedLabels.some((label) => name.includes(label));
-      });
-      const qty = Number(match?.cantidad);
-      return Number.isFinite(qty) && qty > 0 ? qty : 0;
-    };
-
-    const resolveImageUrl = (value) => {
-      if (!value || typeof value !== "string") {
-        return "/placeholder.svg?height=256&width=384";
-      }
-      if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:")) {
-        return value;
-      }
-
-      const normalizedPath = value.startsWith("/") ? value : `/${value}`;
-      if (normalizedPath.startsWith("/uploads/")) {
-        const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api\/v\d+$/i, "");
-        return `${apiOrigin}${normalizedPath}`;
-      }
-      return normalizedPath;
-    };
-
-    const formatPrice = (item) => {
-      if (item.operacion === "Arriendo" && Number(item.precio_arriendo) > 0) {
-        return `$${new Intl.NumberFormat("es-CO").format(item.precio_arriendo)}/mes`;
-      }
-      const basePrice = Number(item.precio_venta) > 0 ? item.precio_venta : Number(item.precio);
-      if (basePrice > 0) {
-        return `$${new Intl.NumberFormat("es-CO").format(basePrice)}`;
-      }
-      return "Precio a consultar";
-    };
-
-    const toCardItem = (item) => ({
-      id: item.id,
-      title: item.titulo || "Inmueble",
-      price: formatPrice(item),
-      location: item.ciudad || item.departamento || "Ubicación no disponible",
-      area: Number(item.area_construida) > 0 ? `${item.area_construida} m²` : "Área no disponible",
-      bedrooms: getAmenityQuantity(item, ["habitacion", "alcoba", "cuarto"]),
-      bathrooms: getAmenityQuantity(item, ["bano", "baño"]),
-      image: resolveImageUrl(item.image || item.imagenes?.[0]),
-      status: item.operacion || "Disponible",
-      featured: true,
-    });
-
-    const loadFeatured = async () => {
-      try {
-        const { items } = await inmueblesAPI.getPublicInmuebles(1, 6, { destacado: true });
-        if (!mounted) return;
-        const normalized = Array.isArray(items) ? items.slice(0, 6).map(toCardItem) : [];
-        setFeaturedProperties(normalized);
-      } catch (error) {
-        if (!mounted) return;
-        console.error("Error cargando inmuebles destacados:", error);
-        setFeaturedProperties([]);
-      } finally {
-        if (mounted) setFeaturedLoading(false);
-      }
-    };
-
-    loadFeatured();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -513,20 +425,75 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {featuredLoading && (
-              <p className="col-span-full text-sm text-gray-500">
-                Cargando inmuebles destacados...
-              </p>
-            )}
-            {!featuredLoading && featuredProperties.length === 0 && (
-              <p className="col-span-full text-sm text-gray-500">
-                No hay inmuebles destacados disponibles en este momento.
-              </p>
-            )}
-            {!featuredLoading &&
-              featuredProperties.map((property) => (
-                <PropertyCard key={property.id} property={property} />
-              ))}
+            {properties.map((property, index) => (
+              <Card
+                key={index}
+                className="overflow-hidden border-none shadow-xl hover:shadow-2xl transition-all duration-300 group rounded-xl"
+              >
+                <div className="relative h-72 overflow-hidden">
+                  <img
+                    src={
+                      property.image || "/placeholder.svg?height=256&width=384"
+                    }
+                    alt={property.title}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <Badge className="absolute top-4 right-4 bg-[#00457B] px-3 py-1 text-sm font-medium text-white z-10">
+                    {property.status}
+                  </Badge>
+                  {property.featured && (
+                    <Badge className="absolute top-4 left-4 bg-amber-500 px-3 py-1 text-sm font-medium text-white z-10">
+                      Destacado
+                    </Badge>
+                  )}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent h-20 transition-transform duration-500 group-hover:scale-105"></div>
+                </div>
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-xl group-hover:text-[#00457B] transition-colors duration-300">
+                      {property.title}
+                    </CardTitle>
+                    <p className="text-xl font-bold text-[#00457B] bg-blue-50 px-3 py-1 rounded-full">
+                      {property.price}
+                    </p>
+                  </div>
+                  <div className="flex items-center text-gray-500 text-sm mt-1">
+                    <MapPin className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
+                    {property.location}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-between text-sm bg-gray-50 p-3 rounded-lg">
+                    <div className="flex items-center">
+                      <Home className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
+                      {property.area}
+                    </div>
+                    <div className="flex items-center">
+                      <Building2 className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
+                      {property.bedrooms} Hab.
+                    </div>
+                    <div className="flex items-center">
+                      <Key className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
+                      {property.bathrooms} Baños
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    asChild
+                    className="w-full bg-[#00457B] text-white hover:bg-[#003b69] rounded-full group-hover:shadow-lg transition-all duration-300"
+                  >
+                    <Link
+                      to={`/inmuebles/${property.id}`}
+                      className="flex items-center justify-center text-white gap-2"
+                    >
+                      Ver detalles
+                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
           </div>
         </div>
       </section>

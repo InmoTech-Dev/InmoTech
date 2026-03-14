@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/shared/components/ui/card";
 import { Badge } from "@/shared/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/shared/components/ui/carousel";
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
 import {
   Building2,
   Calendar,
@@ -20,8 +21,11 @@ import {
   Info,
   Landmark,
   MapPin,
+  MessageSquare,
+  Phone,
   Share2,
   ShowerHead,
+  Star,
   Trees,
   Tv,
   Wifi,
@@ -386,7 +390,48 @@ export default function PropertyDetailPage() {
               </TabsContent>
             </Tabs>
           </div>
-          <div className="hidden lg:block" />
+
+          <div className="space-y-6">
+            <Card className="border-none shadow-md">
+              <CardContent className="p-6">
+                <div className="flex flex-col items-center text-center mb-4">
+                  <Avatar className="h-24 w-24 mb-4">
+                    <AvatarImage src="/avatar-agent-1.jpg" alt="Ana Rodriguez" />
+                    <AvatarFallback>AR</AvatarFallback>
+                  </Avatar>
+                  <h3 className="font-bold text-lg">Ana Rodriguez</h3>
+                  <p className="text-[#00457B]">Agente Inmobiliario Senior</p>
+                  <div className="flex items-center mt-1">
+                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                    <span className="ml-1 text-sm text-gray-500">(28 resenas)</span>
+                  </div>
+                </div>
+                <CardContent className="p-4">
+                  <h3 className="font-bold text-lg mb-1">{property?.titulo || property?.direccion || "Inmueble"}</h3>
+                  <div className="flex items-center text-gray-500 text-sm mb-2">
+                    <MapPin className="h-4 w-4 mr-1" /> {property?.ciudad || "Ciudad"}, {property?.departamento || "Depto"}
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <MessageSquare className="h-5 w-5 text-[#00457B] mr-2" />
+                    <span>ana.rodriguez@matriz.com</span>
+                  </div>
+                </CardContent>
+
+                <div className="space-y-3">
+                  <Button className="w-full bg-[#00457B] hover:bg-[#003b69]">
+                    <Phone className="h-5 w-5 mr-2" /> Llamar ahora
+                  </Button>
+                  <Button variant="outline" className="w-full border-[#00457B] text-[#00457B] hover:bg-[#00457B]/10">
+                    <MessageSquare className="h-5 w-5 mr-2" /> Enviar mensaje
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 

@@ -1,90 +1,27 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaPhone, FaEnvelope } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Home, Phone, Mail, X, ChevronDown } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Home, Phone, Mail, X } from 'lucide-react';
 import "../../../../shared/styles/globals.css";
 import LeasesPersonForm from "../../components/leases/TenantForm";
 import ViewTenantModal from "../../components/leases/ViewTenantForm";
 import { renantsApiService } from "../../../../shared/services/arrendatarioApiService";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
-import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import MESSAGES from "../../../../shared/constants/messages";
 import { useToast } from "../../../../shared/hooks/use-toast";
-import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
-
-const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
-const hasAssociatedLease = (tenant = {}) =>
-  Boolean(
-    tenant.rawLease ||
-    tenant.fechaInicio ||
-    tenant.fechaFin ||
-    tenant.valorMensual ||
-    tenant.estadoContrato ||
-    (Array.isArray(tenant.inmueblesArrendados) && tenant.inmueblesArrendados.length > 0)
-  );
 
 export function LeasesManagementPage() {
-  const PAGE_SIZE = 5;
   const [arrendatarios, setArrendatarios] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    pagina: 1,
-    limite: PAGE_SIZE,
-    paginas_totales: 1,
-  });
   const [showForm, setShowForm] = useState(false);
   const [tenantToEdit, setTenantToEdit] = useState(null);
   const [tenantToView, setTenantToView] = useState(null);
   const [tenantToDelete, setTenantToDelete] = useState(null);
-  const [statusChangingId, setStatusChangingId] = useState(null);
-  const [statusMenuId, setStatusMenuId] = useState(null);
   const { toast } = useToast();
-
-  const getTenantIdentifiers = (tenant = {}) =>
-    [
-      tenant.id_arrendatario,
-      tenant.id_cliente,
-      tenant.idCliente,
-      tenant.id,
-      tenant.personaId,
-      tenant.persona?.id_persona,
-      tenant.arrendatario?.id_arrendatario,
-      tenant.arrendatario?.id,
-      tenant.arrendatario?.persona?.id_persona,
-    ].filter(Boolean);
-
-  const pickBestLeaseForTenant = (tenant, arriendos = []) => {
-    const tenantIds = getTenantIdentifiers(tenant);
-    if (!tenantIds.length) return null;
-
-    const matches = arriendos.filter((a) => {
-      const arr = a.arrendatario || a.Arrendatario || {};
-      const persona = arr.persona || arr.Persona || {};
-      const ids = [
-        arr.id_arrendatario,
-        arr.id,
-        arr.idCliente,
-        arr.id_cliente,
-        persona.id_persona,
-      ].filter(Boolean);
-      return ids.some((id) => tenantIds.includes(id));
-    });
-
-    if (!matches.length) return null;
-
-    return matches
-      .map((m) => ({
-        m,
-        ts: new Date(m.fecha_inicio || m.fechaInicio || m.fecha_cobro || m.fechaCobro || 0).getTime(),
-      }))
-      .sort((a, b) => b.ts - a.ts)[0].m;
-  };
   const handleViewTenant = async (tenant) => {
     if (!tenant) return;
     // Optimistic show basic data
@@ -131,8 +68,8 @@ export function LeasesManagementPage() {
         leaseData = mapArriendoToLeaseData(tenant.rawLease);
       } else {
         try {
-          const arriendosResp = await arriendoApiService.obtenerArriendos({ page: 1, limit: 200 });
-          const arriendosList = arriendosResp?.data || [];
+          const arriendosResp = await arriendoApiService.obtenerArriendos();
+          const arriendosList = arriendosResp?.data?.data || arriendosResp?.data || arriendosResp || [];
           const match = pickBestLease(arriendosList);
           if (match) {
             leaseData = mapArriendoToLeaseData(match);
@@ -161,84 +98,6 @@ export function LeasesManagementPage() {
       merged.segundoApellidoCodeudor = merged.segundoApellidoCodeudor || tenant.segundoApellidoCodeudor;
       merged.telefonoCodeudor = merged.telefonoCodeudor || tenant.telefonoCodeudor;
       merged.correoCodeudor = merged.correoCodeudor || tenant.correoCodeudor;
-
-      const registroInmueble =
-        merged.registroInmobiliario ||
-        merged.inmueble?.registro ||
-        merged.inmueble?.registro_inmobiliario ||
-        merged.rawLease?.Inmueble?.registro_inmobiliario ||
-        merged.rawLease?.Inmueble?.registro;
-
-      if (registroInmueble) {
-        try {
-          const fetchedProperty = await inmueblesAPI.getInmuebleByRegistro(registroInmueble);
-          if (fetchedProperty) {
-            const enrichedInmueble = {
-              ...(merged.inmueble || {}),
-              ...fetchedProperty,
-              registro: fetchedProperty.registro || merged.registroInmobiliario || merged.inmueble?.registro,
-              registro_inmobiliario:
-                fetchedProperty.registro ||
-                fetchedProperty.registro_inmobiliario ||
-                merged.registroInmobiliario ||
-                merged.inmueble?.registro_inmobiliario,
-            };
-
-            merged.inmueble = enrichedInmueble;
-            merged.nombreInmueble =
-              fetchedProperty.titulo ||
-              fetchedProperty.nombre ||
-              fetchedProperty.nombre_comercial ||
-              merged.nombreInmueble;
-            merged.imagenInmueble =
-              fetchedProperty.image ||
-              fetchedProperty.imagen_principal ||
-              fetchedProperty.imagen_portada ||
-              fetchedProperty.portada ||
-              merged.imagenInmueble;
-            merged.inmueblesArrendados = [
-              {
-                ...(merged.inmueblesArrendados?.[0] || {}),
-                id: fetchedProperty.id || merged.inmueblesArrendados?.[0]?.id,
-                nombre:
-                  fetchedProperty.titulo ||
-                  fetchedProperty.nombre ||
-                  fetchedProperty.nombre_comercial ||
-                  merged.nombreInmueble,
-                direccion: fetchedProperty.direccion || merged.direccion || merged.inmueblesArrendados?.[0]?.direccion || "",
-                registro:
-                  fetchedProperty.registro ||
-                  fetchedProperty.registro_inmobiliario ||
-                  merged.registroInmobiliario ||
-                  merged.inmueblesArrendados?.[0]?.registro ||
-                  "",
-                imagen_principal:
-                  fetchedProperty.image ||
-                  fetchedProperty.imagen_principal ||
-                  fetchedProperty.imagen_portada ||
-                  fetchedProperty.portada ||
-                  merged.imagenInmueble ||
-                  "",
-                imagenes: fetchedProperty.imagenes || merged.inmueblesArrendados?.[0]?.imagenes || [],
-              },
-            ];
-
-            if (merged.rawLease?.Inmueble || merged.rawLease?.inmueble) {
-              const leasePropertyKey = merged.rawLease?.Inmueble ? "Inmueble" : "inmueble";
-              merged.rawLease = {
-                ...merged.rawLease,
-                [leasePropertyKey]: {
-                  ...(merged.rawLease?.[leasePropertyKey] || {}),
-                  ...enrichedInmueble,
-                },
-              };
-            }
-          }
-        } catch (_error) {
-          // Si falla el enriquecimiento del inmueble, conservamos los datos ya resueltos.
-        }
-      }
-
       setTenantToView(merged);
     } catch (error) {
       console.error("No se pudo cargar el detalle del arrendatario", error);
@@ -246,86 +105,13 @@ export function LeasesManagementPage() {
     }
   };
 
-  const handleToggleEstado = async (tenant, forcedEstado) => {
-    if (!tenant) return;
-    const targetId = tenant.id || tenant.id_arrendatario || tenant.personaId;
-    if (!targetId) {
-      setStatusMessage({ type: "error", message: "No se pudo identificar el arrendatario." });
-      return;
-    }
-    const current = normalizeEstado(tenant.estado || "Activo");
-    const nextEstado = forcedEstado || (current === "activo" ? "Inactivo" : "Activo");
-    try {
-      setStatusChangingId(targetId);
-      const payload = {
-        estado: nextEstado,
-        tipoDocumento: tenant.tipoDocumento || tenant.persona?.tipo_documento || "CC",
-        documento: tenant.documento || tenant.persona?.numero_documento || "",
-        primerNombre: tenant.primerNombre || tenant.primerNombreArrendatario || "",
-        segundoNombre: tenant.segundoNombre || tenant.segundoNombreArrendatario || "",
-        primerApellido: tenant.primerApellido || tenant.primerApellidoArrendatario || "",
-        segundoApellido: tenant.segundoApellido || tenant.segundoApellidoArrendatario || "",
-        correo: tenant.correo || tenant.correoArrendatario || "",
-        telefono: tenant.telefono || tenant.telefonoArrendatario || "",
-      };
-      const updated = await renantsApiService.update(targetId, payload);
-      setArrendatarios((prev) =>
-        prev.map((t) =>
-          (t.id === targetId || t.id_arrendatario === targetId || t.personaId === targetId)
-            ? { ...t, estado: updated.estado || nextEstado }
-            : t
-        )
-      );
-      toast({
-        title: "Estado actualizado",
-        description: `El arrendatario ahora está ${nextEstado}.`,
-        variant: "default",
-      });
-      setStatusMenuId(null);
-    } catch (error) {
-      const errMsg = error.message || "No se pudo cambiar el estado del arrendatario";
-      setStatusMessage({ type: "error", message: errMsg });
-      toast({
-        title: "Error al cambiar estado",
-        description: errMsg,
-        variant: "destructive",
-      });
-    } finally {
-      setStatusChangingId(null);
-    }
-  };
-
-  const handleEditTenant = (tenant) => {
-    if (hasAssociatedLease(tenant)) {
-      toast({
-        title: "Edición bloqueada",
-        description: "No puedes editar un arrendatario con un arriendo asociado.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setTenantToEdit(tenant);
-    setShowForm(true);
-  };
-
   const mapArriendoToLeaseData = (arriendo = {}) => {
     const inmueble = arriendo.Inmueble || arriendo.inmueble || {};
     const codeudor = arriendo.codeudor || arriendo.Codeudor || {};
     const codeudorPersona = codeudor.persona || codeudor.Persona || codeudor;
-    const inmuebleImagenes = Array.isArray(inmueble.imagenes) ? inmueble.imagenes : [];
-    const imagenPrincipal =
-      inmuebleImagenes.find((img) => Boolean(img?.es_principal)) ||
-      inmuebleImagenes[0] ||
-      inmueble.imagen_principal ||
-      inmueble.imagen_portada ||
-      inmueble.portada ||
-      inmueble.imagen_destacada ||
-      null;
     const inmuebleNombre =
       inmueble.nombre ||
       inmueble.titulo ||
-      inmueble.nombre_inmueble ||
       inmueble.registro_inmobiliario ||
       inmueble.registro ||
       inmueble.direccion ||
@@ -341,8 +127,6 @@ export function LeasesManagementPage() {
               nombre: inmuebleNombre || "Inmueble",
               direccion: inmuebleDireccion || "",
               registro: inmuebleRegistro || "",
-              imagen_principal: imagenPrincipal?.ruta_archivo || imagenPrincipal?.url || imagenPrincipal?.secure_url || imagenPrincipal || "",
-              imagenes: inmuebleImagenes,
             },
           ]
         : [];
@@ -352,12 +136,6 @@ export function LeasesManagementPage() {
       registroInmobiliario: inmuebleRegistro,
       tipoInmueble: inmueble.categoria || inmueble.tipo || null,
       nombreInmueble: inmuebleNombre,
-      imagenInmueble:
-        imagenPrincipal?.ruta_archivo ||
-        imagenPrincipal?.url ||
-        imagenPrincipal?.secure_url ||
-        imagenPrincipal ||
-        null,
       direccion: inmuebleDireccion,
       ciudad: inmueble.ciudad || null,
       departamento: inmueble.departamento || null,
@@ -379,144 +157,33 @@ export function LeasesManagementPage() {
     };
   };
 
-    const fetchTenants = async (query = "", page = 1) => {
+    const fetchTenants = async () => {
         try {
             setIsLoading(true);
-            const tenantParams = { page, limit: PAGE_SIZE };
-            if (query) tenantParams.search = query;
-            const tenantsResult = await renantsApiService.getAll(tenantParams);
-            const baseTenants = tenantsResult?.data || [];
-            const backendPagination = tenantsResult?.pagination || {
-              total: baseTenants.length,
-              pagina: page,
-              limite: PAGE_SIZE,
-              paginas_totales: 1,
-            };
+            const [tenants, arriendosResp] = await Promise.all([
+                renantsApiService.getAll(),
+                arriendoApiService.obtenerArriendos().catch(() => ({ data: { data: [] } }))
+      ]);
 
-            let tenants = baseTenants;
-            try {
-              const arriendosResp = await arriendoApiService.obtenerArriendos({ page: 1, limit: 200 });
-              const arriendosList = arriendosResp?.data || [];
+      const arriendosList = arriendosResp?.data?.data || arriendosResp?.data || arriendosResp || [];
 
-              tenants = await Promise.all(
-                baseTenants.map(async (tenant) => {
-                  if (
-                    tenant.inmueble?.titulo ||
-                    tenant.inmueble?.nombre ||
-                    tenant.nombreInmueble ||
-                    tenant.inmueblesArrendados?.[0]?.nombre
-                  ) {
-                    return tenant;
-                  }
+      const merged = tenants.map((t) => {
+        const tenantId = t.id || t.personaId;
+        const match = arriendosList.find((a) => {
+          const arrendatario = a.arrendatario || a.Arrendatario || {};
+          const persona = arrendatario.persona || arrendatario.Persona || {};
+          return (
+            arrendatario.id_arrendatario === tenantId ||
+            arrendatario.id === tenantId ||
+            persona.id_persona === tenantId
+          );
+        });
+        if (!match) return t;
+        const leaseData = mapArriendoToLeaseData(match);
+        return { ...t, ...leaseData, rawLease: match };
+      });
 
-                  const match = pickBestLeaseForTenant(tenant, arriendosList);
-                  if (!match) return tenant;
-
-                  const leaseData = mapArriendoToLeaseData(match);
-                  const registroInmueble =
-                    leaseData.registroInmobiliario ||
-                    leaseData.inmueble?.registro ||
-                    leaseData.inmueble?.registro_inmobiliario ||
-                    match?.Inmueble?.registro_inmobiliario ||
-                    match?.Inmueble?.registro ||
-                    match?.inmueble?.registro_inmobiliario ||
-                    match?.inmueble?.registro;
-
-                  let fetchedProperty = null;
-                  if (registroInmueble) {
-                    try {
-                      fetchedProperty = await inmueblesAPI.getInmuebleByRegistro(registroInmueble);
-                    } catch (_error) {
-                      fetchedProperty = null;
-                    }
-                  }
-
-                  if (!fetchedProperty) {
-                    return {
-                      ...tenant,
-                      ...leaseData,
-                    };
-                  }
-
-                  const enrichedInmueble = {
-                    ...(leaseData.inmueble || tenant.inmueble || {}),
-                    ...fetchedProperty,
-                    registro:
-                      fetchedProperty.registro ||
-                      fetchedProperty.registro_inmobiliario ||
-                      leaseData.registroInmobiliario ||
-                      "",
-                    registro_inmobiliario:
-                      fetchedProperty.registro ||
-                      fetchedProperty.registro_inmobiliario ||
-                      leaseData.registroInmobiliario ||
-                      "",
-                  };
-
-                  return {
-                    ...tenant,
-                    ...leaseData,
-                    inmueble: enrichedInmueble,
-                    nombreInmueble:
-                      fetchedProperty.titulo ||
-                      fetchedProperty.nombre ||
-                      fetchedProperty.nombre_comercial ||
-                      leaseData.nombreInmueble ||
-                      tenant.nombreInmueble,
-                    imagenInmueble:
-                      fetchedProperty.image ||
-                      fetchedProperty.imagen_principal ||
-                      fetchedProperty.imagen_portada ||
-                      fetchedProperty.portada ||
-                      leaseData.imagenInmueble ||
-                      tenant.imagenInmueble,
-                    inmueblesArrendados: [
-                      {
-                        ...(leaseData.inmueblesArrendados?.[0] || tenant.inmueblesArrendados?.[0] || {}),
-                        id: fetchedProperty.id || leaseData.inmueblesArrendados?.[0]?.id || tenant.inmueblesArrendados?.[0]?.id,
-                        nombre:
-                          fetchedProperty.titulo ||
-                          fetchedProperty.nombre ||
-                          fetchedProperty.nombre_comercial ||
-                          leaseData.nombreInmueble ||
-                          tenant.nombreInmueble ||
-                          "Inmueble asignado",
-                        direccion:
-                          fetchedProperty.direccion ||
-                          leaseData.direccion ||
-                          tenant.direccion ||
-                          "",
-                        registro:
-                          fetchedProperty.registro ||
-                          fetchedProperty.registro_inmobiliario ||
-                          leaseData.registroInmobiliario ||
-                          tenant.registroInmobiliario ||
-                          "",
-                        imagen_principal:
-                          fetchedProperty.image ||
-                          fetchedProperty.imagen_principal ||
-                          fetchedProperty.imagen_portada ||
-                          fetchedProperty.portada ||
-                          leaseData.imagenInmueble ||
-                          tenant.imagenInmueble ||
-                          "",
-                        imagenes:
-                          fetchedProperty.imagenes ||
-                          leaseData.inmueblesArrendados?.[0]?.imagenes ||
-                          tenant.inmueblesArrendados?.[0]?.imagenes ||
-                          [],
-                      },
-                    ],
-                  };
-                })
-              );
-            } catch (_error) {
-              tenants = baseTenants;
-            }
-
-            setArrendatarios(tenants);
-            setPagination(backendPagination);
-            setCurrentPage(backendPagination.pagina || page);
+      setArrendatarios(merged);
     } catch (error) {
       setStatusMessage({
         type: "error",
@@ -531,27 +198,21 @@ export function LeasesManagementPage() {
     fetchTenants();
   }, []);
 
-  useEffect(() => {
-    const term = searchTerm.trim();
-    const timeoutId = setTimeout(() => {
-      setCurrentPage(1);
-      fetchTenants(term, 1);
-    }, 400);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
-
-  useEffect(() => {
-    if (!statusMenuId) return undefined;
-
-    const handleOutsideClick = (event) => {
-      if (event.target.closest("[data-status-menu]")) return;
-      setStatusMenuId(null);
-    };
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [statusMenuId]);
+  const filteredTenants = useMemo(() => {
+    if (!searchTerm.trim()) return arrendatarios;
+    const lower = searchTerm.toLowerCase();
+    return arrendatarios.filter((tenant) => {
+      return (
+        tenant.primerNombre.toLowerCase().includes(lower) ||
+        (tenant.segundoNombre && tenant.segundoNombre.toLowerCase().includes(lower)) ||
+        tenant.primerApellido.toLowerCase().includes(lower) ||
+        (tenant.segundoApellido && tenant.segundoApellido.toLowerCase().includes(lower)) ||
+        tenant.documento.includes(searchTerm) ||
+        tenant.correo.toLowerCase().includes(lower) ||
+        tenant.telefono.includes(searchTerm)
+      );
+    });
+  }, [arrendatarios, searchTerm]);
 
   const handleCloseForm = () => {
     setShowForm(false);
@@ -563,7 +224,6 @@ export function LeasesManagementPage() {
     try {
       const newTenant = await renantsApiService.create(formData);
       setArrendatarios((prev) => [newTenant, ...prev]);
-      fetchTenants(searchTerm.trim(), 1);
       toast({ title: "Arrendatario creado", description: MESSAGES.leaseTenant.create, variant: "default" });
       handleCloseForm();
     } catch (error) {
@@ -584,7 +244,6 @@ export function LeasesManagementPage() {
     try {
       const updated = await renantsApiService.update(tenantToEdit.id, formData);
       setArrendatarios((prev) => prev.map((tenant) => (tenant.id === updated.id ? updated : tenant)));
-      fetchTenants(searchTerm.trim(), currentPage);
       toast({ title: "Arrendatario actualizado", description: MESSAGES.leaseTenant.update, variant: "default" });
       handleCloseForm();
     } catch (error) {
@@ -612,7 +271,6 @@ export function LeasesManagementPage() {
       const removedTenant = await renantsApiService.delete(tenantToDelete.id);
       const removedId = removedTenant?.id ?? tenantToDelete.id;
       setArrendatarios((prev) => prev.filter((tenant) => tenant.id !== removedId));
-      fetchTenants(searchTerm.trim(), currentPage);
       toast({ title: "Arrendatario eliminado", description: MESSAGES.leaseTenant.delete, variant: "default" });
     } catch (error) {
       toast({
@@ -627,10 +285,10 @@ export function LeasesManagementPage() {
 
   // Calcular estadísticas
   const stats = {
-    total: pagination.total,
-    activos: arrendatarios.filter(t => normalizeEstado(t.estado) === 'activo').length,
-    morosos: arrendatarios.filter(t => normalizeEstado(t.estado) === 'moroso').length,
-    conInmuebles: arrendatarios.filter(t => t.inmueblesArrendados && t.inmueblesArrendados.length > 0).length
+    total: filteredTenants.length,
+    activos: filteredTenants.filter(t => t.estado === 'Activo').length,
+    morosos: filteredTenants.filter(t => t.estado === 'Moroso').length,
+    conInmuebles: filteredTenants.filter(t => t.inmueblesArrendados && t.inmueblesArrendados.length > 0).length
   };
 
   const renderFormModal = () => {
@@ -821,9 +479,9 @@ const renderDeleteModal = () => {
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           {/* TABLA REORGANIZADA */}
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-visible">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
             {/* CABECERA DE TABLA */}
-            <div className="overflow-x-auto overflow-y-visible">
+            <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
@@ -845,7 +503,7 @@ const renderDeleteModal = () => {
                         </div>
                       </td>
                     </tr>
-                  ) : arrendatarios.length === 0 ? (
+                  ) : filteredTenants.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                         <div className="flex flex-col items-center gap-2">
@@ -854,11 +512,7 @@ const renderDeleteModal = () => {
                       </td>
                     </tr>
                   ) : (
-                    arrendatarios.map((tenant) => {
-                      const estadoNormalized = normalizeEstado(tenant.estado);
-                      const estadoLabel = tenant.estado || "Pendiente";
-                      const isEditBlocked = hasAssociatedLease(tenant);
-                      return (
+                    filteredTenants.map((tenant) => (
                       <tr key={tenant.id} className="hover:bg-slate-50 transition-colors">
                         {/* INFORMACIÓN PERSONAL */}
                         <td className="px-6 py-4">
@@ -885,18 +539,15 @@ const renderDeleteModal = () => {
 
                         {/* INMUEBLE ASIGNADO */}
                         <td className="px-6 py-4">
-                          {(tenant.inmueblesArrendados && tenant.inmueblesArrendados.length > 0) || tenant.nombreInmueble || tenant.inmueble ? (
-                            <div className="flex flex-col items-center justify-center gap-1 text-center">
-                              <Home className="w-4 h-4 text-slate-400" />
-                              <p className="text-xs text-slate-500">
-                                {tenant.inmueblesArrendados?.[0]?.nombre ||
-                                  tenant.nombreInmueble ||
-                                  tenant.inmueble?.titulo ||
-                                  tenant.inmueble?.nombre ||
-                                  tenant.inmueble?.nombre_comercial ||
-                                  (tenant.inmueblesArrendados?.[0]?.id ? `Inmueble #${tenant.inmueblesArrendados[0].id}` : "Inmueble asignado")}
-                              </p>
-                            </div>
+                          {tenant.inmueblesArrendados && tenant.inmueblesArrendados.length > 0 ? (
+                          <div className="text-center">
+                            <p className="font-semibold text-slate-800 text-sm">
+                              {tenant.inmueblesArrendados[0].nombre || "Inmueble #" + tenant.inmueblesArrendados[0].id}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {tenant.inmueblesArrendados[0].direccion || "Dirección no especificada"}
+                            </p>
+                          </div>
                           ) : (
                             <div className="flex flex-col items-center justify-center text-slate-400">
                               <Home className="w-6 h-6 mb-1" />
@@ -921,46 +572,19 @@ const renderDeleteModal = () => {
                         </td>
 
                         {/* ESTADO */}
-                        <td className="px-6 py-4 text-center relative">
-                          <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setStatusMenuId((prev) =>
-                                  prev === (tenant.id || tenant.id_arrendatario || tenant.personaId)
-                                    ? null
-                                    : (tenant.id || tenant.id_arrendatario || tenant.personaId)
-                                )
-                              }
-                              disabled={statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId)}
-                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
-                                estadoNormalized === "activo"
-                                  ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
-                                  : estadoNormalized === "moroso"
-                                  ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200 hover:ring-2 hover:ring-red-200"
-                                  : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
-                              } ${statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId) ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === (tenant.id || tenant.id_arrendatario || tenant.personaId) ? "ring-2 ring-slate-200" : ""}`}
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex flex-col items-center justify-center space-y-2">
+                            <span
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
+                                tenant.estado === "Activo"
+                                  ? "bg-green-100 text-green-700 border-green-200"
+                                  : tenant.estado === "Moroso"
+                                  ? "bg-red-100 text-red-700 border-red-200"
+                                  : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                              }`}
                             >
-                              {statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId) && (
-                                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                              )}
-                              <span>{estadoLabel}</span>
-                              <ChevronDown className="w-3 h-3 ml-2" />
-                            </button>
-                            {statusMenuId === (tenant.id || tenant.id_arrendatario || tenant.personaId) && (
-                              <div className="absolute left-1/2 -translate-x-1/2 bottom-10 z-[60] bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
-                                {["Activo", "Inactivo"].map((estadoOpcion) => (
-                                  <button
-                                    key={estadoOpcion}
-                                    type="button"
-                                    onClick={() => handleToggleEstado(tenant, estadoOpcion)}
-                                    className="w-full text-left px-3 py-2 hover:bg-slate-50"
-                                  >
-                                    {estadoOpcion}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
+                              {tenant.estado || "Pendiente"}
+                            </span>
                             {tenant.fechaInicio && (
                               <span className="text-xs text-slate-500">
                                 Desde: {new Date(tenant.fechaInicio).toLocaleDateString()}
@@ -984,10 +608,11 @@ const renderDeleteModal = () => {
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              disabled={isEditBlocked}
-                              onClick={() => handleEditTenant(tenant)}
-                              className={`p-2 transition-colors ${isEditBlocked ? "text-slate-300 cursor-not-allowed" : "text-green-600 hover:text-green-800"}`}
-                              title={isEditBlocked ? "No puedes editar un arrendatario con un arriendo asociado" : "Editar arrendatario"}
+                              onClick={() => {
+                                setTenantToEdit(tenant);
+                                setShowForm(true);
+                              }}
+                              className="p-2 text-green-600 hover:text-green-800 transition-colors"
                               aria-label="Editar arrendatario"
                             >
                               <Edit className="w-4 h-4" />
@@ -996,38 +621,12 @@ const renderDeleteModal = () => {
                           </div>
                         </td>
                       </tr>
-                      );
-                    })
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-          <Pagination
-            currentPage={currentPage}
-            totalPages={
-              (Boolean(pagination?.has_next_page) ||
-                ((pagination?.paginas_totales || 1) <= currentPage && arrendatarios.length === PAGE_SIZE))
-                ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                : Math.max(pagination?.paginas_totales || 1, currentPage)
-            }
-            hasPrevPage={currentPage > 1}
-            hasNextPage={
-              Boolean(pagination?.has_next_page) ||
-              ((pagination?.paginas_totales || 1) <= currentPage && arrendatarios.length === PAGE_SIZE)
-            }
-            onPageChange={(page) => {
-              const hasNextPage =
-                Boolean(pagination?.has_next_page) ||
-                ((pagination?.paginas_totales || 1) <= currentPage && arrendatarios.length === PAGE_SIZE);
-              const totalPages = hasNextPage
-                ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                : Math.max(pagination?.paginas_totales || 1, currentPage);
-              if (page === currentPage || page < 1 || (page > totalPages && !hasNextPage)) return;
-              setCurrentPage(page);
-              fetchTenants(searchTerm.trim(), page);
-            }}
-          />
         </motion.div>
       </div>
 

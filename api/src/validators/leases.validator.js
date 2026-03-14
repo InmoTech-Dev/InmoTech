@@ -44,16 +44,6 @@ const updateLeaseStatusSchema = Joi.object({
   descripcion: Joi.string().max(500).allow('', null) // alias para compatibilidad con BD
 });
 
-const extendLeaseSchema = Joi.object({
-  fecha_finalizacion: Joi.date().iso().required(),
-  comentario: Joi.string().max(500).allow('', null)
-});
-
-const registerPreNoticeSchema = Joi.object({
-  comentario: Joi.string().max(1000).allow('', null),
-  url_soporte: Joi.string().uri().max(500).allow('', null)
-});
-
 const createPaymentSchema = Joi.object({
   fecha_cobro: Joi.date().iso().required(),
   fecha_limite: Joi.date().iso().required(),
@@ -83,8 +73,6 @@ module.exports = {
   createLeaseSchema,
   updateLeaseSchema,
   updateLeaseStatusSchema,
-  extendLeaseSchema,
-  registerPreNoticeSchema,
   createPaymentSchema,
   updatePaymentSchema,
   createReceiptSchema

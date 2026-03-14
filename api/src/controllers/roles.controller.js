@@ -1,5 +1,4 @@
 const rolesService = require('../services/roles.service');
-const sseService = require('../services/sse.service');
 const logger = require('../utils/logger');
 
 class RolesController {
@@ -12,8 +11,6 @@ class RolesController {
       const userId = req.user.id;
 
       const rol = await rolesService.crearRol(rolData, userId);
-
-      sseService.emitRoleChanged({ action: 'create', roleId: rol.id_rol });
 
       return res.status(201).json({
         success: true,
@@ -74,8 +71,6 @@ class RolesController {
 
       const rol = await rolesService.actualizarRol(parseInt(id), updateData, userId);
 
-      sseService.emitRoleChanged({ action: 'update', roleId: parseInt(id) });
-
       return res.status(200).json({
         success: true,
         message: 'Rol actualizado exitosamente',
@@ -97,8 +92,6 @@ class RolesController {
 
       await rolesService.eliminarRol(parseInt(id), userId);
 
-      sseService.emitRoleChanged({ action: 'delete', roleId: parseInt(id) });
-
       return res.status(200).json({
         success: true,
         message: 'Rol eliminado exitosamente'
@@ -118,8 +111,6 @@ class RolesController {
       const userId = req.user.id;
 
       const asignacion = await rolesService.asignarRol(parseInt(idPersona), parseInt(idRol), userId);
-
-      sseService.emitUserChanged({ action: 'role_assigned', userId: parseInt(idPersona) });
 
       return res.status(201).json({
         success: true,
@@ -141,8 +132,6 @@ class RolesController {
       const userId = req.user.id;
 
       await rolesService.removerRol(parseInt(idPersona), parseInt(idRol), userId);
-
-      sseService.emitUserChanged({ action: 'role_removed', userId: parseInt(idPersona) });
 
       return res.status(200).json({
         success: true,

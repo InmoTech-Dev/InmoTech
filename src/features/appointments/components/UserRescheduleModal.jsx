@@ -180,11 +180,11 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
   const clienteNombre = cliente.nombre_completo && cliente.apellido_completo
     ? `${cliente.nombre_completo} ${cliente.apellido_completo}`
     : cliente.nombre_completo ||
-    // Fallback: usar datos del usuario autenticado
-    (user && (user.nombre_completo && user.apellido_completo
-      ? `${user.nombre_completo} ${user.apellido_completo}`
-      : user.nombre_completo || user.full_name)) ||
-    'Cliente no especificado';
+      // Fallback: usar datos del usuario autenticado
+      (user && (user.nombre_completo && user.apellido_completo
+        ? `${user.nombre_completo} ${user.apellido_completo}`
+        : user.nombre_completo || user.full_name)) ||
+      'Cliente no especificado';
 
   const servicioNombre = servicio.nombre_servicio || 'Servicio no especificado';
   const inmuebleInfo = inmueble.direccion || 'Propiedad no especificada';
@@ -558,12 +558,12 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
                   </h3>
 
                   {/* Mini calendar */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                    {/* Calendar Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <motion.button
-                        type="button"
-                        whileHover={{ scale: 1.1 }}
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  {/* Calendar Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => navigateMonth(-1)}
                         className="p-2 hover:bg-white rounded-lg transition-colors"
@@ -745,8 +745,9 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
                       onChange={(e) => handleInputChange('motivo_reagendamiento', e.target.value)}
                       rows={4}
                       placeholder="Explica por qué necesitas reagendar esta cita (mínimo 10 caracteres)..."
-                      className={`w-full pl-4 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors resize-none ${errors.motivo_reagendamiento ? 'border-red-500' : 'border-slate-300'
-                        }`}
+                      className={`w-full pl-4 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors resize-none ${
+                        errors.motivo_reagendamiento ? 'border-red-500' : 'border-slate-300'
+                      }`}
                     />
                   </div>
 

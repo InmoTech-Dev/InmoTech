@@ -14,9 +14,7 @@ const AdminReportsView = ({
     loading: reportsLoading,
     filters,
     setFilters,
-    refreshTrigger,
-    searchTerm,
-    onSearchChange
+    refreshTrigger
 }) => {
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -171,7 +169,6 @@ const AdminReportsView = ({
             const enrichedReport = {
                 ...detailedReport,
                 ubicacion: report.ubicacion || detailedReport.inmueble_ciudad || '',
-                direccionInmueble: report.direccionInmueble || detailedReport.inmueble_direccion || detailedReport.inmueble?.direccion || '',
                 tipoInmueble: report.tipoInmueble || detailedReport.inmueble_categoria || '',
                 propietario: report.propietario || detailedReport.propietario_nombre || '',
                 referencia: report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || '',
@@ -238,8 +235,6 @@ const AdminReportsView = ({
                 loading={usersLoading}
                 isCollapsed={isSidebarCollapsed}
                 onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                searchTerm={searchTerm}
-                onSearchChange={onSearchChange}
             />
 
             {/* Column 2: Selection List (Center) */}

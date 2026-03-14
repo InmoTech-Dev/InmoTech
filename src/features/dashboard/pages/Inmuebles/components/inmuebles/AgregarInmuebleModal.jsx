@@ -8,18 +8,16 @@ import { uploadToCloudinary } from '../../../../../../shared/services/cloudinary
 
 const PROPERTY_TYPES = ['Casa', 'Apartamento', 'Local', 'Oficina', 'Bodega', 'Lote', 'Finca', 'Otro'];
 const OPERATION_OPTIONS = ['Venta', 'Arriendo', 'Venta y Arriendo'];
-const MIN_AMENITIES_REQUIRED_TYPES = new Set(['Casa', 'Apartamento']);
-const DEFAULT_AMENITIES = ['Habitaciones', 'Banos', 'Parqueaderos', 'Balcon', 'Cuarto util', 'Cocina'];
 
 const AMENITIES_BY_TYPE = {
-  Casa: DEFAULT_AMENITIES,
-  Apartamento: DEFAULT_AMENITIES,
-  Local: ['Banos', 'Zona de carga', 'Deposito'],
-  Oficina: ['Banos', 'Salas de reunion', 'Parqueaderos', 'Recepcion'],
-  Bodega: ['Area de carga', 'Oficinas internas'],
-  Lote: ['Area verde', 'Servicios publicos'],
-  Finca: ['Habitaciones', 'Banos', 'Piscina', 'Casa mayordomo'],
-  Otro: DEFAULT_AMENITIES
+  Casa: ['Habitaciones', 'Baños', 'Parqueaderos', 'Jardín', 'Patio cubierto'],
+  Apartamento: ['Habitaciones', 'Baños', 'Parqueaderos', 'Balcón', 'Depósito', 'Coworking'],
+  Local: ['Baños', 'Zona de carga', 'Depósito'],
+  Oficina: ['Baños', 'Salas de reunión', 'Parqueaderos', 'Recepción'],
+  Bodega: ['Área de carga', 'Oficinas internas'],
+  Lote: ['Área verde', 'Servicios públicos'],
+  Finca: ['Habitaciones', 'Baños', 'Piscina', 'Casa mayordomo'],
+  Otro: ['Habitaciones', 'Baños']
 };
 
 const MAX_IMAGE_SIZE_MB = 5;
@@ -83,18 +81,6 @@ const buildAmenitiesForType = (type, current = []) => {
   return [...mapped, ...customs];
 };
 
-const getSelectedAmenitiesSignature = (items = []) => {
-  const normalized = items
-    .filter((item) => item?.seleccionada)
-    .map((item) => ({
-      nombre: String(item?.nombre || '').trim().toLowerCase(),
-      cantidad: Number(item?.cantidad) > 0 ? Number(item.cantidad) : 1
-    }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-  return JSON.stringify(normalized);
-};
-
 const formatOwnerSummary = (owner) => {
   if (!owner) return null;
   return {
@@ -120,7 +106,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
   const [saving, setSaving] = useState(false);
   const [checkingRegistro, setCheckingRegistro] = useState(false);
   const [registroDisponible, setRegistroDisponible] = useState(true);
-  const [descripcionCambioComodidades, setDescripcionCambioComodidades] = useState('');
   const lastFocusedRef = useRef(null);
   const lastFocusInfo = useRef({ name: null, selectionStart: null, selectionEnd: null });
 
@@ -168,22 +153,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     () => owners.find((owner) => String(owner.id) === String(selectedOwnerId)),
     [owners, selectedOwnerId]
   );
-  const amenitiesChangedInEdit = useMemo(() => {
-    if (!inmuebleEditar) return false;
-    const currentSignature = getSelectedAmenitiesSignature(amenities);
-    const initialSignature = getSelectedAmenitiesSignature(inmuebleEditar.comodidades || []);
-    return currentSignature !== initialSignature;
-  }, [amenities, inmuebleEditar]);
-
-  useEffect(() => {
-    if (!amenitiesChangedInEdit && errors.descripcionCambioComodidades) {
-      setErrors((prev) => {
-        const updated = { ...prev };
-        delete updated.descripcionCambioComodidades;
-        return updated;
-      });
-    }
-  }, [amenitiesChangedInEdit, errors.descripcionCambioComodidades]);
 
   const loadOwners = async () => {
     try {
@@ -230,7 +199,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       setSelectedOwnerId('');
       setOwnerModalOpen(false);
       setCustomAmenity({ nombre: '', cantidad: 1 });
-      setDescripcionCambioComodidades('');
       setErrors({});
       setActiveStep(0);
       return;
@@ -265,13 +233,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (inmuebleEditar.propietario?.id) {
         setSelectedOwnerId(inmuebleEditar.propietario.id);
       }
-      setDescripcionCambioComodidades('');
     } else {
       setForm(INITIAL_FORM);
       setAmenities(buildAmenitiesForType(INITIAL_FORM.tipo));
       setImagenes([]);
       setSelectedOwnerId('');
-      setDescripcionCambioComodidades('');
     }
     setActiveStep(0);
   }, [inmuebleEditar, isOpen]);
@@ -281,11 +247,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === 'tipo') {
       setAmenities((prev) => buildAmenitiesForType(value, prev));
-      setErrors((prev) => {
-        const updated = { ...prev };
-        delete updated.comodidades;
-        return updated;
-      });
     }
   };
 
@@ -355,11 +316,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         amenity.id === amenityId ? { ...amenity, seleccionada: !amenity.seleccionada } : amenity
       )
     );
-    setErrors((prev) => {
-      const updated = { ...prev };
-      delete updated.comodidades;
-      return updated;
-    });
   };
 
   const handleAmenityQuantity = (amenityId, quantity) => {
@@ -368,11 +324,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         amenity.id === amenityId ? { ...amenity, cantidad: Number(quantity) || 0 } : amenity
       )
     );
-    setErrors((prev) => {
-      const updated = { ...prev };
-      delete updated.comodidades;
-      return updated;
-    });
   };
 
   const handleAddCustomAmenity = () => {
@@ -388,11 +339,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       }
     ]);
     setCustomAmenity({ nombre: '', cantidad: 1 });
-    setErrors((prev) => {
-      const updated = { ...prev };
-      delete updated.comodidades;
-      return updated;
-    });
   };
 
   const handleImageUpload = async (event) => {
@@ -470,14 +416,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (!form.direccion.trim()) validationErrors.direccion = 'La dirección es obligatoria';
       if (!form.ciudad.trim()) validationErrors.ciudad = 'La ciudad es obligatoria';
       if (!form.departamento.trim()) validationErrors.departamento = 'El departamento es obligatorio';
-    } else if (stepIndex === 2) {
-      const selectedAmenitiesCount = amenities.filter((amenity) => amenity.seleccionada).length;
-      if (MIN_AMENITIES_REQUIRED_TYPES.has(form.tipo) && selectedAmenitiesCount < 2) {
-        validationErrors.comodidades = 'Casa y Apartamento requieren minimo 2 comodidades.';
-      }
-      if (inmuebleEditar && amenitiesChangedInEdit && !descripcionCambioComodidades.trim()) {
-        validationErrors.descripcionCambioComodidades = 'Describe el cambio en comodidades';
-      }
     } else if (stepIndex === 3) {
       if (!selectedOwnerId) {
         validationErrors.propietario = 'Selecciona un propietario';
@@ -552,9 +490,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         comodidades: selectedAmenities,
         imagenes: uploadedImages,
         propietario: ownerSummary || null,
-        propietarioId: ownerSummary?.id,
-        descripcion_cambio_comodidades:
-          inmuebleEditar && amenitiesChangedInEdit ? descripcionCambioComodidades.trim() : ''
+        propietarioId: ownerSummary?.id
       };
 
       await onSave(payload, Boolean(inmuebleEditar));
@@ -603,113 +539,113 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           <div>
             <label className="text-sm text-slate-600 flex justify-between">
               Registro inmobiliario
-            {errors.registro && <span className="text-xs text-red-500">{errors.registro}</span>}
-          </label>
-          <input
-            name="registro"
-            value={form.registro}
-            onChange={handleFieldChange}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-          {!registroDisponible && (
-            <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
-              <AlertCircle className="h-4 w-4" />
-              <span>El registro ya existe. Usa uno diferente.</span>
-            </div>
-          )}
-          {checkingRegistro && (
-            <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>Verificando registro...</span>
-            </div>
-          )}
-        </div>
-        <div>
-          <label className="text-sm text-slate-600 flex justify-between">
-            Título del inmueble
-            {errors.titulo && <span className="text-xs text-red-500">{errors.titulo}</span>}
-          </label>
-          <input
-            name="titulo"
-            value={form.titulo}
-            onChange={handleFieldChange}
-            placeholder="Casa moderna en El Poblado"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="text-sm text-slate-600">Tipo de propiedad</label>
-          <select
-            name="tipo"
-            value={form.tipo}
-            onChange={handleFieldChange}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            {PROPERTY_TYPES.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-sm text-slate-600">Operación</label>
-          <select
-            name="operacion"
-            value={form.operacion}
-            onChange={handleFieldChange}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            {OPERATION_OPTIONS.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-        {(form.operacion === 'Venta' || form.operacion === 'Venta y Arriendo') && (
-          <div>
-            <label className="text-sm text-slate-600 flex justify-between">
-              Precio de venta
-              {errors.precioVenta && <span className="text-xs text-red-500">{errors.precioVenta}</span>}
+              {errors.registro && <span className="text-xs text-red-500">{errors.registro}</span>}
             </label>
             <input
-              name="precioVenta"
-              type="number"
-              min="0"
-              value={form.precioVenta}
+              name="registro"
+              value={form.registro}
               onChange={handleFieldChange}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
             />
+            {!registroDisponible && (
+              <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                <span>El registro ya existe. Usa uno diferente.</span>
+              </div>
+            )}
+            {checkingRegistro && (
+              <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Verificando registro...</span>
+              </div>
+            )}
           </div>
-        )}
-        {(form.operacion === 'Arriendo' || form.operacion === 'Venta y Arriendo') && (
           <div>
             <label className="text-sm text-slate-600 flex justify-between">
-              Canon de arriendo
-              {errors.precioArriendo && <span className="text-xs text-red-500">{errors.precioArriendo}</span>}
+              Título del inmueble
+              {errors.titulo && <span className="text-xs text-red-500">{errors.titulo}</span>}
             </label>
             <input
-              name="precioArriendo"
-              type="number"
-              min="0"
-              value={form.precioArriendo}
+              name="titulo"
+              value={form.titulo}
               onChange={handleFieldChange}
+              placeholder="Casa moderna en El Poblado"
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
             />
           </div>
-        )}
-        <div>
-          <label className="text-sm text-slate-600 flex justify-between">
-            Área construida (m²)
-            {errors.areaConstruida && <span className="text-xs text-red-500">{errors.areaConstruida}</span>}
-          </label>
-          <input
-            name="areaConstruida"
-            type="number"
-            min="0"
-            value={form.areaConstruida}
-            onChange={handleFieldChange}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            placeholder="Ej: 120"
-          />
-        </div>
+          <div>
+            <label className="text-sm text-slate-600">Tipo de propiedad</label>
+            <select
+              name="tipo"
+              value={form.tipo}
+              onChange={handleFieldChange}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            >
+              {PROPERTY_TYPES.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-slate-600">Operación</label>
+            <select
+              name="operacion"
+              value={form.operacion}
+              onChange={handleFieldChange}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            >
+              {OPERATION_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+          {(form.operacion === 'Venta' || form.operacion === 'Venta y Arriendo') && (
+            <div>
+              <label className="text-sm text-slate-600 flex justify-between">
+                Precio de venta
+                {errors.precioVenta && <span className="text-xs text-red-500">{errors.precioVenta}</span>}
+              </label>
+              <input
+                name="precioVenta"
+                type="number"
+                min="0"
+                value={form.precioVenta}
+                onChange={handleFieldChange}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+          )}
+          {(form.operacion === 'Arriendo' || form.operacion === 'Venta y Arriendo') && (
+            <div>
+              <label className="text-sm text-slate-600 flex justify-between">
+                Canon de arriendo
+                {errors.precioArriendo && <span className="text-xs text-red-500">{errors.precioArriendo}</span>}
+              </label>
+              <input
+                name="precioArriendo"
+                type="number"
+                min="0"
+                value={form.precioArriendo}
+                onChange={handleFieldChange}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+          )}
+          <div>
+            <label className="text-sm text-slate-600 flex justify-between">
+              Área construida (m²)
+              {errors.areaConstruida && <span className="text-xs text-red-500">{errors.areaConstruida}</span>}
+            </label>
+            <input
+              name="areaConstruida"
+              type="number"
+              min="0"
+              value={form.areaConstruida}
+              onChange={handleFieldChange}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              placeholder="Ej: 120"
+            />
+          </div>
           <div className="md:col-span-2">
             <label className="text-sm text-slate-600 flex justify-between">
               Descripción
@@ -798,31 +734,28 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           {amenities.map((amenity) => (
             <label
               key={amenity.id}
-            className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all ${amenity.seleccionada ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50'}`}
-          >
-            <div className="flex items-center gap-2">
+              className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all ${amenity.seleccionada ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50'}`}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={amenity.seleccionada}
+                  onChange={() => handleAmenityToggle(amenity.id)}
+                  className="text-blue-600 focus:ring-blue-500"
+                />
+                {amenity.nombre}
+              </div>
               <input
-                type="checkbox"
-                checked={amenity.seleccionada}
-                onChange={() => handleAmenityToggle(amenity.id)}
-                className="text-blue-600 focus:ring-blue-500"
+                type="number"
+                min="0"
+                value={amenity.cantidad}
+                disabled={!amenity.seleccionada}
+                onChange={(event) => handleAmenityQuantity(amenity.id, event.target.value)}
+                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100"
               />
-              {amenity.nombre}
-            </div>
-            <input
-              type="number"
-              min="0"
-              value={amenity.cantidad}
-              disabled={!amenity.seleccionada}
-              onChange={(event) => handleAmenityQuantity(amenity.id, event.target.value)}
-              className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100"
-            />
-          </label>
+            </label>
           ))}
         </div>
-        {errors.comodidades && (
-          <p className="text-xs text-red-500">{errors.comodidades}</p>
-        )}
 
         <div className="rounded-2xl border border-dashed border-slate-300 p-4 bg-slate-50">
           <p className="text-sm font-semibold text-slate-700 mb-3">Característica personalizada</p>
@@ -849,33 +782,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             </button>
           </div>
         </div>
-
-        {inmuebleEditar && amenitiesChangedInEdit && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <label className="text-sm text-slate-700 flex justify-between font-semibold">
-              Descripcion del cambio en comodidades
-              {errors.descripcionCambioComodidades && (
-                <span className="text-xs text-red-500">{errors.descripcionCambioComodidades}</span>
-              )}
-            </label>
-            <textarea
-              value={descripcionCambioComodidades}
-              onChange={(event) => {
-                setDescripcionCambioComodidades(event.target.value);
-                if (errors.descripcionCambioComodidades) {
-                  setErrors((prev) => {
-                    const updated = { ...prev };
-                    delete updated.descripcionCambioComodidades;
-                    return updated;
-                  });
-                }
-              }}
-              rows={3}
-              placeholder="Ej: Se agregó 1 baño social y se retiró 1 parqueadero."
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-        )}
       </SectionCard>
 
       <SectionCard title="Galería del inmueble" subtitle="Paso 3">
@@ -985,11 +891,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             <p>{selectedOwner?.telefono || 'Sin teléfono'}</p>
           </div>
           <div>
-          <p className="text-xs text-slate-400 mb-1">Características seleccionadas</p>
+            <p className="text-xs text-slate-400 mb-1">Características seleccionadas</p>
             <p>{amenities.filter((item) => item.seleccionada).length}</p>
           </div>
         </div>
-        
+
 
       </SectionCard>
 

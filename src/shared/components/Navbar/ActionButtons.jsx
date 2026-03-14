@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, LogOut, LayoutDashboard, ChevronDown, Calendar, Building2 } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, ChevronDown, Calendar } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/use-toast';
 
@@ -69,20 +69,10 @@ const ActionButtons = ({ className = '', onButtonClick }) => {
     return hasAdministrativeAccess;
   };
 
-  const isOwnerUser = () => {
-    if (!user) return false;
-    const roles = Array.isArray(user.roles) ? user.roles : [];
-    return roles.some((role) => {
-      const roleName = typeof role === 'object' ? role.nombre_rol : role;
-      return String(roleName || '').toLowerCase().includes('propietario');
-    });
-  };
-
   if (isAuthenticated && user) {
     const displayName = user.nombre_completo || user.email || 'Usuario';
     const displayInfo = user.nombre_completo ? `${displayName} (${user.email || user.correo || ''})` : (user.email || user.correo || '');
     const shouldShowDashboard = hasDashboardAccess();
-    const showOwnerProperties = isOwnerUser();
     const userInitials = displayName
       ? displayName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2)
       : '';
@@ -169,27 +159,14 @@ const ActionButtons = ({ className = '', onButtonClick }) => {
 
                 {/* Mis Citas Option */}
                 {!shouldShowDashboard && (
-                  <>
-                    <Link
-                      to="/mis-citas"
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors duration-200"
-                    >
-                      <Calendar className="h-4 w-4" />
-                      <span>Mis Citas</span>
-                    </Link>
-
-                    {showOwnerProperties && (
-                      <Link
-                        to="/mis-inmuebles"
-                        onClick={() => setIsDropdownOpen(false)}
-                        className="flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors duration-200"
-                      >
-                        <Building2 className="h-4 w-4" />
-                        <span>Mis Inmuebles</span>
-                      </Link>
-                    )}
-                  </>
+                  <Link
+                    to="/mis-citas"
+                    onClick={() => setIsDropdownOpen(false)}
+                    className="flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors duration-200"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    <span>Mis Citas</span>
+                  </Link>
                 )}
 
                 {/* Logout Option */}

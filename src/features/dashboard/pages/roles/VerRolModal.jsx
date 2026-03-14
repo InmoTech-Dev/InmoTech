@@ -19,8 +19,7 @@ import {
   X,
   CheckCircle,
   XCircle,
-  Crown,
-  Download
+  Crown
 } from "lucide-react";
 
 const modulesData = [
@@ -59,7 +58,7 @@ const modulesData = [
   {
     name: "Reportes Inmobiliarios",
     key: "reportes",
-    permisos: ["Crear", "Editar", "Eliminar", "Ver", "Descargar"],
+    permisos: ["Crear", "Editar", "Anular", "Ver"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
     description: "Generacion de informes y analisis de mercado"
@@ -70,8 +69,8 @@ const permissionConfig = {
   "crear": { icon: Plus, color: "text-green-600", bg: "bg-green-50", label: "Crear" },
   "editar": { icon: Edit, color: "text-blue-600", bg: "bg-blue-50", label: "Editar" },
   "eliminar": { icon: Trash2, color: "text-red-600", bg: "bg-red-50", label: "Eliminar" },
-  "ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50", label: "Ver" },
-  "descargar": { icon: Download, color: "text-purple-600", bg: "bg-purple-50", label: "Descargar" }
+  "anular": { icon: Trash2, color: "text-red-600", bg: "bg-red-50", label: "Anular" },
+  "ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50", label: "Ver" }
 };
 
 // Vista simple para roles normales
@@ -85,7 +84,7 @@ const permissionGroups = [
   { key: "citas", label: "Citas" },
 ];
 
-const permissionActions = ["crear", "editar", "eliminar", "ver", "descargar"];
+const permissionActions = ["crear", "editar", "eliminar", "ver"];
 
 export default function VerRolModal({ isOpen, onClose, rol }) {
   if (!isOpen) return null;
@@ -278,7 +277,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
                                 </div>
                                 <div className="flex-1">
                                   <span className="text-sm font-medium text-slate-900">
-                                    {(modulo.key === 'reportes' && permiso === 'Eliminar') ? 'Anular' : permiso}
+                                    {permiso}
                                   </span>
                                 </div>
                                 <div>
@@ -492,7 +491,7 @@ export default function VerRolModal({ isOpen, onClose, rol }) {
                                     </div>
                                     <div className="flex-1">
                                       <span className="text-sm font-medium text-slate-900 capitalize">
-                                        {(modulo.key === 'reportes' && permiso === 'eliminar') ? 'anular' : permiso}
+                                        {permiso}
                                       </span>
                                     </div>
                                     <div>

@@ -419,7 +419,7 @@ class CitaService {
       });
 
       if (!cita) throw new Error('Cita no encontrada');
-
+      
       // Estado ID 1: Solicitada, 4: Re Agendada
       if (![1, 4].includes(cita.id_estado_cita)) {
         throw new Error(`No se puede confirmar una cita en estado ${cita.id_estado_cita}`);

@@ -1122,7 +1122,7 @@ const ReportsContent = () => {
   const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
 
   return (
-    <div className='px-8 py-4 flex flex-col h-[calc(100vh-64px)] overflow-hidden'>
+    <div className='px-0 py-4 flex flex-col h-[calc(100vh-64px)] overflow-hidden'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
       {dbError && <div className='p-4 text-red-600'>{dbError}</div>}
 
@@ -1154,8 +1154,6 @@ const ReportsContent = () => {
           filters={adminFilters}
           setFilters={setAdminFilters}
           refreshTrigger={refreshDetailedView}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
         />
       ) : (
         <>

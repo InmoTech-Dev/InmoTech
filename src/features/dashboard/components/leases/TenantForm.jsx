@@ -193,7 +193,7 @@ export default function TenantForm({
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
     switch (tipoDocumento) {
       case "CC":
-        if (!/^[0-9]{7,10}$/.test(numeroLimpio)) return "La cedula de ciudadania debe tener entre 7 y 10 digitos";
+        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return "La cedula de ciudadania debe tener entre 8 y 10 digitos";
         break;
       case "CE":
         if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return "La cedula de extranjeria debe tener entre 6 y 10 digitos";
@@ -653,7 +653,6 @@ export default function TenantForm({
                     required={true}
                   />
                 </div>
-
               </section>
 
               {/* Observaciones Section - removed */}

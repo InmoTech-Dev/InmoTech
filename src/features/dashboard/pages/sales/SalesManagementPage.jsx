@@ -26,7 +26,6 @@ import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { useToast } from "../../../../shared/hooks/use-toast";
-import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
 
 
 const STATUS_NORMALIZE = (value = "") =>
@@ -519,13 +518,6 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     id: sale.id ?? sale.id_venta ?? fallback.id ?? Date.now(),
 
-    id_inmueble:
-      sale.id_inmueble ??
-      inmueble.id_inmueble ??
-      fallback.id_inmueble ??
-      fallback?.raw?.id_inmueble ??
-      null,
-
     registro:
 
       fallback.inmuebleRegistro ??
@@ -818,31 +810,26 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
 
 const toISODate = (value) => {
-  const pad = (num) => String(num).padStart(2, "0");
-  const toYmd = (date) =>
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
-  if (!value) {
-    return toYmd(new Date());
-  }
+  if (!value) return new Date().toISOString();
 
-  const raw = String(value).trim();
-  const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (ymdMatch) {
-    return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
-  }
+  const directDate = new Date(value);
 
-  const directDate = new Date(raw);
   if (!Number.isNaN(directDate.getTime())) {
-    return toYmd(directDate);
+
+    return directDate.toISOString();
+
   }
 
-  const dateOnly = new Date(`${raw}T00:00:00`);
+  const dateOnly = new Date(`${value}T00:00:00`);
+
   if (!Number.isNaN(dateOnly.getTime())) {
-    return toYmd(dateOnly);
+
+    return dateOnly.toISOString();
+
   }
 
-  return toYmd(new Date());
+  return new Date().toISOString();
 
 };
 
@@ -858,76 +845,6 @@ const mapPaymentToPurchaseType = (medioPago = "") => {
 
   return normalized === "transferencia" ? "Directa" : "Directa";
 
-};
-
-const INMUEBLES_FICHAS_STORAGE_KEY = "inmuebles:fichas-tecnicas";
-
-const getFichaHistory = () => {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(INMUEBLES_FICHAS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (_error) {
-    return {};
-  }
-};
-
-const saveFichaHistory = (history = {}) => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(INMUEBLES_FICHAS_STORAGE_KEY, JSON.stringify(history));
-  } catch (_error) {
-    // noop
-  }
-};
-
-const buildFichaSnapshotFromSale = (sale = {}, overrides = {}) => ({
-  titulo: sale.inmuebleNombre || overrides.titulo || "",
-  direccion: sale.inmuebleDireccion || overrides.direccion || "",
-  ciudad: sale.inmuebleCiudad || overrides.ciudad || "",
-  departamento: sale.inmuebleDepartamento || overrides.departamento || "",
-  pais: sale.inmueblePais || overrides.pais || "",
-  tipo: sale.inmuebleTipo || overrides.tipo || "",
-  operacion: sale.tipo || overrides.operacion || "Venta",
-  estado: overrides.estado || sale.inmuebleEstado || "Disponible",
-  precio_venta: sale.inmueblePrecio || sale.valor || overrides.precio_venta || "",
-  precio_arriendo: overrides.precio_arriendo || "",
-  descripcion: overrides.descripcion || "",
-  comodidades: [],
-  imagenes: [],
-  propietario: null,
-  registro: sale.inmuebleRegistro || sale.registro || overrides.registro || "",
-  area_construida: sale.inmuebleArea || overrides.area_construida || ""
-});
-
-const appendFichaTecnicaToLocalHistory = ({ inmuebleId, snapshot, cambios = "" }) => {
-  if (!inmuebleId || !snapshot) return;
-  const key = String(inmuebleId);
-  const history = getFichaHistory();
-  const list = Array.isArray(history[key]) ? history[key] : [];
-  const lastVersion = Number(list?.[0]?.version || 0);
-  const currentEstado = String(snapshot.estado || "").trim();
-  const previousEstado = String(list?.[0]?.snapshot?.estado || "").trim();
-
-  if (
-    previousEstado &&
-    currentEstado &&
-    previousEstado.toLowerCase() === currentEstado.toLowerCase() &&
-    String(cambios || "").trim() === String(list?.[0]?.cambios || "").trim()
-  ) {
-    return;
-  }
-
-  const ficha = {
-    id: `ficha-${Date.now()}`,
-    version: lastVersion + 1,
-    fecha: new Date().toLocaleDateString("es-CO"),
-    cambios: cambios || "Actualización de seguimiento de venta",
-    snapshot,
-  };
-
-  history[key] = [ficha, ...list];
-  saveFichaHistory(history);
 };
 
 
@@ -1110,7 +1027,6 @@ const EstadoBadge = ({ estado }) => {
 
 
 export function SalesManagementPage() {
-  const PAGE_SIZE = 5;
 
   const [ventas, setVentas] = useState(INITIAL_VENTAS);
 
@@ -1127,13 +1043,6 @@ export function SalesManagementPage() {
   const [trackingSale, setTrackingSale] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    pagina: 1,
-    limite: PAGE_SIZE,
-    paginas_totales: 1,
-  });
 
   const [showInterestedPeople, setShowInterestedPeople] = useState(false);
 
@@ -1306,7 +1215,7 @@ export function SalesManagementPage() {
 
 
 
-  const fetchVentas = useCallback(async (query = "", page = 1) => {
+  const fetchVentas = useCallback(async () => {
 
     setLoadingVentas(true);
 
@@ -1314,13 +1223,21 @@ export function SalesManagementPage() {
 
     try {
 
-      const response = await ventaApiService.obtenerVentas({
-        page,
-        limit: PAGE_SIZE,
-        search: query || undefined,
-      });
+      const response = await ventaApiService.obtenerVentas();
 
-      const payload = Array.isArray(response?.data) ? response.data : [];
+      const payload = Array.isArray(response?.data)
+
+        ? response.data
+
+        : Array.isArray(response?.data?.data)
+
+          ? response.data.data
+
+          : Array.isArray(response)
+
+            ? response
+
+            : [];
 
 
 
@@ -1333,14 +1250,6 @@ export function SalesManagementPage() {
         );
 
         setVentas(normalized);
-        const pagination = response?.pagination || {
-          total: normalized.length,
-          pagina: page,
-          limite: PAGE_SIZE,
-          paginas_totales: 1,
-        };
-        setPagination(pagination);
-        setCurrentPage(pagination.pagina);
 
       }
 
@@ -1375,16 +1284,6 @@ export function SalesManagementPage() {
     fetchVentas();
 
   }, [fetchVentas]);
-
-  useEffect(() => {
-    const term = searchTerm.trim();
-    const timeoutId = setTimeout(() => {
-      setCurrentPage(1);
-      fetchVentas(term, 1);
-    }, 400);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, fetchVentas]);
 
 
 
@@ -1737,24 +1636,24 @@ export function SalesManagementPage() {
       const buyerIdForUpdate =
         buyerInfo?.id ||
         buyerInfo?.compradorId ||
-        buyerInfo?.raw?.id_comprador;
+        buyerInfo?.raw?.id_comprador ||
+        buyerInfo?.personaId;
 
       try {
-        if (buyerIdForUpdate) {
-          await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
 
-            id_inmueble: payload.id_inmueble,
+        await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
 
-            id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
+          id_inmueble: payload.id_inmueble,
 
-            fecha_compra: payload.fecha_venta,
+          id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
 
-            valor_compra: payload.valor_venta,
+          fecha_compra: payload.fecha_venta,
 
-            tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
+          valor_compra: payload.valor_venta,
 
-          });
-        }
+          tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
+
+        });
 
       } catch (error) {
 
@@ -1767,12 +1666,6 @@ export function SalesManagementPage() {
 
 
       setVentas((prev) => [...prev, normalizedSale]);
-      fetchVentas(searchTerm.trim(), 1);
-      appendFichaTecnicaToLocalHistory({
-        inmuebleId: payload.id_inmueble,
-        snapshot: buildFichaSnapshotFromSale(normalizedSale, { estado: "Vendido" }),
-        cambios: "Cambio automático de estado a Vendido por registro de venta",
-      });
 
       const successText = buyerUpdateError
         ? MESSAGES.sale.create.partialBuyer
@@ -1899,7 +1792,6 @@ export function SalesManagementPage() {
           String(v.id) === String(saleId) ? { ...v, ...mergedForState, raw: apiSale } : v
         )
       );
-      fetchVentas(searchTerm.trim(), currentPage);
 
       if (finalEstado.includes("cancel")) {
         await liberarInmueblePorVenta(mergedForState);
@@ -1941,6 +1833,31 @@ export function SalesManagementPage() {
 
 
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const filteredVentas = ventas.filter((v) => {
+    if (!normalizedSearch) return true;
+
+    const registro = v.registro ? v.registro.toLowerCase() : "";
+    const comprador = v.comprador ? v.comprador.toLowerCase() : "";
+    const compradorCorreo = v.compradorCorreo ? v.compradorCorreo.toLowerCase() : "";
+    const compradorDocumento = v.compradorDocumento ? String(v.compradorDocumento).toLowerCase() : "";
+    const tipo = v.tipo ? v.tipo.toLowerCase() : "";
+    const estado = v.estado ? v.estado.toLowerCase() : "";
+    const fecha = v.fecha ? String(v.fecha).toLowerCase() : "";
+    const valor = v.valor ? String(v.valor).toLowerCase() : "";
+
+    return (
+      registro.includes(normalizedSearch) ||
+      comprador.includes(normalizedSearch) ||
+      compradorCorreo.includes(normalizedSearch) ||
+      compradorDocumento.includes(normalizedSearch) ||
+      tipo.includes(normalizedSearch) ||
+      estado.includes(normalizedSearch) ||
+      fecha.includes(normalizedSearch) ||
+      valor.includes(normalizedSearch)
+    );
+  });
 
 
 
@@ -1948,13 +1865,13 @@ export function SalesManagementPage() {
 
   const stats = {
 
-    total: pagination.total,
+    total: filteredVentas.length,
 
-    pagadas: ventas.filter(v => v.estado === 'Pagado').length,
+    pagadas: filteredVentas.filter(v => v.estado === 'Pagado').length,
 
-    pendientes: ventas.filter(v => v.estado === 'Pendiente').length,
+    pendientes: filteredVentas.filter(v => v.estado === 'Pendiente').length,
 
-    totalValor: ventas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
+    totalValor: filteredVentas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
 
   };
 
@@ -2303,9 +2220,9 @@ export function SalesManagementPage() {
 
                     </tr>
 
-                  ) : ventas.length > 0 ? (
+                  ) : filteredVentas.length > 0 ? (
 
-                    ventas.map((v) => (
+                    filteredVentas.map((v) => (
 
                       <tr
 
@@ -2426,31 +2343,6 @@ export function SalesManagementPage() {
                 </tbody>
 
               </table>
-              <Pagination
-                currentPage={currentPage}
-                totalPages={
-                  (Boolean(pagination?.has_next_page) ||
-                    ((pagination?.paginas_totales || 1) <= currentPage && ventas.length === PAGE_SIZE))
-                    ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                    : Math.max(pagination?.paginas_totales || 1, currentPage)
-                }
-                hasPrevPage={currentPage > 1}
-                hasNextPage={
-                  Boolean(pagination?.has_next_page) ||
-                  ((pagination?.paginas_totales || 1) <= currentPage && ventas.length === PAGE_SIZE)
-                }
-                onPageChange={(page) => {
-                  const hasNextPage =
-                    Boolean(pagination?.has_next_page) ||
-                    ((pagination?.paginas_totales || 1) <= currentPage && ventas.length === PAGE_SIZE);
-                  const totalPages = hasNextPage
-                    ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                    : Math.max(pagination?.paginas_totales || 1, currentPage);
-                  if (page === currentPage || page < 1 || (page > totalPages && !hasNextPage)) return;
-                  setCurrentPage(page);
-                  fetchVentas(searchTerm.trim(), page);
-                }}
-              />
 
             </div>
 
@@ -2477,6 +2369,34 @@ export function SalesManagementPage() {
   );
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

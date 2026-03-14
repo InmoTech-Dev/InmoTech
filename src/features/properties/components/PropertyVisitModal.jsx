@@ -601,24 +601,27 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
 
   // ⭐ CORRECCIÓN: Función para buscar persona automáticamente
   const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
-    // Validaciones previas
-    if (!tipoDocumento || !numeroDocumento || numeroDocumento.length < 5) {
+    // Si el número es demasiado corto, limpiar campos y salir
+    if (!numeroDocumento || numeroDocumento.replace(/[\s\-\.]/g, '').length < 5) {
+      setFormData(prev => ({
+        ...prev,
+        nombres: "",
+        apellidos: "",
+        telefono: "",
+        email: ""
+      }));
+      setPrevPhone("");
       return;
     }
 
+    if (!tipoDocumento) return;
+
     const errorDocumento = validateNumeroDocumento(numeroDocumento, tipoDocumento);
-    if (errorDocumento) {
-      return;
-    }
+    if (errorDocumento) return;
 
     setIsSearchingPerson(true);
 
     try {
-      console.log('🔍 Buscando persona:', {
-        tipo: tipoDocumentoMap[tipoDocumento] || tipoDocumento,
-        numero: numeroDocumento.replace(/[\s\-\.]/g, '')
-      });
-
       const tipoDocMap = tipoDocumentoMap[tipoDocumento] || tipoDocumento;
       const response = await apiClient.get('/citas/buscar-persona', {
         params: {
@@ -627,73 +630,56 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
         }
       });
 
-      console.log('✅ Respuesta del servidor:', response);
-
       const persona = response.data || response;
 
       if (persona && (persona.primer_nombre || persona.correo || persona.telefono)) {
-        // Construir nombres completos
-        const nombresCompletos = [persona.primer_nombre, persona.segundo_nombre]
-          .filter(Boolean)
-          .join(' ');
-
-        const apellidosCompletos = [persona.primer_apellido, persona.segundo_apellido]
-          .filter(Boolean)
-          .join(' ');
-
-        // ⭐ CORRECCIÓN: Formatear el teléfono usando tu función formatPhoneNumber
+        const nombresCompletos = [persona.primer_nombre, persona.segundo_nombre].filter(Boolean).join(' ');
+        const apellidosCompletos = [persona.primer_apellido, persona.segundo_apellido].filter(Boolean).join(' ');
+        
         let telefonoFormateado = persona.telefono || '';
         if (telefonoFormateado) {
           telefonoFormateado = formatPhoneNumber(telefonoFormateado, '', false);
         }
 
-        console.log('📝 Datos a rellenar:', {
-          nombres: nombresCompletos,
-          apellidos: apellidosCompletos,
+        setFormData(prev => ({
+          ...prev,
+          nombres: nombresCompletos.trim(),
+          apellidos: apellidosCompletos.trim(),
           telefono: telefonoFormateado,
-          correo: persona.correo
-        });
+          email: (persona.correo || "").trim()
+        }));
 
-        // ✨ ORGANIZACIÓN DEL AUTOCOMPLETADO: Actualizar formulario usando el hook personalizado
-        const nuevosDatos = {};
-
-        if (nombresCompletos.trim()) {
-          nuevosDatos.nombres = nombresCompletos.trim();
-        }
-
-        if (apellidosCompletos.trim()) {
-          nuevosDatos.apellidos = apellidosCompletos.trim();
-        }
-
-        if (telefonoFormateado) {
-          nuevosDatos.telefono = telefonoFormateado;
-          // ⭐ También actualizar prevPhone para que funcione el formateo manual
-          setPrevPhone(telefonoFormateado);
-        }
-
-        if (persona.correo) {
-          nuevosDatos.email = persona.correo.trim();
-        }
-
-        // Actualizar todo el formulario a la vez
-        if (Object.keys(nuevosDatos).length > 0) {
-          setFormData(prev => ({
-            ...prev,
-            ...nuevosDatos
-          }));
-        }
+        if (telefonoFormateado) setPrevPhone(telefonoFormateado);
 
         toast({
           title: "✅ Datos encontrados",
           description: "Se han completado los campos con la información existente.",
           variant: "default"
         });
+      } else {
+        // Si la respuesta es exitosa pero sin datos útiles, limpiar
+        setFormData(prev => ({
+          ...prev,
+          nombres: "",
+          apellidos: "",
+          telefono: "",
+          email: ""
+        }));
+        setPrevPhone("");
       }
     } catch (error) {
+      // ⭐ LIMPIEZA: Si no se encuentra (404) o hay error, limpiar campos prellenados
+      setFormData(prev => ({
+        ...prev,
+        nombres: "",
+        apellidos: "",
+        telefono: "",
+        email: ""
+      }));
+      setPrevPhone("");
+
       if (error.response?.status !== 404) {
         console.error('❌ Error al buscar persona:', error);
-      } else {
-        console.log('ℹ️ Persona no encontrada, continuar con registro nuevo');
       }
     } finally {
       setIsSearchingPerson(false);
@@ -956,20 +942,27 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
                           type="text"
                           value={formData.numeroDocumento}
                           onChange={(e) => {
-                            // 1. Filtrar solo caracteres válidos
                             const value = e.target.value;
                             const filteredValue = value.replace(/[^0-9\s\.\-]/g, '');
-
-                            // 2. Actualizar el estado
                             updateFormData('numeroDocumento', filteredValue);
 
-                            // 3. Limpiar búsqueda anterior
-                            if (window.searchTimeout) {
-                              clearTimeout(window.searchTimeout);
+                            if (window.searchTimeout) clearTimeout(window.searchTimeout);
+
+                            const cleanValue = filteredValue.replace(/[\s\-\.]/g, '');
+                            
+                            // ⭐ LIMPIEZA: Si el documento es vacío o muy corto, limpiar campos
+                            if (cleanValue.length < 5) {
+                              setFormData(prev => ({
+                                ...prev,
+                                nombres: "",
+                                apellidos: "",
+                                telefono: "",
+                                email: ""
+                              }));
+                              setPrevPhone("");
                             }
 
-                            // 4. Buscar automáticamente con debounce
-                            if (formData.tipoDocumento && filteredValue.trim().length >= 5) {
+                            if (formData.tipoDocumento && cleanValue.length >= 5) {
                               window.searchTimeout = setTimeout(() => {
                                 buscarPersonaAutomaticamente(formData.tipoDocumento, filteredValue);
                               }, 500);

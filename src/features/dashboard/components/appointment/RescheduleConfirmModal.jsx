@@ -366,7 +366,7 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
   };
 
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[10200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -584,12 +584,12 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
 
         {/* Footer */}
         <div className="bg-slate-50/80 backdrop-blur-md border-t border-slate-100 px-8 py-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={handleRequestClose}
-            className="px-6 py-3 text-slate-500 hover:text-slate-800 font-bold text-sm transition-colors"
-            disabled={isSubmitting}
-          >
+            <button
+              type="button"
+              onClick={handleRequestClose}
+              className="px-6 py-3 text-slate-500 hover:text-slate-800 font-bold text-sm transition-colors"
+              disabled={isSubmitting}
+            >
             Descartar cambios
           </button>
 

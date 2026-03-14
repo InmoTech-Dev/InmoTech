@@ -414,7 +414,7 @@ class CitaController {
       // âœ… Verificar lÃ­mite de ediciones antes de actualizar (omitir para administradores)
       const citaExistente = await citaService.obtenerCitaPorId(parsedId);
       const isAdmin = isSuperAdministrator(req.user) || isAdministrator(req.user);
-
+      
       if (!isAdmin && citaExistente.ediciones_realizadas >= citaExistente.ediciones_maximas) {
         return res.status(400).json({
           success: false,
@@ -678,7 +678,7 @@ class CitaController {
           // Ya lo hace arriba con enviarEmailCitaConfirmadaAgente, pero solo en condiciones especificas.
           // Si queremos que SIEMPRE le llegue al agente nuevo cuando lo asignan:
           if (!esReasignacionConfirmada && !esPrimeraAsignacionSolicitada) {
-            await emailService.enviarEmailCitaConfirmadaAgente({ cita: citaDetallada });
+             await emailService.enviarEmailCitaConfirmadaAgente({ cita: citaDetallada });
           }
         }
       } catch (emailError) {
@@ -1135,12 +1135,12 @@ class CitaController {
 
       // Solo aplicar restricciones para "Visita a Propiedad" (ID 1)
       if (idServicioParsed === 1) {
-        const filtros = {
+        const filtros = { 
           fecha_cita,
           id_estado_cita: "1,2,3,4" // Traer solo activas (solicitada, confirmada, programada, reagendada)
         };
         if (id_inmueble) filtros.id_inmueble = parseInt(id_inmueble);
-
+        
         const result = await citaService.obtenerTodasLasCitas(filtros);
         const citasExistentes = Array.isArray(result) ? result : (result.citas || []);
 
@@ -1153,7 +1153,7 @@ class CitaController {
             if (!isNaN(date.getTime())) {
               return date.toTimeString().substring(0, 5);
             }
-          } catch (e) { }
+          } catch (e) {}
           return String(t);
         };
 

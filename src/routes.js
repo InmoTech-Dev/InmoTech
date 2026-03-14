@@ -4,9 +4,8 @@ export const routes = {
     services: '/servicios',
     properties: '/inmuebles',
     propertyDetails: '/inmuebles/:id',
-    contact: '/contactanos',
+    contact: '/contáctanos',
     userAppointments: '/mis-citas',
-    userProperties: '/mis-inmuebles',
 
     //Dashboard
 

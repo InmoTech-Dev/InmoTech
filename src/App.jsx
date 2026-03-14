@@ -17,9 +17,7 @@ import AboutPage from './features/about/pages/AboutPage'
 import ServicesPage from './features/services/pages/ServicesPage'
 import LoginPage from './features/auth/pages/LoginPage'
 import UserAppointmentsPage from './features/appointments/pages/UserAppointmentsPage'
-import MyPropertiesPage from './features/properties/pages/MyPropertiesPage'
 import ActivateAccountPage from './features/auth/pages/ActivateAccountPage'
-import ResetPasswordPage from './features/auth/pages/ResetPasswordPage'
 
 // Dashboard pages
 import DashboardPage from './features/dashboard/DashboardPage'
@@ -75,7 +73,7 @@ function App() {
           }
         />
         <Route
-          path="/contactanos"
+          path="/contáctanos"
           element={
             <>
               <Navbar />
@@ -120,10 +118,6 @@ function App() {
           path="/activar"
           element={<ActivateAccountPage />}
         />
-        <Route
-          path="/reset-password"
-          element={<ResetPasswordPage />}
-        />
 
         {/* Authenticated user routes with navbar/footer */}
         <Route
@@ -136,23 +130,13 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/mis-inmuebles"
-          element={
-            <ProtectedRoute>
-              <Navbar />
-              <MyPropertiesPage />
-              <Footer />
-            </ProtectedRoute>
-          }
-        />
 
         {/* Dashboard routes with sidebar layout */}
         <Route
           path="/dashboard"
           element={
             <DashboardRoute>
-              <DashboardLayout fullWidth={true}>
+              <DashboardLayout>
                 <DashboardPage />
               </DashboardLayout>
             </DashboardRoute>
@@ -247,7 +231,7 @@ function App() {
           element={
             <DashboardRoute>
               <ModulePermissionRoute moduleName="reportes" action="ver">
-                <DashboardLayout fullWidth={true}>
+                <DashboardLayout>
                   <Reports />
                 </DashboardLayout>
               </ModulePermissionRoute>

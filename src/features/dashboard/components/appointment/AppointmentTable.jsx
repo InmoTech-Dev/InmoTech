@@ -706,7 +706,7 @@ const AppointmentTable = ({
         ))}
       </div>
 
-      {/* Pagination */}
+            {/* Pagination */}
       <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="text-sm text-slate-600">
@@ -733,10 +733,11 @@ const AppointmentTable = ({
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => onPageChange(page)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${isCurrentPage
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    isCurrentPage
                       ? 'bg-blue-600 text-white'
                       : 'text-slate-600 hover:bg-white'
-                    }`}
+                  }`}
                 >
                   {page}
                 </motion.button>

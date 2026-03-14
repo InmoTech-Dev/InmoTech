@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FaTimes } from "react-icons/fa";
-import { Eye, Plus } from "lucide-react";
-import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 import ventaApiService from "../../../../shared/services/ventaApiService";
 
 /* ---------- UI helpers (mismo estilo compacto) ---------- */
@@ -192,11 +190,6 @@ export default function ViewSaleModal({ sale, onClose }) {
   const estadoVenta = pick(sale.estado, sale.estado_venta, raw.estado_venta, raw.estado);
 
   const [attachments, setAttachments] = useState(sale.adjuntos || []);
-  const [viewer, setViewer] = useState({ isOpen: false, currentIndex: 0 });
-  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
-  const [pdfBlobUrl, setPdfBlobUrl] = useState("");
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState("");
 
   useEffect(() => {
     const loadAttachments = async () => {
@@ -212,126 +205,6 @@ export default function ViewSaleModal({ sale, onClose }) {
     };
     loadAttachments();
   }, [sale]);
-
-  const isImageFile = (url = "") => {
-    const clean = url.split("?")[0].toLowerCase();
-    return /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(clean);
-  };
-  const isPdfFile = (url = "") => url.split("?")[0].toLowerCase().endsWith(".pdf");
-  const normalizePdfUrl = (url = "") => {
-    if (!url) return "";
-    let out = url;
-    // For PDFs coming as image upload, force resource_type raw
-    out = out.replace("/image/raw/upload/", "/raw/upload/");
-    out = out.replace("/image/upload/", "/raw/upload/");
-    if (isPdfFile(out) && out.includes("/upload/") && !out.includes("/raw/upload/")) {
-      out = out.replace("/upload/", "/raw/upload/");
-    }
-    return out;
-  };
-  const getPdfCandidates = (url = "") => {
-    const original = url;
-    const normalized = normalizePdfUrl(url);
-    const list = [];
-    if (original) list.push(original);          // probar primero la URL tal cual llega del backend
-    if (normalized && normalized !== original) list.push(normalized); // luego la variante raw
-    // Si viene como raw y falla, intenta image/upload (por si se subió como imagen)
-    if (original.includes("/raw/upload/")) {
-      list.push(original.replace("/raw/upload/", "/image/upload/"));
-      list.push(original.replace("/raw/upload/", "/auto/upload/"));
-    }
-    if (normalized.includes("/raw/upload/") && normalized !== original) {
-      list.push(normalized.replace("/raw/upload/", "/image/upload/"));
-      list.push(normalized.replace("/raw/upload/", "/auto/upload/"));
-    }
-    // Variante auto si no estaba
-    if (original.includes("/image/upload/")) {
-      list.push(original.replace("/image/upload/", "/auto/upload/"));
-    }
-    if (normalized.includes("/image/upload/") && normalized !== original) {
-      list.push(normalized.replace("/image/upload/", "/auto/upload/"));
-    }
-    return list;
-  };
-
-  const toDownloadUrl = (url = "") => {
-    if (!url) return "";
-    const [base, query] = url.split("?");
-    const withFlag = base.includes("/upload/")
-      ? base.replace("/upload/", "/upload/fl_attachment/")
-      : base;
-    return query ? `${withFlag}?${query}` : withFlag;
-  };
-
-  const downloadFile = (url = "", filename = "archivo") => {
-    const candidates = getPdfCandidates(url);
-    const pick = candidates.find(Boolean) || url;
-    const link = document.createElement("a");
-    link.href = toDownloadUrl(pick);
-    link.download = filename;
-    link.rel = "noopener";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const imageAttachments = attachments.filter((a) => isImageFile(a.url || a.preview));
-  const otherAttachments = attachments.filter((a) => !isImageFile(a.url || a.preview));
-
-  const openViewer = (idx) => setViewer({ isOpen: true, currentIndex: idx });
-  const startPdfViewer = (url, name) => {
-    setPdfViewer({ isOpen: true, url, name });
-  };
-
-  // Fetch PDF as blob to bypass Cloudinary/X-Frame issues; fallback to Google if fails.
-  useEffect(() => {
-    let abort = false;
-    const controller = new AbortController();
-    if (!pdfViewer.isOpen || !pdfViewer.url) {
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
-      setPdfBlobUrl("");
-      setPdfError("");
-      return;
-    }
-
-    const load = async () => {
-      setPdfLoading(true);
-      setPdfError("");
-      if (pdfBlobUrl) {
-        URL.revokeObjectURL(pdfBlobUrl);
-        setPdfBlobUrl("");
-      }
-      const candidates = getPdfCandidates(pdfViewer.url);
-      let lastErr = null;
-      for (const candidate of candidates) {
-        try {
-          const resp = await fetch(candidate, { signal: controller.signal, mode: "cors" });
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          const blob = await resp.blob();
-          if (abort) return;
-          const urlObj = URL.createObjectURL(blob);
-          setPdfBlobUrl(urlObj);
-          lastErr = null;
-          break;
-        } catch (err) {
-          lastErr = err;
-          if (abort) return;
-        }
-      }
-      if (lastErr) {
-        setPdfError(`No pudimos cargar el PDF (último error: ${lastErr.message}). Usa Descargar o Abrir en pestaña nueva.`);
-      }
-      if (!abort) setPdfLoading(false);
-    };
-    load();
-
-    return () => {
-      abort = true;
-      controller.abort();
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfViewer.isOpen, pdfViewer.url]);
 
   const cleanDescription = (text) => {
     if (!text) return "Sin descripción";
@@ -500,93 +373,32 @@ export default function ViewSaleModal({ sale, onClose }) {
                   {attachments.length === 0 ? (
                     <p className="text-sm text-gray-600">No hay archivos adjuntos aún.</p>
                   ) : (
-                    <div className="space-y-3">
-                      {imageAttachments.length > 0 && (
-                        <div>
-                          <h4 className="text-xs font-semibold text-gray-700 mb-2">Vista rápida</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            {imageAttachments.slice(0, 4).map((img, index) => {
-                              const name = img.nombre_archivo || img.nombre || img.filename || `Imagen ${index + 1}`;
-                              const thumbUrl = img.url || img.preview;
-                              return (
-                                <div
-                                  key={img.id_adjunto || img.id || `img-${index}`}
-                                  className="relative group bg-white border border-gray-200 rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-all"
-                                  onClick={() => openViewer(index)}
-                                >
-                                  <div className="aspect-square bg-gray-100">
-                                    <img
-                                      src={thumbUrl}
-                                      alt={name}
-                                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                                    />
-                                  </div>
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    {index === 3 && imageAttachments.length > 4 ? (
-                                      <div className="flex flex-col items-center gap-1 text-white">
-                                        <Plus className="w-8 h-8" />
-                                        <span className="font-bold text-lg">+{imageAttachments.length - 3}</span>
-                                      </div>
-                                    ) : (
-                                      <Eye className="w-8 h-8 text-white" />
-                                    )}
-                                  </div>
-                                  {index === 3 && imageAttachments.length > 4 && (
-                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-lg">
-                                      +{imageAttachments.length - 3}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {otherAttachments.length > 0 && (
-                        <ul className="space-y-2 text-sm">
-                          {otherAttachments.map((file, idx) => {
-                            const name = file.nombre_archivo || file.nombre || file.filename || `Archivo ${idx + 1}`;
-                            const url = file.url;
-                            const pdf = isPdfFile(url || "");
-                            return (
-                              <li
-                                key={file.id_adjunto || file.id || `file-${idx}`}
-                                className="flex items-center justify-between gap-3 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50"
-                              >
-                                <span className="truncate flex-1 text-gray-900">{name}</span>
-                                {url ? (
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    {pdf ? (
-                                      <button
-                                        type="button"
-                                        className="text-blue-600 hover:underline"
-                                        onClick={() => startPdfViewer(normalizePdfUrl(url), name)}
-                                      >
-                                        Ver aquí
-                                      </button>
-                                    ) : (
-                                      <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                                        Ver
-                                      </a>
-                                    )}
-                                    <button
-                                      type="button"
-                                      className="text-blue-600 hover:underline"
-                                      onClick={() => downloadFile(url, name || `archivo-${idx + 1}`)}
-                                    >
-                                      Descargar
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400 text-xs">Sin URL</span>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
+                    <ul className="space-y-2 text-sm">
+                      {attachments.map((file, idx) => {
+                        const name = file.nombre_archivo || file.nombre || file.filename || `Archivo ${idx + 1}`;
+                        const url = file.url;
+                        return (
+                          <li
+                            key={file.id_adjunto || file.id || idx}
+                            className="flex items-center justify-between gap-3 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50"
+                          >
+                            <span className="truncate flex-1 text-gray-900">{name}</span>
+                            {url ? (
+                              <div className="flex items-center gap-3 shrink-0">
+                                <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                                  Ver
+                                </a>
+                                <a href={url} download className="text-blue-600 hover:underline">
+                                  Descargar
+                                </a>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">Sin URL</span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </section>
               </div>
@@ -603,78 +415,6 @@ export default function ViewSaleModal({ sale, onClose }) {
                 Cerrar
               </motion.button>
             </div>
-            <ImageViewer
-              isOpen={viewer.isOpen}
-              onClose={() => setViewer((v) => ({ ...v, isOpen: false }))}
-              images={imageAttachments.map((img) => ({
-                url: img.url || img.preview,
-                name: img.nombre_archivo || img.nombre || img.filename,
-              }))}
-              currentIndex={viewer.currentIndex}
-              onIndexChange={(idx) => setViewer((v) => ({ ...v, currentIndex: idx }))}
-            />
-            {pdfViewer.isOpen && (
-              <div
-                className="fixed inset-0 z-[110] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
-                onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
-              >
-                <div
-                  className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
-                      <span className="text-sm font-semibold text-gray-800 truncate">{pdfViewer.name || "Documento PDF"}</span>
-                      <div className="flex items-center gap-2">
-                        <a
-                          role="button"
-                          className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
-                          onClick={() => downloadFile(pdfViewer.url, pdfViewer.name || "documento.pdf")}
-                        >
-                          Descargar
-                        </a>
-                      <button
-                        className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
-                        onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
-                      >
-                        Cerrar
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex-1 bg-gray-100">
-                    {pdfViewer.url ? (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center relative">
-                        {pdfLoading && <div className="text-sm text-gray-700">Cargando documento...</div>}
-                        {!pdfLoading && pdfBlobUrl && (
-                          <iframe
-                            key={pdfBlobUrl}
-                            src={`${pdfBlobUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH`}
-                            title={pdfViewer.name || "PDF"}
-                            className="w-full h-full border-0 bg-white"
-                          />
-                        )}
-                        {!pdfLoading && !pdfBlobUrl && pdfError && (
-                          <div className="p-4 text-sm text-gray-700 text-center space-y-2">
-                            <p>{pdfError}</p>
-                            <a
-                              href={pdfViewer.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-600 hover:text-blue-800 underline"
-                            >
-                              Abrir en nueva pestaña
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-sm text-gray-600">
-                        Sin URL del documento.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </motion.div>
         </motion.div>
       )}

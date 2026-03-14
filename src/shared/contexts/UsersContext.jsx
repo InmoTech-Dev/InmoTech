@@ -120,8 +120,6 @@ export const UsersProvider = ({ children }) => {
         ).filter(Boolean)
       );
 
-      realtimeBus.emit('user.changed', { id_persona: id, action: 'status_change', newState: nuevoEstado });
-
       return true;
     } catch (error) {
       console.error('Error cambiando estado:', error);
@@ -174,7 +172,6 @@ export const UsersProvider = ({ children }) => {
 
       console.log('ðŸ‘¤ USERS CONTEXT: Agregando usuario al estado local:', userWithEstado);
       addUser(userWithEstado);
-      realtimeBus.emit('user.changed', { id_persona: userWithEstado.id_persona, action: 'create' });
 
       toast({
         title: "Exito",
@@ -217,7 +214,6 @@ export const UsersProvider = ({ children }) => {
         merged.invitacion_estado = computeInvitacionEstado(merged);
 
         updateUser(merged);
-        realtimeBus.emit('user.changed', { id_persona: id, action: 'update' });
       } else {
         console.warn('Usuario actualizado no valido, recargando lista...');
         loadUsers();
@@ -245,7 +241,6 @@ export const UsersProvider = ({ children }) => {
     try {
       await usersApiService.deleteUser(id);
       deleteUser(id);
-      realtimeBus.emit('user.changed', { id_persona: id, action: 'delete' });
 
       toast({
         title: "Exito",

@@ -10,7 +10,6 @@ import ConfirmationDialog from "../../../../shared/components/ui/ConfirmationDia
 import rolesApiService from "../../../../shared/services/rolesApiService";
 import { useAuth } from "../../../../shared/contexts/AuthContext";
 import { useToast } from "../../../../shared/hooks/use-toast";
-import realtimeBus from "../../../../shared/services/realtimeBus";
 import EmptyState from "../../../../shared/components/ui/EmptyState";
 import "./Switch.css";
 
@@ -142,7 +141,6 @@ const RolesContent = () => {
       console.log('Creando nuevo rol:', nuevoRol);
       const rolCreado = await rolesApiService.crearRol(nuevoRol);
       await cargarRoles();
-      realtimeBus.emit('role.changed', { action: 'create', roleId: rolCreado.id });
       toast({
         title: "Rol creado exitosamente",
         description: `El rol "${rolCreado.nombre_rol}" ha sido creado correctamente.`,
@@ -180,7 +178,6 @@ const RolesContent = () => {
 
       await rolesApiService.actualizarRol(rolEditado.id, datosActualizados);
       await cargarRoles();
-      realtimeBus.emit('role.changed', { action: 'update', roleId: rolEditado.id });
       toast({
         title: "Rol actualizado",
         description: "El rol ha sido actualizado correctamente.",
@@ -239,7 +236,6 @@ const RolesContent = () => {
     try {
       await rolesApiService.actualizarRol(rolActual.id, { estado: nuevoEstado });
       await cargarRoles();
-      realtimeBus.emit('role.changed', { action: 'status_change', roleId: rolActual.id, newState: nuevoEstado });
       toast({
         title: "Estado actualizado",
         description: `El rol "${rolActual.nombre}" ha sido ${nuevoEstado ? 'activado' : 'desactivado'} correctamente.`,
@@ -308,7 +304,6 @@ const RolesContent = () => {
     try {
       await rolesApiService.eliminarRol(rolSeleccionado.id);
       setRoles((prev) => prev.filter((rol) => rol.id !== rolSeleccionado.id));
-      realtimeBus.emit('role.changed', { action: 'delete', roleId: rolSeleccionado.id });
       toast({
         title: "Rol eliminado",
         description: `El rol "${rolSeleccionado.nombre}" ha sido eliminado correctamente.`,

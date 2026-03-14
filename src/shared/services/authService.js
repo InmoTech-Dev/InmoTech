@@ -50,10 +50,10 @@ class AuthService {
    * Get authenticated profile
    * @returns {Promise<Object>}
    */
-  async getProfile(params = {}) {
+  async getProfile() {
     try {
       console.log('[AUTH] Loading user profile...');
-      const response = await apiClient.get('/auth/me', { params });
+      const response = await apiClient.get('/auth/me');
       console.log('[AUTH] Profile loaded');
       return response;
     } catch (error) {
@@ -183,29 +183,6 @@ class AuthService {
       return response;
     } catch (error) {
       console.error('[AUTH] Reset password error:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Validate reset password token
-   * @param {string} token
-   * @returns {Promise<Object>}
-   */
-  async validateResetToken(token) {
-    try {
-      console.log('[AUTH] Validating reset token...');
-
-      const response = await apiClient.request('/auth/reset-password', {
-        method: 'GET',
-        params: { token },
-        skipAuth: true
-      });
-
-      console.log('[AUTH] Reset token is valid');
-      return response;
-    } catch (error) {
-      console.error('[AUTH] Validate reset token error:', error.message);
       throw error;
     }
   }

@@ -1,6 +1,7 @@
 const { Rol, Persona, PersonasRol, Permiso } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const sseService = require('./sse.service');
 const { buildPermissionsPayload, normalizePermissionsStructure } = require('../utils/permissions.helper');
 const {
   SUPER_ADMIN_ROLE,
@@ -231,6 +232,14 @@ if (rolInactivo) {
         }, { transaction: t });
 
         logger.info(`Rol ${rol.nombre_rol} asignado a persona ${personaId} por usuario ${userId}`);
+        
+        // Emitir evento de cambio de usuario
+        sseService.emitUserChanged({
+          action: 'role_assigned',
+          userId: personaId,
+          affectedUserIds: [personaId]
+        });
+
         return asignacion;
 
       } catch (error) {
@@ -295,6 +304,14 @@ if (rolInactivo) {
         // Desactivar asignación
         await asignacion.update({ estado: false }, { transaction: t });
         logger.info(`Rol ${rolId} removido de persona ${personaId} por usuario ${userId}`);
+
+        // Emitir evento de cambio de usuario
+        sseService.emitUserChanged({
+          action: 'role_removed',
+          userId: personaId,
+          affectedUserIds: [personaId]
+        });
+
         return true;
 
       } catch (error) {
@@ -435,6 +452,13 @@ if (rolInactivo) {
         }
 
         logger.info(`Rol actualizado: ${rolId} por usuario ${userId}`);
+
+        // Emitir evento de cambio de rol (afecta a todos los que tengan este rol)
+        sseService.emitRoleChanged({
+          action: 'updated',
+          roleId: rolId
+        });
+
         return rol;
 
       } catch (error) {
@@ -519,6 +543,13 @@ if (rolInactivo) {
 
         await rol.update({ estado: false }, { transaction: t });
         logger.info(`Rol eliminado: ${rolId} por usuario ${userId}`);
+
+        // Emitir evento de cambio de rol
+        sseService.emitRoleChanged({
+          action: 'deleted',
+          roleId: rolId
+        });
+
         return true;
 
       } catch (error) {

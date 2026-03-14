@@ -34,24 +34,6 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
     currentIndex: 0
   });
 
-  // Estado para expansión de rubros y seguimientos
-  const [expandedRubros, setExpandedRubros] = React.useState({});
-  const [expandedSeguimientos, setExpandedSeguimientos] = React.useState({});
-
-  const toggleRubro = (rubroId) => {
-    setExpandedRubros(prev => ({
-      ...prev,
-      [rubroId]: !prev[rubroId]
-    }));
-  };
-
-  const toggleSeguimiento = (segId) => {
-    setExpandedSeguimientos(prev => ({
-      ...prev,
-      [segId]: !prev[segId]
-    }));
-  };
-
   const openViewer = (index) => {
     setViewerConfig({
       isOpen: true,
@@ -509,18 +491,11 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                             className="border border-slate-200 rounded-lg overflow-hidden bg-white"
                           >
                             {/* Rubro Header */}
-                            <div
-                              className="bg-slate-50 p-3 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
-                              onClick={() => toggleRubro(rubroKey)}
-                            >
+                            <div className="bg-slate-50 p-3 border-b border-slate-200">
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
                                   <h4 className="font-medium text-slate-900 text-sm">{rubro.nombre || 'Rubro sin nombre'}</h4>
-                                  {!expandedRubros[rubroKey] && (
-                                    <p className="text-xs text-slate-600 mt-1 truncate max-w-[500px]">
-                                      {rubro.descripcion || 'Sin descripción'}
-                                    </p>
-                                  )}
+                                  <p className="text-xs text-slate-600 mt-1">{rubro.descripcion || 'Sin descripción'}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <Badge className={`${getStatusColor(rubro.estado)} text-xs`}>
@@ -535,18 +510,8 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                               </div>
                             </div>
 
-                            {/* Rubro Content (Solo si está expandido) */}
-                            {expandedRubros[rubroKey] && (
-                              <div className="p-4 space-y-4 border-b border-slate-100">
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Descripción</label>
-                                  <p className="text-sm text-slate-700 mt-1">{rubro.descripcion || 'Sin descripción'}</p>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Seguimientos del Rubro (Solo si el rubro está expandido) */}
-                            {expandedRubros[rubroKey] && rubro.seguimientos && rubro.seguimientos.length > 0 && (
+                            {/* Seguimientos del Rubro */}
+                            {rubro.seguimientos && rubro.seguimientos.length > 0 && (
                               <div className="p-3">
                                 <div className="flex items-center justify-between mb-2">
                                   <h5 className="font-medium text-slate-800 text-sm flex items-center">
@@ -560,65 +525,46 @@ function ViewReportModal({ isOpen, onClose, report, onEdit }) {
                                 <div className="space-y-2">
                                   {rubro.seguimientos.map((seguimiento, segIndex) => {
                                     const seguimientoKey = seguimiento.id_seguimiento_rubro || seguimiento.id || `seg-${rubroKey}-${segIndex}`;
-                                    const isExpanded = expandedSeguimientos[seguimientoKey];
-
                                     return (
-                                      <div
-                                        key={seguimientoKey}
-                                        className="bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
-                                      >
-                                        {/* Seguimiento Header */}
-                                        <div
-                                          className="p-3 cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100 flex items-center justify-between"
-                                          onClick={() => toggleSeguimiento(seguimientoKey)}
-                                        >
+                                      <div key={seguimientoKey} className="bg-white rounded-lg p-3 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center justify-between mb-2">
                                           <div className="flex items-center gap-2">
                                             <div className="w-6 h-6 bg-blue-100 border border-blue-200 rounded-full flex items-center justify-center">
                                               <span className="text-xs font-semibold text-blue-700">#{segIndex + 1}</span>
                                             </div>
                                             <span className="text-sm font-medium text-slate-800">Seguimiento {segIndex + 1}</span>
-                                            {!isExpanded && (
-                                              <span className="text-xs text-slate-500 truncate max-w-[200px] italic">
-                                                - {seguimiento.descripcion}
-                                              </span>
-                                            )}
                                           </div>
                                           <Badge className={`${getFollowUpStatusColor(seguimiento.estado)} text-[11px] rounded-full px-2`}>
                                             {seguimiento.estado || 'Sin estado'}
                                           </Badge>
                                         </div>
 
-                                        {/* Seguimiento Content */}
-                                        {isExpanded && (
-                                          <div className="p-3 bg-slate-50/30">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                              <div className="col-span-full mb-1">
-                                                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Descripción:</span>
-                                                <p className="text-slate-800 mt-0.5">{seguimiento.descripcion || 'Sin descripción'}</p>
-                                              </div>
-                                              <div className="flex items-center gap-2 bg-white p-2 rounded border border-slate-100">
-                                                <CalendarIcon className="w-4 h-4 text-slate-400" />
-                                                <div>
-                                                  <span className="block text-[10px] uppercase font-bold text-slate-400">Fecha</span>
-                                                  <p className="text-slate-700 font-medium">{seguimiento.fecha || 'Sin fecha'}</p>
-                                                </div>
-                                              </div>
-                                              <div className="flex items-center gap-2 bg-white p-2 rounded border border-slate-100">
-                                                <UserIcon className="w-4 h-4 text-slate-400" />
-                                                <div>
-                                                  <span className="block text-[10px] uppercase font-bold text-slate-400">Responsable</span>
-                                                  <p className="text-slate-700 font-medium">{seguimiento.responsable || 'No asignado'}</p>
-                                                </div>
-                                              </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                                          <div>
+                                            <span className="font-medium text-slate-700">Descripción:</span>
+                                            <p className="text-slate-900">{seguimiento.descripcion || 'Sin descripción'}</p>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <CalendarIcon className="w-3 h-3 text-slate-500" />
+                                            <div>
+                                              <span className="font-medium text-slate-700">Fecha:</span>
+                                              <p className="text-slate-900">{seguimiento.fecha || 'Sin fecha'}</p>
                                             </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <UserIcon className="w-3 h-3 text-slate-500" />
+                                            <div>
+                                              <span className="font-medium text-slate-700">Responsable:</span>
+                                              <p className="text-slate-900">{seguimiento.responsable || 'No asignado'}</p>
+                                            </div>
+                                          </div>
+                                        </div>
 
-                                            {seguimiento.subSeguimientos > 0 && (
-                                              <div className="mt-3 pt-2 border-t border-slate-200">
-                                                <span className="text-[11px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                                                  Sub-seguimientos: {seguimiento.subSeguimientos}
-                                                </span>
-                                              </div>
-                                            )}
+                                        {seguimiento.subSeguimientos > 0 && (
+                                          <div className="mt-2 pt-2 border-t border-slate-200">
+                                            <span className="text-[11px] text-slate-600">
+                                              Sub-seguimientos: {seguimiento.subSeguimientos}
+                                            </span>
                                           </div>
                                         )}
                                       </div>

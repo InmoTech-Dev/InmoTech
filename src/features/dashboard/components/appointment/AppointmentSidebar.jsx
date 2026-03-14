@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Clock, MapPin, User, Filter, ChevronRight } from 'lucide-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../../../shared/components/ui/select';
+import { formatTimeTo12Hour, formatTimeTo24Hour } from '../../../../shared/utils/time';
 
 const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
   const [internalFilter, setInternalFilter] = React.useState('Todos los estados');
@@ -16,36 +17,18 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
     }
 
     const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) return null;
+    if (isNaN(parsed.getTime())) return null;
     const year = parsed.getFullYear();
     const month = String(parsed.getMonth() + 1).padStart(2, '0');
     const day = String(parsed.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
   const getCitaHora = (cita) => cita?.hora_inicio || cita?.hora || null;
-  const normalizarHora = (hora) => {
-    if (!hora) return null;
-
-    const raw = String(hora).trim();
-    const simpleMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-    if (simpleMatch) {
-      return `${simpleMatch[1].padStart(2, '0')}:${simpleMatch[2]}`;
-    }
-
-    if (raw.includes('T')) {
-      const isoMatch = raw.match(/T(\d{2}):(\d{2})/);
-      if (isoMatch) {
-        return `${isoMatch[1]}:${isoMatch[2]}`;
-      }
-    }
-
-    return raw;
-  };
 
   // Get upcoming appointments (next 10 appointments sorted by date and time)
   const upcomingAppointments = useMemo(() => {
     const filtered = Array.isArray(citas) ? citas : [];
-    
+
     return filtered
       .filter(cita => {
         const fechaCita = getCitaFecha(cita);
@@ -71,10 +54,10 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
         const fechaB = getCitaFecha(b);
         const dateCompare = fechaA.localeCompare(fechaB);
         if (dateCompare !== 0) return dateCompare;
-        
+
         // Compare times if dates are equal
-        const timeA = normalizarHora(getCitaHora(a)) || '00:00';
-        const timeB = normalizarHora(getCitaHora(b)) || '00:00';
+        const timeA = formatTimeTo24Hour(getCitaHora(a)) || '00:00';
+        const timeB = formatTimeTo24Hour(getCitaHora(b)) || '00:00';
         return timeA.localeCompare(timeB);
       })
       .slice(0, 10); // Show next 10 appointments
@@ -84,16 +67,16 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
     // Parse YYYY-MM-DD manually to avoid UTC conversion issues
     const [year, month, day] = dateString.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const checkDate = new Date(date);
-    checkDate.setHours(0,0,0,0);
-    
+    checkDate.setHours(0, 0, 0, 0);
+
     const checkTime = checkDate.getTime();
     const todayTime = today.getTime();
     const tomorrowTime = tomorrow.getTime();
@@ -124,17 +107,39 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
   };
 
   const getClientName = (cita) => {
-    if (typeof cita.cliente === 'object') {
-      return `${cita.cliente.nombre_completo || ''} ${cita.cliente.apellido_completo || ''}`.trim();
+    if (!cita) return 'Sin cliente';
+
+    // Si ya existe clienteNombreCompleto (caché o pre-calculado)
+    if (cita.clienteNombreCompleto) return cita.clienteNombreCompleto;
+
+    if (typeof cita.cliente === 'object' && cita.cliente) {
+      const nombre = (cita.cliente.nombre_completo || cita.cliente.nombre || '').trim();
+      const apellido = (cita.cliente.apellido_completo || cita.cliente.apellido || '').trim();
+      const completo = `${nombre} ${apellido}`.trim();
+      return completo || 'Sin nombre';
     }
+
     return cita.cliente || 'Sin nombre';
   };
 
   const getPropertyName = (cita) => {
-    if (typeof cita.inmueble === 'object') {
+    if (!cita) return 'Sin propiedad';
+
+    // Si ya existe direccion (caché o pre-calculado)
+    if (cita.direccion) return cita.direccion;
+
+    if (cita.inmueble && typeof cita.inmueble === 'object') {
       return cita.inmueble.direccion || 'Sin dirección';
     }
-    return cita.propiedad || 'Sin propiedad';
+
+    // Caso de respaldo (propiedad puede ser string o un campo antiguo)
+    if (cita.propiedad) {
+      return typeof cita.propiedad === 'object'
+        ? (cita.propiedad.direccion || 'Sin dirección')
+        : cita.propiedad;
+    }
+
+    return 'Sin propiedad';
   };
 
   return (
@@ -142,7 +147,7 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
       {/* Header - Fixed */}
       <div className="p-4 border-b border-slate-200 flex-shrink-0">
         <h3 className="text-lg font-semibold text-slate-800 mb-3">Próximas Citas</h3>
-        
+
         {/* Filter */}
         <div className="space-y-2">
           <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
@@ -151,7 +156,7 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
           </label>
           <Select value={internalFilter} onValueChange={setInternalFilter}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Todos los estados"/>
+              <SelectValue placeholder="Todos los estados" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos los estados">Todos los estados</SelectItem>
@@ -193,13 +198,10 @@ const AppointmentSidebar = ({ citas, onAppointmentClick }) => {
                 </span>
               </div>
 
-              {/* Time */}
-              {getCitaHora(cita) && (
-                <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
-                  <Clock className="w-3.5 h-3.5" />
-                  {normalizarHora(getCitaHora(cita))}
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+                <Clock className="w-3.5 h-3.5" />
+                {formatTimeTo12Hour(getCitaHora(cita))}
+              </div>
 
               {/* Client */}
               <div className="flex items-center gap-2 text-sm text-slate-800 font-medium mb-1">

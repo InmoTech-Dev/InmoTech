@@ -327,6 +327,18 @@ class SSEService {
     });
   }
 
+  emitAppointmentChanged({ action, appointmentId, affectedUserIds = [], audienceUserIds = [] }) {
+    const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
+    if (recipients.length === 0) return;
+
+    this.sendToUsers(recipients, 'appointment.changed', {
+      action: action || 'updated',
+      appointment_id: this.normalizeUserId(appointmentId),
+      affected_user_ids: this.normalizeUserIds(affectedUserIds),
+      occurred_at: new Date().toISOString(),
+    });
+  }
+
   emitReportChanged({ action, reportId, affectedUserIds = [], audienceUserIds = [] }) {
     const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
     if (recipients.length === 0) return;
@@ -361,6 +373,16 @@ class SSEService {
       action: action || 'updated',
       user_id: this.normalizeUserId(userId),
       affected_user_ids: this.normalizeUserIds(affectedUserIds),
+      occurred_at: new Date().toISOString(),
+    });
+  }
+
+  emitRoleChanged({ action, roleId }) {
+    // Los cambios en roles afectan potencialmente a todos los usuarios
+    // Notificamos a todos para que refresquen su perfil si es necesario
+    this.broadcastToAll('role.changed', {
+      action: action || 'updated',
+      role_id: this.normalizeUserId(roleId),
       occurred_at: new Date().toISOString(),
     });
   }

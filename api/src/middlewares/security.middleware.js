@@ -47,6 +47,13 @@ const createLimiter = createJsonLimiter({
   message: 'Has alcanzado el limite de citas que puedes crear por hora',
 });
 
+// Límite específico para creación de arrendatarios (evita mensaje de "citas")
+const renantsLimiter = createJsonLimiter({
+  windowMs: toPositiveInt(process.env.RATE_LIMIT_RENANTS_WINDOW_MS, 60 * 60 * 1000),
+  max: toPositiveInt(process.env.RATE_LIMIT_RENANTS_MAX_REQUESTS, 60),
+  message: 'Has alcanzado el límite de arrendatarios que puedes crear por hora',
+});
+
 // Limita intentos de login y operaciones sensibles de invitaciones
 const loginLimiter = createJsonLimiter({
   windowMs: 15 * 60 * 1000,
@@ -133,6 +140,7 @@ module.exports = {
   sseConnectLimiter,
   strictLimiter,
   createLimiter,
+  renantsLimiter,
   loginLimiter,
   invitationLimiter,
   forgotPasswordLimiter,

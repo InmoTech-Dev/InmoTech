@@ -19,8 +19,10 @@ import AdminReportsView from './AdminReportsView'
 
 
 const ReportsContent = () => {
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedReport, setSelectedReport] = useState(null)
+  const [refreshDetailedView, setRefreshDetailedView] = useState(0)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -28,6 +30,7 @@ const ReportsContent = () => {
   const [showCancelled, setShowCancelled] = useState(false)
   const [statusFilter, setStatusFilter] = useState('Todos los estados')
   const [todayOnly, setTodayOnly] = useState(false)
+  const [adminFilters, setAdminFilters] = useState({ year: '', month: '', city: '' })
   const [isStatusChangeConfirmOpen, setIsStatusChangeConfirmOpen] = useState(false)
   const [pendingStatusChange, setPendingStatusChange] = useState(null)
   const { createReport, updateReport, deleteReport } = useReports()
@@ -176,6 +179,7 @@ const ReportsContent = () => {
         ''
       )
       await fetchReports()
+      setRefreshDetailedView(v => v + 1)
       toast({
         title: 'Estado actualizado',
         description: `El reporte pasó a ${estadoNormalizado}`,
@@ -335,6 +339,7 @@ const ReportsContent = () => {
       const payload = {
         id_inmueble: Number(reportData.id_inmueble),
         tipo_reporte: reportData.tipoReporte?.trim(),
+        titulo: reportData.titulo || reportData.tipoReporte?.trim() || 'Nuevo Reporte',
         estado: normalizeEstado(reportData.estado),
         descripcion: reportData.descripcion?.trim() || 'Sin descripción',
         id_persona_reporta: personaId,
@@ -378,7 +383,8 @@ const ReportsContent = () => {
         for (const seg of activos) {
           const segPayload = {
             descripcion: (seg.descripcion || '').trim(),
-            estado: normalizeEstado(seg.estado || 'Pendiente')
+            estado: normalizeEstado(seg.estado || 'Pendiente'),
+            fecha: seg.fecha || null
           }
           await reportesInmobiliariosService.crearSeguimientoRubro(backendId, rubroId, segPayload)
 
@@ -454,6 +460,7 @@ const ReportsContent = () => {
     // 1) Actualizar campos del reporte (sin borrar nada)
     const patchPayload = {
       estado: normalizeEstado(reportData.estado),
+      titulo: reportData.titulo || reportData.titulo_reporte || reportData.tipoReporte,
       descripcion: (reportData.descripcion || '').trim(),
       seguimiento_general: (reportData.seguimientoGeneral || '').trim(),
       id_persona_reporta: reportData.id_persona_reporta
@@ -494,7 +501,8 @@ const ReportsContent = () => {
       for (const s of segsToProcess) {
         const segPayload = {
           descripcion: (s.descripcion || '').trim(),
-          estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente'))
+          estado: normalizeEstado(s.activo === false ? 'Cancelado' : (s.estado || 'Pendiente')),
+          fecha: s.fecha || null
         }
 
         const segBackendId = Number(s.backendId ?? 0)
@@ -515,9 +523,27 @@ const ReportsContent = () => {
       }
     }
 
+    // 3) Sincronizar imágenes (Eliminar removidas y subir nuevas)
+    const currentImagenes = Array.isArray(reportData.imagenes) ? reportData.imagenes : []
+    const originalImagenes = selectedReport.imagenes || []
+
+    // Identificar IDs que siguen presentes (usando id o backendId)
+    const currentImgIds = new Set(currentImagenes.map(img => img.id_imagen || img.id))
+
+    // Eliminar las que ya no están
+    for (const img of originalImagenes) {
+      const imgId = img.id_imagen || img.id
+      if (imgId && !currentImgIds.has(imgId)) {
+        try {
+          await reportesInmobiliariosService.eliminarImagen(backendId, imgId)
+        } catch (e) {
+          console.error('Error al eliminar imagen:', e)
+        }
+      }
+    }
+
     // Subir nuevas imágenes añadidas en edición (solo si traen File)
-    const imagenes = Array.isArray(reportData.imagenes) ? reportData.imagenes : []
-    for (const img of imagenes) {
+    for (const img of currentImagenes) {
       if (img.file) {
         const upload = await uploadToCloudinary(img.file, { folder: `inmotech/reportes/${backendId}/imagenes` })
         await reportesInmobiliariosService.agregarImagen(backendId, { url: upload.url })
@@ -529,9 +555,26 @@ const ReportsContent = () => {
       }
     }
 
+    // 4) Sincronizar archivos (Eliminar removidos y subir nuevos)
+    const currentArchivos = Array.isArray(reportData.archivos) ? reportData.archivos : []
+    const originalArchivos = selectedReport.archivos || []
+
+    const currentFileIds = new Set(currentArchivos.map(f => f.id_archivo || f.id))
+
+    // Eliminar los que ya no están
+    for (const f of originalArchivos) {
+      const fileId = f.id_archivo || f.id
+      if (fileId && !currentFileIds.has(fileId)) {
+        try {
+          await reportesInmobiliariosService.eliminarArchivo(backendId, fileId)
+        } catch (e) {
+          console.error('Error al eliminar archivo:', e)
+        }
+      }
+    }
+
     // Subir nuevos archivos añadidos en edición (solo si traen File)
-    const archivos = Array.isArray(reportData.archivos) ? reportData.archivos : []
-    for (const f of archivos) {
+    for (const f of currentArchivos) {
       if (f.file) {
         const nombre = (f.name || f.nombre || 'Archivo').toString()
         const upload = await uploadToCloudinary(f.file, { folder: `inmotech/reportes/${backendId}/archivos` })
@@ -544,9 +587,11 @@ const ReportsContent = () => {
       }
     }
 
-    setIsEditModalOpen(false)
-    setSelectedReport(null)
     await fetchReports()
+    setRefreshDetailedView(prev => prev + 1)
+    setIsEditModalOpen(false)
+    // No reseteamos selectedReport para que la vista detallada se mantenga abierta con la nueva info
+    // setSelectedReport(null) 
   }
 
   const handleDeleteReport = async (reportToDelete) => {
@@ -571,7 +616,7 @@ const ReportsContent = () => {
       switch (estado) {
         case 'Completado':
           return 'status-completado';
-        case 'En proceso':
+        case 'En Proceso':
           return 'status-proceso';
         case 'Cotizando':
           return 'status-cotizando';
@@ -1077,7 +1122,7 @@ const ReportsContent = () => {
   const isAdminView = user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r));
 
   return (
-    <div className='px-0 py-6 space-y-6'>
+    <div className='px-8 py-4 flex flex-col h-[calc(100vh-64px)] overflow-hidden'>
       {dbLoading && <div className='p-4 text-slate-600'>Cargando reportes…</div>}
       {dbError && <div className='p-4 text-red-600'>{dbError}</div>}
 
@@ -1093,6 +1138,10 @@ const ReportsContent = () => {
         showCancelled={showCancelled}
         onToggleShowCancelled={() => setShowCancelled(v => !v)}
         hideFilters={isAdminView}
+        adminFilters={adminFilters}
+        setAdminFilters={setAdminFilters}
+        onSearchAdmin={setAdminFilters}
+        allReports={dbReports}
       />
 
       {user?.roles?.some(r => ['Administrador', 'Super Administrador'].includes(r)) ? (
@@ -1102,6 +1151,11 @@ const ReportsContent = () => {
           onEditReport={handleEditReport}
           onDownloadPDF={handleDownloadReportPDF}
           loading={dbLoading}
+          filters={adminFilters}
+          setFilters={setAdminFilters}
+          refreshTrigger={refreshDetailedView}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
         />
       ) : (
         <>

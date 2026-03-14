@@ -9,7 +9,8 @@ export const publicRoutes = {
   properties: '/inmuebles',
   propertyDetails: '/inmuebles/:id',
   contact: '/contactanos',
-  userAppointments: '/mis-citas'
+  userAppointments: '/mis-citas',
+  userProperties: '/mis-inmuebles'
 };
 
 export const publicNavigationLinks = [
@@ -25,6 +26,8 @@ export const dashboardRoutes = {
   dashboard: '/dashboard',
   properties: '/inmuebles/gestion',
   owners: '/inmuebles/propietarios',
+  ownerMyProperties: '/dashboard/propietario/inmuebles',
+  ownerMyLeases: '/dashboard/propietario/arriendos',
   appointments: '/dashboard/citas',
   clients: '/dashboard/citas/clientes',
   sales: '/dashboard/salesManagement',

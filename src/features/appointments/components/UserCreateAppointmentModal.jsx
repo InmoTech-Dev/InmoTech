@@ -67,8 +67,8 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
 
   const availableHours = [
     "08:00 am", "08:30 am", "09:00 am", "09:30 am", "10:00 am", "10:30 am",
-    "11:00 am", "11:30 am", "02:00 pm", "02:30 pm", "03:00 pm", "03:30 pm",
-    "04:00 pm", "04:30 pm", "05:00 pm", "05:30 pm",
+    "11:00 am", "11:30 am", "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm",
+    "03:00 pm", "03:30 pm", "04:00 pm", "04:30 pm"
   ];
 
   const servicios = [
@@ -163,7 +163,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
     if (!hora) return "La hora es requerida";
 
     if (!availableHours.includes(hora)) {
-      return "Las citas solo se pueden agendar entre las 8:00 am y las 6:00 pm";
+      return "Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm";
     }
 
     return "";
@@ -321,9 +321,9 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
 
   const canSubmit = () => {
     return formData.fecha.trim() !== "" &&
-           formData.hora.trim() !== "" &&
-           formData.servicio.trim() !== "" &&
-           Object.values(errors).every((error) => !error);
+      formData.hora.trim() !== "" &&
+      formData.servicio.trim() !== "" &&
+      Object.values(errors).every((error) => !error);
   };
 
   const validateField = (field, value) => {
@@ -469,22 +469,20 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                       whileTap={{ scale: 0.98 }}
                       onClick={() => updateFormData("servicio", servicio.name)}
                       disabled={isSubmitting}
-                      className={`w-full p-4 rounded-xl border transition-all duration-200 ${
-                        formData.servicio === servicio.name
+                      className={`w-full p-4 rounded-xl border transition-all duration-200 ${formData.servicio === servicio.name
                           ? "bg-blue-600 text-white border-blue-600 shadow-lg"
                           : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       <div className="text-left">
                         <div className="text-lg font-bold flex items-center gap-2">
                           <span className="text-2xl">{servicio.icon}</span>
                           {servicio.name}
                         </div>
-                        <p className={`text-sm mt-1 ${
-                          formData.servicio === servicio.name
+                        <p className={`text-sm mt-1 ${formData.servicio === servicio.name
                             ? "text-blue-100"
                             : "text-slate-500"
-                        }`}>
+                          }`}>
                           {servicio.description}
                         </p>
                       </div>
@@ -614,11 +612,10 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                             whileTap={!day.isDisabled ? { scale: 0.95 } : {}}
                             onClick={() => handleDateSelect(day)}
                             disabled={day.isDisabled || isSubmitting}
-                            className={`h-10 w-10 rounded-lg text-sm font-medium transition-all duration-200 ${
-                              day.isDisabled
+                            className={`h-10 w-10 rounded-lg text-sm font-medium transition-all duration-200 ${day.isDisabled
                                 ? "text-slate-300 cursor-not-allowed"
                                 : "text-slate-700 hover:bg-blue-50"
-                            } ${!day.isCurrentMonth ? "text-slate-400" : ""}
+                              } ${!day.isCurrentMonth ? "text-slate-400" : ""}
                               ${day.isToday ? "bg-blue-100 text-blue-600 font-bold" : ""}
                               ${isSelected ? "bg-blue-600 text-white" : ""}
                               ${day.isSunday && day.isCurrentMonth ? "bg-red-50 text-red-400" : ""}
@@ -674,11 +671,10 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                             whileTap={{ scale: 0.95 }}
                             onClick={() => updateFormData("hora", hour)}
                             disabled={isSubmitting}
-                            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                              formData.hora === hour
+                            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${formData.hora === hour
                                 ? "bg-blue-600 text-white"
                                 : "bg-white text-slate-700 hover:bg-blue-50 border border-slate-200"
-                            }`}
+                              }`}
                           >
                             {hour}
                           </motion.button>

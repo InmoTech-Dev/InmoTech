@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Badge } from '@/shared/components/ui/badge'
-import { Button } from '@/shared/components/ui/button'
 import { EyeIcon, EditIcon, DownloadIcon, ChevronLeftIcon, ChevronRightIcon, FileText, MapPin, Building, User, Calendar, BarChart3, CheckCircle, Clock, AlertCircle, XCircle } from 'lucide-react'
+import { useAuth } from '@/shared/contexts/AuthContext'
+import { cn } from '@/shared/utils/cn'
 
 export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
+  const { hasPermission } = useAuth()
+  const canEdit = hasPermission('reportes', 'editar')
+  const canDownload = hasPermission('reportes', 'descargar')
+
   const [sortField, setSortField] = useState(null)
   const [sortDirection, setSortDirection] = useState('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -18,7 +20,7 @@ export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
     switch (estado) {
       case 'Completado':
         return 'bg-green-100 text-green-800 border-green-200'
-      case 'En proceso':
+      case 'En Proceso':
         return 'bg-blue-100 text-blue-800 border-blue-200'
       case 'Cotizando':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200'
@@ -41,7 +43,7 @@ export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
         icon: CheckCircle,
         label: 'Completado'
       },
-      'En proceso': {
+      'En Proceso': {
         color: 'bg-blue-100 text-blue-800 border border-blue-200',
         icon: Clock,
         label: 'En Proceso'
@@ -122,7 +124,7 @@ export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
   const stats = {
     total: reportsData.length,
     pendientes: reportsData.filter(r => r.estado === 'Pendiente').length,
-    enProceso: reportsData.filter(r => r.estado === 'En proceso').length,
+    enProceso: reportsData.filter(r => r.estado === 'En Proceso').length,
     completados: reportsData.filter(r => r.estado === 'Completado').length,
     cancelados: reportsData.filter(r => r.estado === 'Cancelado').length,
     cotizando: reportsData.filter(r => r.estado === 'Cotizando').length,
@@ -162,20 +164,28 @@ export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
               <EyeIcon className="h-5 w-5" />
             </motion.button>
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => onEdit?.(report)}
-              className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-              title="Editar reporte"
+              whileHover={canEdit ? { scale: 1.1 } : {}}
+              whileTap={canEdit ? { scale: 0.9 } : {}}
+              disabled={!canEdit}
+              onClick={() => canEdit && onEdit?.(report)}
+              className={cn(
+                "p-2 rounded-lg transition-colors",
+                canEdit ? "text-blue-600 hover:bg-blue-50" : "text-slate-400 cursor-not-allowed opacity-50"
+              )}
+              title={canEdit ? "Editar reporte" : "No tienes permiso para editar"}
             >
               <EditIcon className="h-5 w-5" />
             </motion.button>
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => onDownloadPDF?.(report)}
-              className="p-2 rounded-lg text-purple-600 hover:bg-purple-50 transition-colors"
-              title="Descargar PDF"
+              whileHover={canDownload ? { scale: 1.1 } : {}}
+              whileTap={canDownload ? { scale: 0.9 } : {}}
+              disabled={!canDownload}
+              onClick={() => canDownload && onDownloadPDF?.(report)}
+              className={cn(
+                "p-2 rounded-lg transition-colors",
+                canDownload ? "text-purple-600 hover:bg-purple-50" : "text-slate-400 cursor-not-allowed opacity-50"
+              )}
+              title={canDownload ? "Descargar PDF" : "No tienes permiso para descargar"}
             >
               <DownloadIcon className="h-5 w-5" />
             </motion.button>
@@ -246,20 +256,28 @@ export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
             <EyeIcon className="h-4 w-4" />
           </motion.button>
           <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => onEdit?.(report)}
-            className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-            title="Editar"
+            whileHover={canEdit ? { scale: 1.1 } : {}}
+            whileTap={canEdit ? { scale: 0.9 } : {}}
+            disabled={!canEdit}
+            onClick={() => canEdit && onEdit?.(report)}
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              canEdit ? "text-blue-600 hover:bg-blue-50" : "text-slate-400 cursor-not-allowed opacity-50"
+            )}
+            title={canEdit ? "Editar" : "No tienes permiso"}
           >
             <EditIcon className="h-4 w-4" />
           </motion.button>
           <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => onDownloadPDF?.(report)}
-            className="p-2 rounded-lg text-purple-600 hover:bg-purple-50 transition-colors"
-            title="Descargar PDF"
+            whileHover={canDownload ? { scale: 1.1 } : {}}
+            whileTap={canDownload ? { scale: 0.9 } : {}}
+            disabled={!canDownload}
+            onClick={() => canDownload && onDownloadPDF?.(report)}
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              canDownload ? "text-purple-600 hover:bg-purple-50" : "text-slate-400 cursor-not-allowed opacity-50"
+            )}
+            title={canDownload ? "Descargar PDF" : "No tienes permiso"}
           >
             <DownloadIcon className="h-4 w-4" />
           </motion.button>

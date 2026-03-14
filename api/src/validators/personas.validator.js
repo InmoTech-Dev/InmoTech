@@ -1,10 +1,15 @@
 const Joi = require('joi');
 
+const normalizeTipoDoc = (value, helpers) => {
+  const t = value.toString().trim().toUpperCase();
+  if (['CC', 'CE', 'TI', 'NIT'].includes(t)) return t;
+  if (t === 'PAS' || t === 'PASAPORTE') return 'Pasaporte';
+  return helpers.error('any.invalid');
+};
+
 // Validacion para crear persona (alta por invitacion administrativa)
 const crearPersonaSchema = Joi.object({
-  tipo_documento: Joi.string()
-    .valid('CC', 'CE', 'TI', 'NIT', 'PAS')
-    .required(),
+  tipo_documento: Joi.string().custom(normalizeTipoDoc).required(),
 
   numero_documento: Joi.string()
     .min(5)
@@ -41,6 +46,11 @@ const crearPersonaSchema = Joi.object({
     .optional()
     .default(false),
 
+  rol: Joi.string()
+    .valid('Usuario', 'Propietario', 'Empleado', 'Administrador', 'Super Administrador')
+    .optional()
+    .default('Usuario'),
+
   estado: Joi.boolean()
     .optional()
     .default(true)
@@ -63,7 +73,7 @@ const actualizarPersonaSchema = Joi.object({
     .pattern(/^(\+57\s?)?[3]\d{2}\s?\d{3}\s?\d{4}$|^\+57\s?3\d{2}\s?\d{3}\s?\d{2}\s?\d{2}$/)
     .allow('', null)
     .optional(),
-  tipo_documento: Joi.string().valid('CC', 'CE', 'TI', 'NIT', 'PAS').optional(),
+  tipo_documento: Joi.string().custom(normalizeTipoDoc).optional(),
   numero_documento: Joi.string().min(5).max(20).pattern(/^[0-9A-Z]+$/).optional(),
 
   estado: Joi.boolean().optional()
@@ -71,9 +81,7 @@ const actualizarPersonaSchema = Joi.object({
 
 // Validación para buscar personas
 const buscarPersonaSchema = Joi.object({
-  tipo_documento: Joi.string()
-    .valid('CC', 'CE', 'TI', 'NIT', 'PAS')
-    .required(),
+  tipo_documento: Joi.string().custom(normalizeTipoDoc).required(),
 
   numero_documento: Joi.string()
     .min(1)

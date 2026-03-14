@@ -10,14 +10,192 @@ const {
 } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 class LeaseService {
+  getAutomaticTrackingComments() {
+    return [
+      'Cobros vencidos o exigibles sin pagar',
+      'Todos los cobros pagados',
+      'Estado restaurado automáticamente tras saldar cobros pendientes'
+    ];
+  }
+
+  async getLatestTrackingEntry(leaseId, transaction = null) {
+    return SeguimientoArrendamiento.findOne({
+      where: { id_arrendamiento: leaseId },
+      order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
+      transaction
+    });
+  }
+
+  async getLatestManualTrackingEntry(leaseId, transaction = null) {
+    const rows = await SeguimientoArrendamiento.findAll({
+      where: {
+        id_arrendamiento: leaseId,
+        [Op.or]: [
+          { comentario: null },
+          {
+            comentario: {
+              [Op.notIn]: this.getAutomaticTrackingComments()
+            }
+          }
+        ]
+      },
+      order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
+      limit: 5,
+      transaction
+    });
+
+    return rows.find((row) => row?.estado && row.estado !== 'Debe') || null;
+  }
+
+  parsePreNoticeTracking(comment = '') {
+    const text = String(comment || '');
+    if (!text.toLowerCase().includes('preaviso registrado por el arrendatario')) {
+      return null;
+    }
+
+    const observationMatch = text.match(/Observación:\s*(.*?)(?:\s+Soporte:\s*https?:\/\/\S+)?$/i);
+    const supportMatch = text.match(/Soporte:\s*(https?:\/\/\S+)/i);
+
+    return {
+      observacion: observationMatch?.[1]?.trim() || '',
+      url_soporte: supportMatch?.[1]?.trim() || ''
+    };
+  }
+
+  isPreNoticeDeletedTracking(comment = '') {
+    return String(comment || '')
+      .toLowerCase()
+      .includes('preaviso eliminado del arrendamiento');
+  }
+
+  async getLatestPreNoticeEntry(leaseId, transaction = null) {
+    const rows = await SeguimientoArrendamiento.findAll({
+      where: {
+        id_arrendamiento: leaseId
+      },
+      order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
+      limit: 20,
+      transaction
+    });
+
+    let latestObservation = null;
+    let latestSupport = null;
+
+    for (const row of rows) {
+      if (this.isPreNoticeDeletedTracking(row?.comentario)) {
+        if (!latestObservation && !latestSupport) {
+          return null;
+        }
+        break;
+      }
+
+      const parsed = this.parsePreNoticeTracking(row?.comentario);
+      if (parsed) {
+        if (!latestObservation && parsed.observacion) {
+          latestObservation = {
+            observacion: parsed.observacion,
+            fecha_creacion: row.fecha_creacion
+          };
+        }
+
+        if (!latestSupport && parsed.url_soporte) {
+          latestSupport = {
+            url_soporte: parsed.url_soporte,
+            fecha_creacion: row.fecha_creacion
+          };
+        }
+
+        if (latestObservation && latestSupport) {
+          return {
+            observacion: latestObservation.observacion,
+            url_soporte: latestSupport.url_soporte,
+            fecha_creacion: latestObservation.fecha_creacion || latestSupport.fecha_creacion,
+            fecha_soporte: latestSupport.fecha_creacion
+          };
+        }
+      }
+    }
+
+    if (!latestObservation && !latestSupport) {
+      return null;
+    }
+
+    return {
+      observacion: latestObservation?.observacion || '',
+      url_soporte: latestSupport?.url_soporte || '',
+      fecha_creacion: latestObservation?.fecha_creacion || latestSupport?.fecha_creacion || null,
+      fecha_soporte: latestSupport?.fecha_creacion || null
+    };
+  }
+
+  async resolveStateAfterPaymentsAreUpToDate(lease, transaction = null) {
+    if (!lease) return 'Al día';
+
+    if (['Finalizado', 'Cancelado'].includes(lease.estado)) {
+      return lease.estado;
+    }
+
+    const latestManualTracking = await this.getLatestManualTrackingEntry(
+      lease.id_arrendamiento,
+      transaction
+    );
+
+    if (latestManualTracking?.estado) {
+      return latestManualTracking.estado;
+    }
+
+    if (lease.estado && lease.estado !== 'Debe') {
+      return lease.estado;
+    }
+
+    return 'Al día';
+  }
   // Recalcula el estado del arrendamiento según cobros pendientes/vencidos.
-  async syncLeaseStateFromPayments(leaseId, transaction = null) {
+  async getDisplayedLeaseState(leaseId, lease = null, transaction = null) {
+    const currentLease = lease || await this.getLeaseById(leaseId, transaction);
+    if (!currentLease) return null;
+
+    if (['Finalizado', 'Cancelado'].includes(currentLease.estado)) {
+      return currentLease.estado;
+    }
+
+    const today = this.formatDateOnly(new Date());
     const pendingCount = await Payment.count({
       where: {
         id_arrendamiento: leaseId,
-        estado: { [Op.in]: ['Pendiente', 'Vencido'] }
+        [Op.or]: [
+          { estado: 'Vencido' },
+          {
+            estado: 'Pendiente',
+            fecha_cobro: { [Op.lte]: today }
+          }
+        ]
+      },
+      transaction
+    });
+
+    if (pendingCount > 0) {
+      return 'Debe';
+    }
+
+    return this.resolveStateAfterPaymentsAreUpToDate(currentLease, transaction);
+  }
+
+  async syncLeaseStateFromPayments(leaseId, transaction = null) {
+    const today = this.formatDateOnly(new Date());
+    const pendingCount = await Payment.count({
+      where: {
+        id_arrendamiento: leaseId,
+        [Op.or]: [
+          { estado: 'Vencido' },
+          {
+            estado: 'Pendiente',
+            fecha_cobro: { [Op.lte]: today }
+          }
+        ]
       },
       transaction
     });
@@ -25,6 +203,54 @@ class LeaseService {
     const lease = await this.getLeaseById(leaseId, transaction);
     if (!lease) return null;
 
+    if (['Finalizado', 'Cancelado'].includes(lease.estado)) {
+      return lease.estado;
+    }
+
+    const latestTracking = await this.getLatestTrackingEntry(leaseId, transaction);
+
+    if (pendingCount === 0) {
+      const resolvedState = await this.resolveStateAfterPaymentsAreUpToDate(lease, transaction);
+
+      if (lease.estado !== resolvedState) {
+        await lease.update({ estado: resolvedState }, { transaction });
+      }
+
+      const restoreComment =
+        resolvedState === 'Al dÃ­a'
+          ? 'Todos los cobros pagados'
+          : 'Estado restaurado automÃ¡ticamente tras saldar cobros pendientes';
+
+      if (
+        latestTracking?.estado === 'Debe' &&
+        latestTracking?.comentario === 'Cobros vencidos o exigibles sin pagar'
+      ) {
+        await this.logSeguimiento({
+          id_arrendamiento: leaseId,
+          estado: resolvedState,
+          comentario: restoreComment,
+          transaction
+        });
+      }
+
+      return resolvedState;
+    }
+
+    if (
+      latestTracking?.estado !== 'Debe' ||
+      latestTracking?.comentario !== 'Cobros vencidos o exigibles sin pagar'
+    ) {
+      await this.logSeguimiento({
+        id_arrendamiento: leaseId,
+        estado: 'Debe',
+        comentario: 'Cobros vencidos o exigibles sin pagar',
+        transaction
+      });
+    }
+
+    return 'Debe';
+
+    /*
     if (pendingCount === 0) {
       await lease.update({ estado: 'Al día' }, { transaction });
       await this.logSeguimiento({
@@ -40,10 +266,11 @@ class LeaseService {
     await this.logSeguimiento({
       id_arrendamiento: leaseId,
       estado: 'Debe',
-      comentario: 'Cobros pendientes o vencidos',
+      comentario: 'Cobros vencidos o exigibles sin pagar',
       transaction
     });
     return 'Debe';
+    */
   }
 
   async logSeguimiento({ id_arrendamiento, estado, comentario = null, id_persona = null, transaction = null }) {
@@ -73,16 +300,27 @@ class LeaseService {
     });
 
     if (!persona) {
-      persona = await Persona.create({
-        tipo_documento,
-        numero_documento,
-        nombre_completo: nombre_completo || '',
-        apellido_completo: apellido_completo || '',
-        correo: correo || `${numero_documento}@placeholder.com`,
-        telefono: telefono || null,
-        tiene_cuenta: false,
-        estado: true
-      }, { transaction });
+      try {
+        persona = await Persona.create({
+          tipo_documento,
+          numero_documento,
+          nombre_completo: nombre_completo || '',
+          apellido_completo: apellido_completo || '',
+          correo: correo || `${numero_documento}@placeholder.com`,
+          telefono: telefono || null,
+          tiene_cuenta: false,
+          estado: true
+        }, { transaction });
+      } catch (error) {
+        if (error.name === 'SequelizeUniqueConstraintError') {
+          persona = await Persona.findOne({
+            where: { tipo_documento, numero_documento },
+            transaction
+          });
+        } else {
+          throw error;
+        }
+      }
     } else {
       // Actualizar datos básicos si vienen
       await persona.update({
@@ -170,11 +408,18 @@ class LeaseService {
         // 4. Actualizar estado del inmueble a "Arrendado"
         await inmueble.update({
           estado: false,
-          estado_frontend: 'Arrendado'
+          estado_frontend: 'Arrendado',
+          destacado: false
         }, { transaction: t });
 
         // 5. Generar cobros mensuales automáticamente
-        await this.generateMonthlyPayments(newLease.id_arrendamiento, t);
+        const chargeDay = (() => {
+          const src = leaseData.fecha_cobro || leaseData.fechaCobro;
+          if (!src) return null;
+          const d = this.parseDateOnly(src);
+          return d ? d.getUTCDate() : null;
+        })();
+        await this.generateMonthlyPayments(newLease.id_arrendamiento, t, { chargeDay });
 
         return await this.getLeaseById(newLease.id_arrendamiento, t);
 
@@ -186,36 +431,175 @@ class LeaseService {
     return result;
   }
 
-  async generateMonthlyPayments(leaseId, transaction = null) {
-    try {
-      const lease = await this.getLeaseById(leaseId, transaction);
-      
-      const startDate = new Date(lease.fecha_inicio);
-      const endDate = new Date(lease.fecha_finalizacion);
-      
-      const payments = [];
-      let currentDate = new Date(startDate);
-      
-      while (currentDate <= endDate) {
-        const paymentDate = new Date(currentDate);
-        const dueDate = new Date(currentDate);
-        dueDate.setDate(dueDate.getDate() + 10); // 10 días para pagar
-        
-        payments.push({
+  // Utilidades para fechas sin desfase de zona (DATEONLY)
+  formatDateOnly(dateObj) {
+    const year = dateObj.getUTCFullYear();
+    const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  parseDateOnly(value) {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value)) {
+      return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+    }
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const [, y, m, d] = match.map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+
+  // Acepta YYYY-MM-DD (ISO) y DD/MM/YYYY (formato usado en UI) y devuelve Date en UTC.
+  parseDateFlexible(value) {
+    if (!value) return null;
+
+    // Si viene como Date, usamos su ISO (UTC) para conservar el día elegido en el cliente
+    if (value instanceof Date && !Number.isNaN(value)) {
+      const iso = value.toISOString().slice(0, 10); // YYYY-MM-DD
+      return this.parseDateOnly(iso);
+    }
+
+    // Si es string o algo parseable por Date, usamos su ISO para quedarnos con YYYY-MM-DD
+    const maybeDate = new Date(value);
+    if (!Number.isNaN(maybeDate)) {
+      const isoFromDate = maybeDate.toISOString().slice(0, 10);
+      return this.parseDateOnly(isoFromDate);
+    }
+
+    const matchDMY = String(value).match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
+    if (matchDMY) {
+      const [, d, m, y] = matchDMY.map(Number);
+      return new Date(Date.UTC(y, m - 1, d));
+    }
+
+    return null;
+  }
+
+  diffMonths(startDate, endDate) {
+    if (!startDate || !endDate) return 0;
+    return (
+      (endDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
+      (endDate.getUTCMonth() - startDate.getUTCMonth())
+    );
+  }
+
+  addMonthsClamped(date, monthsToAdd) {
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const day = date.getUTCDate();
+    const targetMonthDate = new Date(Date.UTC(year, month + monthsToAdd, 1));
+    const lastDay = new Date(
+      Date.UTC(targetMonthDate.getUTCFullYear(), targetMonthDate.getUTCMonth() + 1, 0)
+    ).getUTCDate();
+    return new Date(
+      Date.UTC(targetMonthDate.getUTCFullYear(), targetMonthDate.getUTCMonth(), Math.min(day, lastDay))
+    );
+  }
+
+  async generateExtensionPayments(leaseId, oldEndDate, newEndDate, transaction = null, options = {}) {
+    const { graceDays = 10 } = options;
+    const lease = await this.getLeaseById(leaseId, transaction);
+    const payments = await Payment.findAll({
+      where: { id_arrendamiento: leaseId },
+      order: [['fecha_cobro', 'DESC']],
+      limit: 1,
+      transaction
+    });
+
+    const startDate = this.parseDateOnly(lease.fecha_inicio);
+    const lastPayment = payments[0] || null;
+    const chargeDay =
+      this.parseDateOnly(lastPayment?.fecha_cobro)?.getUTCDate() ||
+      startDate?.getUTCDate() ||
+      1;
+
+    let cursor = lastPayment
+      ? this.addMonthsClamped(this.parseDateOnly(lastPayment.fecha_cobro), 1)
+      : this.addMonthsClamped(oldEndDate, 0);
+
+    const newPayments = [];
+    while (cursor < newEndDate) {
+      const lastDayOfMonth = new Date(
+        Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)
+      ).getUTCDate();
+      const chargeDate = new Date(
+        Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), Math.min(chargeDay, lastDayOfMonth))
+      );
+      const dueDate = new Date(chargeDate);
+      dueDate.setUTCDate(dueDate.getUTCDate() + graceDays);
+
+      const exists = await Payment.count({
+        where: {
           id_arrendamiento: leaseId,
-          fecha_cobro: paymentDate,
-          fecha_limite: dueDate,
+          fecha_cobro: this.formatDateOnly(chargeDate)
+        },
+        transaction
+      });
+
+      if (!exists) {
+        newPayments.push({
+          id_arrendamiento: leaseId,
+          fecha_cobro: this.formatDateOnly(chargeDate),
+          fecha_limite: this.formatDateOnly(dueDate),
           valor_pago: lease.valor_mensual,
           estado: 'Pendiente'
         });
-        
-        // Siguiente mes
-        currentDate.setMonth(currentDate.getMonth() + 1);
       }
-      
+
+      cursor = this.addMonthsClamped(chargeDate, 1);
+    }
+
+    if (newPayments.length) {
+      await Payment.bulkCreate(newPayments, { transaction });
+    }
+
+    return newPayments;
+  }
+
+  async generateMonthlyPayments(leaseId, transaction = null, options = {}) {
+    try {
+      const { chargeDay: requestedChargeDay = null, graceDays = 10 } = options;
+
+      const lease = await this.getLeaseById(leaseId, transaction);
+      const startDate = this.parseDateOnly(lease.fecha_inicio);
+      const endDate = this.parseDateOnly(lease.fecha_finalizacion);
+      if (!startDate || !endDate) {
+        throw new Error('Fechas de arrendamiento inválidas');
+      }
+
+      const payments = [];
+      const startDay = requestedChargeDay || startDate.getUTCDate();
+
+      // Primer cobro: mes de inicio; si el día cae antes del inicio, se mueve al mes siguiente
+      let cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDay));
+      if (cursor < startDate) {
+        cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, startDay));
+      }
+
+      while (cursor < endDate) {
+        const lastDayOfMonth = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
+        const chargeDate = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), Math.min(startDay, lastDayOfMonth)));
+
+        const dueDate = new Date(chargeDate);
+        dueDate.setUTCDate(dueDate.getUTCDate() + graceDays);
+
+        payments.push({
+          id_arrendamiento: leaseId,
+          fecha_cobro: this.formatDateOnly(chargeDate),
+          fecha_limite: this.formatDateOnly(dueDate),
+          valor_pago: lease.valor_mensual,
+          estado: 'Pendiente'
+        });
+
+        // Siguiente mes
+        cursor = new Date(chargeDate);
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      }
+
       await Payment.bulkCreate(payments, { transaction });
       logger.info(`✅ ${payments.length} cobros generados para arrendamiento ${leaseId}`);
-      
+
     } catch (error) {
       logger.error(`❌ Error generando cobros: ${error.message}`);
       throw error;
@@ -286,7 +670,14 @@ class LeaseService {
 
   async getAllLeases(filters = {}) {
     try {
-      logger.info(`🔍 Consultando arrendamientos con filtros: ${JSON.stringify(filters)}`);
+      logger.info(`Consultando arrendamientos con filtros: ${JSON.stringify(filters)}`);
+
+      const pagination = {
+        enabled: Boolean(filters.pagination?.enabled),
+        page: filters.pagination?.page || 1,
+        limit: filters.pagination?.limit || null,
+        offset: filters.pagination?.offset || 0
+      };
 
       const attributes = {
         include: [
@@ -339,81 +730,189 @@ class LeaseService {
           limit: 1,
           order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
           attributes: ['id_seguimiento', 'estado', 'comentario', 'fecha_creacion', 'id_persona']
+        }
+      ];
+
+      const searchIncludes = [
+        {
+          association: 'inmueble',
+          attributes: [],
+          required: false
         },
+        {
+          association: 'arrendatario',
+          attributes: [],
+          required: false,
+          include: [
+            {
+              association: 'persona',
+              attributes: [],
+              required: false
+            }
+          ]
+        },
+        {
+          association: 'codeudor',
+          attributes: [],
+          required: false
+        }
       ];
 
       const whereClause = {};
       if (filters.estado) whereClause.estado = filters.estado;
       if (filters.id_cliente) whereClause.id_cliente = filters.id_cliente;
-      if (filters.id_arrendatario) whereClause.id_cliente = filters.id_arrendatario; // id_cliente mapea a id_arrendatario en la tabla
+      if (filters.id_arrendatario) whereClause.id_cliente = filters.id_arrendatario;
       if (filters.fecha_inicio && filters.fecha_fin) {
         whereClause.fecha_inicio = {
           [Op.between]: [filters.fecha_inicio, filters.fecha_fin]
         };
       }
 
-        const leases = await Lease.findAll({
-          where: whereClause,
-          attributes,
-          include: includeOptions,
-          order: [['fecha_inicio', 'DESC']],
-          logging: false
-        });
+      const rawSearch = String(filters.search || '').trim();
+      if (rawSearch) {
+        const search = `%${rawSearch}%`;
+        whereClause[Op.and] = [
+          {
+            [Op.or]: [
+              { estado: { [Op.like]: search } },
+              { '$inmueble.registro_inmobiliario$': { [Op.like]: search } },
+              { '$inmueble.direccion$': { [Op.like]: search } },
+              { '$inmueble.ciudad$': { [Op.like]: search } },
+              { '$inmueble.departamento$': { [Op.like]: search } },
+              { '$inmueble.categoria$': { [Op.like]: search } },
+              { '$arrendatario.persona.nombre_completo$': { [Op.like]: search } },
+              { '$arrendatario.persona.apellido_completo$': { [Op.like]: search } },
+              { '$arrendatario.persona.numero_documento$': { [Op.like]: search } },
+              { '$arrendatario.persona.correo$': { [Op.like]: search } },
+              { '$arrendatario.persona.telefono$': { [Op.like]: search } },
+              { '$codeudor.nombre_completo$': { [Op.like]: search } },
+              { '$codeudor.apellido_completo$': { [Op.like]: search } },
+              { '$codeudor.numero_documento$': { [Op.like]: search } },
+              { '$codeudor.correo$': { [Op.like]: search } },
+              { '$codeudor.telefono$': { [Op.like]: search } }
+            ]
+          }
+        ];
+      }
 
-      logger.info(`✅ ${leases.length} arrendamientos obtenidos exitosamente`);
+      const listQuery = {
+        where: whereClause,
+        attributes: ['id_arrendamiento', 'fecha_inicio'],
+        include: searchIncludes,
+        distinct: true,
+        col: 'id_arrendamiento',
+        order: [
+          ['fecha_inicio', 'DESC'],
+          ['id_arrendamiento', 'DESC']
+        ],
+        logging: false
+      };
 
-      return leases.map(lease => ({
-        id_arrendamiento: lease.id_arrendamiento,
-        id_arrendatario: lease.id_cliente, // columna id_arrendatario en BD, mapeada como id_cliente en el modelo
-        id_codeudor: lease.id_codeudor,
-        fecha_inicio: lease.fecha_inicio,
-        fecha_finalizacion: lease.fecha_finalizacion,
-        valor_mensual: lease.valor_mensual,
-        estado: lease.estado,
-        duracion_meses: lease.duracion_meses,
-        fecha_creacion: lease.fecha_creacion,
-        inmueble: lease.inmueble ? {
-          id_inmueble: lease.inmueble.id_inmueble,
-          registro_inmobiliario: lease.inmueble.registro_inmobiliario,
-          direccion: lease.inmueble.direccion,
-          ciudad: lease.inmueble.ciudad,
-          departamento: lease.inmueble.departamento,
-          categoria: lease.inmueble.categoria,
-          area_construida: lease.inmueble.area_construida,
-          area_terreno: lease.inmueble.area_terreno,
-          precio_arriendo: lease.inmueble.precio_arriendo,
-          comodidades: lease.inmueble.comodidades || []
-        } : null,
-        arrendatario: lease.arrendatario ? {
-          id_arrendatario: lease.arrendatario.id_arrendatario,
-          persona: lease.arrendatario.persona ? {
-            id_persona: lease.arrendatario.persona.id_persona,
-            nombre_completo: lease.arrendatario.persona.nombre_completo,
-            apellido_completo: lease.arrendatario.persona.apellido_completo,
-            correo: lease.arrendatario.persona.correo,
-            telefono: lease.arrendatario.persona.telefono,
-            tipo_documento: lease.arrendatario.persona.tipo_documento,
-            numero_documento: lease.arrendatario.persona.numero_documento
-          } : null
-        } : null,
-        codeudor: lease.codeudor ? {
-          id_persona: lease.codeudor.id_persona,
-          nombre_completo: lease.codeudor.nombre_completo,
-          apellido_completo: lease.codeudor.apellido_completo,
-          correo: lease.codeudor.correo,
-          telefono: lease.codeudor.telefono,
-          tipo_documento: lease.codeudor.tipo_documento,
-          numero_documento: lease.codeudor.numero_documento
-        } : null,
-        ultimo_seguimiento_estado: lease.seguimientos?.[0]?.estado || null,
-        ultimo_seguimiento_comentario: lease.seguimientos?.[0]?.comentario ?? lease.seguimientos?.[0]?.descripcion ?? null,
-        ultimo_seguimiento_descripcion: lease.seguimientos?.[0]?.descripcion ?? lease.seguimientos?.[0]?.comentario ?? null,
-        ultimo_seguimiento_fecha: lease.seguimientos?.[0]?.fecha_creacion || null,
-        total_seguimientos: Number(lease.get('total_seguimientos')) || 0
+      if (pagination.enabled) {
+        listQuery.limit = pagination.limit;
+        listQuery.offset = pagination.offset;
+      }
+
+      const { count, rows } = await Lease.findAndCountAll(listQuery);
+      const leaseIds = rows.map((lease) => lease.id_arrendamiento);
+
+      if (!leaseIds.length) {
+        return {
+          data: [],
+          pagination: buildPaginationMeta({
+            total: count,
+            page: pagination.page,
+            limit: pagination.limit,
+            enabled: pagination.enabled
+          })
+        };
+      }
+
+      const leases = await Lease.findAll({
+        where: { id_arrendamiento: { [Op.in]: leaseIds } },
+        attributes,
+        include: includeOptions,
+        order: [
+          ['fecha_inicio', 'DESC'],
+          ['id_arrendamiento', 'DESC']
+        ],
+        logging: false
+      });
+
+      const orderMap = new Map(leaseIds.map((id, index) => [id, index]));
+      leases.sort((a, b) => orderMap.get(a.id_arrendamiento) - orderMap.get(b.id_arrendamiento));
+
+      logger.info(`${leases.length} arrendamientos obtenidos exitosamente`);
+
+      const data = await Promise.all(leases.map(async (lease) => {
+        const latestPreNotice = await this.getLatestPreNoticeEntry(lease.id_arrendamiento);
+
+        return {
+          id_arrendamiento: lease.id_arrendamiento,
+          id_arrendatario: lease.id_cliente,
+          id_codeudor: lease.id_codeudor,
+          fecha_inicio: lease.fecha_inicio,
+          fecha_finalizacion: lease.fecha_finalizacion,
+          valor_mensual: lease.valor_mensual,
+          estado: await this.getDisplayedLeaseState(lease.id_arrendamiento, lease),
+          estado_base: lease.estado,
+          duracion_meses: lease.duracion_meses,
+          fecha_creacion: lease.fecha_creacion,
+          inmueble: lease.inmueble ? {
+            id_inmueble: lease.inmueble.id_inmueble,
+            registro_inmobiliario: lease.inmueble.registro_inmobiliario,
+            direccion: lease.inmueble.direccion,
+            ciudad: lease.inmueble.ciudad,
+            departamento: lease.inmueble.departamento,
+            categoria: lease.inmueble.categoria,
+            area_construida: lease.inmueble.area_construida,
+            area_terreno: lease.inmueble.area_terreno,
+            precio_arriendo: lease.inmueble.precio_arriendo,
+            comodidades: lease.inmueble.comodidades || []
+          } : null,
+          arrendatario: lease.arrendatario ? {
+            id_arrendatario: lease.arrendatario.id_arrendatario,
+            persona: lease.arrendatario.persona ? {
+              id_persona: lease.arrendatario.persona.id_persona,
+              nombre_completo: lease.arrendatario.persona.nombre_completo,
+              apellido_completo: lease.arrendatario.persona.apellido_completo,
+              correo: lease.arrendatario.persona.correo,
+              telefono: lease.arrendatario.persona.telefono,
+              tipo_documento: lease.arrendatario.persona.tipo_documento,
+              numero_documento: lease.arrendatario.persona.numero_documento
+            } : null
+          } : null,
+          codeudor: lease.codeudor ? {
+            id_persona: lease.codeudor.id_persona,
+            nombre_completo: lease.codeudor.nombre_completo,
+            apellido_completo: lease.codeudor.apellido_completo,
+            correo: lease.codeudor.correo,
+            telefono: lease.codeudor.telefono,
+            tipo_documento: lease.codeudor.tipo_documento,
+            numero_documento: lease.codeudor.numero_documento
+          } : null,
+          ultimo_seguimiento_estado: lease.seguimientos?.[0]?.estado || null,
+          ultimo_seguimiento_comentario: lease.seguimientos?.[0]?.comentario ?? lease.seguimientos?.[0]?.descripcion ?? null,
+          ultimo_seguimiento_descripcion: lease.seguimientos?.[0]?.descripcion ?? lease.seguimientos?.[0]?.comentario ?? null,
+          ultimo_seguimiento_fecha: lease.seguimientos?.[0]?.fecha_creacion || null,
+          preaviso_observacion: latestPreNotice?.observacion || null,
+          preaviso_url_soporte: latestPreNotice?.url_soporte || null,
+          preaviso_fecha: latestPreNotice?.fecha_creacion || null,
+          total_seguimientos: Number(lease.get('total_seguimientos')) || 0
+        };
       }));
 
+      return {
+        data,
+        pagination: buildPaginationMeta({
+          total: count,
+          page: pagination.page,
+          limit: pagination.limit,
+          enabled: pagination.enabled
+        })
+      };
     } catch (error) {
-      logger.error(`❌ Error en getAllLeases: ${error.message}`);
+      logger.error(`Error en getAllLeases: ${error.message}`);
       throw error;
     }
   }
@@ -442,6 +941,99 @@ class LeaseService {
     } catch (error) {
       throw error;
     }
+  }
+
+  async extendLease(id, fechaFinalizacion, comentario = null, userId = null) {
+    return sequelize.transaction(async (t) => {
+      const lease = await this.getLeaseById(id, t);
+      if (!lease) {
+        throw new Error('Arrendamiento no encontrado');
+      }
+
+      if (['Finalizado', 'Cancelado'].includes(lease.estado)) {
+        throw new Error('No es posible prorrogar un arrendamiento finalizado o cancelado');
+      }
+
+      const startDate = this.parseDateOnly(lease.fecha_inicio);
+      const oldEndDate = this.parseDateOnly(lease.fecha_finalizacion);
+      const newEndDate = this.parseDateFlexible(fechaFinalizacion);
+
+      if (!startDate || !oldEndDate || !newEndDate) {
+        throw new Error('Las fechas del arrendamiento no son válidas para aplicar la prórroga');
+      }
+
+      if (newEndDate <= oldEndDate) {
+        throw new Error('La nueva fecha de finalización debe ser posterior a la fecha final actual');
+      }
+
+      await lease.update(
+        { fecha_finalizacion: this.formatDateOnly(newEndDate) },
+        { transaction: t }
+      );
+
+      await this.generateExtensionPayments(id, oldEndDate, newEndDate, t);
+
+      const comentarioProrroga =
+        comentario?.trim() ||
+        `Prórroga aplicada hasta ${this.formatDateOnly(newEndDate)}`;
+
+      await this.logSeguimiento({
+        id_arrendamiento: id,
+        estado: lease.estado,
+        comentario: comentarioProrroga,
+        id_persona: userId,
+        transaction: t
+      });
+
+      return this.getLeaseById(id, t);
+    });
+  }
+
+  async registerPreNotice(id, payload = {}, userId = null) {
+    const lease = await this.getLeaseById(id);
+    if (!lease) {
+      throw new Error('Arrendamiento no encontrado');
+    }
+
+    const observation = payload.comentario?.trim() || 'Sin observaciones adicionales';
+    const attachmentUrl = payload.url_soporte?.trim() || null;
+    const comentario = [
+      'Preaviso registrado por el arrendatario.',
+      `Observación: ${observation}`,
+      attachmentUrl ? `Soporte: ${attachmentUrl}` : null
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    await this.logSeguimiento({
+      id_arrendamiento: id,
+      estado: lease.estado,
+      comentario,
+      id_persona: userId
+    });
+
+    return this.getLeaseById(id);
+  }
+
+  async deletePreNotice(id, userId = null) {
+    const lease = await this.getLeaseById(id);
+    if (!lease) {
+      throw new Error('Arrendamiento no encontrado');
+    }
+
+    const currentPreNotice = await this.getLatestPreNoticeEntry(id);
+    if (!currentPreNotice) {
+      throw new Error('No hay un preaviso registrado para eliminar');
+    }
+
+    await this.logSeguimiento({
+      id_arrendamiento: id,
+      estado: lease.estado,
+      comentario: 'Preaviso eliminado del arrendamiento.',
+      id_persona: userId
+    });
+
+    return this.getLeaseById(id);
   }
 
   async updateLeaseStatus(id, estado, comentario = null, userId = null) {
@@ -589,6 +1181,21 @@ class LeaseService {
       const payments = await Payment.findAll({
         where: { id_arrendamiento: leaseId },
         order: [['fecha_cobro', 'ASC']],
+        include: [{
+          model: Receipt,
+          as: 'comprobante',
+          attributes: [
+            'id_comprobante',
+            'url_comprobante',
+            'entidad_bancaria',
+            'referencia_bancaria',
+            'monto_pagado',
+            'estado',
+            'fecha_pago',
+            'observaciones',
+            'fecha_creacion'
+          ]
+        }],
         logging: false
       });
 
@@ -612,7 +1219,7 @@ class LeaseService {
       await payment.update(updateData);
 
       // Recalcular estado general del arrendamiento según cobros pendientes/vencidos
-      const leaseState = await this.syncLeaseStateFromPayments(payment.id_arrendamiento);
+      const leaseState = await this.getDisplayedLeaseState(payment.id_arrendamiento);
 
       return { ...payment.get({ plain: true }), lease_estado: leaseState };
     } catch (error) {
@@ -622,18 +1229,38 @@ class LeaseService {
 
   async createReceipt(receiptData) {
     try {
+      const payment = await Payment.findByPk(receiptData.id_cobro);
+      if (!payment) throw new Error('Cobro no encontrado');
+
+      // Normalizar y validar fecha de pago (usar solo la porción de fecha para evitar desfases horario)
+      const payDate = this.parseDateFlexible(receiptData.fecha_pago);
+      if (!payDate) {
+        throw new Error('Fecha de pago inválida. Usa formato YYYY-MM-DD o DD/MM/YYYY');
+      }
+      const payDateStr = this.formatDateOnly(payDate);
+
+      const formattedPayDate = payDateStr;
+
       const newReceipt = await Receipt.create({
         id_cobro: receiptData.id_cobro,
         url_comprobante: receiptData.url_comprobante,
         entidad_bancaria: receiptData.entidad_bancaria,
         referencia_bancaria: receiptData.referencia_bancaria,
         monto_pagado: receiptData.monto_pagado,
-        fecha_pago: receiptData.fecha_pago,
+        fecha_pago: formattedPayDate,
+        // Default debe coincidir con el CHECK de la BD
         estado: receiptData.estado || 'En revisión',
         observaciones: receiptData.observaciones
       });
 
-      return newReceipt;
+      // Al subir comprobante, marcar el cobro como pagado y registrar fecha de pago
+      await Payment.update(
+        { estado: 'Pagado', fecha_pago: formattedPayDate },
+        { where: { id_cobro: receiptData.id_cobro } }
+      );
+
+      const leaseState = await this.getDisplayedLeaseState(payment.id_arrendamiento);
+      return { ...newReceipt.get({ plain: true }), lease_estado: leaseState };
     } catch (error) {
       throw error;
     }

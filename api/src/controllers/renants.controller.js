@@ -1,4 +1,5 @@
 const renantService = require('../services/renants.service');
+const { normalizePagination } = require('../utils/pagination');
 
 class RenantsController {
   async createRenant(req, res, next) {
@@ -17,12 +18,14 @@ class RenantsController {
   async getAllRenants(req, res, next) {
     try {
       const filters = { ...req.query };
-      const renants = await renantService.getAllRenants(filters);
+      filters.pagination = normalizePagination(req.query);
+      const result = await renantService.getAllRenants(filters);
       return res.status(200).json({
         success: true,
         message: 'Arrendatarios obtenidos exitosamente',
-        data: renants,
-        total: renants.length
+        data: result.data,
+        total: result.pagination.total,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

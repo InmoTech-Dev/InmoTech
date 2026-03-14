@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -18,7 +18,8 @@ import {
   Eye,
   X,
   Save,
-  AlertCircle
+  AlertCircle,
+  Download
 } from "lucide-react";
 
 const modulesData = [
@@ -57,7 +58,7 @@ const modulesData = [
   {
     name: "Reportes Inmobiliarios",
     key: "reportes",
-    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    permisos: ["Crear", "Editar", "Eliminar", "Ver", "Descargar"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
     description: "Generacion de informes y analisis de mercado"
@@ -68,7 +69,8 @@ const permissionConfig = {
   "Crear": { icon: Plus, color: "text-green-600", bg: "bg-green-50" },
   "Editar": { icon: Edit, color: "text-blue-600", bg: "bg-blue-50" },
   "Eliminar": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
-  "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
+  "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" },
+  "Descargar": { icon: Download, color: "text-purple-600", bg: "bg-purple-50" }
 };
 
 const VIEW_PERMISSION = "Ver";
@@ -173,9 +175,9 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       prev.map((mod, i) =>
         i === index
           ? {
-              ...mod,
-              permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
-            }
+            ...mod,
+            permisosSeleccionados: getNextPermissionsSelection(mod.permisosSeleccionados, permiso),
+          }
           : mod
       )
     );
@@ -212,7 +214,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       const rolEditado = {
         ...rol,
         nombre: nombre.trim(),       // Para el frontend
-        nombre_rol: nombre.trim(),   // โ�� Ahora se envรญa para el API
+        nombre_rol: nombre.trim(),   // Ahora se envía para el API
         permisos
       };
 
@@ -266,7 +268,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               <div className="flex gap-4 mt-3 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <span>{activeModulesCount} mรณdulos activos</span>
+                  <span>{activeModulesCount} módulos activos</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
@@ -320,10 +322,10 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                 </div>
               )}
 
-              {/* Mรณdulos y Permisos */}
+              {/* Módulos y Permisos */}
               <div>
                 <h3 className="text-lg font-semibold text-slate-800 mb-4">
-                  Configuraciรณn de Permisos por Mรณdulo
+                  Configuración de Permisos por Módulo
                 </h3>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -337,11 +339,11 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.03 }}
                         className={`border-2 rounded-lg transition-all duration-200 ${module.enabled
-                            ? `${module.color} shadow-sm`
-                            : 'bg-gray-50 border-gray-200'
+                          ? `${module.color} shadow-sm`
+                          : 'bg-gray-50 border-gray-200'
                           }`}
                       >
-                        {/* Header del mรณdulo */}
+                        {/* Header del módulo */}
                         <div className="p-4 border-b border-gray-200">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-3 flex-1">
@@ -389,12 +391,12 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                                     type="button"
                                     onClick={() => togglePermiso(index, permiso)}
                                     className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all text-xs font-medium ${isSelected
-                                        ? `${config.bg} ${config.color} border-current shadow-sm`
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                      ? `${config.bg} ${config.color} border-current shadow-sm`
+                                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
                                       }`}
                                   >
                                     <IconPermiso className="w-3 h-3" />
-                                    <span>{permiso}</span>
+                                    <span>{(module.key === 'reportes' && permiso === 'Eliminar') ? 'Anular' : permiso}</span>
                                   </button>
                                 );
                               })}
@@ -426,8 +428,8 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               onClick={handleSubmit}
               disabled={isSubmitting}
               className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isSubmitting
-                  ? 'bg-slate-400 cursor-not-allowed'
-                  : 'bg-slate-600 hover:bg-slate-700'
+                ? 'bg-slate-400 cursor-not-allowed'
+                : 'bg-slate-600 hover:bg-slate-700'
                 } text-white`}
             >
               <Save className="w-4 h-4" />

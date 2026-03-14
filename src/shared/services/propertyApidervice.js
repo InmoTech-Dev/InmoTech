@@ -213,6 +213,9 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       inmueble.imagen_destacada
     ]);
   }
+  const destacadoRaw =
+    inmueble.destacado ?? inmueble.es_destacado ?? inmueble.destacada ?? inmueble.featured ?? false;
+  const destacado = normalizeEstadoValue(destacadoRaw);
 
   let operacion = inmueble.operacion || 'Sin definir';
   if (operacion === 'Sin definir') {
@@ -254,6 +257,8 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       toNumber(inmueble.area_construida ?? inmueble.areaConstruida ?? inmueble.area) ?? null,
     area_privada: toNumber(inmueble.area_privada ?? inmueble.areaPrivada) ?? null,
     estado_frontend: estadoTexto,
+    destacado: destacado ?? false,
+    featured: destacado ?? false,
     metadata: {
       raw: inmueble
     }
@@ -267,42 +272,91 @@ const normalizePagination = (pagination = {}, fallbackPage = 1, fallbackLimit = 
   total: pagination.total ?? pagination.count ?? 0
 });
 
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const getProvidedValue = (payload, keys = []) => {
+  for (const key of keys) {
+    if (hasOwn(payload, key)) {
+      return payload[key];
+    }
+  }
+  return undefined;
+};
+
 const mapInmuebleToApi = (payload = {}) => {
-  const isVenta = payload.operacion === 'Venta' || payload.operacion === 'Venta y Arriendo';
-  const isArriendo = payload.operacion === 'Arriendo' || payload.operacion === 'Venta y Arriendo';
-  const normalizedEstadoBool = normalizeEstadoValue(
-    payload.estado ?? payload.estado_bool ?? payload.estadoBool ?? payload.estado_frontend
-  );
-  const estadoFrontendTexto =
-    typeof payload.estado === 'string'
-      ? payload.estado
-      : payload.estado_frontend ?? payload.estado_texto ?? payload.estadoTexto;
-  const sanitizedImages =
-    payload.imagenes === undefined ? undefined : sanitizeImages(payload.imagenes || []);
+  const operacion = getProvidedValue(payload, ['operacion']) ?? payload.operacion;
+  const isVenta = operacion === 'Venta' || operacion === 'Venta y Arriendo';
+  const isArriendo = operacion === 'Arriendo' || operacion === 'Venta y Arriendo';
 
-  const body = {
-    registro_inmobiliario: payload.registro_inmobiliario || payload.registro,
-    titulo: payload.titulo,
-    direccion: payload.direccion,
-    barrio: payload.barrio ?? null,
-    ciudad: payload.ciudad,
-    departamento: payload.departamento,
-    pais: payload.pais || DEFAULT_COUNTRY,
-    categoria: payload.categoria || payload.tipo || 'Otro',
-    operacion: payload.operacion,
-    estado: normalizedEstadoBool,
-    estado_frontend: estadoFrontendTexto,
-    precio_venta: isVenta ? toNumber(payload.precio_venta ?? payload.precioVenta ?? payload.precio) : null,
-    precio_arriendo: isArriendo ? toNumber(payload.precio_arriendo ?? payload.precioArriendo ?? payload.precio) : null,
-    area_construida: toNumber(payload.area_construida ?? payload.areaConstruida),
-    area_privada: toNumber(payload.area_privada ?? payload.areaPrivada),
-    descripcion: payload.descripcion ?? payload.descripcion_detallada ?? '',
-    comodidades: payload.comodidades || [],
-    imagenes: sanitizedImages
-  };
+  const estadoSource = getProvidedValue(payload, ['estado', 'estado_bool', 'estadoBool', 'estado_frontend']);
+  const normalizedEstadoBool = normalizeEstadoValue(estadoSource);
 
-  if (payload.propietarioId) {
+  const destacadoSource = getProvidedValue(payload, ['destacado', 'featured', 'es_destacado']);
+  const normalizedDestacadoBool = normalizeEstadoValue(destacadoSource);
+
+  const estadoFrontendSource =
+    typeof getProvidedValue(payload, ['estado']) === 'string'
+      ? getProvidedValue(payload, ['estado'])
+      : getProvidedValue(payload, ['estado_frontend', 'estado_texto', 'estadoTexto']);
+
+  const body = {};
+
+  if (hasOwn(payload, 'registro_inmobiliario') || hasOwn(payload, 'registro')) {
+    body.registro_inmobiliario = payload.registro_inmobiliario || payload.registro;
+  }
+  if (hasOwn(payload, 'titulo')) body.titulo = payload.titulo;
+  if (hasOwn(payload, 'direccion')) body.direccion = payload.direccion;
+  if (hasOwn(payload, 'barrio')) body.barrio = payload.barrio ?? null;
+  if (hasOwn(payload, 'ciudad')) body.ciudad = payload.ciudad;
+  if (hasOwn(payload, 'departamento')) body.departamento = payload.departamento;
+  if (hasOwn(payload, 'pais')) body.pais = payload.pais || DEFAULT_COUNTRY;
+  if (hasOwn(payload, 'categoria') || hasOwn(payload, 'tipo')) {
+    body.categoria = payload.categoria || payload.tipo || 'Otro';
+  }
+  if (hasOwn(payload, 'operacion')) body.operacion = payload.operacion;
+  if (estadoSource !== undefined && normalizedEstadoBool !== undefined) {
+    body.estado = normalizedEstadoBool;
+  }
+  if (estadoFrontendSource !== undefined) body.estado_frontend = estadoFrontendSource;
+
+  if (hasOwn(payload, 'precio_venta') || hasOwn(payload, 'precioVenta') || hasOwn(payload, 'precio')) {
+    body.precio_venta = isVenta
+      ? toNumber(payload.precio_venta ?? payload.precioVenta ?? payload.precio)
+      : null;
+  }
+  if (hasOwn(payload, 'precio_arriendo') || hasOwn(payload, 'precioArriendo') || hasOwn(payload, 'precio')) {
+    body.precio_arriendo = isArriendo
+      ? toNumber(payload.precio_arriendo ?? payload.precioArriendo ?? payload.precio)
+      : null;
+  }
+  if (hasOwn(payload, 'area_construida') || hasOwn(payload, 'areaConstruida')) {
+    body.area_construida = toNumber(payload.area_construida ?? payload.areaConstruida);
+  }
+  if (hasOwn(payload, 'area_privada') || hasOwn(payload, 'areaPrivada')) {
+    body.area_privada = toNumber(payload.area_privada ?? payload.areaPrivada);
+  }
+  if (hasOwn(payload, 'descripcion') || hasOwn(payload, 'descripcion_detallada')) {
+    body.descripcion = payload.descripcion ?? payload.descripcion_detallada ?? '';
+  }
+  if (hasOwn(payload, 'comodidades')) {
+    body.comodidades = payload.comodidades || [];
+  }
+  if (hasOwn(payload, 'imagenes')) {
+    body.imagenes = sanitizeImages(payload.imagenes || []);
+  }
+  if (destacadoSource !== undefined && normalizedDestacadoBool !== undefined) {
+    body.destacado = normalizedDestacadoBool;
+  }
+
+  if (hasOwn(payload, 'propietarioId') && payload.propietarioId !== null) {
     body.propietario_id = payload.propietarioId;
+  }
+  if (hasOwn(payload, 'propietario_id') && payload.propietario_id !== null) {
+    body.propietario_id = payload.propietario_id;
+  }
+
+  if (payload.desasignar_propietario === true) {
+    body.desasignar_propietario = true;
   }
 
   if (payload.propietario) {
@@ -329,7 +383,7 @@ export const inmueblesAPI = {
         ...filters
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : [];
@@ -347,6 +401,16 @@ export const inmueblesAPI = {
   // Versión pública (landing) - usa /inmuebles/buscar sin auth
   async getPublicInmuebles(page = 1, limit = DEFAULT_LIMIT, filters = {}) {
     try {
+      const isAvailableForPublicCatalog = (item = {}) => {
+        if (item.estado_bool === false) return false;
+        const status = String(item.estado_frontend || item.estado || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        return status !== 'vendido' && status !== 'arrendado';
+      };
+
       const response = await apiClient.get('/inmuebles/buscar', {
         pagina: page,
         limite: limit,
@@ -354,9 +418,11 @@ export const inmueblesAPI = {
         _t: Date.now()
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
-        ? payload.inmuebles.map(mapInmuebleFromApi)
+        ? payload.inmuebles
+            .map(mapInmuebleFromApi)
+            .filter(isAvailableForPublicCatalog)
         : [];
 
       return {
@@ -394,7 +460,7 @@ export const inmueblesAPI = {
         },
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : Array.isArray(payload.data)

@@ -53,8 +53,9 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
 
   const availableHours = useMemo(() => [
     '08:00 am', '08:30 am', '09:00 am', '09:30 am', '10:00 am', '10:30 am',
-    '11:00 am', '11:30 am', '02:00 pm', '02:30 pm', '03:00 pm', '03:30 pm',
-    '04:00 pm', '04:30 pm', '05:00 pm', '05:30 pm'
+    '11:00 am', '11:30 am', '12:00 pm', '12:30 pm',
+    '02:00 pm', '02:30 pm', '03:00 pm', '03:30 pm',
+    '04:00 pm', '04:30 pm'
   ], []);
 
   const normalizeFechaToInput = (fecha) => {
@@ -196,7 +197,7 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
     if (!v) return 'La hora es requerida';
     const n = normalizeHoraToOption(v);
     if (!n) return 'Selecciona una hora valida';
-    return horaOptions.includes(n) ? '' : 'Selecciona una hora valida de la lista';
+    return horaOptions.includes(n) ? '' : 'Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm';
   };
   const validateServicio = (v) => {
     if (!v || v.trim() === '') return 'El servicio es requerido';

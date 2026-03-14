@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { X, User, Phone, Mail, FileText, CheckCircle } from 'lucide-react';
+import { buyersApiService } from "../../../../shared/services/buyersApiService";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 const defaultFormData = {
   id: null,
@@ -12,6 +14,7 @@ const defaultFormData = {
   segundoApellido: "",
   correo: "",
   telefono: "",
+  estado: "Activo",
   observaciones: ""
 };
 
@@ -34,6 +37,7 @@ export default function BuyerForm({
 }) {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState(null);
+  const { toast } = useToast();
 
   // Refs estilo TenantForm para evitar bloqueos al tipear
   const valuesRef = useRef({ ...defaultFormData, id: nextId });
@@ -49,6 +53,111 @@ export default function BuyerForm({
   const docFields = ["documento"];
   const phoneFields = ["telefono"];
   const emailFields = ["correo"];
+  const [lookupState, setLookupState] = useState({ loading: false, message: "", error: null });
+  const lookupTimeoutRef = useRef(null);
+
+  const sanitizeNumericString = (value) => {
+    if (value === undefined || value === null) return "";
+    return value.toString().replace(/[^0-9]/g, "");
+  };
+
+  const normalizePhone = (value = "") => {
+    const digits = sanitizeNumericString(value);
+    if (!digits) return "";
+    if (digits.startsWith("57") && digits.length > 10) {
+      return digits.slice(-10);
+    }
+    return digits.slice(-10);
+  };
+
+  const setValue = (name, value) => {
+    valuesRef.current[name] = value;
+    displayValuesRef.current[name] = value;
+    if (elRefs.current[name]) {
+      try { elRefs.current[name].value = value; } catch (e) {}
+    }
+  };
+
+  const applyBuyerData = useCallback((buyer = {}) => {
+    setValue("tipoDocumento", buyer.tipoDocumento || buyer.tipo_documento || valuesRef.current.tipoDocumento);
+    setValue("documento", buyer.documento || buyer.numero_documento || "");
+    setValue("primerNombre", buyer.primerNombre || "");
+    setValue("segundoNombre", buyer.segundoNombre || "");
+    setValue("primerApellido", buyer.primerApellido || "");
+    setValue("segundoApellido", buyer.segundoApellido || "");
+    setValue("correo", buyer.correo || "");
+    setValue("telefono", normalizePhone(buyer.telefono));
+    setValue("estado", buyer.estado || "Activo");
+  }, []);
+
+  const cleanDocument = (value = "") => value.replace(/\\D/g, "").trim();
+
+  const lookupBuyer = useCallback(async () => {
+    const tipoDocumento = (valuesRef.current.tipoDocumento || "").trim();
+    const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
+
+    if (!tipoDocumento || !numeroDocumento) return;
+
+    const validationError = validateDocument(tipoDocumento, numeroDocumento);
+    if (validationError) {
+      setLookupState({ loading: false, message: "", error: null });
+      toast({
+        title: "Documento inválido",
+        description: validationError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+      setLookupState({ loading: true, message: "", error: null });
+    try {
+      let buyer = await buyersApiService.findByDocument(tipoDocumento, numeroDocumento);
+      if (!buyer) {
+        buyer = await buyersApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
+      }
+
+      if (buyer) {
+        applyBuyerData(buyer);
+        setLookupState({
+          loading: false,
+          message: "",
+          error: null
+        });
+        toast({
+          title: "Comprador encontrado",
+          description: "Datos autocompletados correctamente.",
+          variant: "default",
+        });
+      } else {
+        setLookupState({
+          loading: false,
+          message: "",
+          error: null
+        });
+        toast({
+          title: "No encontrado",
+          description: "No se encontró una persona con ese documento.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      setLookupState({
+        loading: false,
+        message: "",
+        error: null
+      });
+      toast({
+        title: "Error al buscar",
+        description: "No fue posible buscar el comprador. Intenta de nuevo.",
+        variant: "destructive",
+      });
+    }
+  }, [applyBuyerData]);
+
+  const triggerLookup = useCallback(() => {
+    if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+    lookupTimeoutRef.current = setTimeout(lookupBuyer, 250);
+  }, [lookupBuyer]);
 
   useEffect(() => {
     const newData = {
@@ -67,7 +176,7 @@ export default function BuyerForm({
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
     switch (tipoDocumento) {
       case 'CC':
-        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
+        if (!/^[0-9]{7,10}$/.test(numeroLimpio)) return 'La cédula de ciudadanía debe tener entre 7 y 10 dígitos';
         break;
       case 'CE':
         if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
@@ -162,6 +271,11 @@ export default function BuyerForm({
       ...prev,
       [name]: errorMessage,
     }));
+
+    // Al salir de tipo o documento, intentar autocompletar
+    if ((name === "documento" || name === "tipoDocumento") && !errorMessage) {
+      triggerLookup();
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -304,6 +418,7 @@ export default function BuyerForm({
       segundoApellido: "Segundo Apellido",
       correo: "Correo Electrónico",
       telefono: "Teléfono",
+      estado: "Estado",
       observaciones: "Observaciones"
     };
     return labels[name] ?? name;
@@ -315,7 +430,7 @@ export default function BuyerForm({
     requiredFields.some((field) => !String(valuesRef.current[field] ?? "").trim());
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       {/* Backdrop (animado) */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -329,7 +444,7 @@ export default function BuyerForm({
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.25 }}
-          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col"
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[90vh] overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >        
         {/* Header */}

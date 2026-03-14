@@ -1,160 +1,148 @@
 /**
- * @fileoverview Servicio frontend para interactuar con el endpoint de Arriendos
- * @module shared/services/arriendoApiService
- * @description Cliente HTTP que consume la API REST de arriendos del backend
- * @author InmoTech Development Team
- * @version 1.0.0
+ * Servicio frontend para endpoints de arriendos (leases)
  */
 
 import { apiClient } from './api.config';
 
+const extractPagination = (response, fallback = {}) => {
+  const payload = response?.data ?? response ?? {};
+  const pagination = payload?.pagination || payload?.paginacion || {};
+  const page = fallback.page ?? 1;
+  const limit = fallback.limit ?? 5;
+  const total =
+    pagination.total ??
+    pagination.total_items ??
+    pagination.totalItems ??
+    pagination.count ??
+    payload?.total ??
+    payload?.total_items ??
+    payload?.totalItems ??
+    payload?.count ??
+    0;
+  const resolvedLimit = pagination.limite ?? pagination.limit ?? pagination.per_page ?? pagination.perPage ?? limit;
+  const totalPagesRaw =
+    pagination.paginas_totales ??
+    pagination.total_paginas ??
+    pagination.totalPages ??
+    pagination.pages ??
+    payload?.paginas_totales ??
+    payload?.total_paginas ??
+    payload?.totalPages ??
+    payload?.pages;
+  const resolvedTotalPages =
+    totalPagesRaw ?? (total > 0 ? Math.ceil(total / Math.max(resolvedLimit || limit, 1)) : 1);
+
+  return {
+    total,
+    pagina:
+      pagination.pagina ??
+      pagination.page ??
+      pagination.current_page ??
+      pagination.currentPage ??
+      payload?.pagina ??
+      payload?.page ??
+      payload?.current_page ??
+      payload?.currentPage ??
+      page,
+    limite: resolvedLimit,
+    paginas_totales: resolvedTotalPages,
+    has_next_page:
+      pagination.has_next_page ??
+      pagination.hasNextPage ??
+      payload?.has_next_page ??
+      payload?.hasNextPage ??
+      false,
+    has_prev_page:
+      pagination.has_prev_page ??
+      pagination.hasPrevPage ??
+      payload?.has_prev_page ??
+      payload?.hasPrevPage ??
+      false,
+  };
+};
+
+const extractList = (response) => {
+  const data = response?.data?.data ?? response?.data ?? response;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.results)) return data.results;
+  return [];
+};
+
 class ArriendoApiService {
-  /**
-   * Crea un nuevo arriendo
-   * @param {Object} arriendoData - Datos del arriendo
-   * @returns {Promise<Object>} Respuesta del servidor con el arriendo creado
-   */
   async crearArriendo(arriendoData) {
-    try {
-      console.log('🏠 Creando nuevo arriendo...');
-
-      const response = await apiClient.post('/leases', arriendoData);
-
-      console.log('✅ Arriendo creado exitosamente');
-      return response;
-    } catch (error) {
-      console.error('❌ Error creando arriendo:', error.message);
-      throw error;
-    }
+    const response = await apiClient.post('/leases', arriendoData);
+    return response;
   }
 
-  /**
-   * Obtiene todos los arriendos con filtros opcionales
-   * @param {Object} params - Parámetros de consulta (estado, etc.)
-   * @returns {Promise<Object>} Lista de arriendos
-   */
   async obtenerArriendos(params = {}) {
-    try {
-      console.log('📋 Obteniendo arriendos...');
-
-      const response = await apiClient.get('/leases', { params });
-
-      console.log('✅ Arriendos obtenidos');
-      return response;
-    } catch (error) {
-      console.error('❌ Error obteniendo arriendos:', error.message);
-      throw error;
-    }
+    const response = await apiClient.get('/leases', { params });
+    return {
+      data: extractList(response),
+      pagination: extractPagination(response, params),
+      raw: response,
+    };
   }
 
-  /**
-   * Obtiene estadísticas de arriendos
-   * @returns {Promise<Object>} Estadísticas de arriendos
-   */
   async obtenerEstadisticas() {
-    try {
-      console.log('📊 Obteniendo estadísticas de arriendos...');
-
-      const response = await apiClient.get('/leases/dashboard/statistics');
-
-      console.log('✅ Estadísticas obtenidas');
-      return response;
-    } catch (error) {
-      console.error('❌ Error obteniendo estadísticas:', error.message);
-      throw error;
-    }
+    const response = await apiClient.get('/leases/dashboard/statistics');
+    return response;
   }
 
-  /**
-   * Reserva un arriendo
-   * @param {number} id - ID del arriendo
-   * @param {Object} reservaData - Datos de la reserva
-   * @returns {Promise<Object>} Arriendo reservado
-   */
   async reservarArriendo(id, reservaData) {
-    try {
-      console.log(`📅 Reservando arriendo con ID: ${id}`);
-
-      const response = await apiClient.patch(`/leases/${id}/reservar`, reservaData);
-
-      console.log('✅ Arriendo reservado');
-      return response;
-    } catch (error) {
-      console.error('❌ Error reservando arriendo:', error.message);
-      throw error;
-    }
+    const response = await apiClient.patch(`/leases/${id}/reservar`, reservaData);
+    return response;
   }
 
-  /**
-   * Activa un arriendo
-   * @param {number} id - ID del arriendo
-   * @returns {Promise<Object>} Arriendo activado
-   */
   async activarArriendo(id) {
-    try {
-      console.log(`▶️ Activando arriendo con ID: ${id}`);
-
-      const response = await apiClient.patch(`/leases/${id}/activar`);
-
-      console.log('✅ Arriendo activado');
-      return response;
-    } catch (error) {
-      console.error('❌ Error activando arriendo:', error.message);
-      throw error;
-    }
+    const response = await apiClient.patch(`/leases/${id}/activar`);
+    return response;
   }
 
-  /**
-   * Finaliza un arriendo
-   * @param {number} id - ID del arriendo
-   * @returns {Promise<Object>} Arriendo finalizado
-   */
   async finalizarArriendo(id) {
-    try {
-      console.log(`⏹️ Finalizando arriendo con ID: ${id}`);
-
-      const response = await apiClient.patch(`/leases/${id}/finalizar`);
-
-      console.log('✅ Arriendo finalizado');
-      return response;
-    } catch (error) {
-      console.error('❌ Error finalizando arriendo:', error.message);
-      throw error;
-    }
+    const response = await apiClient.patch(`/leases/${id}/finalizar`);
+    return response;
   }
 
-  /**
-   * Elimina un arriendo por ID
-   * @param {number|string} id - ID del arriendo
-   * @returns {Promise<Object>} Respuesta del servidor
-   */
   async eliminarArriendo(id) {
-    try {
-      console.log(`🗑️ Eliminando arriendo con ID: ${id}`);
-      const response = await apiClient.delete(`/leases/${id}`);
-      console.log('✅ Arriendo eliminado');
-      return response;
-    } catch (error) {
-      console.error('❌ Error eliminando arriendo:', error.message);
-      throw error;
-    }
+    const response = await apiClient.delete(`/leases/${id}`);
+    return response;
   }
 
-  /**
-   * Actualiza únicamente el estado del arriendo (flujo de seguimiento)
-   * @param {number} id - ID del arriendo
-   * @param {{estado: string, comentario?: string}} payload - Estado nuevo y comentario opcional
-   */
   async actualizarEstado(id, payload) {
-    try {
-      console.log(`🔄 Actualizando estado del arriendo ${id} → ${payload?.estado}`);
-      const response = await apiClient.patch(`/leases/${id}/estado`, payload);
-      console.log('✅ Estado de arriendo actualizado');
-      return response;
-    } catch (error) {
-      console.error('❌ Error actualizando estado del arriendo:', error.message);
-      throw error;
-    }
+    const response = await apiClient.patch(`/leases/${id}/estado`, payload);
+    return response;
+  }
+
+  async prorrogarArriendo(id, payload) {
+    const response = await apiClient.patch(`/leases/${id}/extend`, payload);
+    return response;
+  }
+
+  async registrarPreaviso(id, payload) {
+    const response = await apiClient.patch(`/leases/${id}/pre-notice`, payload);
+    return response;
+  }
+
+  async eliminarPreaviso(id) {
+    const response = await apiClient.delete(`/leases/${id}/pre-notice`);
+    return response;
+  }
+
+  // Cobros del arriendo
+  async obtenerCobros(id) {
+    const response = await apiClient.get(`/leases/${id}/payments`);
+    return response;
+  }
+
+  // Comprobante de pago asociado a un cobro
+  async crearComprobante(leaseId, paymentId, payload) {
+    const response = await apiClient.post(
+      `/leases/${leaseId}/payments/${paymentId}/receipt`,
+      payload
+    );
+    return response;
   }
 }
 

@@ -63,7 +63,6 @@ const initial = {
     inmuebleBarrio: "",
     inmuebleDireccion: "",
     inmueblePrecio: "",
-    inmuebleGaraje: false,
     inmuebleEstado: "Disponible",
     fechaVenta: new Date().toISOString().slice(0, 10),
     medioPago: "efectivo",
@@ -129,6 +128,30 @@ const propertyIsOnlyForRent = (property = {}) => {
     return operacion === "arriendo" || operacion === "alquiler";
 };
 
+const propertyIsSold = (property = {}) => {
+    const source = getPropertySource(property);
+    const estadoTexto = normalizeTextValue(
+        property.estado ||
+        source.estado ||
+        source.estado_inmueble ||
+        source.estado_frontend ||
+        property.estadoVenta ||
+        source.estado_venta
+    );
+    const soldKeywords = ["vendido", "vendida", "vendidos", "sold", "cerrada", "completada"];
+    return soldKeywords.some((kw) => estadoTexto.includes(kw));
+};
+
+const isActiveStatus = (estado = "") => {
+    const normalized = normalizeTextValue(estado);
+    return normalized === "activo" || normalized === "activa" || estado === true;
+};
+
+const getBuyerState = (buyer = {}) =>
+    buyer.estado ?? buyer.status ?? buyer.raw?.estado ?? buyer.persona?.estado;
+
+const buyerIsActive = (buyer = {}) => isActiveStatus(getBuyerState(buyer));
+
 const normalizeDocType = (value = "") => {
     const v = normalizeTextValue(value);
     if (!v) return "";
@@ -137,7 +160,7 @@ const normalizeDocType = (value = "") => {
     if (["nit", "n.i.t", "tax id"].includes(v)) return "NIT";
     if (["pasaporte", "passport", "pp"].includes(v)) return "PASAPORTE";
     if (["ti", "t.i", "tarjeta de identidad"].includes(v)) return "TI";
-    return value; // deja tal cual si no coincide; el select mostrará vacío si no existe la opción
+    return value;
 };
 
 // Separa posibles prefijos de tipo y limpia solo dígitos para el número
@@ -156,6 +179,14 @@ const splitDocTypeAndNumber = (rawNumber = "", rawType = "") => {
         tipo: inferredType,
         numero: numberOnly
     };
+};
+
+// Limpia el número de documento a solo dígitos (para validación y búsquedas)
+const cleanDocument = (value = "") => value.toString().replace(/[^0-9]/g, "").trim();
+const MIN_BUYER_DOC_LENGTH = 6;
+const shouldTriggerBuyerLookup = (tipoDocumento = "", numeroDocumento = "") => {
+    const cleaned = cleanDocument(numeroDocumento);
+    return Boolean(tipoDocumento) && cleaned.length >= MIN_BUYER_DOC_LENGTH;
 };
 
 const getOwnerCandidate = (inmueble = {}) => {
@@ -208,13 +239,26 @@ export default function SalesForm({ onClose, onSubmit }) {
     const phoneFields = ["vendedorTelefono", "compradorTelefono"];
     const emailFields = ["vendedorCorreo", "compradorCorreo"];
 
+    const sanitizeNumericString = (value) => {
+        if (value === undefined || value === null) return "";
+        return value.toString().replace(/[^0-9]/g, "");
+    };
+
+    const normalizePhone = (value = "") => {
+        const digits = sanitizeNumericString(value);
+        if (!digits) return "";
+        if (digits.startsWith("57") && digits.length > 10) {
+            return digits.slice(-10);
+        }
+        return digits.slice(-10);
+    };
+
     // Campos agrupados por paso para la validación
-    // Orden de pasos: 1) inmueble, 2) vendedor (propietario), 3) comprador, 4) precio/pago
     const stepFields = {
         1: [
             "inmuebleTipo", "inmuebleRegistro", "inmuebleNombre",
             "inmueblePais", "inmuebleDepartamento", "inmuebleCiudad",
-            "inmuebleBarrio", "inmuebleDireccion", "inmuebleGaraje"
+            "inmuebleBarrio", "inmuebleDireccion"
         ],
         2: [
             "vendedorTipoDocumento", VENDEDOR_DOC, "vendedorNombreCompleto", 
@@ -243,30 +287,29 @@ export default function SalesForm({ onClose, onSubmit }) {
     const getLabel = (name) => {
         const labels = {
             // Vendedor
-            vendedorTipoDocumento: "Tipo Doc. Vendedor", 
-            vendedorDocumento: "Número Doc. Vendedor",
+            vendedorTipoDocumento: "Tipo de Documento Vendedor", 
+            vendedorDocumento: "Número de Documento Vendedor",
             vendedorNombreCompleto: "Nombre Completo Vendedor", 
-            vendedorCorreo: "Correo Vendedor",
+            vendedorCorreo: "Correo Electrónico Vendedor",
             vendedorTelefono: "Teléfono Vendedor",
 
             // Comprador
-            compradorTipoDocumento: "Tipo Doc. Comprador", 
-            compradorDocumento: "Número Doc. Comprador",
+            compradorTipoDocumento: "Tipo de Documento Comprador", 
+            compradorDocumento: "Número de Documento Comprador",
             compradorNombreCompleto: "Nombre Completo Comprador", 
-            compradorCorreo: "Correo Comprador",
+            compradorCorreo: "Correo Electrónico Comprador",
             compradorTelefono: "Teléfono Comprador",
 
             // Inmueble
             inmuebleTipo: "Tipo de Inmueble", 
-            inmuebleRegistro: "No. Registro Catastral",
-            inmuebleNombre: "Nombre/Título Comercial", 
+            inmuebleRegistro: "Registro Inmobiliario",
+            inmuebleNombre: "Nombre del Inmueble", 
             inmueblePais: "País", 
-            inmuebleDepartamento: "Departamento/Estado",
+            inmuebleDepartamento: "Departamento",
             inmuebleCiudad: "Ciudad", 
-            inmuebleBarrio: "Barrio/Zona",
-            inmuebleDireccion: "Dirección Completa",
-            inmueblePrecio: "Precio de Venta (COP)", 
-            inmuebleGaraje: "¿Tiene Garaje?",
+            inmuebleBarrio: "Barrio",
+            inmuebleDireccion: "Dirección",
+            inmueblePrecio: "Precio del Inmueble", 
 
             // Venta
             fechaVenta: "Fecha de Venta",
@@ -279,31 +322,26 @@ export default function SalesForm({ onClose, onSubmit }) {
     };
 
     // === VALIDACIONES MEJORADAS PARA DOCUMENTOS ===
-
-    // Función para validar documentos según el tipo
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
         
         switch (tipoDocumento) {
-            case 'CC': // Cédula de Ciudadanía
-                if (!/^[0-9]{8,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
+            case 'CC':
+                if (!/^[0-9]{7,10}$/.test(numeroLimpio)) {
+                    return 'La cédula de ciudadanía debe tener entre 7 y 10 dígitos';
                 }
                 break;
-                
-            case 'CE': // Cédula de Extranjería
+            case 'CE':
                 if (!/^[0-9]{6,10}$/.test(numeroLimpio)) {
                     return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
                 }
                 break;
-                
-            case 'NIT': // NIT
+            case 'NIT':
                 if (!/^[0-9]{9,10}$/.test(numeroLimpio)) {
                     return 'El NIT debe tener 9 o 10 dígitos';
                 }
                 break;
-                
-            case 'PASAPORTE': // Pasaporte
+            case 'PASAPORTE':
                 if (numeroLimpio.length < 6 || numeroLimpio.length > 20) {
                     return 'El pasaporte debe tener entre 6 y 20 caracteres';
                 }
@@ -311,26 +349,23 @@ export default function SalesForm({ onClose, onSubmit }) {
                     return 'El pasaporte solo puede contener letras y números';
                 }
                 break;
-                
-            case 'TI': // Tarjeta de Identidad
+            case 'TI':
                 if (!/^[0-9]{10,11}$/.test(numeroLimpio)) {
                     return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
                 }
                 break;
-                
             default:
                 return 'Tipo de documento no válido';
         }
-        
         return '';
     };
 
-    // Función para obtener la clase de estilo (incluyendo el resaltado de error)
+    // Función para obtener la clase de estilo MEJORADA (igual que en RentForm)
     const getFieldClass = useCallback((fieldName) => {
-        const errorClass = errors[fieldName] 
-            ? 'border-red-500 ring-2 ring-red-500' 
-            : 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
-        return `w-full p-3 border rounded-lg focus:outline-none transition duration-150 ${errorClass}`;
+        const errorClass = errors[fieldName]
+            ? "border-red-500 ring-2 ring-red-200"
+            : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200";
+        return `w-full rounded-xl bg-white px-3 py-2 text-sm shadow-sm focus:outline-none transition ${errorClass}`;
     }, [errors]);
 
     // Formateador de números con separadores de miles
@@ -356,7 +391,6 @@ export default function SalesForm({ onClose, onSubmit }) {
             valuesRef.current[name] = initial[name] ?? "";
         }
         
-        // Inicializar valor de visualización para campos de moneda
         if (currencyFields.includes(name) && valuesRef.current[name]) {
             displayValuesRef.current[name] = formatNumberWithThousandsSeparator(valuesRef.current[name].toString());
         } else {
@@ -372,40 +406,99 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
     };
 
-    // Manejador de cambios en inputs (sistema optimizado)
+    const setFieldValue = (name, value) => {
+        const el = elRefs.current[name];
+        if (currencyFields.includes(name)) {
+            const clean = sanitizeNumericString(value);
+            const formatted = clean ? formatNumberWithThousandsSeparator(clean) : "";
+            valuesRef.current[name] = clean;
+            displayValuesRef.current[name] = formatted;
+            if (el) {
+                try { el.value = formatted; } catch (_err) { /* ignore */ }
+            }
+        } else if (el?.type === "checkbox") {
+            const checkedValue = Boolean(value);
+            valuesRef.current[name] = checkedValue;
+            displayValuesRef.current[name] = checkedValue;
+            el.checked = checkedValue;
+        } else {
+            const nextValue = value ?? "";
+            valuesRef.current[name] = nextValue;
+            displayValuesRef.current[name] = nextValue;
+            if (el) {
+                try { el.value = nextValue; } catch (_err) { /* ignore */ }
+            }
+        }
+
+        if (errors[name]) {
+            setErrors((prev) => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
+    };
+
+    // Manejador de cambios en inputs MEJORADO
     const handleInputChange = (e) => {
         let { name, type, value, checked } = e.target;
         let cleanValue = value;
+        const isDocFieldChange = docFields.includes(name);
+        const isPhoneFieldChange = phoneFields.includes(name);
 
         if (type === "checkbox") {
             valuesRef.current[name] = checked;
         } else {
-            // Formatear campos de moneda
             if (currencyFields.includes(name)) {
                 cleanValue = value.replace(/[^0-9]/g, '');
                 const formattedValue = formatNumberWithThousandsSeparator(cleanValue);
                 
                 displayValuesRef.current[name] = formattedValue;
                 e.target.value = formattedValue;
+            } else if (isDocFieldChange || isPhoneFieldChange) {
+                cleanValue = sanitizeNumericString(value);
+                displayValuesRef.current[name] = cleanValue;
+                if (e.target.value !== cleanValue) {
+                    e.target.value = cleanValue;
+                }
             } else {
                 displayValuesRef.current[name] = value;
             }
             
             valuesRef.current[name] = cleanValue;
 
-            // Reset de selección de comprador si cambian documentos
             if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
                 selectedBuyerRef.current = null;
                 manuallyEditedBuyerFieldsRef.current.clear();
             }
 
-            // Marcar campos editados manualmente
             if (BUYER_AUTOFILL_FIELDS.includes(name)) {
                 manuallyEditedBuyerFieldsRef.current.add(name);
             }
+
+            if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
+                const tipoDocActual =
+                    name === "compradorTipoDocumento" ? cleanValue : (valuesRef.current.compradorTipoDocumento || "");
+                const numeroDocActual =
+                    name === COMPRADOR_DOC ? cleanValue : (valuesRef.current.compradorDocumento || "");
+
+                buyerDocumentSnapshotRef.current = {
+                    tipo: tipoDocActual,
+                    numero: cleanDocument(numeroDocActual || ""),
+                };
+
+                if (shouldTriggerBuyerLookup(tipoDocActual, numeroDocActual)) {
+                    triggerBuyerLookup(120);
+                } else {
+                    setBuyerLookupState((prev) =>
+                        prev.loading || prev.error || prev.message
+                            ? { loading: false, message: "", error: null }
+                            : prev
+                    );
+                }
+            }
         }
 
-        // Limpiar errores al escribir
         if (errors[name]) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -414,7 +507,6 @@ export default function SalesForm({ onClose, onSubmit }) {
             });
         }
 
-        // Si cambia el medio de pago a algo distinto de mixto, limpiar campos mixtos
         if (name === "medioPago" && cleanValue.toLowerCase() !== "mixto") {
             valuesRef.current.medioPagoDescripcion = "";
             displayValuesRef.current.medioPagoDescripcion = "";
@@ -442,26 +534,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                 delete next.medioPagoEfectivo;
                 delete next.medioPagoTransferencia;
                 return next;
-            });
-        }
-    };
-
-    const setFieldValue = (name, value) => {
-        valuesRef.current[name] = value ?? "";
-        displayValuesRef.current[name] = value ?? "";
-        const el = elRefs.current[name];
-        if (el) {
-            if (el.type === "checkbox") {
-                el.checked = !!value;
-            } else {
-                try { el.value = value ?? ""; } catch (_err) { /* ignore */ }
-            }
-        }
-        if (errors[name]) {
-            setErrors(prev => {
-                const newErrors = { ...prev };
-                delete newErrors[name];
-                return newErrors;
             });
         }
     };
@@ -504,7 +576,6 @@ export default function SalesForm({ onClose, onSubmit }) {
         if (tipo) setFieldValue("vendedorTipoDocumento", tipo);
         if (numero) {
             setFieldValue(VENDEDOR_DOC, String(numero));
-            // Guardar snapshot para que las validaciones/búsquedas no lo borren
             buyerDocumentSnapshotRef.current = {
                 tipo: valuesRef.current.vendedorTipoDocumento || tipo || "",
                 numero: String(numero)
@@ -546,7 +617,6 @@ export default function SalesForm({ onClose, onSubmit }) {
             if (priceEl) priceEl.value = formatted;
         }
 
-        // Autocompletar vendedor con datos del propietario
         autofillVendedorDesdePropietario(inmueble);
     };
 
@@ -560,11 +630,26 @@ export default function SalesForm({ onClose, onSubmit }) {
             const inmueble = await inmueblesAPI.getInmuebleByRegistro(cleanRegistro);
 
             if (inmueble && inmueble.id) {
+                if (propertyIsSold(inmueble)) {
+                    setInmuebleLookupState({ loading: false, message: "", error: null });
+                    setErrors((prev) => {
+                        const next = { ...prev };
+                        next.inmuebleRegistro = "Este inmueble ya fue vendido y no puede registrarse otra venta.";
+                        return next;
+                    });
+                    toast({
+                        title: "Inmueble ya vendido",
+                        description: "No se puede registrar una nueva venta para este inmueble.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
                 if (propertyHasActiveLease(inmueble)) {
                     setInmuebleLookupState({ loading: false, message: "", error: null });
                     setErrors((prev) => {
                         const next = { ...prev };
-                        delete next.inmuebleRegistro; // evitamos mostrar texto de la API en el campo
+                        delete next.inmuebleRegistro;
                         return next;
                     });
                     toast({
@@ -643,17 +728,14 @@ export default function SalesForm({ onClose, onSubmit }) {
         setErrors(prev => {
             const newErrors = { ...prev };
 
-            // Validar campo obligatorio
-            if (isRequired && !value.trim() && name !== 'inmuebleGaraje') { 
+            if (isRequired && !value.trim()) { 
                  errorMessage = "Este campo es obligatorio.";
             }
 
-            // Validar formato y longitud (solo si no hay error de obligatoriedad y el campo tiene valor)
             if (!errorMessage && value.trim()) {
                 if (nameFields.includes(name) && !isValidName(value)) {
                     errorMessage = `Solo se permiten letras.`;
                 } 
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(name)) {
                     let tipoDocumento = "";
                     
@@ -663,11 +745,9 @@ export default function SalesForm({ onClose, onSubmit }) {
                         tipoDocumento = valuesRef.current.compradorTipoDocumento || "CC";
                     }
                     
-                    // Validar formato básico primero
                     if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
                         errorMessage = `Solo se permiten letras, números, espacios, puntos y guiones`;
                     } else {
-                        // Validación específica por tipo de documento
                         errorMessage = validateDocument(tipoDocumento, value);
                     }
                 } 
@@ -683,7 +763,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                 } 
             }
 
-            // Aplicar o limpiar error
             if (errorMessage) {
                 newErrors[name] = errorMessage;
             } else {
@@ -693,27 +772,45 @@ export default function SalesForm({ onClose, onSubmit }) {
             return newErrors;
         });
 
-        // Lookup de inmueble por registro para autocompletar
         if (name === "inmuebleRegistro" && !errorMessage && value.trim().length > 0) {
             await handleInmuebleLookup(value);
         }
-        // Lógica de búsqueda de comprador
         if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
             const currentTipo = valuesRef.current.compradorTipoDocumento || "";
-            const normalizedDocumento = valuesRef.current.compradorDocumento || "";
-            const docChanged =
-                buyerDocumentSnapshotRef.current.tipo !== currentTipo ||
-                buyerDocumentSnapshotRef.current.numero !== normalizedDocumento;
+            const normalizedDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+            const docReady = shouldTriggerBuyerLookup(currentTipo, normalizedDocumento);
+            const previousSnapshot = { ...buyerDocumentSnapshotRef.current };
 
-            if (docChanged) {
-                resetBuyerSelection({ resetState: true, resetFields: true });
+            if (!docReady) {
                 buyerDocumentSnapshotRef.current = {
                     tipo: currentTipo,
                     numero: normalizedDocumento,
                 };
+                return;
             }
 
+            const docChanged =
+                previousSnapshot.tipo !== currentTipo ||
+                previousSnapshot.numero !== normalizedDocumento;
+
+            if (docChanged) {
+                resetBuyerSelection({ resetState: true, resetFields: true });
+            }
+
+            buyerDocumentSnapshotRef.current = {
+                tipo: currentTipo,
+                numero: normalizedDocumento,
+            };
+
             triggerBuyerLookup(name === COMPRADOR_DOC ? 0 : 200);
+        }
+
+        if (name === "compradorNombreCompleto") {
+            const currentTipo = valuesRef.current.compradorTipoDocumento || "";
+            const normalizedDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+            if (shouldTriggerBuyerLookup(currentTipo, normalizedDocumento) && !selectedBuyerRef.current) {
+                triggerBuyerLookup(0);
+            }
         }
     };
 
@@ -724,12 +821,10 @@ export default function SalesForm({ onClose, onSubmit }) {
         if (value === 0) return "0";
         if (value === "") return "";
 
-        // Para campos numéricos estrictos, solo mantener dígitos
         if (strictNumericFields.includes(fieldName)) {
             return value.toString().replace(/[^0-9]/g, '');
         }
 
-        // Para campos de moneda, solo mantener dígitos (sin formato)
         if (currencyFields.includes(fieldName)) {
             return value.toString().replace(/[^0-9]/g, '');
         }
@@ -742,7 +837,6 @@ export default function SalesForm({ onClose, onSubmit }) {
             return value.toString().replace(/[\s\-\(\)\+]/g, '');
         }
 
-        // Para otros campos, solo trim
         return value.toString().trim();
     };
 
@@ -774,6 +868,21 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const applyBuyerData = useCallback((buyer) => {
         if (!buyer) return;
+        if (!buyerIsActive(buyer)) {
+            const inactiveMsg = "No se puede asociar una venta a un arrendatario en estado inactivo.";
+            setBuyerLookupState({
+                loading: false,
+                message: "",
+                error: inactiveMsg,
+            });
+            toast({
+                title: "Arrendatario inactivo",
+                description: inactiveMsg,
+                variant: "destructive",
+            });
+            resetBuyerSelection({ resetState: true, resetFields: true });
+            return;
+        }
 
         selectedBuyerRef.current = buyer;
 
@@ -800,7 +909,6 @@ export default function SalesForm({ onClose, onSubmit }) {
             return "";
         };
 
-        // Actualizar directamente las refs en lugar del estado
         valuesRef.current.compradorPersonaId = buyer.personaId || "";
 
         if (!manuallyEditedBuyerFieldsRef.current.has("compradorNombreCompleto")) {
@@ -812,11 +920,11 @@ export default function SalesForm({ onClose, onSubmit }) {
             displayValuesRef.current.compradorCorreo = buyer.correo || buyer.raw?.persona?.correo || "";
         }
         if (!manuallyEditedBuyerFieldsRef.current.has("compradorTelefono")) {
-            valuesRef.current.compradorTelefono = buyer.telefono || buyer.raw?.persona?.telefono || "";
-            displayValuesRef.current.compradorTelefono = buyer.telefono || buyer.raw?.persona?.telefono || "";
+            const normalizedPhone = normalizePhone(buyer.telefono || buyer.raw?.persona?.telefono || "");
+            valuesRef.current.compradorTelefono = normalizedPhone;
+            displayValuesRef.current.compradorTelefono = normalizedPhone;
         }
 
-        // Forzar actualización de los inputs
         const nombreEl = elRefs.current.compradorNombreCompleto;
         const correoEl = elRefs.current.compradorCorreo;
         const telefonoEl = elRefs.current.compradorTelefono;
@@ -831,7 +939,6 @@ export default function SalesForm({ onClose, onSubmit }) {
             telefonoEl.value = valuesRef.current.compradorTelefono;
         }
 
-        // Limpiar errores
         setErrors((prev) => {
             const nextErrors = { ...prev };
             BUYER_AUTOFILL_FIELDS.forEach((field) => {
@@ -859,7 +966,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             return {
                 primerNombre: parts[0],
                 segundoNombre: "",
-                primerApellido: "",
+                primerApellido: parts[0],
                 segundoApellido: "",
             };
         }
@@ -876,13 +983,12 @@ export default function SalesForm({ onClose, onSubmit }) {
         if (parts.length === 3) {
             return {
                 primerNombre: parts[0],
-                segundoNombre: "",
-                primerApellido: parts[1],
-                segundoApellido: parts[2],
+                segundoNombre: parts[1],
+                primerApellido: parts[2],
+                segundoApellido: "",
             };
         }
 
-        // 4 o más palabras: dos últimos como apellidos, resto para nombres
         const primerApellido = parts[parts.length - 2];
         const segundoApellido = parts[parts.length - 1];
         const nombres = parts.slice(0, parts.length - 2);
@@ -897,7 +1003,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const createBuyerFromForm = useCallback(async () => {
         const tipoDocumento = normalizeValueForStorage("compradorTipoDocumento", valuesRef.current.compradorTipoDocumento || "");
-        const documento = normalizeValueForStorage(COMPRADOR_DOC, valuesRef.current.compradorDocumento || "");
+        const documento = cleanDocument(normalizeValueForStorage(COMPRADOR_DOC, valuesRef.current.compradorDocumento || ""));
         const nombreCompleto = (valuesRef.current.compradorNombreCompleto || "").trim();
 
         if (!tipoDocumento || !documento || !nombreCompleto) {
@@ -908,6 +1014,17 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         setBuyerLookupState({ loading: true, message: "", error: null });
         try {
+            const existingBuyer = await buyersApiService.findByDocument(tipoDocumento, documento);
+            if (existingBuyer?.id || existingBuyer?.compradorId || existingBuyer?.raw?.id_comprador) {
+                applyBuyerData(existingBuyer);
+                setBuyerLookupState({
+                    loading: false,
+                    message: "Comprador encontrado y seleccionado.",
+                    error: null,
+                });
+                return existingBuyer;
+            }
+
             const createdBuyer = await buyersApiService.create({
                 tipoDocumento,
                 documento,
@@ -917,6 +1034,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 segundoApellido,
                 correo: valuesRef.current.compradorCorreo || "",
                 telefono: valuesRef.current.compradorTelefono || "",
+                estado: "Activo",
             });
 
             applyBuyerData(createdBuyer);
@@ -924,6 +1042,11 @@ export default function SalesForm({ onClose, onSubmit }) {
                 loading: false,
                 message: "Comprador creado y seleccionado.",
                 error: null,
+            });
+            toast({
+                title: "Comprador creado",
+                description: "Datos guardados y autocompletados.",
+                variant: "default",
             });
 
             return createdBuyer;
@@ -939,20 +1062,27 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const fetchBuyerByDocument = useCallback(async () => {
         const tipoDocumento = (valuesRef.current.compradorTipoDocumento || "").trim();
-        const numeroDocumento = valuesRef.current.compradorDocumento || "";
+        const numeroDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+        valuesRef.current.compradorDocumento = numeroDocumento;
+        displayValuesRef.current.compradorDocumento = numeroDocumento;
 
-        if (!tipoDocumento || !numeroDocumento) {
+        if (!shouldTriggerBuyerLookup(tipoDocumento, numeroDocumento)) {
             resetBuyerSelection({ resetState: true, resetFields: true });
+            setBuyerLookupState({ loading: false, message: "", error: null });
             return;
         }
 
-        // Validar el documento antes de hacer la búsqueda
         const documentError = validateDocument(tipoDocumento, numeroDocumento);
         if (documentError) {
             setBuyerLookupState({
                 loading: false,
                 message: "",
                 error: "Documento inválido. Corrija el formato antes de buscar.",
+            });
+            toast({
+                title: "Documento inválido",
+                description: "Corrige el tipo y número antes de buscar.",
+                variant: "destructive",
             });
             return;
         }
@@ -967,10 +1097,17 @@ export default function SalesForm({ onClose, onSubmit }) {
         });
 
         try {
-            const buyer = await buyersApiService.findByDocument(
+            let buyer = await buyersApiService.findByDocument(
                 tipoDocumento,
                 numeroDocumento
             );
+
+            if (!buyer) {
+                buyer = await buyersApiService.findPersonaByDocument(
+                    tipoDocumento,
+                    numeroDocumento
+                );
+            }
 
             if (buyerLookupRequestId.current !== requestId) {
                 return;
@@ -978,28 +1115,59 @@ export default function SalesForm({ onClose, onSubmit }) {
 
             if (buyer) {
                 applyBuyerData(buyer);
+
+                if (!buyer.id && !buyer.compradorId) {
+                    if (!valuesRef.current.compradorNombreCompleto?.trim()) {
+                        const composedName = [buyer.primerNombre, buyer.segundoNombre, buyer.primerApellido, buyer.segundoApellido]
+                            .filter(Boolean)
+                            .join(" ")
+                            .trim();
+                        if (composedName) {
+                            valuesRef.current.compradorNombreCompleto = composedName;
+                            displayValuesRef.current.compradorNombreCompleto = composedName;
+                            const nombreEl = elRefs.current.compradorNombreCompleto;
+                            if (nombreEl) {
+                                try { nombreEl.value = composedName; } catch (_err) { /* ignore */ }
+                            }
+                        }
+                    }
+
+                    try {
+                        await createBuyerFromForm();
+                        return;
+                    } catch (_err) {}
+                }
+
                 setBuyerLookupState({
                     loading: false,
-                    message: "Datos del comprador completados automáticamente.",
+                    message: "Persona encontrada y datos autocompletados.",
                     error: null,
                 });
                 toast({
                     title: "Comprador encontrado",
-                    description: "Datos del comprador completados automáticamente.",
+                    description: "Datos autocompletados correctamente.",
                     variant: "default",
                 });
-            } else {
+                return;
+            }
+
+            const nombreCompleto = (valuesRef.current.compradorNombreCompleto || "").trim();
+            if (!nombreCompleto) {
                 resetBuyerSelection();
                 setBuyerLookupState({
                     loading: false,
                     message: "",
-                    error: "No encontramos un comprador registrado con ese documento.",
+                    error: null,
                 });
-                toast({
-                    title: "Comprador no encontrado",
-                    description: "No encontramos un comprador registrado con ese documento.",
-                    variant: "destructive",
-                });
+                return;
+            }
+
+            try {
+                await createBuyerFromForm();
+            } catch (_err) {
+                if (buyerLookupRequestId.current === requestId) {
+                    setBuyerLookupState((prev) => ({ ...prev, loading: false }));
+                }
             }
         } catch (error) {
             if (buyerLookupRequestId.current !== requestId) {
@@ -1009,15 +1177,15 @@ export default function SalesForm({ onClose, onSubmit }) {
             setBuyerLookupState({
                 loading: false,
                 message: "",
-                error: error?.message || "No fue posible buscar el comprador.",
+                error: "No fue posible buscar el comprador. Intenta de nuevo.",
             });
             toast({
                 title: "Error al buscar comprador",
-                description: error?.message || "No fue posible buscar el comprador.",
+                description: "No fue posible buscar el comprador. Intenta de nuevo.",
                 variant: "destructive",
             });
         }
-    }, [applyBuyerData, resetBuyerSelection]);
+    }, [applyBuyerData, resetBuyerSelection, createBuyerFromForm]);
 
     const triggerBuyerLookup = useCallback(
         (delay = 250) => {
@@ -1052,24 +1220,20 @@ export default function SalesForm({ onClose, onSubmit }) {
                 requiredFields.includes(fieldName) ||
                 (isMixto && (isCashSplit || isTransferSplit));
             
-            // Validación de obligatoriedad
-            if (isRequired && !value.toString().trim() && fieldName !== 'inmuebleGaraje') { 
+            if (isRequired && !value.toString().trim()) { 
                 error = "Este campo es obligatorio.";
             } 
             
-            // Validación de números estrictos
             if (isRequired && (strictNumericFields.includes(fieldName) || isCashSplit || isTransferSplit)) {
                  if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                      error = "Este campo es obligatorio y debe ser mayor a 0";
                  }
             }
 
-            // Validación de formato MEJORADA
             if (!error && value.toString().trim()) {
                 if (nameFields.includes(fieldName) && !isValidName(value)) {
                     error = `Solo se permiten letras, espacios y acentos.`;
                 } 
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(fieldName)) {
                     let tipoDocumento = "";
                     
@@ -1101,7 +1265,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                 }
             }
             
-            // Actualizar errores
             if (error) {
                 currentErrors[fieldName] = error;
                 hasError = true;
@@ -1118,7 +1281,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     // Navegación entre pasos
     const handleNextStep = () => {
-        let fieldsToValidate = stepFields[step].filter(f => f !== 'inmuebleGaraje' || requiredFields.includes('inmuebleGaraje'));
+        let fieldsToValidate = stepFields[step];
         
         const { currentErrors, hasError, firstErrorField } = runValidation(fieldsToValidate);
 
@@ -1147,7 +1310,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        const allFieldsToValidate = Object.values(stepFields).flat().filter(f => f !== 'inmuebleGaraje' || requiredFields.includes('inmuebleGaraje'));
+        const allFieldsToValidate = Object.values(stepFields).flat();
         const { currentErrors, hasError, firstErrorField } = runValidation(allFieldsToValidate);
 
         setErrors(currentErrors);
@@ -1202,6 +1365,21 @@ export default function SalesForm({ onClose, onSubmit }) {
             }
         }
 
+        if (!buyerIsActive(buyerRef)) {
+            const inactiveMsg = "No se puede asociar una venta a un arrendatario en estado inactivo.";
+            setErrors((prev) => ({
+                ...prev,
+                compradorDocumento: inactiveMsg,
+            }));
+            setStep(3);
+            toast({
+                title: "Arrendatario inactivo",
+                description: inactiveMsg,
+                variant: "destructive",
+            });
+            return;
+        }
+
         const normalizedValues = Object.keys(valuesRef.current).reduce((acc, fieldName) => {
             const currentValue = valuesRef.current[fieldName] ?? "";
             acc[fieldName] = normalizeValueForStorage(fieldName, currentValue);
@@ -1225,13 +1403,12 @@ export default function SalesForm({ onClose, onSubmit }) {
         onClose?.();
     };
 
-    // Componente Field reutilizable (con validaciones mejoradas)
+    // Componente Field reutilizable MEJORADO (con el estilo exacto de RentForm)
     const Field = ({ name, as = "input", options = [], placeholder, type = "text" }) => {
         const label = getLabel(name);
         const errorMessage = errors[name];
         const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
         const isMixto = medioPagoActual === "mixto";
-        const isPaymentDescription = name === "medioPagoDescripcion";
         const isCashSplit = name === "medioPagoEfectivo";
         const isTransferSplit = name === "medioPagoTransferencia";
         const isRequired =
@@ -1243,12 +1420,13 @@ export default function SalesForm({ onClose, onSubmit }) {
         const isEmailField = emailFields.includes(name);
         const isStrictNumeric = strictNumericFields.includes(name);
         const isNameField = nameFields.includes(name);
+        const isCurrencyField = currencyFields.includes(name);
 
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
         
         let inputType = type;
-        if (isDocField || isPhoneField || isStrictNumeric) {
+        if (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
             if (type !== 'date' && type !== 'email') {
                 inputType = "tel";
             }
@@ -1257,15 +1435,20 @@ export default function SalesForm({ onClose, onSubmit }) {
             inputType = "email";
         }
 
-        // Placeholders mejorados para documentos
+        const inputMode = (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "numeric" : undefined;
+        const pattern = (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "[0-9]*" : undefined;
+
         let fieldPlaceholder = placeholder;
         if (isDocField) {
             fieldPlaceholder = "Ej: 1234567890 (8-10 dígitos según el tipo)";
         }
+        if (isPhoneField) {
+            fieldPlaceholder = "Ej: 3001234567 (10 dígitos mínimo)";
+        }
 
         if (type === "checkbox") {
             return (
-                <label htmlFor={name} className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <label htmlFor={name} className="col-span-3 flex items-center gap-2 text-sm font-semibold text-gray-700 mt-2">
                     <input
                         id={name}
                         name={name}
@@ -1317,17 +1500,18 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         if (as === "textarea") {
             return (
-                <div className="col-span-1 sm:col-span-2">
+                <div>
                     {LabelContent}
                     <textarea
                         id={name}
                         name={name}
                         ref={setElRef(name)}
-                        className={`${getFieldClass(name)} h-20 resize-none`}
+                        className={getFieldClass(name)}
                         placeholder={fieldPlaceholder}
                         defaultValue={initial[name] ?? ""}
                         onChange={handleInputChange}
                         onBlur={onBlurHandler}
+                        rows="3"
                     />
                     {errorMessage && (
                         <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
@@ -1345,8 +1529,10 @@ export default function SalesForm({ onClose, onSubmit }) {
                     ref={setElRef(name)}
                     className={getFieldClass(name)}
                     type={inputType}
+                    inputMode={inputMode}
+                    pattern={pattern}
                     placeholder={fieldPlaceholder}
-                    defaultValue={initial[name] ?? ""}
+                    defaultValue={(displayValuesRef.current[name] || initial[name]) ?? ""}
                     onChange={handleInputChange}
                     onBlur={onBlurHandler}
                 />
@@ -1362,238 +1548,244 @@ export default function SalesForm({ onClose, onSubmit }) {
     return (
         <AnimatePresence>
             <motion.div 
-                className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4 overflow-y-auto"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-3"
                 onClick={onClose}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
             >
-            <motion.div 
-                className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 relative my-8 max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.98 }}
-                transition={{ duration: 0.25 }}
-            >
-
-                <motion.button onClick={onClose} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 p-1 rounded-full transition duration-150" aria-label="Cerrar">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                </motion.button>
-
-                <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Nueva venta</h2>
-                    <p className="text-gray-600 text-sm">Complete la información requerida para registrar una nueva venta</p>
-                </div>
-
-                <div className="mb-6">
-                    <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                        <div
-                            className="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-in-out shadow-lg shadow-blue-400/50"
-                            style={{ width: `${(step / totalSteps) * 100}%` }}
-                        />
+                <motion.div 
+                    role="dialog"
+                    aria-modal="true"
+                    className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 w-full max-w-4xl relative flex flex-col"
+                    onClick={(e) => e.stopPropagation()}
+                    initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                    transition={{ duration: 0.25 }}
+                >
+                    {/* Header sticky */}
+                    <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 sm:px-5 py-4 flex items-start gap-3">
+                        <div className="flex-1">
+                            <h2 className="text-2xl font-bold text-gray-900">Registrar Venta</h2>
+                            <p className="text-sm text-gray-600 mt-1">Complete la información de la nueva venta</p>
+                            <div className="mt-4">
+                                <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                        className="bg-blue-600 h-1.5 rounded-full transition-all duration-500"
+                                        style={{ width: `${(step / totalSteps) * 100}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs sm:text-sm text-gray-600 mt-2">
+                                    <span className="font-semibold text-gray-900">Paso {step} de {totalSteps}</span>:{" "}
+                                    {step === 1 ? "Datos del Inmueble" : 
+                                     step === 2 ? "Datos del Vendedor (Propietario)" : 
+                                     step === 3 ? "Datos del Comprador" : "Precio y Medio de Pago"}
+                                    {" "} (Campos obligatorios marcados con *)
+                                </p>
+                            </div>
+                        </div>
+                        <motion.button
+                            aria-label="Cerrar"
+                            onClick={onClose}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="h-9 w-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                        </motion.button>
                     </div>
-                    <p className="text-xs text-blue-700 font-bold mt-2 text-center">
-                        Paso {step} de {totalSteps}:{" "}
-                        <span className="font-semibold text-gray-600">
-                            {step === 1 ? "Datos del Inmueble" : 
-                             step === 2 ? "Datos del Vendedor (Propietario)" : 
-                             step === 3 ? "Datos del Comprador" : "Precio y Medio de Pago"}
-                        </span>
-                    </p>
-                </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* PASO 1: Datos del Inmueble */}
-                    {step === 1 && (
-                        <div>
-                            <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">1. Detalles y Ubicación del Inmueble</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-                                <Field
-                                    name="inmuebleTipo"
-                                    as="select"
-                                    options={[
-                                        { value: "Casa", label: "Casa" },
-                                        { value: "Apartamento", label: "Apartamento" },
-                                        { value: "Oficina", label: "Oficina" },
-                                        { value: "Lote", label: "Lote/Terreno" },
-                                    ]}
-                                />
-                                <Field name="inmuebleRegistro" placeholder="No. de matrícula inmobiliaria" />
-                                {(inmuebleLookupState.loading || inmuebleLookupState.error || inmuebleLookupState.message) && (
-                                    <div className="md:col-span-2">
-                                        <p
-                                            className={`text-sm ${
-                                                inmuebleLookupState.loading
-                                                    ? "text-blue-600"
-                                                    : inmuebleLookupState.error
-                                                    ? "text-red-600"
-                                                    : "text-green-700"
-                                            }`}
-                                        >
-                                            {inmuebleLookupState.loading && "Buscando inmueble..."}
-                                            {!inmuebleLookupState.loading && inmuebleLookupState.error && inmuebleLookupState.error}
-                                            {!inmuebleLookupState.loading && !inmuebleLookupState.error && inmuebleLookupState.message}
-                                        </p>
+                    <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+                        <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
+                            
+                            {/* PASO 1: Datos del Inmueble */}
+                            {step === 1 && (
+                                <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-900">Datos del Inmueble</h3>
+                                        <p className="text-xs text-gray-600 mt-1">Información y ubicación de la propiedad</p>
                                     </div>
-                                )}
-                                <div className="md:col-span-2">
-                                    <Field name="inmuebleNombre" placeholder="Ej: Apartamento 501, Edificio La Torre" />
-                                </div>
-                                <Field name="inmueblePais" placeholder="País" />
-                                <Field name="inmuebleDepartamento" placeholder="Departamento o Estado" />
-                                <Field name="inmuebleCiudad" placeholder="Ciudad" />
-                                <Field name="inmuebleBarrio" placeholder="Barrio o Zona" />
-                                <div className="md:col-span-2">
-                                    <Field name="inmuebleDireccion" as="textarea" placeholder="Dirección completa, ej: Carrera 10 # 25-50" />
-                                </div>
-
-                                <Field name="inmuebleGaraje" type="checkbox" />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PASO 2: Datos del Vendedor */}
-                    {step === 2 && (
-                        <div>
-                            <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">2. Información del Vendedor (Propietario)</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-                                <Field
-                                    name="vendedorTipoDocumento"
-                                    as="select"
-                                    options={DOCUMENT_OPTIONS}
-                                />
-                                <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
-                                <Field name="vendedorNombreCompleto" placeholder="Solo letras y espacios." />
-                                <Field name="vendedorCorreo" placeholder="correo@dominio.com" type="email" />
-                                <Field name="vendedorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PASO 3: Datos del Comprador */}
-                    {step === 3 && (
-                        <div>
-                            <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">3. Información del Comprador</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-                                <Field
-                                    name="compradorTipoDocumento"
-                                    as="select"
-                                    options={DOCUMENT_OPTIONS}
-                                />
-                                <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
-                                <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
-                                <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
-                                <Field name="compradorTelefono" placeholder="Solo números. Mínimo 10 dígitos." />
-                                {(buyerLookupState.loading || buyerLookupState.error || buyerLookupState.message) && (
-                                    <div className="md:col-span-2">
-                                        <p
-                                            className={`text-sm ${
-                                                buyerLookupState.loading
-                                                    ? "text-blue-600"
-                                                    : buyerLookupState.error
-                                                        ? "text-red-600"
-                                                        : "text-green-700"
-                                            }`}
-                                        >
-                                            {buyerLookupState.loading && "Buscando compradorâ€¦"}
-                                            {!buyerLookupState.loading && buyerLookupState.error && buyerLookupState.error}
-                                            {!buyerLookupState.loading && !buyerLookupState.error && buyerLookupState.message}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PASO 4: Precio de Venta */}
-                    {step === 4 && (
-                        <div>
-                            <h3 className="text-lg font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200">4. Precio de Venta</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-6 max-w-xl mx-auto">
-                                <Field name="fechaVenta" type="date" />
-                                <Field
-                                    name="medioPago"
-                                    as="select"
-                                    options={PAYMENT_OPTIONS}
-                                />
-                                {(valuesRef.current.medioPago || "").toLowerCase() === "mixto" && (
-                                    <>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <Field
-                                            name="medioPagoEfectivo"
-                                            placeholder="Valor en efectivo (COP)"
+                                            name="inmuebleTipo"
+                                            as="select"
+                                            options={[
+                                                { value: "Casa", label: "Casa" },
+                                                { value: "Apartamento", label: "Apartamento" },
+                                                { value: "Oficina", label: "Oficina" },
+                                                { value: "Lote", label: "Lote/Terreno" },
+                                            ]}
                                         />
+                                        <Field name="inmuebleRegistro" placeholder="Ej: 12345-ABC" />
+                                        <Field name="inmuebleNombre" placeholder="Ej: Edificio Central" />
+                                        <Field name="inmueblePais" placeholder="Ej: Colombia" />
+                                        <Field name="inmuebleDepartamento" placeholder="Ej: Antioquia" />
+                                        <Field name="inmuebleCiudad" placeholder="Ej: Medellín" />
+                                        <Field name="inmuebleBarrio" placeholder="Ej: El Poblado" />
+                                        <div className="md:col-span-3">
+                                            <Field name="inmuebleDireccion" as="textarea" placeholder="Ej: Calle 10 # 45-20" />
+                                        </div>
+                                        {(inmuebleLookupState.loading || inmuebleLookupState.message || inmuebleLookupState.error) && (
+                                            <div className="md:col-span-3 mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                                                {inmuebleLookupState.loading && (
+                                                    <p className="text-blue-700">Buscando inmueble...</p>
+                                                )}
+                                                {!inmuebleLookupState.loading && inmuebleLookupState.message && (
+                                                    <p className="text-green-700">{inmuebleLookupState.message}</p>
+                                                )}
+                                                {!inmuebleLookupState.loading && inmuebleLookupState.error && (
+                                                    <p className="text-red-700">{inmuebleLookupState.error}</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* PASO 2: Datos del Vendedor */}
+                            {step === 2 && (
+                                <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-900">Datos del Vendedor (Propietario)</h3>
+                                        <p className="text-xs text-gray-600 mt-1">Información del propietario del inmueble</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <Field
-                                            name="medioPagoTransferencia"
-                                            placeholder="Valor por transferencia (COP)"
+                                            name="vendedorTipoDocumento"
+                                            as="select"
+                                            options={DOCUMENT_OPTIONS}
                                         />
-                                    </>
-                                )}
-                                <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
-                            </div>
+                                        <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                        <Field name="vendedorNombreCompleto" placeholder="Solo letras y espacios." />
+                                        <Field name="vendedorCorreo" placeholder="correo@dominio.com" type="email" />
+                                        <Field name="vendedorTelefono" placeholder="Ej: 3001234567 (10 dígitos mínimo)" />
+                                    </div>
+                                </section>
+                            )}
 
-                            <div className="p-4 bg-blue-50 border border-blue-300 rounded-xl shadow-inner text-gray-800 max-w-xl mx-auto">
-                                <h4 className="text-base font-extrabold mb-2 text-blue-800 border-b border-blue-200 pb-1">Resumen de la Propiedad</h4>
-                                <div className="space-y-1 text-sm">
-                                    <div className="flex justify-between">
-                                        <p className="font-medium text-gray-700">Tipo/Nombre:</p>
-                                        <p className="text-right font-medium text-gray-900">{valuesRef.current.inmuebleTipo || "N/A"} - {valuesRef.current.inmuebleNombre || "N/A"}</p>
+                            {/* PASO 3: Datos del Comprador */}
+                            {step === 3 && (
+                                <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-900">Datos del Comprador</h3>
+                                        <p className="text-xs text-gray-600 mt-1">Información del comprador</p>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <p className="font-medium text-gray-700">Ubicación:</p>
-                                        <p className="text-right font-medium text-gray-900">{valuesRef.current.inmuebleCiudad || "N/A"}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <Field
+                                            name="compradorTipoDocumento"
+                                            as="select"
+                                            options={DOCUMENT_OPTIONS}
+                                        />
+                                        <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                        <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
+                                        <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
+                                        <Field name="compradorTelefono" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
+                                        {(buyerLookupState.loading || buyerLookupState.message || buyerLookupState.error) && (
+                                            <div className="md:col-span-3 mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                                                {buyerLookupState.loading && (
+                                                    <p className="text-blue-700">Buscando comprador...</p>
+                                                )}
+                                                {!buyerLookupState.loading && buyerLookupState.message && (
+                                                    <p className="text-green-700">{buyerLookupState.message}</p>
+                                                )}
+                                                {!buyerLookupState.loading && buyerLookupState.error && (
+                                                    <p className="text-red-700">{buyerLookupState.error}</p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="border-t border-blue-400 pt-2 flex justify-between items-center font-extrabold text-lg mt-2">
-                                        <span className="text-gray-900">PRECIO FINAL:</span>
-                                        <span className="text-blue-700">$ {formattedPrice}</span>
+                                </section>
+                            )}
+
+                            {/* PASO 4: Precio y Medio de Pago */}
+                            {step === 4 && (
+                                <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-900">Precio y Medio de Pago</h3>
+                                        <p className="text-xs text-gray-600 mt-1">Define el valor y forma de pago</p>
                                     </div>
-                                </div>
-                            </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <Field name="fechaVenta" type="date" />
+                                        <Field
+                                            name="medioPago"
+                                            as="select"
+                                            options={PAYMENT_OPTIONS}
+                                        />
+                                        <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros)" />
+                                        
+                                        {(valuesRef.current.medioPago || "").toLowerCase() === "mixto" && (
+                                            <>
+                                                <Field name="medioPagoEfectivo" placeholder="Valor en efectivo" />
+                                                <Field name="medioPagoTransferencia" placeholder="Valor por transferencia" />
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Resumen */}
+                                    <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Resumen de la Venta</h4>
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Inmueble:</span>
+                                                <span className="font-medium text-gray-900">{valuesRef.current.inmuebleTipo || "N/A"} - {valuesRef.current.inmuebleNombre || "N/A"}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Ubicación:</span>
+                                                <span className="font-medium text-gray-900">{valuesRef.current.inmuebleCiudad || "N/A"}</span>
+                                            </div>
+                                            <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between items-center font-bold">
+                                                <span className="text-gray-900">PRECIO FINAL:</span>
+                                                <span className="text-blue-600">$ {formattedPrice}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
                         </div>
-                    )}
 
-                    <div className="pt-4 border-t mt-6 flex justify-between">
-                        {step > 1 && (
-                            <motion.button
-                                type="button"
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={prevStep}
-                                className="px-5 py-2 text-sm bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-150"
-                            >
-                                Atrás
-                            </motion.button>
-                        )}
-                        {step === 1 && <div />}
+                        <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+                            {step > 1 ? (
+                                <motion.button 
+                                    type="button" 
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={prevStep} 
+                                    className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm"
+                                >
+                                    Anterior
+                                </motion.button>
+                            ) : <div />}
 
-                        {step < totalSteps && (
-                            <motion.button
-                                type="button"
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={handleNextStep}
-                                className="px-6 py-2 text-sm bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02]"
-                            >
-                                Siguiente
-                            </motion.button>
-                        )}
+                            {step < totalSteps && (
+                                <motion.button
+                                    type="button"
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={handleNextStep}
+                                    className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+                                >
+                                    Siguiente
+                                </motion.button>
+                            )}
 
-                        {step === totalSteps && (
-                            <motion.button
-                                type="submit"
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                className="px-6 py-2 text-sm bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02]"
-                            >
-                                Registrar Venta
-                            </motion.button>
-                        )}
-                    </div>
-                </form>
-            </motion.div>
+                            {step === totalSteps && (
+                                <motion.button 
+                                    type="submit"
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className="px-5 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-60 ml-auto"
+                                >
+                                    Registrar Venta
+                                </motion.button>
+                            )}
+                        </div>
+                    </form>
+                </motion.div>
             </motion.div>
         </AnimatePresence>
     );
 }
+

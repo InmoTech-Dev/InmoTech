@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Phone, Mail, FileText, CheckCircle } from 'lucide-react';
+import { renantsApiService as tenantsApiService } from "../../../../shared/services/arrendatarioApiService";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 const defaultFormData = {
   id: null,
@@ -18,8 +20,8 @@ const requiredFields = ["tipoDocumento", "documento", "primerNombre", "primerApe
 
 // Opciones de documentos
 const DOCUMENT_OPTIONS = [
-  { value: "CC", label: "Cédula de Ciudadanía (CC)" },
-  { value: "CE", label: "Cédula de Extranjería (CE)" },
+  { value: "CC", label: "Cedula de Ciudadania (CC)" },
+  { value: "CE", label: "Cedula de Extranjeria (CE)" },
   { value: "NIT", label: "NIT" },
   { value: "PASAPORTE", label: "Pasaporte" },
   { value: "TI", label: "Tarjeta de Identidad (TI)" },
@@ -34,6 +36,9 @@ export default function TenantForm({
 }) {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState(null);
+  const [lookupState, setLookupState] = useState({ loading: false, message: "", error: null });
+  const lookupTimeoutRef = useRef(null);
+  const { toast } = useToast();
   
   // Refs para manejo eficiente de estado
   const valuesRef = useRef({ ...defaultFormData, id: nextId });
@@ -51,6 +56,123 @@ export default function TenantForm({
   const phoneFields = ["telefono"];
   const emailFields = ["correo"];
 
+  const sanitizeNumericString = (value) => {
+    if (value === undefined || value === null) return "";
+    return value.toString().replace(/[^0-9]/g, "");
+  };
+
+  const normalizePhone = (value = "") => {
+    const digits = sanitizeNumericString(value);
+    if (!digits) return "";
+    if (digits.startsWith("57") && digits.length > 10) {
+      return digits.slice(-10);
+    }
+    return digits.slice(-10);
+  };
+
+  const setValue = (name, value) => {
+    valuesRef.current[name] = value;
+    displayValuesRef.current[name] = value;
+    if (elRefs.current[name]) {
+      try { elRefs.current[name].value = value; } catch (e) {}
+    }
+  };
+
+  const cleanDocument = (value = "") => value.replace(/\D/g, "").trim();
+
+  const applyTenantData = useCallback((tenant = {}) => {
+    setValue("tipoDocumento", tenant.tipoDocumento || tenant.tipo_documento || valuesRef.current.tipoDocumento);
+    setValue("documento", tenant.documento || tenant.numero_documento || "");
+    setValue("primerNombre", tenant.primerNombre || "");
+    setValue("segundoNombre", tenant.segundoNombre || "");
+    setValue("primerApellido", tenant.primerApellido || "");
+    setValue("segundoApellido", tenant.segundoApellido || "");
+    setValue("correo", tenant.correo || "");
+    setValue("telefono", normalizePhone(tenant.telefono));
+  }, []);
+
+  // Limpia los campos de datos personales/contacto (no toca tipo/documento)
+  const clearPersonFields = useCallback(() => {
+    [
+      "primerNombre",
+      "segundoNombre",
+      "primerApellido",
+      "segundoApellido",
+      "correo",
+      "telefono"
+    ].forEach((field) => setValue(field, ""));
+  }, []);
+
+  const lookupTenant = useCallback(async () => {
+    const tipoDocumento = (valuesRef.current.tipoDocumento || "").trim();
+    const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
+
+    if (!tipoDocumento || !numeroDocumento) return;
+
+    const validationError = validateDocument(tipoDocumento, numeroDocumento);
+    if (validationError) {
+      setLookupState({ loading: false, message: "", error: null });
+      toast({
+        title: "Documento invalido",
+        description: validationError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLookupState({ loading: true, message: "", error: null });
+    clearPersonFields();
+    try {
+      let tenant = await tenantsApiService.findByDocument(tipoDocumento, numeroDocumento);
+      if (!tenant) {
+        tenant = await tenantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
+      }
+
+      if (tenant) {
+        applyTenantData(tenant);
+        setLookupState({
+          loading: false,
+          message: "",
+          error: null
+        });
+        toast({
+          title: "Arrendatario encontrado",
+          description: "Datos autocompletados correctamente.",
+          variant: "default",
+        });
+      } else {
+        clearPersonFields();
+        setLookupState({
+          loading: false,
+          message: "",
+          error: null
+        });
+        toast({
+          title: "No encontrado",
+          description: "No se encontro una persona con ese documento.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      clearPersonFields();
+      setLookupState({
+        loading: false,
+        message: "",
+        error: null
+      });
+      toast({
+        title: "Error al buscar",
+        description: "No fue posible buscar el arrendatario. Intenta de nuevo.",
+        variant: "destructive",
+      });
+    }
+  }, [applyTenantData, clearPersonFields, toast]);
+
+  const triggerLookup = useCallback(() => {
+    if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+    lookupTimeoutRef.current = setTimeout(lookupTenant, 250);
+  }, [lookupTenant]);
+
   useEffect(() => {
     const newData = {
       ...defaultFormData,
@@ -66,52 +188,33 @@ export default function TenantForm({
 
   // === SISTEMA DE VALIDACIONES MEJORADO ===
 
-  // Función para validar documentos según el tipo
+  // Funcion para validar documentos segun el tipo
   const validateDocument = (tipoDocumento, numeroDocumento) => {
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
-    
     switch (tipoDocumento) {
-      case 'CC': // Cédula de Ciudadanía
-        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) {
-          return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
-        }
+      case "CC":
+        if (!/^[0-9]{7,10}$/.test(numeroLimpio)) return "La cedula de ciudadania debe tener entre 7 y 10 digitos";
         break;
-        
-      case 'CE': // Cédula de Extranjería
-        if (!/^[0-9]{6,10}$/.test(numeroLimpio)) {
-          return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
-        }
+      case "CE":
+        if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return "La cedula de extranjeria debe tener entre 6 y 10 digitos";
         break;
-        
-      case 'NIT': // NIT
-        if (!/^[0-9]{9,10}$/.test(numeroLimpio)) {
-          return 'El NIT debe tener 9 o 10 dígitos';
-        }
+      case "NIT":
+        if (!/^[0-9]{9,10}$/.test(numeroLimpio)) return "El NIT debe tener 9 o 10 digitos";
         break;
-        
-      case 'PASAPORTE': // Pasaporte
-        if (numeroLimpio.length < 6 || numeroLimpio.length > 20) {
-          return 'El pasaporte debe tener entre 6 y 20 caracteres';
-        }
-        if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) {
-          return 'El pasaporte solo puede contener letras y números';
-        }
+      case "PASAPORTE":
+        if (numeroLimpio.length < 6 || numeroLimpio.length > 20) return "El pasaporte debe tener entre 6 y 20 caracteres";
+        if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) return "El pasaporte solo puede contener letras y numeros";
         break;
-        
-      case 'TI': // Tarjeta de Identidad
-        if (!/^[0-9]{10,11}$/.test(numeroLimpio)) {
-          return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
-        }
+      case "TI":
+        if (!/^[0-9]{10,11}$/.test(numeroLimpio)) return "La tarjeta de identidad debe tener 10 u 11 digitos";
         break;
-        
       default:
-        return 'Tipo de documento no válido';
+        return "Tipo de documento no valido";
     }
-    
-    return '';
+    return "";
   };
 
-  // Función para obtener la clase de estilo
+  // Funcion para obtener la clase de estilo
   const getFieldClass = useCallback((fieldName) => {
     const baseClass = "w-full px-3 py-2 border rounded-lg focus:outline-none transition-colors";
     const errorClass = errors[fieldName] 
@@ -120,7 +223,7 @@ export default function TenantForm({
     return `${baseClass} ${errorClass}`;
   }, [errors]);
 
-  // Configuración de referencias de elementos
+  // Configuracin de referencias de elementos
   const setElRef = (name) => (el) => {
     if (!el) return;
     elRefs.current[name] = el;
@@ -145,7 +248,7 @@ export default function TenantForm({
     let { name, value } = e.target;
     let cleanValue = value;
 
-    // Para campos de documento y teléfono, limpiar caracteres no numéricos
+    // Para campos de documento y telefono, limpiar caracteres no numericos
     if (docFields.includes(name) || phoneFields.includes(name)) {
       cleanValue = value.replace(/[^0-9]/g, '');
       displayValuesRef.current[name] = value; // Mantener display original
@@ -165,12 +268,12 @@ export default function TenantForm({
     }
   };
 
-  // Funciones de validación de formato
-  const isValidName = (value) => /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]*$/.test(value);
+    // Funciones de validacion de formato
+    const isValidName = (value) => /^[a-zA-Z\s]*$/.test(value);
   const isValidNumeric = (value) => /^\d*$/.test(value);
   const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
 
-  // Manejador de blur para validación MEJORADO
+    // Manejador de blur para validacion mejorado
   const handleInputBlur = (e) => {
     const { name } = e.target;
     const value = valuesRef.current[name] || ""; 
@@ -178,59 +281,55 @@ export default function TenantForm({
     let errorMessage = null;
     const isRequired = requiredFields.includes(name);
 
-    setErrors(prev => {
-      const newErrors = { ...prev };
+    // Validar obligatorio
+    if (isRequired && !value.trim()) { 
+      errorMessage = "Este campo es obligatorio.";
+    }
 
-      // Validar campo obligatorio
-      if (isRequired && !value.trim()) { 
-        errorMessage = "Este campo es obligatorio.";
-      }
-
-      // Validar formato y longitud (solo si no hay error de obligatoriedad y el campo tiene valor)
-      if (!errorMessage && value.trim()) {
-        if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
-          errorMessage = `Solo se permiten letras y espacios.`;
-        } 
-        // VALIDACIÓN MEJORADA PARA DOCUMENTOS
-        else if (docFields.includes(name)) {
-          const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
-          
-          // Validar formato básico primero
-          if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
-            errorMessage = `Solo se permiten letras, números, espacios, puntos y guiones`;
-          } else {
-            // Validación específica por tipo de documento
-            errorMessage = validateDocument(tipoDocumento, value);
-          }
-        } 
-        else if (phoneFields.includes(name)) {
-          if (!isValidNumeric(value)) {
-            errorMessage = `Solo se permiten números.`;
-          } else if (value.length < 10) {
-            errorMessage = `El teléfono debe tener al menos 10 dígitos`;
-          }
-        } 
-        else if (emailFields.includes(name)) {
-          if (!value.includes("@")) {
-            errorMessage = `El correo debe contener @.`;
-          } else if (!isValidEmail(value)) {
-            errorMessage = `El correo electrónico debe ser válido.`;
-          }
+    // Validar formato y longitud
+    if (!errorMessage && value.trim()) {
+      if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
+        errorMessage = `Solo se permiten letras y espacios.`;
+      } 
+      else if (docFields.includes(name)) {
+        const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
+        
+        if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
+          errorMessage = `Solo se permiten letras, numeros, espacios, puntos y guiones`;
+        } else {
+          errorMessage = validateDocument(tipoDocumento, value);
+        }
+      } 
+      else if (phoneFields.includes(name)) {
+        if (!isValidNumeric(value)) {
+          errorMessage = `Solo se permiten numeros.`;
+        } else if (value.length < 10) {
+          errorMessage = `El telefono debe tener al menos 10 digitos`;
+        }
+      } 
+      else if (emailFields.includes(name)) {
+        if (!value.includes("@")) {
+          errorMessage = `El correo debe contener @.`;
+        } else if (!isValidEmail(value)) {
+          errorMessage = `El correo electronico debe ser valido.`;
         }
       }
+    }
 
-      // Aplicar o limpiar error
-      if (errorMessage) {
-        newErrors[name] = errorMessage;
-      } else {
-        delete newErrors[name];
-      }
-
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      if (errorMessage) newErrors[name] = errorMessage;
+      else delete newErrors[name];
       return newErrors;
     });
+
+    // Si blur en doc/tipo sin error -> lookup
+    if ((name === "documento" || name === "tipoDocumento") && !errorMessage) {
+      triggerLookup();
+    }
   };
 
-  // Validación centralizada MEJORADA
+  // Validacion centralizada MEJORADA
   const runValidation = (fieldsToCheck) => {
     let currentErrors = { ...errors };
     let hasError = false;
@@ -242,30 +341,30 @@ export default function TenantForm({
 
       const isRequired = requiredFields.includes(fieldName);
       
-      // Validación de obligatoriedad
+      // Validacion de obligatoriedad
       if (isRequired && !value.toString().trim()) { 
         error = "Este campo es obligatorio.";
       }
 
-      // Validación de formato MEJORADA
+      // Validacion de formato MEJORADA
       if (!error && value.toString().trim()) {
         if (nameFields.includes(fieldName) && !isValidName(displayValuesRef.current[fieldName])) {
           error = `Solo se permiten letras, espacios y acentos.`;
         } 
-        // VALIDACIÓN MEJORADA PARA DOCUMENTOS
+        // VALIDACIN MEJORADA PARA DOCUMENTOS
         else if (docFields.includes(fieldName)) {
           const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
           error = validateDocument(tipoDocumento, value);
         } 
         else if (phoneFields.includes(fieldName)) {
           if (!isValidNumeric(value)) {
-            error = `Solo se permiten dígitos.`;
+            error = `Solo se permiten digitos.`;
           } else if (value.length < 10) {
-            error = `El teléfono debe tener al menos 10 dígitos`;
+            error = `El telefono debe tener al menos 10 digitos`;
           }
         } 
         else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
-          error = `Debe ser un correo electrónico válido.`;
+          error = `Debe ser un correo electronico valido.`;
         }
       }
       
@@ -337,10 +436,10 @@ export default function TenantForm({
     // Placeholders mejorados
     let fieldPlaceholder = placeholder;
     if (isDocField) {
-      fieldPlaceholder = "Ej: 1234567890 (8-10 dígitos según el tipo)";
+      fieldPlaceholder = "Ej: 1234567890 (8-10 digitos segun el tipo)";
     }
     if (isPhoneField) {
-      fieldPlaceholder = "Ej: 3001234567 (10 dígitos mínimo)";
+      fieldPlaceholder = "Ej: 3001234567 (10 digitos minimo)";
     }
 
     const LabelContent = (
@@ -424,17 +523,17 @@ export default function TenantForm({
     );
   };
 
-  // Función para obtener etiquetas
+  // Funcion para obtener etiquetas
   const getLabel = (name) => {
     const labels = {
       tipoDocumento: "Tipo de Documento",
-      documento: "Número de Documento",
+      documento: "Numero de Documento",
       primerNombre: "Primer Nombre",
       segundoNombre: "Segundo Nombre", 
       primerApellido: "Primer Apellido",
       segundoApellido: "Segundo Apellido",
-      correo: "Correo Electrónico",
-      telefono: "Teléfono",
+      correo: "Correo Electronico",
+      telefono: "Telefono",
       // observaciones: "Observaciones"
     };
     return labels[name] ?? name;
@@ -447,7 +546,7 @@ export default function TenantForm({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -463,7 +562,7 @@ export default function TenantForm({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.3 }}
-          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col"
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[90vh] overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -472,8 +571,8 @@ export default function TenantForm({
               <h2 className="text-2xl font-bold text-slate-800">{formTitle}</h2>
               <p className="text-slate-600 mt-1">
                 {isEditing
-                  ? "Actualice la información del arrendatario"
-                  : "Complete la información requerida para registrar un nuevo arrendatario"}
+                  ? "Actualice la informacion del arrendatario"
+                  : "Complete la informacion requerida para registrar un nuevo arrendatario"}
               </p>
             </div>
             <motion.button
@@ -504,19 +603,19 @@ export default function TenantForm({
                     className=""
                   />
 
-                  <Field 
-                    name="documento"
-                    placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)"
-                    icon={FileText}
-                    className="md:col-span-2"
-                  />
-                </div>
+                <Field 
+                  name="documento"
+                  placeholder="Ej: 1234567890 (8-10 digitos segun el tipo)"
+                  icon={FileText}
+                  className="md:col-span-2"
+                />
+              </div>
 
                 {/* Nombres y Apellidos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field
                     name="primerNombre"
-                    placeholder="Ej: María"
+                    placeholder="Ej: Mara"
                     icon={User}
                     required={true}
                   />
@@ -527,7 +626,7 @@ export default function TenantForm({
                   />
                   <Field
                     name="primerApellido"
-                    placeholder="Ej: García"
+                    placeholder="Ej: Garca"
                     icon={User}
                     required={true}
                   />
@@ -549,11 +648,12 @@ export default function TenantForm({
                   />
                   <Field
                     name="telefono"
-                    placeholder="Ej: 3001234567 (10 dígitos mínimo)"
+                    placeholder="Ej: 3001234567 (10 digitos minimo)"
                     icon={Phone}
                     required={true}
                   />
                 </div>
+
               </section>
 
               {/* Observaciones Section - removed */}
@@ -611,3 +711,4 @@ export default function TenantForm({
     </AnimatePresence>
   );
 }
+

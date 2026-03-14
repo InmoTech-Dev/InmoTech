@@ -1,12 +1,15 @@
-import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
+﻿import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { FaTimes } from "react-icons/fa";
 import { motion } from 'framer-motion';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { renantsApiService } from "../../../../shared/services/arrendatarioApiService";
+import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
-import { useToast } from "../../../../shared/hooks/use-toast";
+import { toast } from "../../../../shared/hooks/use-toast";
+import { Toaster } from "../../../../shared/components/ui/toaster";
 
-// Lista de campos que deben ser obligatorios según la solicitud del usuario (INCLUYE ARRENDATARIO, CODEUDOR, INMUEBLE Y CONTRATO)
+// Lista de campos que deben ser obligatorios segÃºn la solicitud del usuario (INCLUYE ARRENDATARIO, CODEUDOR, INMUEBLE Y CONTRATO)
 const requiredFields = [
     // Arrendatario
     "tipoDocArrendatario", "numeroDocArrendatario", "primerNombreArrendatario",
@@ -25,12 +28,157 @@ const requiredFields = [
 
 // Opciones de documentos
 const DOCUMENT_OPTIONS = [
-    { value: "CC", label: "Cédula de Ciudadanía (CC)" },
-    { value: "CE", label: "Cédula de Extranjería (CE)" },
+    { value: "CC", label: "Cedula de Ciudadania (CC)" },
+    { value: "CE", label: "Cedula de Extranjeria (CE)" },
     { value: "NIT", label: "NIT" },
     { value: "Pasaporte", label: "Pasaporte" },
     { value: "TI", label: "Tarjeta de Identidad (TI)" },
 ];
+
+const normalizeTextValue = (value = "") =>
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const getPropertySource = (property = {}) =>
+    property?.metadata?.raw || property?.raw || property || {};
+
+const isActiveStatus = (estado = "") => {
+    // Soporta booleanos, números y cadenas frecuentes (activo/habilitado)
+    if (estado === true || estado === 1 || estado === "1" || String(estado).toLowerCase() === "true") return true;
+    const normalized = normalizeTextValue(estado);
+    return normalized === "activo" || normalized === "activa" || normalized === "habilitado" || normalized === "habilitada";
+};
+
+const getRenantState = (renant = {}) =>
+    renant.estado ??
+    renant.status ??
+    renant.persona?.estado ??
+    renant.raw?.estado ??
+    renant.estado_arrendatario ??
+    renant.raw?.estado_arrendatario ??
+    renant.raw?.persona?.estado ??
+    renant.activo ??
+    renant.isActive ??
+    renant.enabled;
+
+const renantIsActive = (renant = {}) => isActiveStatus(getRenantState(renant));
+
+const propertyHasActiveLease = (property = {}) => {
+    const source = getPropertySource(property);
+    const estadoTexto = normalizeTextValue(
+        property.estado ||
+        source.estado_frontend ||
+        source.estado ||
+        source.estado_inmueble
+    );
+
+    const leaseCollections = [
+        source.arriendos,
+        source.arrendamientos,
+        source.leases,
+        source.lease,
+        source.inmueble_arriendos,
+        source.arriendos_activos,
+    ].filter(Array.isArray);
+
+    const leaseList = leaseCollections.flat();
+
+    const hasLeaseMarkedActive = leaseList.some((lease) => {
+        const leaseState = normalizeTextValue(
+            lease?.estado ||
+            lease?.estado_contrato ||
+            lease?.estado_arriendo ||
+            lease?.status
+        );
+        return (
+            leaseState === "activo" ||
+            leaseState === "activa" ||
+            leaseState.includes("vigente") ||
+            leaseState.includes("en curso")
+        );
+    });
+
+    return (
+        estadoTexto.includes("arrend") ||
+        estadoTexto.includes("alquil") ||
+        hasLeaseMarkedActive
+    );
+};
+
+const propertyIsSold = (property = {}) => {
+    const source = getPropertySource(property);
+    const estadoTexto = normalizeTextValue(
+        property.estado ||
+        source.estado ||
+        source.estado_inmueble ||
+        source.estado_frontend ||
+        property.estadoVenta ||
+        source.estado_venta
+    );
+    const soldKeywords = ["vendido", "vendida", "vendidos", "sold", "cerrada", "completada"];
+    return soldKeywords.some((kw) => estadoTexto.includes(kw));
+};
+
+const propertyIsMarkedForSale = (property = {}) => {
+    const source = getPropertySource(property);
+    const operacion = normalizeTextValue(
+        property.operacion || source.operacion || source.tipo_operacion || property.tipoOperacion
+    );
+    const estadoTexto = normalizeTextValue(
+        property.estado || source.estado || source.estado_frontend || source.estado_inmueble
+    );
+    return operacion.includes("venta") || operacion.includes("sale") || estadoTexto.includes("venta");
+};
+
+const propertyIsMarkedForRent = (property = {}) => {
+    const source = getPropertySource(property);
+    const operacion = normalizeTextValue(
+        property.operacion || source.operacion || source.tipo_operacion || property.tipoOperacion
+    );
+    return (
+        operacion.includes("arriendo") ||
+        operacion.includes("alquiler") ||
+        operacion.includes("rent") ||
+        operacion.includes("lease")
+    );
+};
+
+const propertyIsAvailable = (property = {}) => {
+    const source = getPropertySource(property);
+    const estadoTexto = normalizeTextValue(
+        property.estado || source.estado || source.estado_frontend || source.estado_inmueble
+    );
+    if (!estadoTexto) return false;
+    return estadoTexto.includes("disponible") || estadoTexto.includes("available");
+};
+
+const validateInmuebleForRent = (inmueble = {}) => {
+    if (propertyIsSold(inmueble)) {
+        return "Este inmueble ya fue vendido y no se puede arrendar.";
+    }
+    if (propertyIsMarkedForSale(inmueble)) {
+        return "Este inmueble está marcado para venta, no se puede arrendar.";
+    }
+    if (!propertyIsMarkedForRent(inmueble)) {
+        return "Solo puedes seleccionar inmuebles configurados para arriendo.";
+    }
+    if (!propertyIsAvailable(inmueble)) {
+        return "El inmueble debe tener estado Disponible para poder arrendarlo.";
+    }
+    if (propertyHasActiveLease(inmueble)) {
+        return "El inmueble ya tiene un arriendo activo.";
+    }
+    return null;
+};
+
+const isOnOrAfterToday = (dateString) => {
+    if (!dateString) return false;
+    const d = new Date(dateString);
+    if (Number.isNaN(d)) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() <= today.getTime();
+};
 
 const combineNames = (first = "", second = "") => {
     return [first, second]
@@ -52,9 +200,19 @@ const sanitizeNumericString = (value) => {
     return value.toString().replace(/[^0-9]/g, "");
 };
 
+const normalizePhone = (value = "") => {
+    const digits = sanitizeNumericString(value);
+    if (!digits) return "";
+    if (digits.startsWith("57") && digits.length > 10) {
+        // Mantener solo los últimos 10 dígitos si trae el indicativo
+        return digits.slice(-10);
+    }
+    return digits.slice(-10);
+};
+
 /**
  * Payload SOLO para crear / actualizar Arrendatario (persona)
- * Ya NO mete datos del contrato aquí.
+ * Ya NO mete datos del contrato aquÃ­.
  */
 const buildArrendatarioPayload = (values = {}) => ({
     tipoDocumento: values.tipoDocArrendatario,
@@ -76,7 +234,7 @@ const buildArrendatarioPayload = (values = {}) => ({
 /**
  * Payload para crear el ARRIENDO / CONTRATO
  * Intenta ser compatible con ambas convenciones (camelCase y snake_case)
- * para que el backend pueda mapear fácilmente.
+ * para que el backend pueda mapear fÃ¡cilmente.
  */
 const buildArriendoPayload = (values = {}, renant = {}) => {
     const idArrendatario =
@@ -87,7 +245,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         values.id_arrendatario ||
         values.idArrendatario;
 
-    // Preparar datos del codeudor (persona). Se enviarán para que el backend cree/busque el registro y asigne id_codeudor.
+    // Preparar datos del codeudor (persona). Se enviarÃ¡n para que el backend cree/busque el registro y asigne id_codeudor.
     const codeudorPayload = {
         tipo_documento: values.tipoDocCodeudor,
         numero_documento: values.numeroDocCodeudor,
@@ -105,7 +263,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
     const idInmueble = values.idInmueble ? Number(values.idInmueble) : undefined;
 
     return {
-        // Relación con Arrendatario/cliente
+        // RelaciÃ³n con Arrendatario/cliente
         id_cliente: idArrendatario,
         idCliente: idArrendatario,
         id_arrendatario: idArrendatario,
@@ -118,14 +276,16 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         // Fechas
         fecha_inicio: values.fechaInicio,
         fecha_finalizacion: values.fechaFinal,
+        fecha_cobro: values.fechaCobro,
         fechaInicio: values.fechaInicio,
         fechaFin: values.fechaFinal,
+        fechaCobro: values.fechaCobro,
 
         // Valores
         valor_mensual: valorMensual,
         valorMensual: valorMensual,
 
-        // Garantía (opcional)
+        // GarantÃ­a (opcional)
         tipo_garantia: values.tipoGarantia,
         tipoGarantia: values.tipoGarantia,
         valor_garantia: valorGarantia,
@@ -133,17 +293,17 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         descripcion_garantia: values.descripcionGarantia,
         descripcionGarantia: values.descripcionGarantia,
 
-        // Codeudor (persona) - el backend lo resolverá a id_codeudor
+        // Codeudor (persona) - el backend lo resolverÃ¡ a id_codeudor
         codeudor: codeudorPayload,
 
         // Estado del contrato
-        estado: "Activo",
+        estado: values.estado || values.estadoContrato || "Activo",
     };
 };
 
 export default function RentForm({ onClose, onSubmit }) {
     const [step, setStep] = useState(1);
-    // Estado para manejar los errores en línea. Usa { fieldName: errorMessage }
+    // Estado para manejar los errores en lÃ­nea. Usa { fieldName: errorMessage }
     const [errors, setErrors] = useState({});
     const [submissionState, setSubmissionState] = useState({
         isSubmitting: false,
@@ -167,7 +327,6 @@ export default function RentForm({ onClose, onSubmit }) {
     });
     const arrendatarioLookupTimeoutRef = useRef(null);
     const arrendatarioLookupRequestId = useRef(0);
-    const { toast } = useToast();
     const manuallyEditedArrendatarioFieldsRef = useRef(new Set());
     const [inmuebleLookupState, setInmuebleLookupState] = useState({
         loading: false,
@@ -178,6 +337,7 @@ export default function RentForm({ onClose, onSubmit }) {
     const totalSteps = 4;
 
     const initial = {
+        // Por defecto usar CC para que el lookup tenga tipo desde el inicio (igual que en Compradores)
         tipoDocArrendatario: "", numeroDocArrendatario: "", primerNombreArrendatario: "", segundoNombreArrendatario: "",
         primerApellidoArrendatario: "", segundoApellidoArrendatario: "", correoArrendatario: "", telefonoArrendatario: "",
 
@@ -186,14 +346,14 @@ export default function RentForm({ onClose, onSubmit }) {
         estabilidadLaboral: "",
 
         tipoInmueble: "", registroInmobiliario: "", nombreInmueble: "",
-        departamento: "", ciudad: "", barrio: "", direccion: "", precioInmueble: "", garaje: false,
+        departamento: "", ciudad: "", barrio: "", direccion: "", precioInmueble: "",
 
         fechaInicio: "", fechaFinal: "", fechaCobro: "", precio: "", estado: "Activo",
     };
 
     // refs para mantener TODOS los valores sin causar re-renders en cada letra
     const valuesRef = useRef({ ...initial });
-    // Ref para mantener los valores formateados visibles en los inputs, si son diferentes del valor numérico
+    // Ref para mantener los valores formateados visibles en los inputs, si son diferentes del valor numÃ©rico
     const displayValuesRef = useRef({ ...initial });
     const elRefs = useRef({});
     const errorFocusTimeout = useRef(null); // Usado para enfocar el primer campo con error
@@ -201,8 +361,9 @@ export default function RentForm({ onClose, onSubmit }) {
     // Constantes para los nombres de los campos de documento
     const NUMERO_DOC_ARR = "numeroDocArrendatario";
     const NUMERO_DOC_COD = "numeroDocCodeudor";
+    const MIN_DOC_LOOKUP_LENGTH = 6;
 
-    // Lista de campos que deben ser estrictamente numéricos (solo dígitos)
+    // Lista de campos que deben ser estrictamente numÃ©ricos (solo dÃ­gitos)
     const strictNumericFields = [
         "precioInmueble", "precio"
     ];
@@ -210,7 +371,7 @@ export default function RentForm({ onClose, onSubmit }) {
     // Campos que requieren formato de miles
     const currencyFields = ["precioInmueble", "precio"];
 
-    // Campos agrupados por paso para la validación de 'Siguiente'
+    // Campos agrupados por paso para la validaciÃ³n de 'Siguiente'
     const stepFields = {
         1: [
             "tipoDocArrendatario", NUMERO_DOC_ARR, "primerNombreArrendatario", "segundoNombreArrendatario",
@@ -223,7 +384,7 @@ export default function RentForm({ onClose, onSubmit }) {
         ],
         3: [
             "tipoInmueble", "registroInmobiliario", "nombreInmueble",
-            "departamento", "ciudad", "barrio", "direccion", "precioInmueble", "garaje"
+            "departamento", "ciudad", "barrio", "direccion", "precioInmueble"
         ],
         4: ["fechaInicio", "fechaFinal", "fechaCobro", "precio"],
     };
@@ -234,12 +395,17 @@ export default function RentForm({ onClose, onSubmit }) {
         "primerNombreCodeudor", "segundoNombreCodeudor", "primerApellidoCodeudor", "segundoApellidoCodeudor",
     ];
 
-    // Lista de campos que deben contener solo números (documentos)
+    // Lista de campos que deben contener solo nÃºmeros (documentos)
     const docFields = [
         NUMERO_DOC_ARR, NUMERO_DOC_COD,
     ];
 
-    // Lista de campos que deben contener solo números (teléfonos)
+    const shouldTriggerArrLookup = (tipo = "", numero = "") => {
+        const clean = sanitizeNumericString(numero);
+        return Boolean((tipo || "").trim()) && clean.length >= MIN_DOC_LOOKUP_LENGTH;
+    };
+
+    // Lista de campos que deben contener solo nÃºmeros (telÃ©fonos)
     const phoneFields = [
         "telefonoArrendatario", "telefonoCodeudor",
     ];
@@ -251,29 +417,29 @@ export default function RentForm({ onClose, onSubmit }) {
 
     // === VALIDACIONES MEJORADAS PARA DOCUMENTOS ===
 
-    // Función para validar documentos según el tipo
+    // FunciÃ³n para validar documentos segÃºn el tipo
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
         
         switch (tipoDocumento) {
-            case 'CC': // Cédula de Ciudadanía
-                if (!/^[0-9]{8,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
+            case 'CC': // Cedula de Ciudadania
+                if (!/^[0-9]{7,10}$/.test(numeroLimpio)) {
+                    return 'La cedula de ciudadania debe tener entre 7 y 10 digitos';
                 }
                 break;
-                
-            case 'CE': // Cédula de Extranjería
+
+            case 'CE': // Cedula de Extranjeria
                 if (!/^[0-9]{6,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
+                    return 'La cedula de extranjeria debe tener entre 6 y 10 digitos';
                 }
                 break;
-                
+
             case 'NIT': // NIT
                 if (!/^[0-9]{9,10}$/.test(numeroLimpio)) {
-                    return 'El NIT debe tener 9 o 10 dígitos';
+                    return 'El NIT debe tener 9 o 10 digitos';
                 }
                 break;
-                
+
             case 'PASAPORTE': // Pasaporte
                 if (numeroLimpio.length < 6 || numeroLimpio.length > 20) {
                     return 'El pasaporte debe tener entre 6 y 20 caracteres';
@@ -282,15 +448,15 @@ export default function RentForm({ onClose, onSubmit }) {
                     return 'El pasaporte solo puede contener letras y números';
                 }
                 break;
-                
+
             case 'TI': // Tarjeta de Identidad
                 if (!/^[0-9]{10,11}$/.test(numeroLimpio)) {
-                    return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
+                    return 'La tarjeta de identidad debe tener 10 u 11 digitos';
                 }
                 break;
                 
             default:
-                return 'Tipo de documento no válido';
+                return 'Tipo de documento no valido';
         }
         
         return '';
@@ -298,29 +464,31 @@ export default function RentForm({ onClose, onSubmit }) {
 
     const getLabel = (name) => {
         const labels = {
-            tipoDocArrendatario: "Tipo de Documento", numeroDocArrendatario: "Número de Documento", primerNombreArrendatario: "Primer Nombre",
+            tipoDocArrendatario: "Tipo de Documento", numeroDocArrendatario: "Numero de Documento", primerNombreArrendatario: "Primer Nombre",
             segundoNombreArrendatario: "Segundo Nombre", primerApellidoArrendatario: "Primer Apellido", segundoApellidoArrendatario: "Segundo Apellido",
-            correoArrendatario: "Correo Electrónico", telefonoArrendatario: "Teléfono", tipoDocCodeudor: "Tipo de Documento Codeudor",
-            numeroDocCodeudor: "Número de Documento Codeudor", primerNombreCodeudor: "Primer Nombre Codeudor",
+            correoArrendatario: "Correo Electronico", telefonoArrendatario: "Telefono", tipoDocCodeudor: "Tipo de Documento Codeudor",
+            numeroDocCodeudor: "Numero de Documento Codeudor", primerNombreCodeudor: "Primer Nombre Codeudor",
             segundoNombreCodeudor: "Segundo Nombre Codeudor", primerApellidoCodeudor: "Primer Apellido Codeudor",
-            segundoApellidoCodeudor: "Segundo Apellido Codeudor", correoCodeudor: "Correo Electrónico Codeudor",
-            telefonoCodeudor: "Teléfono Codeudor", estabilidadLaboral: "Estabilidad Económica", tipoInmueble: "Tipo de Inmueble",
+            segundoApellidoCodeudor: "Segundo Apellido Codeudor", correoCodeudor: "Correo Electronico Codeudor",
+            telefonoCodeudor: "Telefono Codeudor", estabilidadLaboral: "Estabilidad Economica", tipoInmueble: "Tipo de Inmueble",
             registroInmobiliario: "Registro Inmobiliario", nombreInmueble: "Nombre del Inmueble",
-            departamento: "Departamento", ciudad: "Ciudad", barrio: "Barrio", direccion: "Dirección",
+            departamento: "Departamento", ciudad: "Ciudad", barrio: "Barrio", direccion: "Direccion",
             precioInmueble: "Precio del Inmueble",
-            garaje: "Garaje", fechaInicio: "Fecha de Inicio", fechaFinal: "Fecha de Finalización", fechaCobro: "Fecha de Cobro",
+            fechaInicio: "Fecha de Inicio", fechaFinal: "Fecha de Finalizacion", fechaCobro: "Fecha de Cobro",
             precio: "Precio del Arriendo",
         };
         return labels[name] ?? name;
     };
 
-    // Función para obtener la clase de estilo (incluyendo el resaltado de error)
+    // FunciÃ³n para obtener la clase de estilo (incluyendo el resaltado de error)
     const getFieldClass = useCallback((fieldName) => {
-        const errorClass = errors[fieldName] ? 'border-red-500 ring-2 ring-red-500' : 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
-        return `w-full p-3 border rounded-lg focus:outline-none transition duration-150 ${errorClass}`;
+        const errorClass = errors[fieldName]
+            ? "border-red-500 ring-2 ring-red-200"
+            : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200";
+        return `w-full rounded-xl bg-white px-3 py-2 text-sm shadow-sm focus:outline-none transition ${errorClass}`;
     }, [errors]);
 
-    // Formatea un número con separadores de miles
+    // Formatea un nÃºmero con separadores de miles
     const formatNumberWithThousandsSeparator = (value) => {
         if (!value) return "";
         const cleanValue = value.replace(/[^0-9]/g, '');
@@ -340,12 +508,17 @@ export default function RentForm({ onClose, onSubmit }) {
         if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
             valuesRef.current[name] = initial[name] ?? "";
         }
-        
-        // Inicializar el valor de visualización si es un campo de moneda
-        if (currencyFields.includes(name) && valuesRef.current[name]) {
-            displayValuesRef.current[name] = formatNumberWithThousandsSeparator(valuesRef.current[name].toString());
+        // No autoseleccionar opción; mantener "Seleccione..."
+        if (el.tagName === "SELECT") {
+            displayValuesRef.current[name] = valuesRef.current[name];
+            el.value = valuesRef.current[name] ?? "";
         } else {
             displayValuesRef.current[name] = valuesRef.current[name];
+        }
+
+        // Inicializar el valor de visualizaciÃ³n si es un campo de moneda
+        if (currencyFields.includes(name) && valuesRef.current[name]) {
+            displayValuesRef.current[name] = formatNumberWithThousandsSeparator(valuesRef.current[name].toString());
         }
 
         if (el.type === "checkbox") {
@@ -396,6 +569,20 @@ export default function RentForm({ onClose, onSubmit }) {
 
     const applyArrendatarioData = useCallback((renant) => {
         if (!renant) return;
+        if (!renantIsActive(renant)) {
+            const inactiveMsg = "No se puede asociar un arriendo a un arrendatario en estado inactivo.";
+            setArrendatarioLookupState({
+                loading: false,
+                message: "",
+                error: inactiveMsg,
+            });
+            toast({
+                title: "Arrendatario inactivo",
+                description: inactiveMsg,
+                variant: "destructive",
+            });
+            return;
+        }
 
         const replacements = {
             primerNombreArrendatario: renant.primerNombre || "",
@@ -403,7 +590,7 @@ export default function RentForm({ onClose, onSubmit }) {
             primerApellidoArrendatario: renant.primerApellido || "",
             segundoApellidoArrendatario: renant.segundoApellido || "",
             correoArrendatario: renant.correo || "",
-            telefonoArrendatario: renant.telefono || ""
+            telefonoArrendatario: normalizePhone(renant.telefono)
         };
 
         arrendatarioAutoFillFields.forEach((field) => {
@@ -448,13 +635,8 @@ export default function RentForm({ onClose, onSubmit }) {
             raw.precio ??
             "";
         setFieldValue("precioInmueble", precioAutoFill);
+        setFieldValue("precio", precioAutoFill);
 
-        const garajeSource = raw.garaje ?? raw.parqueaderos ?? raw.garajes ?? inmueble.garaje ?? inmueble.parqueaderos;
-        if (garajeSource !== undefined) {
-            const garageDigits = sanitizeNumericString(garajeSource);
-            const hasGarage = garageDigits ? garageDigits !== "0" : Boolean(garajeSource);
-            setFieldValue("garaje", hasGarage);
-        }
     }, [setFieldValue]);
 
     const handleInmuebleLookup = useCallback(async (registro = "") => {
@@ -471,15 +653,31 @@ export default function RentForm({ onClose, onSubmit }) {
             if (inmuebleLookupRequestId.current !== requestId) return;
 
             if (inmueble && (inmueble.id || inmueble.id_inmueble)) {
+                const validationError = validateInmuebleForRent(inmueble);
+                if (validationError) {
+                    valuesRef.current.idInmueble = undefined;
+                    setInmuebleLookupState({
+                        loading: false,
+                        message: "",
+                        error: validationError
+                    });
+                    toast({
+                        title: "Inmueble no válido para arriendo",
+                        description: validationError,
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
                 autofillInmueble(inmueble);
                 setInmuebleLookupState({
                     loading: false,
-                    message: "Datos del inmueble completados automáticamente.",
+                    message: "",
                     error: null
                 });
                 toast({
                     title: "Inmueble encontrado",
-                    description: "Datos del inmueble completados automáticamente.",
+                    description: "Datos del inmueble completados automaticamente.",
                     variant: "default",
                 });
             } else {
@@ -487,7 +685,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 setInmuebleLookupState({
                     loading: false,
                     message: "",
-                    error: null
+                    error: "No encontramos un inmueble con ese registro."
                 });
                 toast({
                     title: "Inmueble no encontrado",
@@ -501,7 +699,7 @@ export default function RentForm({ onClose, onSubmit }) {
             setInmuebleLookupState({
                 loading: false,
                 message: "",
-                error: null
+                error: error?.message || "No fue posible buscar el inmueble."
             });
             toast({
                 title: "Error al buscar inmueble",
@@ -513,8 +711,13 @@ export default function RentForm({ onClose, onSubmit }) {
 
     const cleanDocument = (value = "") => value.toString().replace(/[^0-9]/g, "").trim();
 
+    const renantHasState = (renant = {}) => {
+        const estado = getRenantState(renant);
+        return estado !== undefined && estado !== null && String(estado).trim() !== "";
+    };
+
     const fetchArrendatarioByDocument = useCallback(async () => {
-        const tipoDocumento = (valuesRef.current.tipoDocArrendatario || "").trim();
+        const tipoDocumento = (valuesRef.current.tipoDocArrendatario || "").trim().toUpperCase();
         const numeroDocumento = cleanDocument(valuesRef.current.numeroDocArrendatario);
 
         if (!tipoDocumento || !numeroDocumento) {
@@ -522,12 +725,19 @@ export default function RentForm({ onClose, onSubmit }) {
             return;
         }
 
+        console.log("[Arrendatario lookup] tipo:", tipoDocumento, "numero:", numeroDocumento);
+
         const documentError = validateDocument(tipoDocumento, numeroDocumento);
         if (documentError) {
             setArrendatarioLookupState({
                 loading: false,
                 message: "",
                 error: documentError
+            });
+            toast({
+                title: "Documento inválido",
+                description: documentError,
+                variant: "destructive",
             });
             return;
         }
@@ -538,43 +748,64 @@ export default function RentForm({ onClose, onSubmit }) {
         setArrendatarioLookupState({ loading: true, message: "", error: null });
 
         try {
-            const results = await renantsApiService.getAll({
-                tipo_documento: tipoDocumento,
-                numero_documento: numeroDocumento
-            });
+            // Mismo flujo que funciona en Compradores: primero buyers (ventas), luego Personas, luego renants.
+            let match = await buyersApiService.findByDocument(tipoDocumento, numeroDocumento);
+            if (!match) {
+                match = await buyersApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
+            }
+            if (!match) {
+                match = await renantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
+            }
+            if (!match) {
+                const result = await renantsApiService.getAll();
+                match = (result?.data || []).find((renant) => {
+                    const storedDoc = cleanDocument(renant.documento);
+                    const tipo = (renant.tipoDocumento || "").toString().trim().toUpperCase();
+                    return storedDoc === numeroDocumento && tipo === tipoDocumento;
+                });
+            }
 
             if (arrendatarioLookupRequestId.current !== requestId) return;
 
-            const matchingRenant = results.find((renant) => {
-                const storedDoc = cleanDocument(renant.documento);
-                return (
-                    storedDoc === numeroDocumento &&
-                    (renant.tipoDocumento || "").toString().trim() === tipoDocumento
-                );
-            });
+            if (match) {
+                // Si el match no trae estado, intentamos obtenerlo desde el servicio de arrendatarios
+                if (!renantHasState(match)) {
+                    const renantWithState = await renantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
+                    if (renantWithState) {
+                        match = { ...renantWithState, ...match };
+                    }
+                }
 
-            if (matchingRenant) {
-                applyArrendatarioData(matchingRenant);
-                setArrendatarioLookupState({
-                    loading: false,
-                    message: "Datos completados automáticamente.",
-                    error: null
-                });
-                toast({
-                    title: "Arrendatario encontrado",
-                    description: "Datos del arrendatario completados automáticamente.",
-                    variant: "default",
-                });
+                if (!renantIsActive(match)) {
+                    const inactiveMsg = "No se puede asociar un arriendo a un arrendatario en estado inactivo.";
+                    setArrendatarioLookupState({
+                        loading: false,
+                        message: "",
+                        error: inactiveMsg,
+                    });
+                    toast({
+                        title: "Arrendatario inactivo",
+                        description: inactiveMsg,
+                        variant: "destructive",
+                    });
+                } else {
+                    applyArrendatarioData(match);
+                    setArrendatarioLookupState({
+                        loading: false,
+                        message: "Persona encontrada y datos autocompletados.",
+                        error: null
+                    });
+                    toast({
+                        title: "Arrendatario encontrado",
+                        description: "Datos autocompletados correctamente.",
+                        variant: "default",
+                    });
+                }
             } else {
                 setArrendatarioLookupState({
                     loading: false,
                     message: "",
-                    error: "No encontramos un arrendatario con ese documento."
-                });
-                toast({
-                    title: "Arrendatario no encontrado",
-                    description: "No encontramos un arrendatario con ese documento.",
-                    variant: "destructive",
+                    error: null,
                 });
             }
         } catch (error) {
@@ -582,11 +813,11 @@ export default function RentForm({ onClose, onSubmit }) {
             setArrendatarioLookupState({
                 loading: false,
                 message: "",
-                error: error?.message || "No fue posible buscar el arrendatario."
+                error: "No fue posible buscar el arrendatario. Intenta de nuevo."
             });
             toast({
                 title: "Error al buscar arrendatario",
-                description: error?.message || "No fue posible buscar el arrendatario.",
+                description: "No fue posible buscar el arrendatario. Intenta de nuevo.",
                 variant: "destructive",
             });
         }
@@ -622,17 +853,23 @@ export default function RentForm({ onClose, onSubmit }) {
         } else {
             // Si es un campo de moneda, limpiamos el valor antes de guardarlo en valuesRef
             if (currencyFields.includes(name)) {
-                cleanValue = value.replace(/[^0-9]/g, ''); // Solo dígitos
+                cleanValue = value.replace(/[^0-9]/g, ''); // Solo dÃ­gitos
                 const formattedValue = formatNumberWithThousandsSeparator(cleanValue);
                 
                 // Actualizar el valor a mostrar en el input (lo que ve el usuario)
                 displayValuesRef.current[name] = formattedValue;
-                e.target.value = formattedValue; // Forzar la actualización visual
+                e.target.value = formattedValue; // Forzar la actualizaciÃ³n visual
+            } else if (docFields.includes(name) || phoneFields.includes(name)) {
+                cleanValue = sanitizeNumericString(value);
+                displayValuesRef.current[name] = cleanValue;
+                if (e.target.value !== cleanValue) {
+                    e.target.value = cleanValue;
+                }
             } else {
                 displayValuesRef.current[name] = value;
             }
             
-            // Guardar siempre el valor LIMPIO (solo dígitos si es numérico con formato) o el valor original
+            // Guardar siempre el valor LIMPIO (solo dÃ­gitos si es numÃ©rico con formato) o el valor original
             valuesRef.current[name] = cleanValue;
 
             if (name === "registroInmobiliario") {
@@ -644,7 +881,7 @@ export default function RentForm({ onClose, onSubmit }) {
             }
         }
 
-        // Limpieza de error en vivo al escribir, solo si ya existía un error
+        // Limpieza de error en vivo al escribir, solo si ya existÃ­a un error
         if (errors[name] && cleanValue.length === 0) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -656,25 +893,193 @@ export default function RentForm({ onClose, onSubmit }) {
             manuallyEditedArrendatarioFieldsRef.current.add(name);
         }
 
+        // Disparar bÃºsqueda solo con tipo y >=6 dÃ­gitos para no bloquear escritura
+        if (name === "numeroDocArrendatario" || name === "tipoDocArrendatario") {
+            const tipo = name === "tipoDocArrendatario" ? cleanValue : valuesRef.current.tipoDocArrendatario;
+            const numero = name === "numeroDocArrendatario" ? cleanValue : valuesRef.current.numeroDocArrendatario;
+            const numeroLimpio = sanitizeNumericString(numero);
+            if (tipo && numeroLimpio.length >= MIN_DOC_LOOKUP_LENGTH) {
+                triggerArrendatarioLookup(120);
+            } else {
+                setArrendatarioLookupState((prev) => {
+                    if (!prev.loading && !prev.message && !prev.error) return prev;
+                    return { loading: false, message: "", error: null };
+                });
+            }
+        }
+
         if (name === "tipoDocArrendatario" || name === NUMERO_DOC_ARR) {
             resetArrendatarioManualFields();
-            setArrendatarioLookupState((prev) => {
-                if (!prev.loading && !prev.message && !prev.error) return prev;
-                return { loading: false, message: "", error: null };
-            });
-            triggerArrendatarioLookup();
         }
     };
 
-    // Funciones de validación de formato
-    const isValidName = (value) => /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]*$/.test(value);
+    // === Date picker estilo agenda ===
+    const formatDateForInput = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    const parseYMDToLocalDate = (value) => {
+        if (!value) return null;
+        const parts = value.split("-").map(Number);
+        if (parts.length < 3 || parts.some(Number.isNaN)) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    };
+
+    const formatDateForDisplay = (value) => {
+        if (!value) return "";
+        const date = parseYMDToLocalDate(value);
+        if (!date) return value;
+        return date.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+    };
+
+    const getDaysInMonth = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+
+        const days = [];
+
+        for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+            const prevDate = new Date(year, month, -i);
+            days.push({ date: prevDate, isCurrentMonth: false, isDisabled: true });
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const d = new Date(year, month, day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            days.push({
+                date: d,
+                isCurrentMonth: true,
+                isDisabled: false,
+                isToday: d.toDateString() === today.toDateString(),
+            });
+        }
+
+        const remainingDays = 42 - days.length;
+        for (let day = 1; day <= remainingDays; day++) {
+            const nextDate = new Date(year, month + 1, day);
+            days.push({ date: nextDate, isCurrentMonth: false, isDisabled: true });
+        }
+
+        return days;
+    };
+
+    const FancyDatePicker = ({ name, label }) => {
+        const errorMessage = errors[name];
+        const [open, setOpen] = useState(false);
+        const selectedValue = valuesRef.current[name];
+        const selectedDate = parseYMDToLocalDate(selectedValue);
+        const initialMonth = selectedDate || new Date();
+        const [currentMonth, setCurrentMonth] = useState(initialMonth);
+        const [days, setDays] = useState(getDaysInMonth(initialMonth));
+
+        useEffect(() => {
+            setDays(getDaysInMonth(currentMonth));
+        }, [currentMonth]);
+
+        useEffect(() => {
+            if (selectedValue) {
+                const d = parseYMDToLocalDate(selectedValue);
+                if (d) {
+                    setCurrentMonth(d);
+                    setDays(getDaysInMonth(d));
+                }
+            }
+        }, [selectedValue]);
+
+        const handleSelect = (day) => {
+            if (day.isDisabled) return;
+            const formatted = formatDateForInput(day.date);
+            setFieldValue(name, formatted);
+            setOpen(false);
+        };
+
+        const monthLabel = `${currentMonth.toLocaleString("es-ES", { month: "long" })} ${currentMonth.getFullYear()}`;
+        const displayText = selectedValue ? formatDateForDisplay(selectedValue) : "Selecciona fecha";
+
+        return (
+            <div className="relative">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {label} <span className="text-red-500">*</span>
+                </label>
+                <button
+                    type="button"
+                    onClick={() => setOpen((v) => !v)}
+                    className={`w-full flex items-center justify-between rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 ${errorMessage ? "border-red-400" : ""}`}
+                >
+                    <span className={selectedValue ? "text-slate-800" : "text-slate-400"}>{displayText}</span>
+                    <CalendarIcon className="w-4 h-4 text-slate-500" />
+                </button>
+                {errorMessage && <p className="text-red-500 text-xs mt-1">{errorMessage}</p>}
+
+                {open && (
+                    <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 bg-white shadow-2xl p-3">
+                        <div className="flex items-center justify-between mb-3">
+                            <button
+                                type="button"
+                                onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                                className="p-2 hover:bg-slate-100 rounded-lg transition"
+                            >
+                                <ChevronLeft className="w-4 h-4 text-slate-600" />
+                            </button>
+                            <span className="text-sm font-semibold text-slate-800 capitalize">{monthLabel}</span>
+                            <button
+                                type="button"
+                                onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                                className="p-2 hover:bg-slate-100 rounded-lg transition"
+                            >
+                                <ChevronRight className="w-4 h-4 text-slate-600" />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 mb-1">
+                            {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
+                                <div key={d} className="text-center text-xs font-semibold text-slate-500 py-1">
+                                    {d}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                            {days.map((day, idx) => {
+                                const isSelected = selectedValue === formatDateForInput(day.date);
+                                return (
+                                    <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => handleSelect(day)}
+                                        disabled={day.isDisabled}
+                                        className={`h-9 rounded-lg text-xs font-semibold transition-all
+                                            ${day.isDisabled ? "text-slate-300 cursor-not-allowed" : "text-slate-700 hover:bg-blue-50"}
+                                            ${!day.isCurrentMonth ? "text-slate-400" : ""}
+                                            ${day.isToday ? "bg-blue-100 text-blue-600" : ""}
+                                            ${isSelected ? "bg-blue-600 text-white shadow-md" : ""}`}
+                                    >
+                                        {day.date.getDate()}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // Funciones de validaciÃ³n de formato
+    const isValidName = (value) => /^[a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘Ã¼Ãœ\s]*$/.test(value);
     const isValidNumeric = (value) => /^\d*$/.test(value);
     const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
 
     // Handler para verificar obligatoriedad, longitud y formato al salir del campo - MEJORADO
     const handleInputBlur = (e) => {
         const { name } = e.target;
-        // Tomamos el valor limpio de la ref, no del e.target.value (que podría estar formateado)
+        // Tomamos el valor limpio de la ref, no del e.target.value (que podrÃ­a estar formateado)
         const value = valuesRef.current[name] || ""; 
         
         let errorMessage = null;
@@ -685,7 +1090,7 @@ export default function RentForm({ onClose, onSubmit }) {
             const newErrors = { ...prev };
 
             // 1. Validar OBLIGATORIO
-            if (isRequired && !value.trim() && name !== 'garaje') { 
+            if (isRequired && !value.trim()) { 
                  errorMessage = "Este campo es obligatorio.";
             }
 
@@ -694,7 +1099,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
                     errorMessage = `Solo se permiten letras y espacios.`;
                 } 
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
+                // VALIDACIÃ“N MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(name)) {
                     let tipoDocumento = "";
                     
@@ -704,25 +1109,29 @@ export default function RentForm({ onClose, onSubmit }) {
                         tipoDocumento = valuesRef.current.tipoDocCodeudor || "CC";
                     }
                     
-                    // Validar formato básico primero
+                    // Validar formato bÃ¡sico primero
                     if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
                         errorMessage = `Solo se permiten letras, números, espacios, puntos y guiones`;
                     } else {
-                        // Validación específica por tipo de documento
+                        // ValidaciÃ³n especÃ­fica por tipo de documento
                         errorMessage = validateDocument(tipoDocumento, value);
                     }
                 } 
-                else if (phoneFields.includes(name) && !isValidNumeric(value)) {
-                    errorMessage = `Solo se permiten números.`;
+                else if (phoneFields.includes(name)) {
+                    if (!isValidNumeric(value)) {
+                        errorMessage = `Solo se permiten números.`;
+                    } else if (value.length < 7) {
+                        errorMessage = "El teléfono debe tener al menos 7 digitos";
+                    }
                 } 
                 else if (emailFields.includes(name) && !isValidEmail(value)) {
-                    errorMessage = `El correo electrónico debe ser válido.`;
+                    errorMessage = `El correo electrónico debe ser valido.`;
                 } 
                 else if (strictNumericFields.includes(name) && !isValidNumeric(value)) { 
                     errorMessage = `Solo se permiten números enteros.`;
                 }
                 
-                // Validaciones específicas para campos numéricos
+                // Validaciones especÃ­ficas para campos numÃ©ricos
                 if (!errorMessage && strictNumericFields.includes(name)) {
                     const numericValue = parseInt(value);
                     
@@ -732,7 +1141,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 }
             }
 
-            // 3. Validar CONFLICTO DE DOCUMENTO (solo si es un campo de documento y no tiene otro error más grave)
+            // 3. Validar CONFLICTO DE DOCUMENTO (solo si es un campo de documento y no tiene otro error mÃ¡s grave)
             if (!errorMessage && docFields.includes(name)) {
                 const otherDocName = name === NUMERO_DOC_ARR ? NUMERO_DOC_COD : NUMERO_DOC_ARR;
                 const otherDocValue = valuesRef.current[otherDocName] || "";
@@ -744,7 +1153,7 @@ export default function RentForm({ onClose, onSubmit }) {
                          newErrors[otherDocName] = conflictErrorMsg;
                     }
                 } else if (newErrors[otherDocName] === conflictErrorMsg) {
-                    // Si el otro campo tenía el error de conflicto, lo limpiamos
+                    // Si el otro campo tenÃ­a el error de conflicto, lo limpiamos
                     delete newErrors[otherDocName];
                 }
             }
@@ -759,12 +1168,21 @@ export default function RentForm({ onClose, onSubmit }) {
             return newErrors;
         });
 
+        if (!errorMessage && (name === NUMERO_DOC_ARR || name === "tipoDocArrendatario")) {
+            const tipo = valuesRef.current.tipoDocArrendatario || "";
+            const numero = valuesRef.current.numeroDocArrendatario || "";
+            if (shouldTriggerArrLookup(tipo, numero)) {
+                triggerArrendatarioLookup(0);
+                fetchArrendatarioByDocument();
+            }
+        }
+
         if (name === "registroInmobiliario" && !errorMessage && value.trim().length > 0) {
             handleInmuebleLookup(value);
         }
     };
 
-    // --- LÓGICA DE VALIDACIÓN CENTRAL MEJORADA ---
+    // --- LÃ“GICA DE VALIDACIÃ“N CENTRAL MEJORADA ---
     const runValidation = (fieldsToCheck) => {
         let currentErrors = { ...errors };
         let hasError = false;
@@ -772,30 +1190,30 @@ export default function RentForm({ onClose, onSubmit }) {
         
         // 1. Iterar sobre los campos del paso actual o todos para validaciones individuales
         for (const fieldName of fieldsToCheck) {
-            // Siempre usamos el valor LIMPIO de valuesRef para la validación
+            // Siempre usamos el valor LIMPIO de valuesRef para la validaciÃ³n
             const value = valuesRef.current[fieldName] || "";
             let error = null;
 
             const isRequired = requiredFields.includes(fieldName);
             
-            // A. Validación de Obligatoriedad
-            if (isRequired && !value.toString().trim() && fieldName !== 'garaje') { 
+            // A. ValidaciÃ³n de Obligatoriedad
+            if (isRequired && !value.toString().trim()) { 
                 error = "Este campo es obligatorio.";
             } 
             
-            // B. Validación de Obligatoriedad y > 0 para números estrictos
+            // B. ValidaciÃ³n de Obligatoriedad y > 0 para nÃºmeros estrictos
             if (isRequired && strictNumericFields.includes(fieldName)) {
                  if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                      error = "Este campo es obligatorio y debe ser mayor a 0";
                  }
             }
 
-            // C. Validación de Formato MEJORADA
+            // C. ValidaciÃ³n de Formato MEJORADA
             if (!error && value.toString().trim()) {
                 if (nameFields.includes(fieldName) && !isValidName(displayValuesRef.current[fieldName])) {
                     error = `Solo se permiten letras, espacios y acentos.`;
                 } 
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
+                // VALIDACIÃ“N MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(fieldName)) {
                     let tipoDocumento = "";
                     
@@ -808,16 +1226,16 @@ export default function RentForm({ onClose, onSubmit }) {
                     error = validateDocument(tipoDocumento, value);
                 } 
                 else if (phoneFields.includes(fieldName) && !isValidNumeric(value)) {
-                    error = `Solo se permiten dígitos.`;
+                    error = `Solo se permiten di­gitos.`;
                 } 
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
-                    error = `Debe ser un correo electrónico válido.`;
+                    error = `Debe ser un correo electrónico valido.`;
                 } 
                 else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) { 
                     error = `Solo se permiten números enteros.`;
                 }
                 
-                // Validaciones específicas para campos numéricos
+                // Validaciones especÃ­ficas para campos numÃ©ricos
                 if (!error && strictNumericFields.includes(fieldName)) {
                     const numericValue = parseInt(value);
                     
@@ -835,7 +1253,7 @@ export default function RentForm({ onClose, onSubmit }) {
                     firstErrorField = fieldName;
                 }
             } else {
-                 // Limpiar el error si el campo es válido (pero no tocar el error de CONFLICTO si ya existe)
+                 // Limpiar el error si el campo es vÃ¡lido (pero no tocar el error de CONFLICTO si ya existe)
                  const isConflictError = currentErrors[fieldName] === "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
                  if (!isConflictError) {
                     delete currentErrors[fieldName];
@@ -843,7 +1261,7 @@ export default function RentForm({ onClose, onSubmit }) {
             }
         }
         
-        // 2. Validación de CONFLICTO DE DOCUMENTO (Cross-field validation)
+        // 2. ValidaciÃ³n de CONFLICTO DE DOCUMENTO (Cross-field validation)
         const docArrValue = valuesRef.current[NUMERO_DOC_ARR] || "";
         const docCodValue = valuesRef.current[NUMERO_DOC_COD] || "";
         const conflictErrorMsg = "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
@@ -887,9 +1305,9 @@ export default function RentForm({ onClose, onSubmit }) {
 
     const handleNextStep = () => {
         // Validar solo los campos del paso actual, asegurando incluir ambos documentos si son relevantes
-        let fieldsToValidate = stepFields[step].filter(f => f !== 'garaje' || requiredFields.includes('garaje'));
+        let fieldsToValidate = stepFields[step];
         
-        // Añadir el campo de documento cruzado para validar el conflicto al cambiar de paso 1 a 2
+        // AÃ±adir el campo de documento cruzado para validar el conflicto al cambiar de paso 1 a 2
         if (step === 1 && (valuesRef.current[NUMERO_DOC_COD] || "").trim()) {
             if (!fieldsToValidate.includes(NUMERO_DOC_COD)) fieldsToValidate.push(NUMERO_DOC_COD);
         }
@@ -921,16 +1339,16 @@ export default function RentForm({ onClose, onSubmit }) {
         e.preventDefault();
         if (submissionState.isSubmitting) return;
         
-        // En el envío final, validamos TODOS los campos obligatorios
+        // En el envÃ­o final, validamos TODOS los campos obligatorios
         const allFieldsToValidate = Object.values(stepFields)
             .flat()
-            .filter(f => f !== 'garaje' || requiredFields.includes('garaje'));
+            .filter(f => requiredFields.includes(f));
         const { currentErrors, hasError, firstErrorField } = runValidation(allFieldsToValidate);
 
         setErrors(currentErrors);
 
         if (hasError) {
-            // Determinar a qué paso debe volver para mostrar el error y enfocar el campo
+            // Determinar a quÃ© paso debe volver para mostrar el error y enfocar el campo
             let targetStep = 1;
             if (stepFields[2].includes(firstErrorField)) targetStep = 2;
             else if (stepFields[3].includes(firstErrorField)) targetStep = 3;
@@ -945,12 +1363,12 @@ export default function RentForm({ onClose, onSubmit }) {
                 if (el) el.focus();
             }, 50);
             
-            return; // Bloquea el envío
+            return; // Bloquea el envÃ­o
         }
 
-        // Validación adicional: asegurar que tenemos un inmueble resuelto a ID
+        // ValidaciÃ³n adicional: asegurar que tenemos un inmueble resuelto a ID
         if (!valuesRef.current.idInmueble) {
-            const msg = "Selecciona un inmueble válido desde el registro inmobiliario.";
+            const msg = "Selecciona un inmueble valido desde el registro inmobiliario.";
             setErrors((prev) => ({ ...prev, registroInmobiliario: msg }));
             setStep(3);
             const el = elRefs.current.registroInmobiliario;
@@ -959,10 +1377,12 @@ export default function RentForm({ onClose, onSubmit }) {
         }
 
         setSubmissionState({ isSubmitting: true, error: null });
-        const rawValues = { ...valuesRef.current };
+        const estadoCalculado = isOnOrAfterToday(valuesRef.current.fechaCobro) ? "Debe" : "Activo";
+        valuesRef.current.estado = estadoCalculado;
+        const rawValues = { ...valuesRef.current, estado: estadoCalculado };
 
         try {
-            // 1️⃣ Asegurar ARRRENDATARIO (crear o reutilizar)
+            // 1ï¸âƒ£ Asegurar ARRRENDATARIO (crear o reutilizar)
             const arrendatarioPayload = buildArrendatarioPayload(rawValues);
             let renant;
 
@@ -972,7 +1392,7 @@ export default function RentForm({ onClose, onSubmit }) {
             } catch (error) {
                 const duplicateMsg = "ya esta registrada como arrendatario";
                 if (error?.message?.toLowerCase().includes(duplicateMsg)) {
-                    // Ya existe → lo buscamos y reutilizamos
+                    // Ya existe â†’ lo buscamos y reutilizamos
                     const tipoDocumento = (rawValues.tipoDocArrendatario || "").trim();
                     const numeroDocumento = cleanDocument(rawValues.numeroDocArrendatario);
 
@@ -981,7 +1401,7 @@ export default function RentForm({ onClose, onSubmit }) {
                         numero_documento: numeroDocumento
                     });
 
-                    const matched = existing?.[0];
+                    const matched = existing?.data?.[0];
                     if (!matched) {
                         throw error; // no pudimos recuperarlo, dejamos que caiga al catch general
                     }
@@ -991,11 +1411,15 @@ export default function RentForm({ onClose, onSubmit }) {
                 }
             }
 
-            // 2️⃣ Crear ARRIENDO ligado al arrendatario obtenido/creado
+            if (!renantIsActive(renant)) {
+                throw new Error("No se puede asociar un arriendo a un arrendatario en estado inactivo.");
+            }
+
+            // 2ï¸âƒ£ Crear ARRIENDO ligado al arrendatario obtenido/creado
             const arriendoPayload = buildArriendoPayload(rawValues, renant);
             const arriendoCreated = await arriendoApiService.crearArriendo(arriendoPayload);
 
-            // 3️⃣ Notificar al padre → RenantManagementPage hará fetchArriendos()
+            // 3ï¸âƒ£ Notificar al padre â†’ RenantManagementPage harÃ¡ fetchArriendos()
             await onSubmit?.({
                 renant,
                 arriendo: arriendoCreated,
@@ -1026,15 +1450,16 @@ export default function RentForm({ onClose, onSubmit }) {
         const isPhoneField = phoneFields.includes(name);
         const isEmailField = emailFields.includes(name);
         const isStrictNumeric = strictNumericFields.includes(name);
+        const isCurrencyField = currencyFields.includes(name);
         const isNameField = nameFields.includes(name);
 
-        // Determinar si necesita validación en blur (incluye los requeridos para feedback inmediato)
+        // Determinar si necesita validaciÃ³n en blur (incluye los requeridos para feedback inmediato)
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
         
-        // Establecer el tipo de input para sugerir teclado numérico
+        // Establecer el tipo de input para sugerir teclado numÃ©rico
         let inputType = type;
-        if (isDocField || isPhoneField || isStrictNumeric) {
+        if (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
             if (type !== 'date' && type !== 'email') {
                 inputType = "tel";
             }
@@ -1043,13 +1468,17 @@ export default function RentForm({ onClose, onSubmit }) {
             inputType = "email";
         }
 
+        // Para campos de moneda dejamos texto libre para permitir separadores visuales
+        const inputMode = (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "numeric" : undefined;
+        const pattern = (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "[0-9]*" : undefined;
+
         // Placeholders mejorados
         let fieldPlaceholder = placeholder;
         if (isDocField) {
-            fieldPlaceholder = "Ej: 1234567890 (8-10 dígitos según el tipo)";
+            fieldPlaceholder = "Ej: 1234567890 (8-10 digitos segun el tipo)";
         }
         if (isPhoneField) {
-            fieldPlaceholder = "Ej: 3001234567 (10 dígitos mínimo)";
+            fieldPlaceholder = "Ej: 3001234567 (10 digitos mi­nimo)";
         }
 
         if (type === "checkbox") {
@@ -1113,6 +1542,8 @@ export default function RentForm({ onClose, onSubmit }) {
                     ref={setElRef(name)}
                     className={getFieldClass(name)}
                     type={inputType}
+                    inputMode={inputMode}
+                    pattern={pattern}
                     placeholder={fieldPlaceholder}
                     defaultValue={(displayValuesRef.current[name] || initial[name]) ?? ""} 
                     onChange={handleInputChange}
@@ -1126,9 +1557,9 @@ export default function RentForm({ onClose, onSubmit }) {
     };
 
     return (
-        // 🔑 Fondo del modal con desenfoque - CAMBIO PRINCIPAL
+        // ðŸ”‘ Fondo del modal con desenfoque - CAMBIO PRINCIPAL
         <motion.div 
-            className="fixed inset-0 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm z-50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1136,57 +1567,58 @@ export default function RentForm({ onClose, onSubmit }) {
         >
             {/* Contenido principal del modal */}
             <motion.div 
-                className="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 relative max-h-[90vh] overflow-y-auto"
+                role="dialog"
+                aria-modal="true"
+                className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 w-full max-w-5xl relative flex flex-col"
                 onClick={(e) => e.stopPropagation()}
                 initial={{ opacity: 0, y: 20, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 20, scale: 0.98 }}
                 transition={{ duration: 0.25 }}
             >
-                
-                {/* Header con estilo del banner */}
-                <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Crear Arriendo</h2>
-                    <p className="text-gray-600 text-sm">Complete la información del nuevo contrato de arrendamiento</p>
-                </div>
-
-                {/* Botón cerrar con estilo azul */}
-                <motion.button
-                    onClick={onClose}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 transition duration-150 p-1 rounded-full"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                </motion.button>
-
-                {/* Barra de progreso */}
-                <div className="mb-6">
-                    <div className="w-full bg-gray-200 h-2 rounded-full">
-                        <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${(step / totalSteps) * 100}%` }}
-                        />
+                {/* Header sticky */}
+                <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-5 flex items-start gap-4">
+                    <div className="flex-1">
+                        <h2 className="text-2xl font-bold text-gray-900">Crear Arriendo</h2>
+                        <p className="text-sm text-gray-600 mt-1">Complete la información del nuevo contrato de arrendamiento</p>
+                        <div className="mt-4">
+                            <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                    className="bg-blue-600 h-1.5 rounded-full transition-all duration-500"
+                                    style={{ width: `${(step / totalSteps) * 100}%` }}
+                                />
+                            </div>
+                            <p className="text-xs sm:text-sm text-gray-600 mt-2">
+                                <span className="font-semibold text-gray-900">Paso {step} de {totalSteps}</span>:{" "}
+                                {step === 1 ? "Datos del Arrendatario" : step === 2 ? "Datos del Codeudor" : step === 3 ? "Datos del Inmueble" : "Datos del Contrato y Pago"}
+                                {" "} (Campos obligatorios marcados con *)
+                            </p>
+                        </div>
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">
-                        Paso {step} de {totalSteps}:{" "}
-                        {step === 1 ? "Datos del Arrendatario" : step === 2 ? "Datos del Codeudor" : step === 3 ? "Datos del Inmueble" : "Datos del Contrato y Pago"}
-                        {" "} (Campos obligatorios marcados con *)
-                    </p>
+                    <motion.button
+                        aria-label="Cerrar"
+                        onClick={onClose}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="h-9 w-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                    </motion.button>
                 </div>
 
-                <form onSubmit={handleSubmit}>
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 space-y-6">
+                <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+                    <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-6 py-5 space-y-4">
                         
                         {/* PASO 1 */}
                         {step === 1 && (
-                            <div>
-                                <h3 className="text-lg font-bold text-blue-800 mb-4 pb-2 border-b border-blue-200">
-                                    Datos del Arrendatario
-                                </h3>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-900">Datos del Arrendatario</h3>
+                                    <p className="text-xs text-gray-600 mt-1">Identifica al arrendatario principal</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <Field
                                         name="tipoDocArrendatario"
                                         as="select"
@@ -1200,27 +1632,30 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="correoArrendatario" placeholder="correo@dominio.com" type="email" />
                                     <Field name="telefonoArrendatario" placeholder="Ej: 3001234567 (10 dígitos mínimo)" />
                                 </div>
-                                <div className="mt-2 space-y-1 text-xs">
-                                    {arrendatarioLookupState.loading && (
-                                        <p className="text-slate-500">Buscando arrendatario existente...</p>
-                                    )}
-                                    {arrendatarioLookupState.message && (
-                                        <p className="text-green-600">{arrendatarioLookupState.message}</p>
-                                    )}
-                                    {arrendatarioLookupState.error && (
-                                        <p className="text-red-600">{arrendatarioLookupState.error}</p>
-                                    )}
-                                </div>
-                            </div>
+                                {(arrendatarioLookupState.loading || arrendatarioLookupState.message || arrendatarioLookupState.error) && (
+                                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                                        {arrendatarioLookupState.loading && (
+                                            <p className="text-blue-700">Buscando arrendatario existente...</p>
+                                        )}
+                                        {!arrendatarioLookupState.loading && arrendatarioLookupState.message && (
+                                            <p className="text-green-700">{arrendatarioLookupState.message}</p>
+                                        )}
+                                        {!arrendatarioLookupState.loading && arrendatarioLookupState.error && (
+                                            <p className="text-red-700">{arrendatarioLookupState.error}</p>
+                                        )}
+                                    </div>
+                                )}
+                            </section>
                         )}
 
                         {/* PASO 2 */}
                         {step === 2 && (
-                            <div>
-                                <h3 className="text-lg font-bold text-green-800 mb-4 pb-2 border-b border-green-200">
-                                    Datos del Codeudor
-                                </h3>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-900">Datos del Codeudor</h3>
+                                    <p className="text-xs text-gray-600 mt-1">Información de respaldo financiero</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <Field
                                         name="tipoDocCodeudor"
                                         as="select"
@@ -1235,16 +1670,17 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="telefonoCodeudor" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
                                     <Field name="estabilidadLaboral" placeholder="Ej: 5 años" />
                                 </div>
-                            </div>
+                            </section>
                         )}
 
                         {/* PASO 3 */}
                         {step === 3 && (
-                            <div>
-                                <h3 className="text-lg font-bold text-yellow-800 mb-4 pb-2 border-b border-yellow-200">
-                                    Datos del Inmueble
-                                </h3>
-                                <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+                            <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-900">Datos del Inmueble</h3>
+                                    <p className="text-xs text-gray-600 mt-1">Selecciona y valida el inmueble</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <Field
                                         name="tipoInmueble"
                                         as="select"
@@ -1255,15 +1691,19 @@ export default function RentForm({ onClose, onSubmit }) {
                                         ]}
                                     />
                                     <Field name="registroInmobiliario" placeholder="Ej: 12345-ABC" />
-                                    <div className="col-span-3 text-xs space-y-1">
-                                        {inmuebleLookupState.loading && (
-                                            <p className="text-slate-500">Buscando inmueble...</p>
-                                        )}
-                                        {inmuebleLookupState.message && (
-                                            <p className="text-green-600">{inmuebleLookupState.message}</p>
-                                        )}
-                                        {inmuebleLookupState.error && (
-                                            <p className="text-red-600">{inmuebleLookupState.error}</p>
+                                    <div className="md:col-span-3">
+                                        {(inmuebleLookupState.loading || inmuebleLookupState.message || inmuebleLookupState.error) && (
+                                            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                                                {inmuebleLookupState.loading && (
+                                                    <p className="text-blue-700">Buscando inmueble...</p>
+                                                )}
+                                                {!inmuebleLookupState.loading && inmuebleLookupState.message && (
+                                                    <p className="text-green-700">{inmuebleLookupState.message}</p>
+                                                )}
+                                                {!inmuebleLookupState.loading && inmuebleLookupState.error && (
+                                                    <p className="text-red-700">{inmuebleLookupState.error}</p>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                     <Field name="nombreInmueble" placeholder="Ej: Edificio Central" />
@@ -1272,41 +1712,40 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="barrio" placeholder="Ej: El Poblado" />
                                     <Field name="direccion" placeholder="Ej: Calle 10 # 45-20" />
                                     <Field name="precioInmueble" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
-                                    <Field name="garaje" type="checkbox" />
                                 </div>
-                            </div>
+                            </section>
                         )}
 
                         {/* PASO 4 */}
                         {step === 4 && (
-                            <div>
-                                <h3 className="text-lg font-bold text-purple-800 mb-4 pb-2 border-b border-purple-200">
-                                    Datos del Contrato y Pago
-                                </h3>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                                    <Field name="fechaInicio" type="date" />
-                                    <Field name="fechaFinal" type="date" />
-                                    <Field name="fechaCobro" type="date" />
+                            <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-900">Datos del Contrato y Pago</h3>
+                                    <p className="text-xs text-gray-600 mt-1">Define fechas y valor mensual</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FancyDatePicker name="fechaInicio" label="Fecha de Inicio" />
+                                    <FancyDatePicker name="fechaFinal" label="Fecha de Finalización" />
+                                    <FancyDatePicker name="fechaCobro" label="Fecha de Cobro" />
                                     <Field name="precio" placeholder="Ej: 1500000 (Solo números enteros mayores a 0)." />
                                 </div>
-                            </div>
+                            </section>
                         )}
 
                     </div>
 
-                    {/* Controles de navegación */}
-                    <div className="flex justify-between pt-6 mt-6">
-                        {step > 1 && (
+                    <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+                        {step > 1 ? (
                             <motion.button 
                                 type="button" 
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={prevStep} 
-                                className="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-400 transition duration-150 transform hover:scale-[1.02]"
+                                className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm"
                             >
                                 Anterior
                             </motion.button>
-                        )}
+                        ) : <div />}
 
                         {step < totalSteps && (
                             <motion.button
@@ -1314,7 +1753,7 @@ export default function RentForm({ onClose, onSubmit }) {
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={handleNextStep}
-                                className={`px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-lg shadow-blue-400/50 hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02] ${step > 1 ? "ml-auto" : "w-full"}`}
+                                className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
                             >
                                 Siguiente
                             </motion.button>
@@ -1326,19 +1765,18 @@ export default function RentForm({ onClose, onSubmit }) {
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 disabled={submissionState.isSubmitting}
-                                className={`px-6 py-2 rounded-lg shadow-lg shadow-green-400/50 ml-auto font-semibold transition duration-150 transform hover:scale-[1.02]
-                                    ${submissionState.isSubmitting ? "bg-green-500 opacity-80 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}
-                                    text-white`}
+                                className="px-5 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-60 ml-auto"
                             >
                                 {submissionState.isSubmitting ? "Creando..." : "Crear Arriendo"}
                             </motion.button>
                         )}
                     </div>
                     {submissionState.error && (
-                        <p className="mt-3 text-sm text-red-600">{submissionState.error}</p>
+                        <p className="px-4 sm:px-6 pb-4 text-sm text-red-600">{submissionState.error}</p>
                     )}
                 </form>
             </motion.div>
+            <Toaster />
         </motion.div>
     );
 }

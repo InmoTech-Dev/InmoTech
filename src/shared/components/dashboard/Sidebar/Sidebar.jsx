@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MdMenu, MdClose } from 'react-icons/md';
+import { MdMenu, MdKeyboardDoubleArrowLeft } from 'react-icons/md';
 import SidebarItem from './SidebarItem';
 import { navigationItems, logoutItem, goToSiteItem } from '../../../utils/navigationData';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -17,7 +17,7 @@ const Sidebar = React.forwardRef(({
   onLogout,
   onGoToSite
 }, ref) => {
-  const { user, getAvailableModules } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   const sidebarVariants = {
     expanded: {
@@ -49,26 +49,17 @@ const Sidebar = React.forwardRef(({
       return navigationItems.filter(item => item.id === 'dashboard');
     }
 
-    const availableModules = getAvailableModules();
-    const moduleSet = new Set(availableModules);
-    const roleNames = user.roles || [];
-
-    if (roleNames.includes('Super Administrador') || roleNames.includes('Administrador')) {
-      return navigationItems;
-    }
-
     return navigationItems.filter(item => {
+      // El dashboard siempre es visible para usuarios autenticados
       if (item.id === 'dashboard') {
         return true;
       }
 
-      if (item.id === 'seguridad') {
-        return false;
-      }
-
-      return moduleSet.has(item.id);
+      // Usar el sistema de permisos centralizado del AuthContext.
+      // Esto asegura que si el rol tiene permiso de 'ver' el módulo, aparezca en el sidebar.
+      return hasPermission(item.id, 'ver');
     });
-  }, [user, getAvailableModules]);
+  }, [user, hasPermission]);
 
   useEffect(() => {
     if (navRef.current) {
@@ -129,7 +120,7 @@ const Sidebar = React.forwardRef(({
           onClick={onToggleSidebar}
           className={`p-2 rounded-lg text-slate-300 hover:text-white hover:bg-blue-500/10 transition-all duration-300 border border-transparent hover:border-blue-400/30 ${isCollapsed ? 'ml-2' : ''}`}
         >
-          {isCollapsed ? <MdMenu size={20} /> : <MdClose size={20} />}
+          {isCollapsed ? <MdMenu size={20} /> : <MdKeyboardDoubleArrowLeft size={20} />}
         </motion.button>
       </div>
 

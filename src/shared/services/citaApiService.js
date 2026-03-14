@@ -630,8 +630,8 @@ class CitaApiService {
 
       const payload = {
         id_agente_nuevo: idAgenteNuevo,
-        comentario: comentario,
-        motivo_reagendamiento: motivoReagendamiento || comentario || null
+        comentario: comentario || "",
+        motivo_reagendamiento: motivoReagendamiento || comentario || ""
       };
 
       const response = await apiClient.post(`/citas/${idCita}/asignar-agente`, payload);
@@ -721,23 +721,38 @@ class CitaApiService {
 
         // Generar todos los horarios disponibles inicialmente
         const todosHorarios = [];
-        for (let hora = 8; hora <= 17; hora++) {
+        // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+        for (let hora = 8; hora <= 12; hora++) {
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora < 17) {
+          if (hora !== 12) {
             todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+          } else {
+            todosHorarios.push(`12:30`);
           }
+        }
+        // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+        for (let hora = 14; hora <= 16; hora++) {
+          todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+          todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         }
 
         // Filtrar horarios que NO estÃ¡n ocupados por citas confirmadas/programadas
         // Filtrar horarios que NO están ocupados por citas confirmadas/programadas
         const citasActivas = citasExistentes.filter(cita =>
-          ['confirmada', 'programada'].includes(cita.estado) &&
+          ['confirmada', 'programada', 'reagendada', 're agendada'].includes(cita.estado) &&
           cita.fecha_cita === data.fecha_cita
         );
 
+        // Función interna rápida para normalizar hora (HH:mm)
+        const formatTimeShort = (t) => {
+          if (!t) return t;
+          if (typeof t === 'string' && t.includes(':')) return t.substring(0, 5);
+          return t;
+        };
+
         // Extraer horarios ocupados por citas definitivas
         const horariosOcupados = new Set(
-          citasActivas.map(cita => cita.hora_inicio)
+          citasActivas.map(cita => formatTimeShort(cita.hora_inicio))
         );
 
         // Contar solicitudes por horario
@@ -745,7 +760,7 @@ class CitaApiService {
         citasExistentes
           .filter(cita => cita.estado === 'solicitada' && cita.fecha_cita === data.fecha_cita)
           .forEach(cita => {
-            const hora = cita.hora_inicio;
+            const hora = formatTimeShort(cita.hora_inicio);
             conteoSolicitudes[hora] = (conteoSolicitudes[hora] || 0) + 1;
           });
 
@@ -765,11 +780,19 @@ class CitaApiService {
         console.log("Otro servicio: Sin restricciones de bloqueo");
 
         const defaultHorarios = [];
-        for (let hora = 8; hora <= 17; hora++) {
+        // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+        for (let hora = 8; hora <= 12; hora++) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora < 17) {
+          if (hora !== 12) {
             defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+          } else {
+            defaultHorarios.push(`12:30`);
           }
+        }
+        // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+        for (let hora = 14; hora <= 16; hora++) {
+          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         }
         return defaultHorarios;
       }
@@ -817,13 +840,20 @@ class CitaApiService {
     } catch (error) {
       console.error("Error en obtenerHorariosDisponiblesUsuario:", error);
 
-      // Fallback: retornar horarios predeterminados
       const defaultHorarios = [];
-      for (let hora = 8; hora <= 17; hora++) {
+      // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+      for (let hora = 8; hora <= 12; hora++) {
         defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
+        if (hora !== 12) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+        } else {
+          defaultHorarios.push(`12:30`);
         }
+      }
+      // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+      for (let hora = 14; hora <= 16; hora++) {
+        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
       }
       return defaultHorarios;
     }
@@ -857,11 +887,17 @@ class CitaApiService {
     } catch (error) {
       console.error("Error en obtenerHorariosDisponiblesPublico:", error);
       const defaultHorarios = [];
-      for (let hora = 8; hora <= 17; hora++) {
+      for (let hora = 8; hora <= 12; hora++) {
         defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
+        if (hora !== 12) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
+        } else {
+          defaultHorarios.push(`12:30`);
         }
+      }
+      for (let hora = 14; hora <= 16; hora++) {
+        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
+        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
       }
       return defaultHorarios;
     }

@@ -40,8 +40,8 @@ const ConfirmationModal = ({
     const dayNum = parseInt(day);
 
     const weekdayIndex = (dayNum + Math.floor(2.6 * ((monthNum + 1) % 12) - 0.2) +
-                         yearNum % 100 + Math.floor(yearNum % 100 / 4) +
-                         Math.floor(yearNum / 400) - 2 * Math.floor(yearNum / 100)) % 7;
+      yearNum % 100 + Math.floor(yearNum % 100 / 4) +
+      Math.floor(yearNum / 400) - 2 * Math.floor(yearNum / 100)) % 7;
 
     const weekday = weekdays[Math.abs(weekdayIndex) % 7];
     const monthName = months[parseInt(month) - 1];
@@ -143,7 +143,7 @@ const ConfirmationModal = ({
 
   return ReactDOM.createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[10200] flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}

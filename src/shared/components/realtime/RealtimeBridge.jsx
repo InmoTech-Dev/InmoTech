@@ -270,7 +270,18 @@ const RealtimeBridge = () => {
         realtimeBus.emit('notification.changed', payload);
       }],
       ['user.changed', (payload) => {
-        realtimeBus.emit('user.changed', payload);
+        // Normalizar para que AuthContext reciba id_persona
+        realtimeBus.emit('user.changed', {
+          ...payload,
+          id_persona: payload.user_id || payload.id_persona,
+        });
+      }],
+      ['role.changed', (payload) => {
+        // Normalizar para que AuthContext y otros reciban roleId
+        realtimeBus.emit('role.changed', {
+          ...payload,
+          roleId: payload.role_id || payload.roleId,
+        });
       }],
       ['session.force_logout', handleForcedLogout],
       ['user_disabled', handleForcedLogout],

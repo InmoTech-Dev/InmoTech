@@ -4,7 +4,6 @@ import ReportSelectionList from './components/ReportSelectionList';
 import ReportDetailedView from './components/ReportDetailedView';
 import administrativosApiService from '@/shared/services/administrativosApiService';
 import reportesInmobiliariosService from '@/features/dashboard/services/reportesInmobiliarios.service';
-import AdminFilterBar from './components/AdminFilterBar';
 import { useToast } from '@/shared/hooks/use-toast';
 
 const AdminReportsView = ({
@@ -12,7 +11,12 @@ const AdminReportsView = ({
     onViewReport,
     onEditReport,
     onDownloadPDF,
-    loading: reportsLoading
+    loading: reportsLoading,
+    filters,
+    setFilters,
+    refreshTrigger,
+    searchTerm,
+    onSearchChange
 }) => {
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -20,7 +24,6 @@ const AdminReportsView = ({
     const [usersLoading, setUsersLoading] = useState(true);
     const [detailedLoading, setDetailedLoading] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [filters, setFilters] = useState({ year: '', month: '', city: '' });
     const { toast } = useToast();
 
     useEffect(() => {
@@ -67,16 +70,7 @@ const AdminReportsView = ({
         fetchUsers();
     }, []);
 
-    // Calculate dynamic filter options
-    const filterOptions = React.useMemo(() => {
-        const cities = [...new Set(allReports.map(r => r.ubicacion).filter(Boolean))].sort();
-        const years = [...new Set(allReports.map(r => {
-            const parts = r.fecha?.split('/');
-            return parts?.[2];
-        }).filter(Boolean))].sort((a, b) => b - a);
 
-        return { cities, years };
-    }, [allReports]);
 
     // Apply filters to ALL reports first to determine which users have matching reports
     const filteredReportsGlobal = React.useMemo(() => {
@@ -177,6 +171,7 @@ const AdminReportsView = ({
             const enrichedReport = {
                 ...detailedReport,
                 ubicacion: report.ubicacion || detailedReport.inmueble_ciudad || '',
+                direccionInmueble: report.direccionInmueble || detailedReport.inmueble_direccion || detailedReport.inmueble?.direccion || '',
                 tipoInmueble: report.tipoInmueble || detailedReport.inmueble_categoria || '',
                 propietario: report.propietario || detailedReport.propietario_nombre || '',
                 referencia: report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || '',
@@ -207,18 +202,34 @@ const AdminReportsView = ({
         }
     };
 
-    // Reset selected report when user changes or reports are reloaded
+    // Sync selectedReport if allReports changes (e.g. from global fetchReports refresh)
     useEffect(() => {
-        if (selectedReport) {
-            const isStillInList = userReports.some(r => r.id === selectedReport.id);
-            if (!isStillInList) {
-                setSelectedReport(null);
+        if (selectedReport && allReports.length > 0) {
+            const currentId = Number(selectedReport.id_reporte || selectedReport.id);
+            const updated = allReports.find(r => Number(r.id_reporte || r.id) === currentId);
+
+            if (updated && updated.estado !== selectedReport.estado) {
+                // Update basic fields from the list while maintaining the enriched detailed data
+                setSelectedReport(prev => ({
+                    ...prev,
+                    ...updated,
+                    // Preserve the enriched details that fetchReports doesn't have but handleSelectReport does
+                    rubros: prev.rubros,
+                    imagenes: prev.imagenes,
+                    archivos: prev.archivos
+                }));
             }
         }
-    }, [selectedUser, allReports]);
+    }, [allReports]);
+
+    useEffect(() => {
+        if (selectedReport && refreshTrigger > 0) {
+            handleSelectReport(selectedReport);
+        }
+    }, [refreshTrigger]);
 
     return (
-        <div className="bg-white border-y border-slate-100 shadow-xl overflow-hidden flex h-[calc(100vh-180px)] min-h-[600px] w-full">
+        <div className="bg-white border-y border-slate-100 shadow-xl overflow-hidden flex flex-1 min-h-0 w-full mt-4">
             {/* Column 1: User List (Sidebar) */}
             <UserSidebar
                 users={filteredUsers}
@@ -227,16 +238,12 @@ const AdminReportsView = ({
                 loading={usersLoading}
                 isCollapsed={isSidebarCollapsed}
                 onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                searchTerm={searchTerm}
+                onSearchChange={onSearchChange}
             />
 
             {/* Column 2: Selection List (Center) */}
             <div className="w-[320px] min-w-[300px] shrink-0 flex flex-col border-l border-slate-50 bg-[#FBFDFF]/10">
-                <AdminFilterBar
-                    filters={filters}
-                    setFilters={setFilters}
-                    options={filterOptions}
-                    onClear={() => setFilters({ year: '', month: '', city: '' })}
-                />
                 <ReportSelectionList
                     selectedUser={selectedUser}
                     reports={userReports}

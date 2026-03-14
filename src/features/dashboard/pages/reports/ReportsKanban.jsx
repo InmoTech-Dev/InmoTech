@@ -2,6 +2,8 @@ import React, { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Badge } from '../../../../shared/components/ui/badge'
 import { MoreHorizontal, MapPin, Calendar as CalendarIcon, FileText } from 'lucide-react'
+import { useAuth } from '@/shared/contexts/AuthContext'
+import { cn } from '@/shared/utils/cn'
 
 function normalizeEstado(raw) {
   const s = String(raw || '').toLowerCase().trim().replace(/[\s_-]/g, '')
@@ -20,6 +22,9 @@ const estadoMeta = {
 }
 
 export default function ReportsKanban({ reports = [], onView, onEdit, onCreate, onChangeEstado, showCancelled }) {
+  const { hasPermission } = useAuth()
+  const canEdit = hasPermission('reportes', 'editar')
+
   const grouped = useMemo(() => {
     const estados = showCancelled
       ? ['Pendiente', 'En Proceso', 'Completado', 'Cancelado']
@@ -44,6 +49,7 @@ export default function ReportsKanban({ reports = [], onView, onEdit, onCreate, 
       const id = e.dataTransfer.getData('text/plain')
       item = reports.find(r => r.id === id || String(r.referencia) === String(id)) || null
     }
+    if (!canEdit) return
     if (item && normalizeEstado(item.estado) !== destinoEstado) {
       onChangeEstado?.(item, destinoEstado)
     }
@@ -88,8 +94,12 @@ export default function ReportsKanban({ reports = [], onView, onEdit, onCreate, 
                     <motion.div
                       key={item.id}
                       layout
-                      draggable
+                      draggable={canEdit}
                       onDragStart={(e) => {
+                        if (!canEdit) {
+                          e.preventDefault()
+                          return
+                        }
                         e.dataTransfer.effectAllowed = 'move'
                         try {
                           e.dataTransfer.setData('application/json', JSON.stringify(item))
@@ -97,8 +107,12 @@ export default function ReportsKanban({ reports = [], onView, onEdit, onCreate, 
                           e.dataTransfer.setData('text/plain', item.id)
                         }
                       }}
-                      whileHover={{ scale: 1.01 }}
-                      className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm hover:shadow-md transition hover:-translate-y-[1px] cursor-move"
+                      whileHover={canEdit ? { scale: 1.01 } : {}}
+                      className={cn(
+                        "rounded-xl border p-4 shadow-sm transition hover:-translate-y-[1px]",
+                        canEdit ? "border-slate-200 bg-white/90 cursor-move hover:shadow-md" : "border-slate-100 bg-slate-50 cursor-default opacity-80"
+                      )}
+                      title={canEdit ? "Arrastra para cambiar estado" : "No tienes permiso para editar"}
                       onClick={() => onView?.(item)}
                     >
                       <div className="flex items-start justify-between">

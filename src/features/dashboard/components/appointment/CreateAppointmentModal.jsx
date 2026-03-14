@@ -216,9 +216,13 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
 
     const horaDecimal = horas + (minutos / 60);
 
-    // Horario laboral: 8:00 am - 6:00 PM
-    if (horaDecimal < 8 || horaDecimal >= 18) {
-      return 'Las citas solo se pueden agendar entre las 8:00 am y las 6:00 pm';
+    // Horario laboral: 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm
+    // El último inicio permitido en la mañana es 12:30 (12.5) y en la tarde 4:30 (16.5)
+    const isMorning = horaDecimal >= 8 && horaDecimal <= 12.5;
+    const isAfternoon = horaDecimal >= 14 && horaDecimal <= 16.5;
+
+    if (!isMorning && !isAfternoon) {
+      return 'Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm';
     }
 
     // Verificar que sea en intervalos de 30 minutos
@@ -792,7 +796,7 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
 
   return ReactDOM.createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-[10100] flex items-center justify-center">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}

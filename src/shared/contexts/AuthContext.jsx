@@ -5,11 +5,13 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import authService from '../services/authService';
 import { apiClient } from '../services/api.config';
+import realtimeBus from '../services/realtimeBus';
 import { canonicalizePermissions, normalizeModuleKey, normalizePermissionKey } from '../utils/permissions';
 
 const AuthContext = createContext(undefined);
 
 const USER_KEY = 'inmotech_user';
+const PUBLIC_BOOTSTRAP_DISABLED_PATHS = new Set(['/reset-password']);
 const ALL_MODULES = [
   'dashboard',
   'citas',
@@ -31,6 +33,12 @@ const parseUserJson = (rawValue) => {
   } catch (error) {
     return null;
   }
+};
+
+const shouldSkipAuthBootstrap = () => {
+  if (typeof window === 'undefined') return false;
+  const currentPath = window.location?.pathname || '';
+  return PUBLIC_BOOTSTRAP_DISABLED_PATHS.has(currentPath);
 };
 
 const extractPermissionsByModule = (user) => {
@@ -81,6 +89,11 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const loadAuthFromStorage = useCallback(async () => {
+    if (shouldSkipAuthBootstrap()) {
+      setInitializing(false);
+      return;
+    }
+
     try {
       const localStored = localStorage.getItem(USER_KEY);
       const sessionStored = sessionStorage.getItem(USER_KEY);
@@ -161,6 +174,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [clearAuthData]);
 
+
   const refreshToken = async () => {
     try {
       const response = await authService.refreshToken();
@@ -209,6 +223,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const refreshUser = useCallback(async () => {
+    if (!isAuthenticated) return null;
+    try {
+      setLoading(true);
+      console.log('[AUTH] Auto-refreshing user profile from API (real-time/demand)...');
+
+      // Añadimos un timestamp para evitar cache literal del navegador y asegurar datos frescos
+      const profileResp = await authService.getProfile({ _ts: Date.now() });
+      const profileUser = profileResp?.data?.user || profileResp?.data || profileResp?.user;
+
+      if (profileUser) {
+        const localStored = localStorage.getItem(USER_KEY);
+        const rememberMe = Boolean(localStored);
+        saveUserToStorage(profileUser, rememberMe);
+        setUser(profileUser);
+        console.log('[AUTH] User profile and permissions refreshed successfully');
+        return profileUser;
+      }
+    } catch (err) {
+      console.error('[AUTH] Error refreshing user profile:', err);
+    } finally {
+      setLoading(false);
+    }
+    return null;
+  }, [isAuthenticated, saveUserToStorage]);
+
   const changePassword = async (currentPassword, newPassword) => {
     try {
       setLoading(true);
@@ -225,7 +265,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const requestPasswordReset = async (email) => {
+  const requestPasswordReset = useCallback(async (email) => {
     try {
       setError(null);
       const response = await authService.forgotPassword(email);
@@ -242,9 +282,9 @@ export const AuthProvider = ({ children }) => {
       custom.status = err.status;
       throw custom;
     }
-  };
+  }, []);
 
-  const resetPasswordWithToken = async (token, newPassword) => {
+  const resetPasswordWithToken = useCallback(async (token, newPassword) => {
     try {
       setError(null);
       const response = await authService.resetPassword(token, newPassword);
@@ -256,7 +296,17 @@ export const AuthProvider = ({ children }) => {
       setError(err.message || 'Error restableciendo contrasena');
       throw err;
     }
-  };
+  }, []);
+
+  const validateResetToken = useCallback(async (token) => {
+    try {
+      setError(null);
+      return await authService.validateResetToken(token);
+    } catch (err) {
+      setError(err.message || 'Error validando enlace de recuperacion');
+      throw err;
+    }
+  }, []);
 
   const hasRole = useCallback((roles) => {
     if (!user || !user.roles) return false;
@@ -320,7 +370,25 @@ export const AuthProvider = ({ children }) => {
       console.log('Sesion expirada (401), limpiando autenticacion local...');
       clearAuthData();
     });
-  }, [loadAuthFromStorage, clearAuthData]);
+
+    // Escuchar cambios globales de usuario o roles para refrescar el perfil actual
+    const offUserChanged = realtimeBus.on('user.changed', (payload) => {
+      // Si el cambio afecta al usuario actual o es un cambio general de sistema
+      if (!payload?.id_persona || payload.id_persona === user?.id_persona) {
+        refreshUser();
+      }
+    });
+
+    const offRoleChanged = realtimeBus.on('role.changed', () => {
+      // Los cambios en roles pueden afectar a cualquier usuario, refrescamos siempre
+      refreshUser();
+    });
+
+    return () => {
+      offUserChanged();
+      offRoleChanged();
+    };
+  }, [loadAuthFromStorage, clearAuthData, refreshUser, user?.id_persona]);
 
   const value = {
     user,
@@ -334,11 +402,14 @@ export const AuthProvider = ({ children }) => {
     updateProfile,
     changePassword,
     requestPasswordReset,
+    forgotPassword: requestPasswordReset,
     resetPassword: resetPasswordWithToken,
+    validateResetToken,
     hasRole,
     hasAccess,
     hasPermission,
     getAvailableModules,
+    refreshUser,
     clearError: () => setError(null),
   };
 

@@ -145,11 +145,19 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
         // Sin servicio seleccionado: horarios predeterminados
         console.log('Loading default hours (no service restriction)');
         const defaultHours = [];
-        for (let hora = 8; hora <= 17; hora++) {
+        // Mañana: 8:00 am - 1:00 pm (último inicio 12:30)
+        for (let hora = 8; hora <= 12; hora++) {
           defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora < 17) {
+          if (hora !== 12) {
             defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
+          } else {
+            defaultHours.push(`12:30`);
           }
+        }
+        // Tarde: 2:00 pm - 5:00 pm (último inicio 16:30)
+        for (let hora = 14; hora <= 16; hora++) {
+          defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
+          defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
         }
         hoursToShow = defaultHours;
       }
@@ -177,11 +185,10 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
       console.error('Error loading available hours:', error);
       // Fallback: horarios predeterminados filtrados si es hoy
       const defaultHours = [];
-      for (let hora = 8; hora <= 17; hora++) {
+      for (let hora = 8; hora <= 16; hora++) {
+        if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
         defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
-          defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
+        defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
       }
 
       let filteredFallback = defaultHours;
@@ -377,14 +384,14 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
                   whileTap={{ scale: 0.95 }}
                   onClick={() => handleHourSelect(hour)}
                   className={`
-                    py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
-                    ${formData.hora === hour
+                        py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
+                        ${formData.hora === hour
                       ? 'bg-blue-600 text-white'
                       : 'bg-slate-100 text-slate-700 hover:bg-blue-50'
                     }
-                  `}
+                      `}
                 >
-                  {formatTimeTo12Hour(hour)}
+                  {formatTimeTo12Hour(hour).toLowerCase()}
                 </motion.button>
               ))}
             </div>

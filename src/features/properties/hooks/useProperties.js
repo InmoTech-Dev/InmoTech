@@ -33,7 +33,7 @@ export function useProperties() {
         const maxPages = 3;
 
         while (page <= maxPages) {
-          const { items, pagination } = await inmueblesAPI.getPublicInmuebles({ pagina: page, limite: limit });
+          const { items, pagination } = await inmueblesAPI.getPublicInmuebles(page, limit, { _t: Date.now() });
           allItems.push(...(items || []));
           const totalPages = pagination?.paginas_totales || pagination?.totalPages || 1;
           if (page >= totalPages) break;
@@ -58,6 +58,7 @@ export function useProperties() {
           return {
             ...item,
             operationTag,
+            featured: item.destacado ?? item.featured ?? false,
             priceLabel: item.precio_venta
               ? formatPrice(item.precio_venta)
               : item.precio_arriendo
@@ -114,7 +115,8 @@ export function useProperties() {
   }, [properties, filters]);
 
   const featuredProperties = useMemo(() => {
-    return filteredProperties.slice(0, 6);
+    const destacados = filteredProperties.filter((property) => property.featured);
+    return destacados.slice(0, 6);
   }, [filteredProperties]);
 
   const getPropertyById = (id) => properties.find((p) => p.id === Number(id));

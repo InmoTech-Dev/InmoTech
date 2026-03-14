@@ -1,2 +1,8 @@
 node_modules/
 .env
+api/logs/*.log
+api/logs/combined*
+api/logs/error*
+api/logs/exceptions*
+api/logs/rejections*
+dist/

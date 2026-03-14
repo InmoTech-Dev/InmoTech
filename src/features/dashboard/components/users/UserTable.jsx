@@ -207,36 +207,36 @@ const UserTable = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
+    <div className="h-full flex flex-col bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden min-h-0 flex-1">
       {!users || users.length === 0 ? (
         <EmptyState message="No hay usuarios para mostrar." />
       ) : (
         <>
-          {/* Desktop Table */}
-          <div className="hidden md:flex md:flex-1 md:min-h-0 md:flex-col">
-            <div className="w-full flex-1 min-h-0">
-              <table className="table-fixed w-full">
+          {/* Desktop Table View */}
+          <div className="hidden md:flex md:flex-col min-h-0 flex-1">
+            <div className="w-full flex-1 overflow-hidden">
+              <table className="w-full table-auto lg:table-fixed">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-3 lg:px-4 xl:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Usuario
+                    <th className="px-3 lg:px-4 xl:px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Información del Usuario
                     </th>
-                    <th className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       Documento
                     </th>
-                    <th className="px-3 lg:px-4 xl:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="hidden lg:table-cell px-3 lg:px-4 xl:px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       Contacto
                     </th>
-                    <th className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Acceso
+                    <th className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Estado Acceso
                     </th>
-                    <th className="px-3 lg:px-4 xl:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-4 xl:px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-[120px] lg:w-[160px]">
                       Estado
                     </th>
-                    <th className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Fecha de Registro
+                    <th className="hidden 2xl:table-cell px-4 lg:px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Registro
                     </th>
-                    <th className="px-3 lg:px-4 xl:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[180px]">
+                    <th className="px-3 lg:px-4 xl:px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider w-[100px] lg:w-[140px]">
                       Acciones
                     </th>
                   </tr>
@@ -254,75 +254,82 @@ const UserTable = ({
                         animate={{ opacity: 1, y: 0 }}
                         className={`hover:bg-slate-50 transition-colors ${isDisabled || isProtected ? 'opacity-60' : ''}`}
                       >
-                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className="flex-shrink-0 h-11 w-11">
-                              <div className="h-11 w-11 rounded-full bg-slate-200 flex items-center justify-center">
-                                <User className="h-[22px] w-[22px] text-slate-600" />
+                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                                <User className="h-5 w-5 text-slate-600" />
                               </div>
                             </div>
                             <div className="min-w-0 space-y-0.5">
-                              <div className="text-sm font-medium text-slate-900 truncate" title={getFullName(user)}>{getFullName(user)}</div>
-                              {isProtected ? (
-                                <div className="text-xs font-semibold text-blue-600">{protectedRole.nombre_rol}</div>
-                              ) : (
-                                <div className="2xl:hidden text-xs text-slate-500 truncate" title={getDocument(user)}>
-                                  {getDocument(user)}
-                                </div>
-                              )}
+                              <div className="text-sm font-bold text-slate-900 truncate" title={getFullName(user)}>{getFullName(user)}</div>
+                              <div className="text-[11px] font-semibold text-blue-600 block lg:hidden">
+                                {isProtected ? protectedRole.nombre_rol : getDocument(user)}
+                              </div>
+                              {/* Contact Stack below name for mid-screens */}
+                              <div className="lg:hidden flex flex-col text-[11px] text-slate-500">
+                                <span className="truncate">{getEmail(user)}</span>
+                                <span className="truncate">{formatPhoneNumber(getPhone(user))}</span>
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-5 align-middle">
-                          <div className="text-sm text-slate-900 truncate" title={getDocument(user)}>{getDocument(user)}</div>
-                        </td>
-                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle">
-                          <div className="flex items-start gap-2 min-w-0">
-                            <Mail className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-                            <span className="text-sm text-slate-900 truncate" title={getEmail(user)}>{getEmail(user)}</span>
+                        <td className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                          <div className="text-sm text-slate-900 font-medium truncate" title={getDocument(user)}>
+                            {isProtected ? (
+                              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs font-bold border border-blue-100">
+                                {protectedRole.nombre_rol}
+                              </span>
+                            ) : getDocument(user)}
                           </div>
-                          <div className="flex items-start gap-2 mt-1 min-w-0">
-                            <Phone className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                        </td>
+                        <td className="hidden lg:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                          <div className="flex items-center gap-2 min-w-0 max-w-[200px]">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                            <span className="text-sm text-slate-600 truncate" title={getEmail(user)}>{getEmail(user)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 min-w-0 max-w-[200px]">
+                            <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                             <span className="text-sm text-slate-500 truncate" title={formatPhoneNumber(getPhone(user))}>{formatPhoneNumber(getPhone(user))}</span>
                           </div>
                         </td>
-                        <td className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-5 align-middle">
+                        <td className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
                           {renderInvitationStatus(user)}
                         </td>
-                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle">
+                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
                           <UserStatusSelector
                             value={user.estado}
                             onChange={(newStatus) => onStatusChange(user, newStatus)}
                             loading={loadingStatusChanges.has(user.id_persona)}
                             disabled={isProtected}
-                            className="w-full max-w-[150px]"
+                            className="w-full"
                           />
                         </td>
-                        <td className="hidden xl:table-cell px-3 lg:px-4 xl:px-6 py-5 align-middle">
-                          <div className="flex items-center gap-2">
+                        <td className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle text-center lg:text-left">
+                          <div className="flex items-center lg:justify-start justify-center gap-2">
                             <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                            <span className="text-sm text-slate-900 truncate" title={getRegistrationDate(user)}>{getRegistrationDate(user)}</span>
+                            <span className="text-sm text-slate-600 truncate" title={getRegistrationDate(user)}>{getRegistrationDate(user)}</span>
                           </div>
                         </td>
-                        <td className="px-3 lg:px-4 xl:px-6 py-5 align-middle text-sm font-medium">
-                          <div className="flex items-center gap-1 flex-nowrap">
+                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle text-sm font-medium">
+                          <div className="flex items-center justify-end lg:justify-start gap-1 flex-nowrap">
                             <motion.button
                               key={`view-${user.id_persona}`}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
+                              whileHover={{ scale: 1.1, backgroundColor: 'rgba(37, 99, 235, 0.05)' }}
+                              whileTap={{ scale: 0.9 }}
                               onClick={() => onView(user)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="p-1.5 text-blue-600 rounded-lg transition-colors border border-transparent hover:border-blue-100"
                               title="Ver detalles"
                             >
                               <Eye className="w-4 h-4" />
                             </motion.button>
                             <motion.button
                               key={`edit-${user.id_persona}`}
-                              whileHover={isProtected ? {} : { scale: 1.05 }}
-                              whileTap={isProtected ? {} : { scale: 0.95 }}
+                              whileHover={isProtected ? {} : { scale: 1.1, backgroundColor: 'rgba(71, 85, 105, 0.05)' }}
+                              whileTap={isProtected ? {} : { scale: 0.9 }}
                               onClick={() => !isProtected && onEdit(user)}
                               disabled={isProtected}
-                              className={`p-2 rounded-lg transition-colors ${isProtected ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-50'}`}
+                              className={`p-1.5 rounded-lg transition-colors border border-transparent ${isProtected ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:border-slate-200'}`}
                               title={isProtected ? "No se puede editar" : "Editar usuario"}
                             >
                               <Edit className="w-4 h-4" />
@@ -330,18 +337,15 @@ const UserTable = ({
                             {shouldShowResend(user) && (
                               <motion.button
                                 key={`resend-${user.id_persona}`}
-                                whileHover={isProtected ? {} : { scale: 1.05 }}
-                                whileTap={isProtected ? {} : { scale: 0.95 }}
+                                whileHover={isProtected ? {} : { scale: 1.1, backgroundColor: 'rgba(217, 119, 6, 0.05)' }}
+                                whileTap={isProtected ? {} : { scale: 0.9 }}
                                 onClick={() => !isProtected && onResendInvitation && onResendInvitation(user)}
                                 disabled={loadingResend.has(user.id_persona) || isProtected}
-                                className={`p-2 rounded-lg transition-colors ${isProtected ? 'text-slate-300 cursor-not-allowed' : 'text-amber-600 hover:bg-amber-50'} disabled:opacity-60`}
+                                className={`p-1.5 rounded-lg transition-colors border border-transparent ${isProtected ? 'text-slate-300 cursor-not-allowed' : 'text-amber-600 hover:border-amber-200'} disabled:opacity-60`}
                                 title={isProtected ? "No se puede reenviar" : "Reenviar invitación"}
                               >
                                 {loadingResend.has(user.id_persona) ? (
-                                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" opacity="0.25" />
-                                    <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-                                  </svg>
+                                  <RefreshCcw className="w-4 h-4 animate-spin" />
                                 ) : (
                                   <RefreshCcw className="w-4 h-4" />
                                 )}

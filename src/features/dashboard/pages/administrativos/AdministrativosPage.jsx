@@ -346,7 +346,7 @@ const AdministrativosPage = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="w-full max-w-full overflow-hidden flex flex-col h-full gap-4 pb-2">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -355,17 +355,18 @@ const AdministrativosPage = () => {
         className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
       >
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Gestión de Administrativos</h1>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Gestión de Administrativos</h1>
           <p className="text-slate-600 mt-1">Administra todos los empleados administrativos</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300"
+          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 whitespace-nowrap"
         >
           <Plus className="w-5 h-5" />
-          Nuevo Administrativo
+          <span className="hidden sm:inline">Nuevo Administrativo</span>
+          <span className="sm:hidden">Nuevo</span>
         </motion.button>
       </motion.div>
 
@@ -374,7 +375,7 @@ const AdministrativosPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+        className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-3 xl:max-w-4xl gap-3"
       >
         <StatsCard
           title="Total Administrativos"
@@ -402,15 +403,13 @@ const AdministrativosPage = () => {
         />
       </motion.div>
 
-      {/* Search and Filters */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="flex flex-wrap items-center gap-2 mt-2"
+        className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 bg-white/50 p-2 rounded-xl border border-slate-200"
       >
-        {/* Search Bar */}
-        <div className="flex-1 min-w-[260px]">
+        <div className="flex-1 min-w-0">
           <SearchBar
             placeholder="Buscar por nombre, email o código..."
             value={searchTerm}
@@ -418,19 +417,15 @@ const AdministrativosPage = () => {
           />
         </div>
 
-        {/* Filters Row */}
-        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:flex xl:items-center gap-2">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.3 }}
-            className="w-full sm:w-auto"
+            className="w-full"
           >
-            <Select
-              value={statusFilter}
-              onValueChange={setStatusFilter}
-            >
-              <SelectTrigger className="h-10 w-full sm:w-[160px]">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 w-full sm:w-[140px]">
                 <SelectValue placeholder="Estado laboral" />
               </SelectTrigger>
               <SelectContent>
@@ -445,13 +440,10 @@ const AdministrativosPage = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.4 }}
-            className="w-full sm:w-auto"
+            className="w-full"
           >
-            <Select
-              value={roleFilter}
-              onValueChange={setRoleFilter}
-            >
-              <SelectTrigger className="h-10 w-full sm:w-[160px]">
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="h-10 w-full sm:w-[140px]">
                 <SelectValue placeholder="Rol" />
               </SelectTrigger>
               <SelectContent>
@@ -469,17 +461,14 @@ const AdministrativosPage = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.5 }}
-            className="w-full sm:w-auto"
+            className="w-full"
           >
-            <Select
-              value={dateFilter}
-              onValueChange={setDateFilter}
-            >
-              <SelectTrigger className="h-10 w-full sm:w-[170px]">
-                <SelectValue placeholder="Fecha de ingreso" />
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="h-10 w-full sm:w-[150px]">
+                <SelectValue placeholder="Registro" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Todos los periodos">Todos los periodos</SelectItem>
+                <SelectItem value="Todos los periodos">Todo</SelectItem>
                 <SelectItem value="Hoy">Hoy</SelectItem>
                 <SelectItem value="Esta semana">Esta semana</SelectItem>
                 <SelectItem value="Este mes">Este mes</SelectItem>
@@ -487,42 +476,36 @@ const AdministrativosPage = () => {
               </SelectContent>
             </Select>
           </motion.div>
-
-          {dateFilter === 'Personalizado' && (
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-wrap gap-2 items-center w-full lg:w-auto"
-            >
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <label className="text-sm font-medium text-slate-700">Desde:</label>
-                <input
-                  type="date"
-                  value={customDateRange.startDate}
-                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                  className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
-                />
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <label className="text-sm font-medium text-slate-700">Hasta:</label>
-                <input
-                  type="date"
-                  value={customDateRange.endDate}
-                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                  className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
-                />
-              </div>
-            </motion.div>
-          )}
         </div>
+
+        {dateFilter === 'Personalizado' && (
+          <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex flex-row gap-2 items-center w-full lg:w-auto"
+          >
+            <input
+              type="date"
+              value={customDateRange.startDate}
+              onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="h-10 flex-1 lg:w-auto px-2.5 rounded-md border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+            <input
+              type="date"
+              value={customDateRange.endDate}
+              onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="h-10 flex-1 lg:w-auto px-2.5 rounded-md border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </motion.div>
+        )}
       </motion.div>
 
-      {/* Content */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.3 }}
+        className="flex-1 min-h-0 max-w-[1600px] w-full mx-auto"
       >
         <AdministrativosTable
           administrativos={currentItems}

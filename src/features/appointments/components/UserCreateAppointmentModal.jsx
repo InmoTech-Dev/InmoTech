@@ -18,6 +18,13 @@ import {
 import { useToast } from '../../../shared/hooks/use-toast';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import citaApiService from '../../../shared/services/citaApiService';
+import {
+  calculateEndTime,
+  formatScheduleTimeLabel,
+  getBusinessHoursMessage,
+  isBusinessDay,
+  VALID_START_TIMES,
+} from '../../../shared/constants/appointmentSchedule';
 
 const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppointmentCreate }) => {
   const { user } = useAuth();
@@ -65,11 +72,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
 
   const daysOfWeek = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
-  const availableHours = [
-    "08:00 am", "08:30 am", "09:00 am", "09:30 am", "10:00 am", "10:30 am",
-    "11:00 am", "11:30 am", "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm",
-    "03:00 pm", "03:30 pm", "04:00 pm", "04:30 pm"
-  ];
+  const availableHours = VALID_START_TIMES.map(formatScheduleTimeLabel);
 
   const servicios = [
     { name: "Visita a Propiedad", icon: "🏠", description: "Recorridos guiados por propiedades", id: 1 },
@@ -113,13 +116,13 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
         const dateObj = new Date(date);
         dateObj.setHours(0, 0, 0, 0);
 
-        // Solo habilitar la fecha preseleccionada (sin importar si es pasada o Sunday)
+        // Solo habilitar la fecha preseleccionada aunque sea una cita historica
         if (dateObj.getTime() === preselectedDateObj.getTime()) {
           isDisabled = false;
         }
       } else {
         // Si no hay fecha preseleccionada, aplicar reglas normales
-        isDisabled = date < today || date.getDay() === 0;
+        isDisabled = date < today || !isBusinessDay(date);
       }
 
       days.push({
@@ -163,7 +166,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
     if (!hora) return "La hora es requerida";
 
     if (!availableHours.includes(hora)) {
-      return "Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm";
+      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de una hora`;
     }
 
     return "";
@@ -209,14 +212,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
     let hora = parseInt(horaStr, 10);
     let minutos = parseInt(minutosStr, 10);
 
-    minutos += 30;
-
-    if (minutos >= 60) {
-      hora += Math.floor(minutos / 60);
-      minutos = minutos % 60;
-    }
-
-    return `${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+    return calculateEndTime(`${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`);
   };
 
   const handleSubmit = async (e) => {
@@ -718,7 +714,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                       </h4>
                       <ul className="text-blue-700 text-sm space-y-1">
                         <li>• Te contactaremos en las próximas 2 horas para confirmar</li>
-                        <li>• Duración aproximada: 30-45 minutos</li>
+                        <li>• Duración aproximada: 1 hora</li>
                         <li>• Puedes reagendar con 24 horas de anticipación</li>
                         <li>• Algunos servicios requieren documentos específicos</li>
                       </ul>

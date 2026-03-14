@@ -1,6 +1,7 @@
 const app = require('./app');
 const { testConnection } = require('./config/database');
 const { runPermissionsBackfill } = require('./startup/backfillPermissions');
+const { scheduleAppointmentsExpiration } = require('./jobs/appointmentsExpiration.job');
 
 const PORT = process.env.PORT || 5000;
 const API_VERSION = String(process.env.API_VERSION || 'v1').toLowerCase();
@@ -66,6 +67,7 @@ const startServer = async () => {
     if (dbConnected) {
       try {
         await runPermissionsBackfill();
+        scheduleAppointmentsExpiration();
       } catch (error) {
         console.error('Error ejecutando backfill de permisos:', error);
         if (PERMISSIONS_BACKFILL_FAIL_HARD) {

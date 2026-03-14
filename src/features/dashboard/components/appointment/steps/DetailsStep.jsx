@@ -292,12 +292,14 @@ const DetailsStep = ({
                           >
                             <div className="p-4">
                               <div className="relative h-36 rounded-xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="flex items-center gap-2 text-slate-500">
-                                    <ImageIcon className="h-5 w-5" />
-                                    <span className="text-sm">Sin imagen</span>
+                                {!imageSrc && (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="flex items-center gap-2 text-slate-500">
+                                      <ImageIcon className="h-5 w-5" />
+                                      <span className="text-sm">Sin imagen</span>
+                                    </div>
                                   </div>
-                                </div>
+                                )}
                                 {imageSrc && (
                                   <img
                                     src={imageSrc}

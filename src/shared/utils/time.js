@@ -31,7 +31,7 @@ const normalizeTimeInput = (timeString) => {
     };
   }
 
-  // Manejar formato con am/pm (ej. 08:30 pm)
+  // Manejar formato con am/pm (ej. 08:00 pm)
   const ampmMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i);
   if (ampmMatch) {
     let hours = parseInt(ampmMatch[1], 10);
@@ -103,3 +103,4 @@ export const formatTimeTo24Hour = (timeString) => {
 
   return `${pad(normalized.hours24)}:${pad(normalized.minutes)}`;
 };
+

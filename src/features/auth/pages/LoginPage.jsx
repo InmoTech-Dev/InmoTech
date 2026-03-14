@@ -8,7 +8,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [showForgotModal, setShowForgotModal] = useState(false)
@@ -23,7 +22,7 @@ export default function LoginPage() {
     setError("")
 
     try {
-      const userData = await login(email, password, rememberMe)
+      const userData = await login(email, password)
       const hasAdministrativeAccess = userData?.es_administrativo === true
       const redirectPath = hasAdministrativeAccess ? "/dashboard" : "/"
 
@@ -203,20 +202,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Recordar sesión */}
-            <div className="flex items-center space-x-2">
-              <input
-                id="remember"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-5 w-5 border-2 border-gray-300 text-[#00457B] rounded-md"
-                disabled={isLoading}
-              />
-              <label htmlFor="remember" className="text-gray-600 font-medium">
-                Recordar sesión
-              </label>
-            </div>
+
 
             {/* Botón */}
             <button

@@ -7,6 +7,11 @@ const emailService = require('../services/email.service');
 const sseService = require('../services/sse.service');
 const realtimeAudienceService = require('../services/realtimeAudience.service');
 const opsConsoleLogger = require('../utils/opsConsoleLogger');
+const {
+  buildDailySlots,
+  filterTodaySlotsByLeadTime,
+  isBusinessDay,
+} = require('../constants/appointmentSchedule');
 
 class CitaController {
   normalizarIdsUsuarios = (values = []) => {
@@ -903,88 +908,35 @@ class CitaController {
         });
       }
 
-      logger.info(`├░┼©ÔÇØ┬ì Usuario obteniendo horarios disponibles para reagendamiento: fecha=${fecha_cita}, servicio=${idServicioParsed}`);
+      logger.info(`Usuario obteniendo horarios disponibles para reagendamiento: fecha=${fecha_cita}, servicio=${idServicioParsed}`);
 
-      // ├░┼©┼í┬¿ L├âÔÇ£GICA ESPECIAL: Si es servicio "Visita a Propiedad" (ID 1)
-      if (idServicioParsed === 1) {
-        logger.info("├░┼©┬Å┬á Servicio 'Visita a Propiedad': Aplicando restricciones de bloqueo para reagendamiento");
-
-        // Obtener citas existentes para esa fecha y servicio de visitas a inmuebles
-        // Solo citas confirmadas, programadas o reagendada (no canceladas ni completadas)
-        const filtros = {
-          fecha_cita: fecha_cita,
-          id_estado_cita: "2,3,4" // confirmada, programada, re agendada
-        };
-
-        const result = await citaService.obtenerTodasLasCitas(filtros);
-        const citasExistentes = Array.isArray(result) ? result : (result.citas || []);
-
-        logger.info(`├░┼©ÔÇ£ÔÇª Citas existentes activas para ${fecha_cita}:`, citasExistentes.length);
-
-        // Generar todos los horarios disponibles inicialmente
-        const todosHorarios = [];
-        for (let hora = 8; hora <= 16; hora++) {
-          if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
-          todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora === 12 || hora === 16) {
-            todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-            continue; // 12:30 y 16:30 son los últimos antes de los cierres
-          }
-          todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
-
-        // Función interna rápida para normalizar hora (HH:mm)
-        const formatTimeShort = (t) => {
-          if (!t) return t;
-          if (typeof t === 'string' && t.includes(':')) return t.substring(0, 5);
-          return t;
-        };
-
-        // Extraer horarios ocupados
-        const horariosOcupados = new Set(
-          citasExistentes.map(cita => formatTimeShort(cita.hora_inicio))
-        );
-
-        // Filtrar horarios disponibles (no ocupados)
-        const horariosDisponibles = todosHorarios.filter(hora =>
-          !horariosOcupados.has(hora)
-        );
-
-        logger.info(`├ó┼ôÔÇª Horarios disponibles para reagendamiento: ${horariosDisponibles.length} de ${todosHorarios.length}`);
-
+      if (!isBusinessDay(fecha_cita)) {
         return res.status(200).json({
           success: true,
           message: 'Horarios disponibles obtenidos exitosamente',
-          data: horariosDisponibles
-        });
-
-      } else {
-        // ├░┼©ÔÇáÔÇ£ PARA OTROS SERVICIOS: Sin restricciones, todos los horarios disponibles
-        logger.info("├░┼©ÔÇáÔÇ£ Otro servicio: Sin restricciones de bloqueo para reagendamiento");
-
-        const defaultHorarios = [];
-        // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
-        for (let hora = 8; hora <= 12; hora++) {
-          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora !== 12) {
-            defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-          } else {
-            defaultHorarios.push(`12:30`);
-          }
-        }
-        // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
-        for (let hora = 14; hora <= 16; hora++) {
-          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
-        // Nota: El bucle ya genera hasta 16:30.
-
-        return res.status(200).json({
-          success: true,
-          message: 'Horarios disponibles obtenidos exitosamente',
-          data: defaultHorarios
+          data: []
         });
       }
+
+      const filtros = {
+        fecha_cita,
+        id_estado_cita: idServicioParsed === 1 ? "2,3,4" : "1,2,3,4"
+      };
+      const result = await citaService.obtenerTodasLasCitas(filtros);
+      const citasExistentes = Array.isArray(result) ? result : (result.citas || []);
+      const todosHorarios = buildDailySlots().map((slot) => slot.hora_inicio);
+      const horariosOcupados = new Set(
+        citasExistentes
+          .map((cita) => String(cita?.hora_inicio || '').slice(0, 5))
+          .filter(Boolean)
+      );
+      const horariosDisponibles = todosHorarios.filter((hora) => !horariosOcupados.has(hora));
+
+      return res.status(200).json({
+        success: true,
+        message: 'Horarios disponibles obtenidos exitosamente',
+        data: horariosDisponibles
+      });
 
     } catch (error) {
       logger.error(`├ó┬Ø┼Æ Error obteniendo horarios disponibles para reagendamiento: ${error.message}`);
@@ -1115,23 +1067,11 @@ class CitaController {
 
       logger.info(`🔍 Consulta PÚBLICA de horarios: fecha=${fecha_cita}, servicio=${idServicioParsed}`);
 
-      // Generar todos los horarios (8am - 5pm)
-      const todosHorarios = [];
-      // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
-      for (let hora = 8; hora <= 12; hora++) {
-        todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora !== 12) {
-          todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-        } else {
-          todosHorarios.push(`12:30`);
-        }
+      if (!isBusinessDay(fecha_cita)) {
+        return res.status(200).json({ success: true, data: [] });
       }
-      // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
-      for (let hora = 14; hora <= 16; hora++) {
-        todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-      }
-      // Nota: El bucle ya genera hasta 16:30.
+
+      const todosHorarios = buildDailySlots().map((slot) => slot.hora_inicio);
 
       // Solo aplicar restricciones para "Visita a Propiedad" (ID 1)
       if (idServicioParsed === 1) {
@@ -1145,17 +1085,7 @@ class CitaController {
         const citasExistentes = Array.isArray(result) ? result : (result.citas || []);
 
         // Función interna para normalizar hora (HH:mm)
-        const formatTime = (t) => {
-          if (!t) return t;
-          if (typeof t === 'string' && t.includes(':')) return t.substring(0, 5);
-          try {
-            const date = new Date(t);
-            if (!isNaN(date.getTime())) {
-              return date.toTimeString().substring(0, 5);
-            }
-          } catch (e) {}
-          return String(t);
-        };
+        const formatTime = (t) => (typeof t === 'string' && t.includes(':') ? t.substring(0, 5) : String(t));
 
         // 1. Horarios OCUPADOS (Ya hay una confirmaciÃ³n activa)
         // âœ… Incluir estado 4 (reagendada) como bloqueo
@@ -1178,16 +1108,29 @@ class CitaController {
           Object.keys(conteoSolicitudes).filter(h => conteoSolicitudes[h] >= 5)
         );
 
-        const disponibles = todosHorarios.filter(h =>
+        let disponibles = todosHorarios.filter(h =>
           !horariosOcupados.has(h) && !horariosSaturados.has(h)
         );
+
+        const today = new Date();
+        const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        if (fecha_cita === todayString) {
+          disponibles = filterTodaySlotsByLeadTime(disponibles, today);
+        }
 
         logger.info(`✅ Horarios disponibles públicos: ${disponibles.length}/${todosHorarios.length}`);
         return res.status(200).json({ success: true, data: disponibles });
       }
 
       // Otros servicios: todos los horarios disponibles
-      return res.status(200).json({ success: true, data: todosHorarios });
+      let disponibles = [...todosHorarios];
+      const today = new Date();
+      const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      if (fecha_cita === todayString) {
+        disponibles = filterTodaySlotsByLeadTime(disponibles, today);
+      }
+
+      return res.status(200).json({ success: true, data: disponibles });
 
     } catch (error) {
       logger.error(`❌ Error en obtenerHorariosDisponiblesPublico: ${error.message}`);

@@ -184,16 +184,16 @@ const AdministrativoStatusSelector = ({
         type="button"
         onClick={handleToggle}
         disabled={disabled || loading}
-        whileHover={!disabled && !loading ? { scale: 1.02 } : {}}
+        whileHover={!disabled && !loading ? { scale: 1.02, backgroundColor: 'rgba(0,0,0,0.02)' } : {}}
         whileTap={!disabled && !loading ? { scale: 0.98 } : {}}
         className={cn(
-          "relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 min-w-[110px] justify-between",
+          "relative flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-lg border text-[11px] lg:text-xs font-bold transition-all duration-300 w-full lg:min-w-[140px] justify-between",
           currentStatus.bgColor,
           currentStatus.borderColor,
           currentStatus.color,
-          !disabled && !loading && "cursor-pointer",
+          !disabled && !loading && "cursor-pointer hover:shadow-sm",
           disabled && "opacity-50 cursor-not-allowed",
-          isOpen && "ring-2 ring-blue-500 ring-opacity-50"
+          isOpen && "ring-2 ring-blue-500/20 border-blue-400 shadow-md"
         )}
       >
         {/* Loading State */}

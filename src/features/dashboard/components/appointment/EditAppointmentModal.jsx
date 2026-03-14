@@ -10,6 +10,15 @@ import { formatTimeTo12Hour } from '../../../../shared/utils/time';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../../../shared/components/ui/select';
 import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog';
 import DetailsStep from './steps/DetailsStep';
+import {
+  DEFAULT_APPOINTMENT_LEAD_MINUTES,
+  VALID_START_TIMES,
+  calculateEndTime,
+  filterTodaySlotsByLeadTime,
+  formatScheduleTimeLabel,
+  getBusinessHoursMessage,
+  isBusinessDay,
+} from '../../../../shared/constants/appointmentSchedule';
 
 const servicios = [
   { id_servicio: 1, nombre_servicio: 'Visita a Propiedad' },
@@ -51,12 +60,10 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const { toast } = useToast();
 
-  const availableHours = useMemo(() => [
-    '08:00 am', '08:30 am', '09:00 am', '09:30 am', '10:00 am', '10:30 am',
-    '11:00 am', '11:30 am', '12:00 pm', '12:30 pm', 
-    '02:00 pm', '02:30 pm', '03:00 pm', '03:30 pm',
-    '04:00 pm', '04:30 pm'
-  ], []);
+  const availableHours = useMemo(
+    () => VALID_START_TIMES.map(formatScheduleTimeLabel),
+    []
+  );
 
   const normalizeFechaToInput = (fecha) => {
     if (!fecha) return '';
@@ -98,6 +105,27 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
     [cita?.hora, cita?.hora_inicio]
   );
 
+  const originalDateValue = useMemo(
+    () => normalizeFechaToInput(cita?.fecha_cita || cita?.fecha),
+    [cita?.fecha, cita?.fecha_cita]
+  );
+
+  const todayInputValue = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const isSelectableDate = (dateValue) => {
+    const normalized = normalizeFechaToInput(dateValue);
+    if (!normalized) return false;
+    if (normalized === originalDateValue) return true;
+    if (normalized < todayInputValue) return false;
+    return isBusinessDay(normalized);
+  };
+
   const horaOptions = useMemo(() => {
     let base = [...availableHours];
 
@@ -107,18 +135,11 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
     const isToday = formData.fecha === todayStr;
 
     if (isToday) {
-      const currentTotalMinutes = today.getHours() * 60 + today.getMinutes();
-
-      base = base.filter(time12 => {
-        // Convertir formato 12h a minutos
-        const [timePart, period] = time12.split(' ');
-        let [h, m] = timePart.split(':').map(Number);
-        if (period === 'pm' && h !== 12) h += 12;
-        if (period === 'am' && h === 12) h = 0;
-
-        const appointmentTotalMinutes = h * 60 + m;
-        return (appointmentTotalMinutes - currentTotalMinutes) >= 120;
-      });
+      base = filterTodaySlotsByLeadTime(
+        base.map((time) => ({ hora_inicio: time })),
+        today,
+        DEFAULT_APPOINTMENT_LEAD_MINUTES
+      ).map((slot) => slot.hora_inicio);
     }
 
     // Siempre incluir la hora agendada originalmente si la fecha coincide con la de la cita
@@ -192,12 +213,20 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
     if (t === 'PASAPORTE' && (!/^[A-Za-z0-9]+$/.test(n) || n.length < 6 || n.length > 20)) return 'El pasaporte debe tener entre 6 y 20 caracteres alfanumericos';
     return '';
   };
-  const validateFecha = (v) => (!v ? 'La fecha es requerida' : (normalizeFechaToInput(v) ? '' : 'Ingresa una fecha valida'));
+  const validateFecha = (v) => {
+    if (!v) return 'La fecha es requerida';
+    const normalized = normalizeFechaToInput(v);
+    if (!normalized) return 'Ingresa una fecha valida';
+    if (!isSelectableDate(normalized)) {
+      return 'Solo puedes seleccionar de lunes a viernes y no fechas anteriores a hoy';
+    }
+    return '';
+  };
   const validateHora = (v) => {
     if (!v) return 'La hora es requerida';
     const n = normalizeHoraToOption(v);
     if (!n) return 'Selecciona una hora valida';
-    return horaOptions.includes(n) ? '' : 'Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm';
+    return horaOptions.includes(n) ? '' : `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de una hora`;
   };
   const validateServicio = (v) => {
     if (!v || v.trim() === '') return 'El servicio es requerido';
@@ -252,7 +281,13 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
       }
 
       if (field === 'id_inmueble') {
-        next.hora = '';
+        // No borramos la hora automÃ¡ticamente al seleccionar inmueble para evitar frustraciÃ³n
+        // Solo la marcarÃ­amos como sucia si fuera necesario re-validar disponibilidad
+        next.id_inmueble = value;
+      }
+
+      if (field === 'fecha' && !isSelectableDate(value)) {
+        return prev;
       }
 
       return next;
@@ -339,6 +374,9 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
         id_persona: formData.id_persona || cita?.id_persona,
         id_inmueble: formData.id_inmueble ?? cita?.id_inmueble ?? null,
         id_servicio: formData.id_servicio || cita?.id_servicio || cita?.servicio?.id_servicio,
+        id_agente_asignado: formData.estado === 'solicitada'
+          ? null
+          : (cita?.id_agente_asignado ?? cita?.agente?.id_persona ?? null),
         tipo_documento: formData.tipoDocumento,
         numero_documento: formData.numeroDocumento,
         nombre_completo: formData.nombre.trim(),
@@ -347,6 +385,7 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
         email: formData.email,
         fecha_cita: normalizeFechaToInput(formData.fecha),
         hora_inicio: normalizeHoraToOption(formData.hora),
+        hora_fin: calculateEndTime(normalizeHoraToOption(formData.hora)),
         observaciones: formData.notas,
         estado: formData.estado,
         cliente: {
@@ -566,7 +605,13 @@ const EditAppointmentModal = ({ isOpen, onClose, cita, onSubmit }) => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2"><Calendar className="w-4 h-4 inline mr-2" />Fecha *</label>
-                        <input type="date" value={formData.fecha} onChange={(e) => updateFormData('fecha', e.target.value)} className={inputClass(errors.fecha)} />
+                        <input
+                          type="date"
+                          value={formData.fecha}
+                          min={todayInputValue}
+                          onChange={(e) => updateFormData('fecha', e.target.value)}
+                          className={inputClass(errors.fecha)}
+                        />
                         {errors.fecha && <p className="text-red-500 text-sm mt-1">{errors.fecha}</p>}
                       </div>
                       <div>

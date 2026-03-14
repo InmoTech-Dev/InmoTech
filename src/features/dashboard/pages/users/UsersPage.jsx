@@ -354,7 +354,7 @@ const UsersPage = () => {
   }
 
   return (
-    <div className="w-full max-w-full overflow-hidden flex flex-col min-h-0 h-[calc(100dvh-12rem)] md:h-[calc(100dvh-13rem)] max-h-[calc(100dvh-12rem)] md:max-h-[calc(100dvh-13rem)] gap-3">
+    <div className="w-full max-w-full overflow-hidden flex flex-col h-full gap-4 pb-2">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -370,13 +370,14 @@ const UsersPage = () => {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => {
-            setServerErrors({}); // Limpiar errores al abrir el modal
+            setServerErrors({}); 
             setIsCreateModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2.5 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-sm md:text-base"
+          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 whitespace-nowrap"
         >
-          <Plus className="w-4 h-4 md:w-5 md:h-5" />
-          Nuevo Usuario
+          <Plus className="w-5 h-5" />
+          <span className="hidden sm:inline">Nuevo Usuario</span>
+          <span className="sm:hidden">Nuevo</span>
         </motion.button>
       </motion.div>
 
@@ -385,7 +386,7 @@ const UsersPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2"
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3"
       >
         <StatsCard
           title="Total Usuarios"
@@ -437,14 +438,13 @@ const UsersPage = () => {
         />
       </motion.div>
 
-      {/* Search and Filters */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 bg-white/50 p-2 rounded-xl border border-slate-200"
       >
-        <div className="flex-1 min-w-[260px]">
+        <div className="flex-1 min-w-0">
           <SearchBar
             placeholder="Buscar por nombre, email, documento..."
             value={searchTerm}
@@ -452,97 +452,84 @@ const UsersPage = () => {
           />
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-          className="w-full sm:w-auto"
-        >
-          <Select
-            value={statusFilter}
-            onValueChange={setStatusFilter}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:flex xl:items-center gap-2">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+            className="w-full"
           >
-            <SelectTrigger className="h-10 w-full sm:w-[136px]">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Todos">Todos</SelectItem>
-              <SelectItem value="Habilitado">Habilitados</SelectItem>
-              <SelectItem value="Deshabilitado">Deshabilitados</SelectItem>
-            </SelectContent>
-          </Select>
-        </motion.div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 w-full sm:w-[130px]">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Todos">Todos</SelectItem>
+                <SelectItem value="Habilitado">Habilitados</SelectItem>
+                <SelectItem value="Deshabilitado">Deshabilitados</SelectItem>
+              </SelectContent>
+            </Select>
+          </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3, delay: 0.4 }}
-          className="w-full sm:w-auto"
-        >
-          <Select
-            value={accessFilter}
-            onValueChange={setAccessFilter}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+            className="w-full"
           >
-            <SelectTrigger className="h-10 w-full sm:w-[180px]">
-              <SelectValue placeholder="Estado de acceso" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Todos">Todos</SelectItem>
-              <SelectItem value="Cuenta activa">Cuenta activa</SelectItem>
-              <SelectItem value="Pendiente de activacion">Pendiente de activacion</SelectItem>
-              <SelectItem value="Cuenta deshabilitada">Cuenta deshabilitada</SelectItem>
-            </SelectContent>
-          </Select>
-        </motion.div>
+            <Select value={accessFilter} onValueChange={setAccessFilter}>
+              <SelectTrigger className="h-10 w-full sm:w-[160px]">
+                <SelectValue placeholder="Estado acceso" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Todos">Acceso: Todos</SelectItem>
+                <SelectItem value="Cuenta activa">Activa</SelectItem>
+                <SelectItem value="Pendiente de activacion">Pendiente</SelectItem>
+                <SelectItem value="Cuenta deshabilitada">Deshabilitada</SelectItem>
+              </SelectContent>
+            </Select>
+          </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3, delay: 0.5 }}
-          className="w-full sm:w-auto"
-        >
-          <Select
-            value={dateFilter}
-            onValueChange={setDateFilter}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.5 }}
+            className="w-full"
           >
-            <SelectTrigger className="h-10 w-full sm:w-[170px]">
-              <SelectValue placeholder="Fecha de registro" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Todos los periodos">Todos los periodos</SelectItem>
-              <SelectItem value="Hoy">Hoy</SelectItem>
-              <SelectItem value="Esta semana">Esta semana</SelectItem>
-              <SelectItem value="Este mes">Este mes</SelectItem>
-              <SelectItem value="Personalizado">Personalizado</SelectItem>
-            </SelectContent>
-          </Select>
-        </motion.div>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="h-10 w-full sm:w-[150px]">
+                <SelectValue placeholder="Registro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Todos los periodos">Todo</SelectItem>
+                <SelectItem value="Hoy">Hoy</SelectItem>
+                <SelectItem value="Esta semana">Esta semana</SelectItem>
+                <SelectItem value="Este mes">Este mes</SelectItem>
+                <SelectItem value="Personalizado">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </motion.div>
+        </div>
 
         {dateFilter === 'Personalizado' && (
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3 }}
-            className="flex flex-wrap gap-2 items-center w-full lg:w-auto"
+            className="flex flex-row gap-2 items-center w-full lg:w-auto"
           >
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <label className="text-sm font-medium text-slate-700">Desde:</label>
-              <input
-                type="date"
-                value={customDateRange.startDate}
-                onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
-              />
-            </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <label className="text-sm font-medium text-slate-700">Hasta:</label>
-              <input
-                type="date"
-                value={customDateRange.endDate}
-                onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                className="h-10 w-full sm:w-auto px-2.5 rounded-md border border-slate-300 text-sm"
-              />
-            </div>
+            <input
+              type="date"
+              value={customDateRange.startDate}
+              onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="h-10 flex-1 lg:w-auto px-2.5 rounded-md border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+            <input
+              type="date"
+              value={customDateRange.endDate}
+              onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="h-10 flex-1 lg:w-auto px-2.5 rounded-md border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
           </motion.div>
         )}
       </motion.div>

@@ -9,6 +9,14 @@
 import { apiClient } from "./api.config";
 import axios from 'axios';
 import { formatTimeTo12Hour, formatTimeTo24Hour } from "../utils/time";
+import {
+  DEFAULT_APPOINTMENT_LEAD_MINUTES,
+  buildDailySlots,
+  calculateEndTime,
+  filterTodaySlotsByLeadTime,
+  isBusinessDay,
+  isWithinBusinessSchedule,
+} from "../constants/appointmentSchedule";
 
 const SERVICIO_MAP = {
   "Visita a Propiedad": 1,
@@ -131,7 +139,10 @@ class CitaApiService {
         hora_inicio: horaInicioNormalizada,
         hora_fin: horaFinNormalizada,
         observaciones: citaData.observaciones || null,
-        id_estado_cita: this.mapEstadoToId(citaData.estado) || citaData.id_estado_cita || 1
+        id_estado_cita: this.mapEstadoToId(citaData.estado) || citaData.id_estado_cita || 1,
+        id_agente_asignado: (this.mapEstadoToId(citaData.estado) || citaData.id_estado_cita || 1) === 1
+          ? null
+          : (typeof citaData.id_agente_asignado !== 'undefined' ? citaData.id_agente_asignado : undefined)
       };
 
       console.log("ð¤ Enviando actualizaciÃ³n al backend:", { id, payload });
@@ -452,16 +463,7 @@ class CitaApiService {
   }
 
   calcularHoraFin(horaInicio) {
-    const [horas, minutos] = horaInicio.split(':').map(Number);
-    let horaFin = horas;
-    let minutosFin = minutos + 30; // Citas de 30 minutos
-
-    if (minutosFin >= 60) {
-      horaFin += 1;
-      minutosFin = 0;
-    }
-
-    return `${String(horaFin).padStart(2, '0')}:${String(minutosFin).padStart(2, '0')}`;
+    return calculateEndTime(horaInicio) || '10:00';
   }
 
   convertirHoraAMinutos(hora) {
@@ -481,19 +483,33 @@ class CitaApiService {
   ensureHoraFinValida(horaInicio, horaFin) {
     const inicioNormalizado = this.formatHoraParaAPI(horaInicio || '09:00');
     const finNormalizado = horaFin ? this.formatHoraParaAPI(horaFin) : null;
+    const expectedEnd = this.calcularHoraFin(inicioNormalizado);
 
-    const inicioMinutos = this.convertirHoraAMinutos(inicioNormalizado);
-    const finMinutos = finNormalizado ? this.convertirHoraAMinutos(finNormalizado) : null;
-
-    if (inicioMinutos === null) {
-      return this.calcularHoraFin('09:00');
+    if (!isWithinBusinessSchedule({
+      fecha: '2026-01-05',
+      horaInicio: inicioNormalizado,
+      horaFin: finNormalizado || expectedEnd,
+    })) {
+      return expectedEnd;
     }
 
-    if (finMinutos === null || finMinutos <= inicioMinutos) {
-      return this.calcularHoraFin(inicioNormalizado);
+    return finNormalizado || expectedEnd;
+  }
+
+  buildFallbackAvailability(fecha, applyLeadTime = true) {
+    if (!isBusinessDay(fecha)) {
+      return [];
     }
 
-    return finNormalizado;
+    let slots = buildDailySlots().map((slot) => slot.hora_inicio);
+    const today = new Date();
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    if (applyLeadTime && fecha === todayString) {
+      slots = filterTodaySlotsByLeadTime(slots, today, DEFAULT_APPOINTMENT_LEAD_MINUTES);
+    }
+
+    return slots;
   }
 
   /**
@@ -721,16 +737,16 @@ class CitaApiService {
 
         // Generar todos los horarios disponibles inicialmente
         const todosHorarios = [];
-        // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+        // Horario legacy mantenido solo por compatibilidad interna.
         for (let hora = 8; hora <= 12; hora++) {
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
           if (hora !== 12) {
             todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
           } else {
-            todosHorarios.push(`12:30`);
+            todosHorarios.push(`12:00`);
           }
         }
-        // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+        // Franja de tarde legacy mantenida solo por compatibilidad interna.
         for (let hora = 14; hora <= 16; hora++) {
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
           todosHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
@@ -780,16 +796,16 @@ class CitaApiService {
         console.log("Otro servicio: Sin restricciones de bloqueo");
 
         const defaultHorarios = [];
-        // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+        // Horario legacy mantenido solo por compatibilidad interna.
         for (let hora = 8; hora <= 12; hora++) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
           if (hora !== 12) {
             defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
           } else {
-            defaultHorarios.push(`12:30`);
+            defaultHorarios.push(`12:00`);
           }
         }
-        // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+        // Franja de tarde legacy mantenida solo por compatibilidad interna.
         for (let hora = 14; hora <= 16; hora++) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
@@ -841,16 +857,16 @@ class CitaApiService {
       console.error("Error en obtenerHorariosDisponiblesUsuario:", error);
 
       const defaultHorarios = [];
-      // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
+      // Horario fallback centralizado.
       for (let hora = 8; hora <= 12; hora++) {
         defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
         if (hora !== 12) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         } else {
-          defaultHorarios.push(`12:30`);
+          defaultHorarios.push(`12:00`);
         }
       }
-      // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
+      // Franja de tarde fallback centralizada.
       for (let hora = 14; hora <= 16; hora++) {
         defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
         defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
@@ -892,7 +908,7 @@ class CitaApiService {
         if (hora !== 12) {
           defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
         } else {
-          defaultHorarios.push(`12:30`);
+          defaultHorarios.push(`12:00`);
         }
       }
       for (let hora = 14; hora <= 16; hora++) {
@@ -900,6 +916,65 @@ class CitaApiService {
         defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
       }
       return defaultHorarios;
+    }
+  }
+
+  async obtenerHorariosDisponibles(data) {
+    try {
+      const params = new URLSearchParams();
+      params.append("fecha_cita", data.fecha_cita);
+      params.append("id_servicio", data.id_servicio || data.servicio);
+      if (data.id_inmueble) params.append("id_inmueble", data.id_inmueble);
+
+      const response = await apiClient.get(`/citas/horarios-disponibles-publico?${params.toString()}`);
+      const result = response.data.data || response.data;
+      if (!Array.isArray(result)) {
+        throw new Error("Formato de respuesta inválido del servidor");
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Error en obtenerHorariosDisponibles:", error);
+      return this.buildFallbackAvailability(data.fecha_cita);
+    }
+  }
+
+  async obtenerHorariosDisponiblesUsuario(data) {
+    try {
+      const params = new URLSearchParams();
+      params.append("fecha_cita", data.fecha_cita);
+      params.append("id_servicio", data.id_servicio);
+
+      const response = await apiClient.get(`/citas/mis-citas/horarios-disponibles?${params.toString()}`);
+      const result = response.data.data || response.data;
+      if (!Array.isArray(result)) {
+        throw new Error("Formato de respuesta inválido del servidor");
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Error en obtenerHorariosDisponiblesUsuario:", error);
+      return this.buildFallbackAvailability(data.fecha_cita);
+    }
+  }
+
+  async obtenerHorariosDisponiblesPublico(data) {
+    try {
+      const params = new URLSearchParams();
+      params.append("fecha_cita", data.fecha_cita);
+      params.append("id_servicio", data.id_servicio);
+      if (data.id_inmueble) params.append("id_inmueble", data.id_inmueble);
+
+      const response = await apiClient.get(`/citas/horarios-disponibles-publico?${params.toString()}`);
+      const result = response.data.data || response.data;
+      if (!Array.isArray(result)) {
+        throw new Error("Formato de respuesta inválido del servidor");
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Error en obtenerHorariosDisponiblesPublico:", error);
+      return this.buildFallbackAvailability(data.fecha_cita);
     }
   }
 

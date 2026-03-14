@@ -28,6 +28,13 @@ import citaApiService from '../../../shared/services/citaApiService';
 import { apiClient } from '../../../shared/services/api.config';
 import { useAppointments } from '../../../shared/contexts/AppointmentContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import {
+  calculateEndTime,
+  VALID_START_TIMES,
+  formatScheduleTimeLabel,
+  getBusinessHoursMessage,
+  isBusinessDay,
+} from '../../../shared/constants/appointmentSchedule';
 
 
 const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
@@ -50,7 +57,6 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
   const [errors, setErrors] = useState({});
   const [prevPhone, setPrevPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSearchingPerson, setIsSearchingPerson] = useState(false);
   const [dynamicAvailableHours, setDynamicAvailableHours] = useState([]);
   const [isLoadingHours, setIsLoadingHours] = useState(false);
 
@@ -116,24 +122,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
 
   const daysOfWeek = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
-  const availableHours = [
-    "08:00 am",
-    "08:30 am",
-    "09:00 am",
-    "09:30 am",
-    "10:00 am",
-    "10:30 am",
-    "11:00 am",
-    "11:30 am",
-    "12:00 pm",
-    "12:30 pm",
-    "02:00 pm",
-    "02:30 pm",
-    "03:00 pm",
-    "03:30 pm",
-    "04:00 pm",
-    "04:30 pm",
-  ];
+  const availableHours = VALID_START_TIMES.map(formatScheduleTimeLabel);
 
   const tiposDocumento = [
     { value: "Cédula de Ciudadanía", label: "Cédula de Ciudadanía (CC)" },
@@ -177,8 +166,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Deshabilitar domingos (día 0)
-      const isDisabled = date < today || date.getDay() === 0;
+      const isDisabled = date < today || !isBusinessDay(date);
 
       days.push({
         date,
@@ -229,13 +217,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
         });
 
         // Convertir de formato "HH:mm" a "hh:mm a" para el UI
-        const horasFormateadas = horas.map(h => {
-          const [hour, minute] = h.split(':');
-          const hNum = parseInt(hour);
-          const period = hNum >= 12 ? 'pm' : 'am';
-          const h12 = hNum % 12 || 12;
-          return `${h12.toString().padStart(2, '0')}:${minute} ${period}`;
-        });
+        const horasFormateadas = horas.map(formatScheduleTimeLabel);
 
         setDynamicAvailableHours(horasFormateadas);
       } catch (error) {
@@ -366,16 +348,9 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
   const validateHora = (hora) => {
     if (!hora) return "La hora es requerida";
 
-    // Lista de horas válidas según el horario de atención:
-    // Lunes - Sábado: 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm
-    const validHours = [
-      "08:00 am", "08:30 am", "09:00 am", "09:30 am", "10:00 am", "10:30 am",
-      "11:00 am", "11:30 am", "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm",
-      "03:00 pm", "03:30 pm", "04:00 pm", "04:30 pm"
-    ];
-
+    // Lista de horas válidas según el horario de atención centralizado.
     if (!availableHours.includes(hora)) {
-      return "Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm";
+      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de una hora`;
     }
 
     return "";
@@ -480,24 +455,8 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
   };
 
 
-  // ✅ Función auxiliar para calcular hora fin (30 minutos después)
-  const calcularHoraFin = (horaInicio) => {
-    const [horaStr, minutosStr] = horaInicio.split(':');
-    let hora = parseInt(horaStr, 10);
-    let minutos = parseInt(minutosStr, 10);
-
-    // Sumar 30 minutos
-    minutos += 30;
-
-    // Si minutos excede 59, incrementar hora y ajustar minutos
-    if (minutos >= 60) {
-      hora += Math.floor(minutos / 60);
-      minutos = minutos % 60;
-    }
-
-    // Asegurar formato HH:MM
-    return `${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
-  };
+  // ✅ Función auxiliar para calcular hora fin con duración de una hora
+  const calcularHoraFin = (horaInicio) => calculateEndTime(horaInicio);
 
   const handleClose = () => {
     // Limpiar datos al cerrar modal
@@ -599,92 +558,6 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
     }));
   };
 
-  // ⭐ CORRECCIÓN: Función para buscar persona automáticamente
-  const buscarPersonaAutomaticamente = async (tipoDocumento, numeroDocumento) => {
-    // Si el número es demasiado corto, limpiar campos y salir
-    if (!numeroDocumento || numeroDocumento.replace(/[\s\-\.]/g, '').length < 5) {
-      setFormData(prev => ({
-        ...prev,
-        nombres: "",
-        apellidos: "",
-        telefono: "",
-        email: ""
-      }));
-      setPrevPhone("");
-      return;
-    }
-
-    if (!tipoDocumento) return;
-
-    const errorDocumento = validateNumeroDocumento(numeroDocumento, tipoDocumento);
-    if (errorDocumento) return;
-
-    setIsSearchingPerson(true);
-
-    try {
-      const tipoDocMap = tipoDocumentoMap[tipoDocumento] || tipoDocumento;
-      const response = await apiClient.get('/citas/buscar-persona', {
-        params: {
-          tipo_documento: tipoDocMap,
-          numero_documento: numeroDocumento.replace(/[\s\-\.]/g, '')
-        }
-      });
-
-      const persona = response.data || response;
-
-      if (persona && (persona.primer_nombre || persona.correo || persona.telefono)) {
-        const nombresCompletos = [persona.primer_nombre, persona.segundo_nombre].filter(Boolean).join(' ');
-        const apellidosCompletos = [persona.primer_apellido, persona.segundo_apellido].filter(Boolean).join(' ');
-        
-        let telefonoFormateado = persona.telefono || '';
-        if (telefonoFormateado) {
-          telefonoFormateado = formatPhoneNumber(telefonoFormateado, '', false);
-        }
-
-        setFormData(prev => ({
-          ...prev,
-          nombres: nombresCompletos.trim(),
-          apellidos: apellidosCompletos.trim(),
-          telefono: telefonoFormateado,
-          email: (persona.correo || "").trim()
-        }));
-
-        if (telefonoFormateado) setPrevPhone(telefonoFormateado);
-
-        toast({
-          title: "✅ Datos encontrados",
-          description: "Se han completado los campos con la información existente.",
-          variant: "default"
-        });
-      } else {
-        // Si la respuesta es exitosa pero sin datos útiles, limpiar
-        setFormData(prev => ({
-          ...prev,
-          nombres: "",
-          apellidos: "",
-          telefono: "",
-          email: ""
-        }));
-        setPrevPhone("");
-      }
-    } catch (error) {
-      // ⭐ LIMPIEZA: Si no se encuentra (404) o hay error, limpiar campos prellenados
-      setFormData(prev => ({
-        ...prev,
-        nombres: "",
-        apellidos: "",
-        telefono: "",
-        email: ""
-      }));
-      setPrevPhone("");
-
-      if (error.response?.status !== 404) {
-        console.error('❌ Error al buscar persona:', error);
-      }
-    } finally {
-      setIsSearchingPerson(false);
-    }
-  };
 
   // Función para manejar el cambio del teléfono con formateo automático
   const handlePhoneChange = (e) => {
@@ -902,19 +775,6 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
                           value={formData.tipoDocumento}
                           onValueChange={(value) => {
                             updateFormData('tipoDocumento', value);
-
-                            // Si ya hay un número de documento válido, buscar automáticamente
-                            if (formData.numeroDocumento.trim().length >= 5) {
-                              // Limpiar timeout anterior
-                              if (window.searchTimeout) {
-                                clearTimeout(window.searchTimeout);
-                              }
-
-                              // Buscar después de 300ms
-                              window.searchTimeout = setTimeout(() => {
-                                buscarPersonaAutomaticamente(value, formData.numeroDocumento);
-                              }, 300);
-                            }
                           }}
                         >
                           <SelectTrigger className={`w-full ${errors.tipoDocumento ? 'border-red-500' : ''}`}>
@@ -945,28 +805,6 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
                             const value = e.target.value;
                             const filteredValue = value.replace(/[^0-9\s\.\-]/g, '');
                             updateFormData('numeroDocumento', filteredValue);
-
-                            if (window.searchTimeout) clearTimeout(window.searchTimeout);
-
-                            const cleanValue = filteredValue.replace(/[\s\-\.]/g, '');
-                            
-                            // ⭐ LIMPIEZA: Si el documento es vacío o muy corto, limpiar campos
-                            if (cleanValue.length < 5) {
-                              setFormData(prev => ({
-                                ...prev,
-                                nombres: "",
-                                apellidos: "",
-                                telefono: "",
-                                email: ""
-                              }));
-                              setPrevPhone("");
-                            }
-
-                            if (formData.tipoDocumento && cleanValue.length >= 5) {
-                              window.searchTimeout = setTimeout(() => {
-                                buscarPersonaAutomaticamente(formData.tipoDocumento, filteredValue);
-                              }, 500);
-                            }
                           }}
                           onKeyDown={(e) => {
                             // Prevenir entrada de letras
@@ -975,18 +813,12 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
                             }
                           }}
                           className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${errors.numeroDocumento ? 'border-red-500' : 'border-slate-300'
-                            } ${isSearchingPerson ? 'bg-blue-50' : ''}`}
+                            }`}
                           placeholder="Número de documento"
                           disabled={!formData.tipoDocumento}
                         />
                         {errors.numeroDocumento && (
                           <p className="text-red-500 text-sm mt-1">{errors.numeroDocumento}</p>
-                        )}
-                        {isSearchingPerson && (
-                          <div className="text-blue-500 text-sm mt-1 flex items-center gap-2">
-                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                            Buscando información...
-                          </div>
                         )}
                       </div>
                     </div>

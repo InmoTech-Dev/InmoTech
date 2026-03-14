@@ -197,31 +197,31 @@ const AdministrativosTable = ({
     );
   };
 
+  
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
+    <div className="h-full flex flex-col bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden min-h-0 flex-1">
       {!administrativos || administrativos.length === 0 ? (
         <EmptyState message="No hay personal administrativo para mostrar." />
       ) : (
         <>
-          {/* Desktop Table */}
-          <div className="hidden md:block">
-            <div className="overflow-x-auto">
-              <table className="w-full">
+          <div className="hidden md:flex md:flex-col min-h-0 flex-1">
+            <div className="w-full flex-1 overflow-hidden">
+              <table className="w-full table-auto">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Administrativo
+                    <th className="px-3 lg:px-4 xl:px-10 py-5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-[40%]">
+                      Información del Empleado
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="hidden lg:table-cell px-3 lg:px-4 xl:px-10 py-5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-[30%]">
                       Contacto
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Estado
+                    <th className="px-3 lg:px-4 xl:px-10 py-5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-[140px] lg:w-[180px]">
+                      Estado Laboral
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Información Laboral
+                    <th className="hidden xl:table-cell px-3 lg:px-4 xl:px-10 py-5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-[160px]">
+                      Fecha de Ingreso
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-4 xl:px-6 py-5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider w-[100px] lg:w-[120px]">
                       Acciones
                     </th>
                   </tr>
@@ -237,73 +237,75 @@ const AdministrativosTable = ({
                         animate={{ opacity: 1, y: 0 }}
                         className={`hover:bg-slate-50 transition-colors ${isRetired || isSuperAdminOrAdmin(administrativo) ? 'opacity-60' : ''}`}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10">
-                              <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
+                              <div className="h-10 w-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
                                 <User className="h-5 w-5 text-slate-600" />
                               </div>
                             </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-slate-900">{getFullName(administrativo)}</div>
-                              <div className="text-sm text-slate-500">{getEmployeeCode(administrativo)}</div>
+                            <div className="ml-3 min-w-0">
+                              <div className="text-sm font-bold text-slate-900 truncate" title={getFullName(administrativo)}>{getFullName(administrativo)}</div>
+                              <div className="text-[11px] font-semibold text-blue-600 truncate">{getEmployeeCode(administrativo)}</div>
+                              {/* Stacked contact for mid-screens */}
+                              <div className="lg:hidden flex flex-col text-[11px] text-slate-500 mt-0.5">
+                                <span className="truncate">{getEmail(administrativo)}</span>
+                                <span className="truncate">{formatPhoneNumber(getPhone(administrativo))}</span>
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-slate-400" />
-                            <span className="text-sm text-slate-900">{getEmail(administrativo)}</span>
+                        <td className="hidden lg:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
+                          <div className="flex items-center gap-2 min-w-0 max-w-[200px]">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                            <span className="text-sm text-slate-600 truncate" title={getEmail(administrativo)}>{getEmail(administrativo)}</span>
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Phone className="w-4 h-4 text-slate-400" />
-                            <span className="text-sm text-slate-500">{formatPhoneNumber(getPhone(administrativo))}</span>
+                          <div className="flex items-center gap-2 mt-0.5 min-w-0 max-w-[200px]">
+                            <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                            <span className="text-sm text-slate-500 truncate" title={formatPhoneNumber(getPhone(administrativo))}>{formatPhoneNumber(getPhone(administrativo))}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
                           <AdministrativoStatusSelector
                             value={administrativo.estado_laboral}
                             onChange={(newStatus) => onStatusChange(administrativo, newStatus)}
                             loading={loadingStatusChanges.has(administrativo.id_administrativo)}
                             disabled={isSuperAdminOrAdmin(administrativo)}
-                            className="w-[120px]"
+                            className="w-full"
                           />
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="hidden 2xl:table-cell px-3 lg:px-4 xl:px-6 py-3.5 align-middle">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4 text-slate-400" />
-                            <span className="text-sm text-slate-900">{getHireDate(administrativo)}</span>
+                            <span className="text-sm text-slate-600">{getHireDate(administrativo)}</span>
                           </div>
-
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center gap-2">
+                        <td className="px-3 lg:px-4 xl:px-6 py-3.5 align-middle text-right">
+                          <div className="flex items-center justify-end gap-1.5">
                             <motion.button
                               key={`view-${administrativo.id_administrativo}`}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
+                              whileHover={{ scale: 1.1, backgroundColor: 'rgba(37, 99, 235, 0.05)' }}
+                              whileTap={{ scale: 0.9 }}
                               onClick={() => onView(administrativo)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="p-1.5 text-blue-600 rounded-lg transition-colors border border-transparent hover:border-blue-100"
                               title="Ver detalles"
                             >
                               <Eye className="w-4 h-4" />
                             </motion.button>
                             <motion.button
                               key={`edit-${administrativo.id_administrativo}`}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
+                              whileHover={isSuperAdminOrAdmin(administrativo) ? {} : { scale: 1.1, backgroundColor: 'rgba(71, 85, 105, 0.05)' }}
+                              whileTap={isSuperAdminOrAdmin(administrativo) ? {} : { scale: 0.9 }}
                               onClick={() => onEdit(administrativo)}
                               disabled={isSuperAdminOrAdmin(administrativo)}
-                              className={`p-2 rounded-lg transition-colors ${isSuperAdminOrAdmin(administrativo)
+                              className={`p-1.5 rounded-lg transition-colors border border-transparent ${isSuperAdminOrAdmin(administrativo)
                                 ? 'text-slate-300 cursor-not-allowed'
-                                : 'text-slate-600 hover:bg-slate-50 cursor-pointer'
+                                : 'text-slate-600 hover:border-slate-200 cursor-pointer'
                                 }`}
                               title={isSuperAdminOrAdmin(administrativo) ? "No se puede editar" : "Editar administrativo"}
                             >
                               <Edit className="w-4 h-4" />
                             </motion.button>
-
-
                           </div>
                         </td>
                       </motion.tr>
@@ -323,12 +325,12 @@ const AdministrativosTable = ({
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
-              <div className="flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-2.5 border-t border-slate-200 bg-slate-50">
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-600">
                   Página {currentPage} de {totalPages}
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}

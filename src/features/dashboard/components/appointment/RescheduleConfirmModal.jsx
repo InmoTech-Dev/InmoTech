@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { Calendar, Clock, User, MapPin, FileText, AlertTriangle, RefreshCw, ChevronLeft } from 'lucide-react';
 import citaApiService from '../../../../shared/services/citaApiService';
+import { calculateEndTime } from '../../../../shared/constants/appointmentSchedule';
 
 const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newDate }) => {
   const [formData, setFormData] = useState({
@@ -24,7 +25,7 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
       if (appointment.hora_inicio) {
         const timeStr = appointment.hora_inicio;
 
-        // 1. Intentar extraer HH:mm directamente del string (formato "08:30" o "Thu Jan 01 1970 08:30:00")
+        // 1. Intentar extraer HH:mm directamente del string o de una fecha serializada
         const timeRegex = /(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?(?:\s|$)/;
         const match = timeStr.match(timeRegex);
 
@@ -336,6 +337,7 @@ const RescheduleConfirmModal = ({ isOpen, onCancel, onConfirm, appointment, newD
       const reagendamientoData = {
         fecha_cita: newDate,
         hora_inicio: formData.hora_inicio,
+        hora_fin: calculateEndTime(formData.hora_inicio),
         id_agente_asignado: appointment.id_agente_asignado,
         motivo_reagendamiento: formData.motivo_reagendamiento.trim()
       };

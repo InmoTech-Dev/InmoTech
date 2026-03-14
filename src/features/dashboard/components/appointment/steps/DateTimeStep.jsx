@@ -3,6 +3,13 @@ import { motion } from 'framer-motion';
 import { Calendar, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import citaApiService from '../../../../../shared/services/citaApiService';
 import { formatTimeTo12Hour } from '../../../../../shared/utils/time';
+import {
+  DEFAULT_APPOINTMENT_LEAD_MINUTES,
+  buildDailySlots,
+  filterTodaySlotsByLeadTime,
+  getBusinessHoursMessage,
+  isBusinessDay,
+} from '../../../../../shared/constants/appointmentSchedule';
 
 const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -51,7 +58,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
       days.push({
         date,
         isCurrentMonth: true,
-        isDisabled: date < today,
+        isDisabled: date < today || !isBusinessDay(date),
         isToday: date.toDateString() === today.toDateString()
       });
     }
@@ -144,22 +151,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
       } else {
         // Sin servicio seleccionado: horarios predeterminados
         console.log('Loading default hours (no service restriction)');
-        const defaultHours = [];
-        // Mañana: 8:00 am - 1:00 pm (último inicio 12:30)
-        for (let hora = 8; hora <= 12; hora++) {
-          defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-          if (hora !== 12) {
-            defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
-          } else {
-            defaultHours.push(`12:30`);
-          }
-        }
-        // Tarde: 2:00 pm - 5:00 pm (último inicio 16:30)
-        for (let hora = 14; hora <= 16; hora++) {
-          defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-          defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
-        hoursToShow = defaultHours;
+        hoursToShow = buildDailySlots().map((slot) => slot.hora_inicio);
       }
 
       // Filtrar horarios si es hoy (margen de 2 horas)
@@ -175,8 +167,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
           // Convertir ambas a minutos desde inicio del día para comparar
           const currentTotalMinutes = currentHour * 60 + currentMinute;
           const appointmentTotalMinutes = h * 60 + m;
-          // Debe haber al menos 120 minutos (2 horas) de diferencia
-          return (appointmentTotalMinutes - currentTotalMinutes) >= 120;
+          return (appointmentTotalMinutes - currentTotalMinutes) >= DEFAULT_APPOINTMENT_LEAD_MINUTES;
         });
       }
 
@@ -184,21 +175,10 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
     } catch (error) {
       console.error('Error loading available hours:', error);
       // Fallback: horarios predeterminados filtrados si es hoy
-      const defaultHours = [];
-      for (let hora = 8; hora <= 16; hora++) {
-        if (hora === 13) continue; // Almuerzo 1:00 pm - 2:00 pm
-        defaultHours.push(`${hora.toString().padStart(2, '0')}:00`);
-        defaultHours.push(`${hora.toString().padStart(2, '0')}:30`);
-      }
-
-      let filteredFallback = defaultHours;
+      let filteredFallback = buildDailySlots().map((slot) => slot.hora_inicio);
       const today = new Date();
       if (fecha === formatDateForInput(today)) {
-        const currentTotalMinutes = today.getHours() * 60 + today.getMinutes();
-        filteredFallback = defaultHours.filter(time => {
-          const [h, m] = time.split(':').map(Number);
-          return (h * 60 + m - currentTotalMinutes) >= 120;
-        });
+        filteredFallback = filterTodaySlotsByLeadTime(filteredFallback, today, DEFAULT_APPOINTMENT_LEAD_MINUTES);
       }
       setAvailableHours(filteredFallback);
     } finally {
@@ -400,7 +380,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
               <div className="text-center text-yellow-700">
                 <Clock className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
                 <p className="text-sm font-medium">No hay horarios disponibles</p>
-                <p className="text-xs">Selecciona otra fecha o servicio</p>
+            <p className="text-xs">Selecciona otra fecha o servicio dentro de {getBusinessHoursMessage().toLowerCase()}</p>
               </div>
             </div>
           )}
@@ -430,7 +410,7 @@ const DateTimeStep = ({ formData, errors, updateFormData, onFieldComplete }) => 
             <span className="font-medium">Cita programada para:</span>
           </div>
           <p className="text-green-700 mt-1 font-semibold">
-            {formatDateForDisplay(formData.fecha)} a las {formData.hora}
+            {formatDateForDisplay(formData.fecha)} a las {formatTimeTo12Hour(formData.hora).toLowerCase()}
           </p>
         </motion.div>
       )}

@@ -251,6 +251,37 @@ class EmailService {
     }
   }
 
+  async enviarEmailCitaCanceladaPorDisponibilidad({ cita, timezone } = {}) {
+    try {
+      const ctx = this._buildCitaContexto(cita, { timezone });
+      if (!ctx.correo) {
+        logger.warn('[EMAIL][CITA] Cancelacion por disponibilidad omitida: cita sin correo');
+        return { success: false, skipped: true, reason: 'sin_correo' };
+      }
+
+      const propertyId = ctx.idInmueble;
+      const rescheduleLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/inmuebles/${propertyId}?reschedule=true`;
+
+      const mailOptions = {
+        from: `"Matriz Inmobiliaria" <${process.env.EMAIL_FROM}>`,
+        to: ctx.correo,
+        subject: `Actualización sobre tu solicitud de cita (${ctx.fechaHumana})`,
+        html: this.generarTemplateCitaCanceladaDisponibilidad({
+          ...ctx,
+          rescheduleLink
+        }),
+        attachments: this._getLogoAttachment()
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      logger.info(`[EMAIL][CITA] Cancelacion por disponibilidad enviada a ${ctx.correo}`, { messageId: info.messageId });
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      logger.error('[EMAIL][CITA] Error enviando correo de cancelacion por disponibilidad:', error);
+      throw error;
+    }
+  }
+
   async enviarEmailCitaReagendada({ cita, motivo, timezone } = {}) {
     try {
       const ctx = this._buildCitaContexto(cita, { timezone });
@@ -1254,25 +1285,25 @@ class EmailService {
               <div class="info-grid">
                 <div class="info-item">
                   <div class="label">Nombre</div>
-                  <div class="value">${name}</div>
+                  <div class="value">\${name}</div>
                 </div>
                 <div class="info-item">
                   <div class="label">Correo Electrónico</div>
-                  <div class="value">${email}</div>
+                  <div class="value">\${email}</div>
                 </div>
                 <div class="info-item">
                   <div class="label">Teléfono</div>
-                  <div class="value">${phone || 'No proporcionado'}</div>
+                  <div class="value">\${phone || 'No proporcionado'}</div>
                 </div>
                 <div class="info-item">
                   <div class="label">Asunto</div>
-                  <div class="value">${subject}</div>
+                  <div class="value">\${subject}</div>
                 </div>
               </div>
 
               <div class="section-title">Mensaje</div>
               <div class="message-box">
-                <div class="message-text">${message}</div>
+                <div class="message-text">\${message}</div>
               </div>
 
               <div style="text-align: center; color: #94A3B8; font-size: 12px;">
@@ -1281,6 +1312,104 @@ class EmailService {
             </div>
             <div class="footer">
               <p>Matriz Inmobiliaria © 2026. Panel Administrativo.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  generarTemplateCitaCanceladaDisponibilidad({
+    nombre = 'Cliente',
+    servicio,
+    fechaHumana,
+    horaRango,
+    direccion,
+    rescheduleLink
+  }) {
+    return `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Novedades sobre tu cita</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+        <style>
+          body { 
+            margin: 0; padding: 0; background-color: #F8FAFC; 
+            font-family: 'Outfit', sans-serif; 
+            color: #1E293B;
+          }
+          .wrapper { width: 100%; padding: 40px 0; }
+          .container { 
+            max-width: 600px; margin: 0 auto; background-color: #ffffff; 
+            border-radius: 24px; overflow: hidden; 
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08); 
+          }
+          .header { 
+            padding: 40px; background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); 
+            text-align: center; color: #FFFFFF;
+          }
+          .status-badge {
+            display: inline-flex; align-items: center; 
+            padding: 8px 16px; border-radius: 100px; 
+            background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); 
+            color: #FFFFFF; font-weight: 600; font-size: 13px;
+          }
+          .content { padding: 40px; text-align: center; }
+          .headline { font-size: 24px; font-weight: 800; color: #0F172A; margin-bottom: 16px; }
+          .message { font-size: 16px; color: #64748B; line-height: 1.6; margin-bottom: 30px; }
+          .info-box {
+            background-color: #F1F5F9; border-radius: 16px; padding: 20px; margin-bottom: 30px;
+            text-align: left;
+          }
+          .info-item { margin-bottom: 12px; }
+          .info-item:last-child { margin-bottom: 0; }
+          .label { font-size: 12px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-bottom: 4px; }
+          .value { font-size: 15px; font-weight: 600; color: #1E293B; }
+          .btn {
+            display: inline-block; padding: 16px 32px; background-color: #3B82F6; 
+            color: #FFFFFF; font-weight: 700; text-decoration: none; border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+            text-align: center;
+          }
+          .footer { padding: 30px; text-align: center; font-size: 12px; color: #94A3B8; border-top: 1px solid #F1F5F9; }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          <div class="container">
+            <div class="header">
+              <div class="status-badge">ACTUALIZACIÓN DE DISPONIBILIDAD</div>
+            </div>
+            <div class="content">
+              <h1 class="headline">¡Hola \${nombre}!</h1>
+              <p class="message">
+                Te contactamos respecto a tu solicitud de cita para visitar una propiedad. 
+                Debido a un cambio reciente en la disponibilidad de este horario, no hemos podido confirmar tu visita en el bloque seleccionado.
+              </p>
+              
+              <div class="info-box">
+                <div class="info-item">
+                  <div class="label">Propiedad</div>
+                  <div class="value">\${direccion}</div>
+                </div>
+                <div class="info-item">
+                  <div class="label">Horario anterior</div>
+                  <div class="value">\${fechaHumana} a las \${horaRango}</div>
+                </div>
+              </div>
+
+              <p class="message" style="font-weight: 600; color: #0F172A;">
+                ¡Aún queremos ayudarte a conocer este inmueble! Por favor, elige un nuevo horario que se ajuste a tu agenda.
+              </p>
+
+              <a href="\${rescheduleLink}" class="btn">Ver otros horarios disponibles</a>
+            </div>
+            <div class="footer">
+              Matriz Inmobiliaria © 2026. Todos los derechos reservados.
             </div>
           </div>
         </div>

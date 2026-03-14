@@ -205,6 +205,8 @@ export const AppointmentProvider = ({ children }) => {
               ...app,
               estado: nuevoEstado,
               id_estado_cita: idEstadoCita,
+              id_agente_asignado: Number(idEstadoCita) === 1 ? null : app.id_agente_asignado,
+              agente: Number(idEstadoCita) === 1 ? null : app.agente,
               fecha_actualizacion: citaActualizada.fecha_actualizacion
             };
           }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useLocation } from "react-router-dom";
 import PropertyVisitModal from "../components/PropertyVisitModal";
 import { useToast } from "@/shared/hooks/use-toast";
 import { useAppointments } from "@/shared/contexts/AppointmentContext";
@@ -41,7 +41,8 @@ export default function PropertyDetailPage() {
   const [property, setProperty] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { addExistingAppointment } = useAppointments();
-
+  const { search } = useLocation();
+ 
   const propertyId = useMemo(() => {
     const parsed = Number(id);
     return Number.isFinite(parsed) ? parsed : null;
@@ -148,6 +149,13 @@ export default function PropertyDetailPage() {
   useEffect(() => {
     setActiveImageIndex(0);
   }, [property?.id]);
+ 
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("reschedule") === "true") {
+      setIsVisitModalOpen(true);
+    }
+  }, [search]);
 
   const handleScheduleVisit = (nuevaCita) => {
     addExistingAppointment(nuevaCita);

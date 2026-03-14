@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, FileText, Save, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../../../shared/contexts/AuthContext';
 import citaApiService from '../../../../shared/services/citaApiService';
+import { calculateEndTime } from '../../../../shared/constants/appointmentSchedule';
 
 const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) => {
   const { user } = useAuth();
@@ -55,23 +56,7 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
       setAvailableTimes(response);
     } catch (error) {
       console.error('Error cargando horarios disponibles:', error);
-      // En caso de error, mostrar horarios predeterminados
-      const defaultTimes = [];
-      // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
-      for (let hora = 8; hora <= 12; hora++) {
-        defaultTimes.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora !== 12) {
-          defaultTimes.push(`${hora.toString().padStart(2, '0')}:30`);
-        } else {
-          defaultTimes.push(`12:30`);
-        }
-      }
-      // Tarde: 2:00 PM - 5:00 PM (último inicio 16:30)
-      for (let hora = 14; hora <= 16; hora++) {
-        defaultTimes.push(`${hora.toString().padStart(2, '0')}:00`);
-        defaultTimes.push(`${hora.toString().padStart(2, '0')}:30`);
-      }
-      setAvailableTimes(defaultTimes);
+      setAvailableTimes(citaApiService.buildFallbackAvailability(fecha));
     } finally {
       setLoadingTimes(false);
     }
@@ -122,7 +107,7 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
             timeFormatted = '09:00';
           }
         }
-        // Si es formato 12 horas (10:30 AM)
+        // Si es formato 12 horas (por ejemplo, 10:00 AM)
         else if (currentTime.includes('AM') || currentTime.includes('PM')) {
           const timeParts = currentTime.replace(/\s+/g, '').toLowerCase();
           let [time, period] = timeParts.split(/(am|pm)/).filter(Boolean);
@@ -285,6 +270,7 @@ const RescheduleAppointmentModal = ({ isOpen, onClose, cita, onRescheduled }) =>
 
       const rescheduleData = {
         ...formData,
+        hora_fin: calculateEndTime(formData.hora_inicio),
         id_agente_asignado: idAgenteAsignado
       };
 

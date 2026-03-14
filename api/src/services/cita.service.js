@@ -13,10 +13,65 @@ const {
   normalizarHoraTexto,
   horaEnMinutos,
   sumarMinutosHora,
-  resolverRangoHorario
+  resolverRangoHorario,
+  cumpleHorarioLaboral,
 } = require('../utils/date');
+const {
+  APPOINTMENT_DURATION_MINUTES,
+  buildDailySlots,
+  isBusinessDay,
+  isWithinBusinessSchedule,
+  normalizeTime,
+} = require('../constants/appointmentSchedule');
+const EmailService = require('./email.service');
+const sseService = require('./sse.service');
 
 class CitaService {
+
+  /**
+   * Verifica si un agente tiene conflictos de horario
+   * @param {number} idAgente - ID del agente
+   * @param {string} fecha - Fecha en formato YYYY-MM-DD
+   * @param {string} horaInicio - Hora inicio HH:mm
+   * @param {string} horaFin - Hora fin HH:mm
+   * @param {number|null} idCitaExcluir - ID de cita a excluir (para reagendamientos)
+   * @returns {Promise<boolean>} True si hay conflicto
+   */
+  async verificarConflictoAgente(idAgente, fecha, horaInicio, horaFin, idCitaExcluir = null) {
+    if (!idAgente) return false;
+
+    // âœ… NORMALIZAR HORAS: Aseguramos que trabajamos con strings HH:mm:ss
+    // Esto es vital porque Sequelize puede devolver objetos Date para campos TIME
+    const hInicio = normalizarHoraExacta(horaInicio);
+    const hFin = normalizarHoraExacta(horaFin);
+
+    if (!hInicio || !hFin) return false;
+
+    const conflicto = await Cita.findOne({
+      where: {
+        id_agente_asignado: idAgente,
+        fecha_cita: normalizarFechaCita(fecha),
+        id_estado_cita: { [Op.in]: [2, 4] }, // Confirmada o Reagendada
+        [Op.or]: [
+          {
+            hora_inicio: { [Op.between]: [hInicio, sumarMinutosHora(hFin, -1)] }
+          },
+          {
+            hora_fin: { [Op.between]: [sumarMinutosHora(hInicio, 1), hFin] }
+          },
+          {
+            [Op.and]: [
+              { hora_inicio: { [Op.lte]: hInicio } },
+              { hora_fin: { [Op.gte]: hFin } }
+            ]
+          }
+        ],
+        ...(idCitaExcluir ? { id_cita: { [Op.ne]: idCitaExcluir } } : {})
+      }
+    });
+
+    return !!conflicto;
+  }
 
   async crearCita(dataCita) {
     const result = await sequelize.transaction(async (t) => {
@@ -54,6 +109,27 @@ class CitaService {
         dataCita.id_inmueble = idInmueble;
         dataCita.id_servicio = idServicio;
 
+        const rangoHorario = resolverRangoHorario({
+          horaInicio: dataCita.hora_inicio,
+          horaFin: dataCita.hora_fin,
+          duracion: APPOINTMENT_DURATION_MINUTES,
+        });
+
+        if (
+          !rangoHorario.horaInicio ||
+          !rangoHorario.horaFin ||
+          !cumpleHorarioLaboral({
+            fecha: dataCita.fecha_cita,
+            horaInicio: rangoHorario.horaInicio,
+            horaFin: rangoHorario.horaFin,
+          })
+        ) {
+          throw asBadRequest('La cita debe programarse de lunes a viernes, en horas en punto y durar exactamente una hora.');
+        }
+
+        dataCita.hora_inicio = rangoHorario.horaInicio;
+        dataCita.hora_fin = rangoHorario.horaFin;
+
         // âœ… Usar directamente nombre_completo y apellido_completo como vienen del frontend
         const nombre_completo = dataCita.nombre_completo || '';
         const apellido_completo = dataCita.apellido_completo || '';
@@ -81,7 +157,7 @@ class CitaService {
             });
 
             if (correoEnUsoPorOtro) {
-              // Si el correo lo tiene otro, no lo actualizamos para evitar 409, 
+              // Si el correo lo tiene otro, no lo actualizamos para evitar 409,
               // pero permitimos que la cita siga con la persona encontrada (por documento)
               logger.warn(`El correo ${correoPrincipal} ya estÃ¡ en uso por otra persona (ID: ${correoEnUsoPorOtro.id_persona}). No se actualizarÃ¡ en este registro.`);
             } else {
@@ -109,13 +185,13 @@ class CitaService {
 
           if (personaPorCorreo) {
             // CONFLICTO: El documento es nuevo pero el correo ya existe.
-            // Para evitar errores 409 y duplicados inconsistentes, asumimos que es la misma persona 
+            // Para evitar errores 409 y duplicados inconsistentes, asumimos que es la misma persona
             // pero que tal vez se registrÃ³ con otro documento antes o hubo un error.
             // Por seguridad en este flujo de citas, usamos la persona encontrada por correo.
             persona = personaPorCorreo;
             logger.info(`Persona encontrada por correo (${correoPrincipal}) aunque el documento es distinto.`);
 
-            // Actualizamos el documento si es necesario? Mejor no por seguridad, 
+            // Actualizamos el documento si es necesario? Mejor no por seguridad,
             // solo actualizamos nombres y telÃ©fono.
             await persona.update({
               nombre_completo,
@@ -412,17 +488,34 @@ class CitaService {
   }
 
   async confirmarCita(idCita, idAgente) {
-    return await sequelize.transaction(async (t) => {
+    let citasACancelar = [];
+    const result = await sequelize.transaction(async (t) => {
       const cita = await Cita.findByPk(idCita, {
-        include: [{ association: 'servicio' }],
+        include: [
+          { association: 'servicio' },
+          { association: 'inmueble' },
+          { association: 'cliente' }
+        ],
         transaction: t
       });
 
       if (!cita) throw new Error('Cita no encontrada');
-      
+
       // Estado ID 1: Solicitada, 4: Re Agendada
       if (![1, 4].includes(cita.id_estado_cita)) {
         throw new Error(`No se puede confirmar una cita en estado ${cita.id_estado_cita}`);
+      }
+
+      // ? Validación de Conflicto de Agente
+      const hayConflicto = await this.verificarConflictoAgente(
+        idAgente,
+        cita.fecha_cita,
+        cita.hora_inicio,
+        cita.hora_fin
+      );
+
+      if (hayConflicto) {
+        throw new Error('El agente ya tiene una cita confirmada en este horario');
       }
 
       const citaActualizada = await cita.update({
@@ -432,29 +525,74 @@ class CitaService {
       }, { transaction: t });
 
       // Lógica de "Bloqueo Inteligente": Si es visita, cancelar otras solicitudes
-      if (cita.servicio?.nombre_servicio === 'Visita a Propiedad' && cita.id_inmueble) {
-        await Cita.update(
-          {
-            id_estado_cita: 6, // Cancelada
-            motivo_cancelacion: 'Lo sentimos, este horario ya fue tomado por otro usuario',
-            fecha_cancelacion: new Date()
+      if (cita.id_inmueble) {
+        // 1. Obtener las citas que se van a cancelar para poder notificar después
+        citasACancelar = await Cita.findAll({
+          where: {
+            id_inmueble: cita.id_inmueble,
+            fecha_cita: normalizarFechaCita(cita.fecha_cita),
+            hora_inicio: normalizarHoraExacta(cita.hora_inicio),
+            id_estado_cita: 1, // Solicitada
+            id_cita: { [Op.ne]: idCita }
           },
-          {
-            where: {
-              id_inmueble: cita.id_inmueble,
-              fecha_cita: normalizarFechaCita(cita.fecha_cita),
-              hora_inicio: normalizarHoraExacta(cita.hora_inicio),
-              id_estado_cita: 1, // Solicitada
-              id_cita: { [Op.ne]: idCita }
+          include: [{ association: 'cliente' }, { association: 'inmueble' }],
+          transaction: t
+        });
+
+        // 2. Ejecutar la cancelación masiva en BD
+        if (citasACancelar.length > 0) {
+          await Cita.update(
+            {
+              id_estado_cita: 6, // Cancelada
+              motivo_cancelacion: 'Lo sentimos, este horario ya fue reservado por otro usuario',
+              fecha_cancelacion: new Date()
             },
-            transaction: t
-          }
-        );
+            {
+              where: {
+                id_cita: { [Op.in]: citasACancelar.map(c => c.id_cita) }
+              },
+              transaction: t
+            }
+          );
+        }
       }
 
-      // Retornar la cita con includes completos
-      return await this.obtenerCitaPorId(idCita, t);
+      return citaActualizada;
     });
+
+    // --- PROCESAMIENTO POST-TRANSACCIÓN (Robustez) ---
+
+    // 1. Notificar cambio en la cita principal vía SSE
+    sseService.emitAppointmentChanged({
+      action: 'confirmed',
+      appointmentId: idCita,
+      affectedUserIds: [result.id_cliente, result.id_agente_asignado]
+    });
+
+    // 2. Procesar cancelaciones en segundo plano
+    if (citasACancelar.length > 0) {
+      // Notificaciones SSE para cada cancelación
+      citasACancelar.forEach(c => {
+        sseService.emitAppointmentChanged({
+          action: 'cancelled',
+          appointmentId: c.id_cita,
+          affectedUserIds: [c.id_cliente]
+        });
+      });
+
+      // Envío de correos en paralelo (allSettled para que uno no detenga al resto)
+      Promise.allSettled(citasACancelar.map(c =>
+        EmailService.enviarEmailCitaCanceladaPorDisponibilidad({ cita: c })
+      )).then(results => {
+        const successes = results.filter(r => r.status === 'fulfilled').length;
+        const failures = results.filter(r => r.status === 'rejected').length;
+        logger.info(`[CONFIRMACION] Procesadas ${citasACancelar.length} cancelaciones automáticas. Éxitos: ${successes}, Fallos: ${failures}`);
+      }).catch(err => {
+        logger.error('[CONFIRMACION] Error crítico en el flujo de notificaciones post-cancelación:', err);
+      });
+    }
+
+    return await this.obtenerCitaPorId(idCita);
   }
 
   async cancelarCita(id, motivoCancelacion) {
@@ -477,6 +615,44 @@ class CitaService {
     }
   }
 
+  async cancelarCitasSolicitadasExpiradas(referenceDate = new Date()) {
+    try {
+      const fechaCorte = new Date(referenceDate);
+      fechaCorte.setDate(fechaCorte.getDate() - 5);
+
+      const fechaCorteNormalizada = normalizarFechaCita(fechaCorte);
+      const motivoExpiracion = 'Expiró por no dar una respuesta a tiempo';
+
+      const [totalActualizadas] = await Cita.update(
+        {
+          id_estado_cita: 6,
+          motivo_cancelacion: motivoExpiracion,
+          fecha_cancelacion: new Date()
+        },
+        {
+          where: {
+            id_estado_cita: 1,
+            fecha_cita: { [Op.lte]: fechaCorteNormalizada }
+          }
+        }
+      );
+
+      if (totalActualizadas > 0) {
+        logger.info(
+          `[CITAS] Expiración automática ejecutada: ${totalActualizadas} cita(s) solicitada(s) cancelada(s) con fecha_cita <= ${fechaCorteNormalizada}`
+        );
+      }
+
+      return {
+        updated: totalActualizadas,
+        cutoffDate: fechaCorteNormalizada
+      };
+    } catch (error) {
+      logger.error(`[CITAS] Error cancelando citas solicitadas expiradas: ${error.message}`);
+      throw error;
+    }
+  }
+
   async reagendarCita(id, nuevosDatos) {
     const result = await sequelize.transaction(async (t) => {
       try {
@@ -488,18 +664,68 @@ class CitaService {
           throw new Error('Cita no encontrada');
         }
 
+        const fechaCita = normalizarFechaCita(nuevosDatos.fecha_cita);
+        const rangoHorario = resolverRangoHorario({
+          horaInicio: nuevosDatos.hora_inicio,
+          horaFin: nuevosDatos.hora_fin,
+          duracion: APPOINTMENT_DURATION_MINUTES,
+        });
+        const horaInicio = rangoHorario.horaInicio;
+        const horaFin = rangoHorario.horaFin;
+
+        if (
+          !horaInicio ||
+          !horaFin ||
+          !cumpleHorarioLaboral({ fecha: fechaCita, horaInicio, horaFin })
+        ) {
+          throw new Error('La cita debe reagendarse de lunes a viernes, en horas en punto y con duracion de una hora');
+        }
+
+        // âœ… 1. Validar Conflicto de Agente (si hay agente asignado)
+        if (nuevosDatos.id_agente_asignado) {
+          const hayConflicto = await this.verificarConflictoAgente(
+            nuevosDatos.id_agente_asignado,
+            fechaCita,
+            horaInicio,
+            horaFin,
+            id
+          );
+          if (hayConflicto) {
+            throw new Error('El agente ya tiene una cita confirmada en este horario');
+          }
+        }
+
+        // âœ… 2. Validar lÃmite de 5 solicitudes por cupo para el inmueble
+        if (citaModel.id_inmueble) {
+          const solicitudesPorCupo = await Cita.count({
+            where: {
+              id_inmueble: citaModel.id_inmueble,
+              fecha_cita: fechaCita,
+              hora_inicio: horaInicio,
+              id_estado_cita: 1, // Solicitada
+              id_cita: { [Op.ne]: id }
+            },
+            transaction: t
+          });
+
+          if (solicitudesPorCupo >= 5) {
+            throw new Error('Este horario ya ha alcanzado el límite máximo de solicitudes permitidas');
+          }
+        }
+
         // Guardar ID del agente anterior para historial
         const idAgenteAnterior = citaModel.id_agente_asignado;
 
         // Actualizar la cita con los nuevos datos
         const datosActualizados = {
-          fecha_cita: normalizarFechaCita(nuevosDatos.fecha_cita),
-          hora_inicio: normalizarHoraExacta(nuevosDatos.hora_inicio),
-          hora_fin: normalizarHoraExacta(nuevosDatos.hora_fin),
+          fecha_cita: fechaCita,
+          hora_inicio: horaInicio,
+          hora_fin: horaFin,
           motivo_reagendamiento: nuevosDatos.motivo_reagendamiento,
           id_agente_asignado: nuevosDatos.id_agente_asignado,
           id_estado_cita: 4, // Reagendada
-          fecha_actualizacion: new Date()
+          fecha_actualizacion: new Date(),
+          ediciones_realizadas: (citaModel.ediciones_realizadas || 0) + 1
         };
 
         await citaModel.update(datosActualizados, { transaction: t });
@@ -522,7 +748,7 @@ class CitaService {
         return await this.obtenerCitaPorId(id, t);
 
       } catch (error) {
-        logger.error(`âŒ Error reagendando cita ${id}: ${error.message}`);
+        logger.error(`â Œ Error reagendando cita ${id}: ${error.message}`);
         throw error;
       }
     });
@@ -560,7 +786,7 @@ class CitaService {
         datosActualizados.fecha_cita = normalizarFechaCita(nuevosDatos.fecha_cita);
       }
 
-      // ├ó┼ôÔÇª Obtener instancia directa de Sequelize para que tenga el m├â┬®todo .update()
+      // +ó+ôÔÇª Obtener instancia directa de Sequelize para que tenga el m+â-®todo .update()
       const citaModel = await Cita.findByPk(id);
       if (!citaModel) {
         throw new Error('Cita no encontrada');
@@ -600,24 +826,41 @@ class CitaService {
           throw new Error('Se requiere un motivo cuando se reasigna un agente');
         }
 
+        // âœ… VALIDACIÃ“N DE CONFLICTO GLOBAL: Protegemos cualquier asignaciÃ³n a un agente
+        // Siempre que la cita no estÃ© cancelada (6) o completada (5)
+        if (![5, 6].includes(cita.id_estado_cita)) {
+          const hayConflicto = await this.verificarConflictoAgente(
+            idAgenteNuevo,
+            cita.fecha_cita,
+            cita.hora_inicio,
+            cita.hora_fin,
+            cita.id_cita // Excluimos la cita actual por si el agente ya estaba asignado (aunque aquÃ­ es 'nuevo')
+          );
+
+          if (hayConflicto) {
+            throw new Error('El agente seleccionado ya tiene una cita confirmada o programada en este horario');
+          }
+        }
+
         await cita.update({
           id_agente_asignado: idAgenteNuevo,
           motivo_reagendamiento: motivoFinal || cita.motivo_reagendamiento,
           fecha_actualizacion: new Date()
         }, { transaction: t });
 
-        if (cita.id_estado_cita === 1) { // Solicitada
+        // Si estaba solicitada, pasar a confirmada automÃ¡ticamente
+        if (cita.id_estado_cita === 1) {
           await cita.update({
             id_estado_cita: 2, // Confirmada
             fecha_confirmacion: new Date()
           }, { transaction: t });
 
           // Bloqueo Inteligente: Cancelar otras solicitudes para el mismo espacio
-          if (cita.id_inmueble && cita.id_servicio === 1) { // Solo para Visitas
+          if (cita.id_inmueble) {
             await Cita.update(
               {
                 id_estado_cita: 6, // Cancelada
-                motivo_cancelacion: 'Lo sentimos, este horario ya fue tomado por otro usuario',
+                motivo_cancelacion: 'Lo sentimos, este horario ya fue reservado por otro usuario',
                 fecha_cancelacion: new Date()
               },
               {
@@ -819,7 +1062,7 @@ class CitaService {
    */
   async actualizarEstadoCitaOptimizado(idCita, idEstadoCita) {
     return await sequelize.transaction(async (t) => {
-      logger.info(`🔄 Actualizando estado de cita ${idCita} a ${idEstadoCita} (optimizado)`);
+      logger.info(`?? Actualizando estado de cita ${idCita} a ${idEstadoCita} (optimizado)`);
 
       const cita = await Cita.findByPk(idCita, {
         attributes: ['id_cita', 'id_estado_cita'],
@@ -839,14 +1082,16 @@ class CitaService {
 
       await cita.update({
         id_estado_cita: idEstadoCita,
+        id_agente_asignado: Number(idEstadoCita) === 1 ? null : cita.id_agente_asignado,
         fecha_actualizacion: new Date()
       }, { transaction: t });
 
-      logger.info(`✅ Estado de cita ${idCita} actualizado a ${idEstadoCita} (optimizado)`);
+      logger.info(`? Estado de cita ${idCita} actualizado a ${idEstadoCita} (optimizado)`);
 
       return {
         id_cita: idCita,
         id_estado_cita: idEstadoCita,
+        id_agente_asignado: Number(idEstadoCita) === 1 ? null : cita.id_agente_asignado,
         fecha_actualizacion: new Date()
       };
     });
@@ -1211,7 +1456,7 @@ class CitaService {
           ? nuevosDatos.id_estado_cita
           : citaOriginal.id_estado_cita;
 
-        const agenteFinal = typeof nuevosDatos.id_agente_asignado !== 'undefined'
+        const agenteFinalBase = typeof nuevosDatos.id_agente_asignado !== 'undefined'
           ? nuevosDatos.id_agente_asignado
           : citaOriginal.id_agente_asignado;
 
@@ -1219,17 +1464,30 @@ class CitaService {
           ? nuevosDatos.motivo_reagendamiento
           : citaOriginal.motivo_reagendamiento;
 
+        const agenteFinal = Number(estadoFinal) === 1 ? null : agenteFinalBase;
+
         const rangoHorarioFinal = resolverRangoHorario({
           horaInicio: typeof nuevosDatos.hora_inicio !== 'undefined'
             ? nuevosDatos.hora_inicio
             : citaOriginal.hora_inicio,
           horaFin: typeof nuevosDatos.hora_fin !== 'undefined'
             ? nuevosDatos.hora_fin
-            : citaOriginal.hora_fin
+            : citaOriginal.hora_fin,
+          duracion: APPOINTMENT_DURATION_MINUTES
         });
 
         if (!rangoHorarioFinal.horaInicio || !rangoHorarioFinal.horaFin) {
           const horarioError = new Error('Horario de cita invalido. Verifique hora de inicio y hora de fin.');
+          horarioError.status = 400;
+          throw horarioError;
+        }
+
+        if (!cumpleHorarioLaboral({
+          fecha: fechaFinal,
+          horaInicio: rangoHorarioFinal.horaInicio,
+          horaFin: rangoHorarioFinal.horaFin,
+        })) {
+          const horarioError = new Error('La cita debe programarse de lunes a viernes, en horas en punto y durar exactamente una hora.');
           horarioError.status = 400;
           throw horarioError;
         }

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MapPin, Phone, Mail, Clock, Send } from "lucide-react"
 import { apiClient } from "@/shared/services/api.config"
 import { useToast } from "@/shared/hooks/use-toast"
+import { getBusinessHoursLines } from "@/shared/constants/appointmentSchedule"
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -20,6 +21,7 @@ export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState({})
   const { toast } = useToast()
+  const businessHours = getBusinessHoursLines()
 
   const validateForm = () => {
     const newErrors = {}
@@ -228,8 +230,10 @@ export default function ContactPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-lg mb-1">Horario de Atención</h3>
-                        <p className="text-gray-600">Lunes - Sábado: 8:00 am - 1:00 pm, 2:00 pm - 5:00 pm</p>
-                        <p className="text-gray-600">Domingos: Cerrado</p>
+                        {businessHours.map((line) => (
+                          <p key={line} className="text-gray-600">{line}</p>
+                        ))}
+                        <p className="text-gray-600">Sábados y domingos: Cerrado</p>
                       </div>
                     </CardContent>
                   </Card>

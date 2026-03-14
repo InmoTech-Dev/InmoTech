@@ -191,13 +191,19 @@ const DayListModal = ({
                                   a menos que onAccept o onReject manejen su propio cierre. 
                                   Pero siguiendo el flujo del usuario: */}
                               <button
-                                onClick={() => onAcceptAppointment && onAcceptAppointment(appointment)}
+                                onClick={() => {
+                                  onAcceptAppointment && onAcceptAppointment(appointment);
+                                  onClose();
+                                }}
                                 className="flex-1 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors"
                               >
                                 Aceptar
                               </button>
                               <button
-                                onClick={() => onRejectAppointment && onRejectAppointment(appointment)}
+                                onClick={() => {
+                                  onRejectAppointment && onRejectAppointment(appointment);
+                                  onClose();
+                                }}
                                 className="flex-1 px-3 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors"
                               >
                                 Cancelar
@@ -230,7 +236,10 @@ const DayListModal = ({
                               )}
                               {hasPermission("citas", "eliminar") && (
                                 <button
-                                  onClick={() => onDeleteAppointment(appointment)}
+                                  onClick={() => {
+                                    onDeleteAppointment(appointment);
+                                    onClose();
+                                  }}
                                   className="flex-1 px-3 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors"
                                 >
                                   Eliminar

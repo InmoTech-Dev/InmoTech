@@ -185,16 +185,16 @@ const UserStatusSelector = ({
         type="button"
         onClick={handleToggle}
         disabled={disabled || loading}
-        whileHover={!disabled && !loading ? { scale: 1.02 } : {}}
+        whileHover={!disabled && !loading ? { scale: 1.02, backgroundColor: 'rgba(0,0,0,0.02)' } : {}}
         whileTap={!disabled && !loading ? { scale: 0.98 } : {}}
         className={cn(
-          "relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 min-w-[150px] justify-between",
+          "relative flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-lg border text-[11px] lg:text-xs font-bold transition-all duration-300 w-full lg:min-w-[140px] justify-between",
           currentStatus.bgColor,
           currentStatus.borderColor,
           currentStatus.color,
-          !disabled && !loading && "cursor-pointer",
+          !disabled && !loading && "cursor-pointer hover:shadow-sm",
           disabled && "opacity-50 cursor-not-allowed",
-          isOpen && "ring-2 ring-blue-500 ring-opacity-50"
+          isOpen && "ring-2 ring-blue-500/20 border-blue-400 shadow-md"
         )}
       >
         {/* Loading State */}
@@ -223,17 +223,18 @@ const UserStatusSelector = ({
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="relative"
+                className="relative flex-shrink-0"
               >
-                <StatusIcon className="w-4 h-4" />
+                <StatusIcon className="w-3.5 h-3.5 lg:w-4 h-4" />
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.1, type: "spring", stiffness: 500, damping: 30 }}
-                  className={cn("absolute -top-1 -right-1 w-2 h-2 rounded-full", currentStatus.dotColor)}
+                  className={cn("absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full", currentStatus.dotColor)}
                 />
               </motion.div>
-              <span className="truncate">{currentStatus.label}</span>
+              <span className="truncate hidden sm:inline">{currentStatus.label}</span>
+              <span className="truncate sm:hidden">{currentStatus.label === 'Habilitado' ? 'Hab.' : 'Des.'}</span>
             </motion.div>
           )}
         </AnimatePresence>

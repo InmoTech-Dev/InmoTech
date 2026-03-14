@@ -10,6 +10,7 @@ import { useToast } from '../../../../shared/hooks/use-toast';
 
 const AgentAssignmentSection = ({
   cita,
+  allCitas = [],
   onAgentAssigned,
   className = "",
   compact = false,
@@ -26,6 +27,18 @@ const AgentAssignmentSection = ({
   const [loadingAgentes, setLoadingAgentes] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historial, setHistorial] = useState([]);
+
+  // âœ… DETECCIÃ“N DE CONFLICTO EN TIEMPO REAL
+  const appointmentDate = cita.fecha_cita || cita.fecha;
+  const appointmentTime = cita.hora_inicio || cita.hora;
+
+  const hasConflict = selectedAgent && allCitas.some(c =>
+    (c.id_agente_asignado === selectedAgent.id_persona) &&
+    (c.fecha_cita === appointmentDate || c.fecha === appointmentDate) &&
+    (c.hora_inicio === appointmentTime || c.hora === appointmentTime) &&
+    (c.id_estado_cita === 2 || c.id_estado_cita === 4) &&
+    (c.id !== cita.id)
+  );
 
 
   const agenteActual = cita.agente;
@@ -185,20 +198,20 @@ const AgentAssignmentSection = ({
 
  if (compact) {
   return (
-   <div className={`relative ${className}`}>
-    {agenteMostrado ? (
-     <div className="relative">
-      <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg pr-8">
-       <User className="w-5 h-5 text-blue-600 flex-shrink-0" />
-       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-blue-900 truncate">
-         {agenteMostrado.nombre_completo || agenteMostrado.apellido_completo || 'Agente asignado'}
-        </p>
-        <div className="flex items-center gap-2">
-         <p className="text-xs text-blue-600">Agente asignado</p>
-         {showHistory && historial.length > 1 && (
-          <button
-           onClick={handleShowHistory}
+   <div className={`relative w-full min-w-0 ${className}`}>
+     {agenteMostrado ? (
+      <div className="relative min-w-0">
+       <div className="flex min-w-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5 pr-8 sm:gap-3 sm:p-3">
+        <User className="h-4 w-4 flex-shrink-0 text-blue-600 sm:h-5 sm:w-5" />
+        <div className="flex-1 min-w-0">
+         <p className="truncate text-sm font-medium text-blue-900">
+          {agenteMostrado.nombre_completo || agenteMostrado.apellido_completo || 'Agente asignado'}
+         </p>
+         <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-[11px] text-blue-600 sm:text-xs">Agente asignado</p>
+          {showHistory && historial.length > 1 && (
+           <button
+            onClick={handleShowHistory}
            className="text-blue-600 hover:bg-blue-100 rounded p-0.5 transition-colors"
            title="Ver historial de asignaciones"
           >
@@ -207,27 +220,27 @@ const AgentAssignmentSection = ({
          )}
         </div>
        </div>
-      </div>
-      {showEdit && hasPermission("citas", "editar") && (
-       <button
-        onClick={() => setIsEditing(true)}
-        className="absolute -top-1 -right-1 p-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md"
-        title="Reasignar agente"
-       >
-        <Edit3 className="w-3 h-3" />
+       </div>
+       {showEdit && hasPermission("citas", "editar") && (
+        <button
+         onClick={() => setIsEditing(true)}
+         className="absolute -top-1 -right-1 rounded-full bg-blue-600 p-1.5 text-white shadow-md transition-colors hover:bg-blue-700"
+         title="Reasignar agente"
+        >
+         <Edit3 className="w-3 h-3" />
        </button>
       )}
      </div>
     ) : (
-     <div className="relative">
-      <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg pr-8">
-       <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-amber-900">Sin agente asignado</p>
-        <p className="text-xs text-amber-600 truncate">Asigna un agente para continuar</p>
+      <div className="relative min-w-0">
+       <div className="flex min-w-0 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 pr-8 sm:gap-3 sm:p-3">
+        <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600 sm:h-5 sm:w-5" />
+        <div className="flex-1 min-w-0">
+         <p className="text-sm font-medium text-amber-900">Sin agente asignado</p>
+         <p className="truncate text-[11px] text-amber-600 sm:text-xs">Asigna un agente para continuar</p>
+        </div>
        </div>
-      </div>
-          {showEdit && hasPermission("citas", "editar") && cita.estado !== 'solicitada' && (
+           {showEdit && hasPermission("citas", "editar") && cita.estado !== 'solicitada' && (
             <button
               onClick={() => setIsEditing(true)}
               className="absolute -top-1 -right-1 p-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 transition-colors shadow-md"
@@ -369,10 +382,19 @@ const AgentAssignmentSection = ({
           </div>
 
 
+          {hasConflict && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 animate-pulse">
+              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700 font-medium">
+                Este agente ya tiene una cita Confirmada o Reagendada en este mismo horario.
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 pt-4">
             <button
               onClick={handleAsignarAgente}
-              disabled={loading || !selectedAgent || (agenteMostrado && !comentario.trim())}
+              disabled={loading || !selectedAgent || (agenteMostrado && !comentario.trim()) || hasConflict}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             >
               {loading ? (

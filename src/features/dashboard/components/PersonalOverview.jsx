@@ -26,7 +26,7 @@ const PersonalOverview = ({ personal, quickActions }) => {
           value={personal?.pendientesUsuario ?? 0}
           tone="warning"
           hint="Citas por gestionar"
-        />AC
+        />
         <KpiCard
           label="No leidas"
           value={personal?.notificacionesNoLeidas ?? 0}

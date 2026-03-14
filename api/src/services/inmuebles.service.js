@@ -10,6 +10,10 @@ const {
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
+const {
+  buildDailySlots,
+  isBusinessDay,
+} = require('../constants/appointmentSchedule');
 
 const VALID_ORDER_COLUMNS = [
   'id_inmueble',
@@ -485,6 +489,14 @@ class InmueblesService {
    */
   async obtenerDisponibilidad(inmuebleId, fecha) {
     try {
+      if (!isBusinessDay(fecha)) {
+        return {
+          inmueble: null,
+          fecha,
+          horarios_disponibles: []
+        };
+      }
+
       // Verificar que el inmueble existe
       const inmueble = await this.obtenerPorId(inmuebleId);
 
@@ -505,35 +517,22 @@ class InmueblesService {
         ]
       });
 
-      // Horarios de trabajo (ejemplo: 8:00 - 18:00)
-      const horaInicio = 8;
-      const horaFin = 18;
-      const intervalo = 30; // minutos
+      const horariosDisponibles = buildDailySlots()
+        .map((slot) => ({
+          hora_inicio: `${slot.hora_inicio}:00`,
+          hora_fin: `${slot.hora_fin}:00`,
+        }))
+        .filter((slot) => {
+          const conflicto = citasDelDia.some((cita) => (
+            slot.hora_inicio < cita.hora_fin && slot.hora_fin > cita.hora_inicio
+          ));
 
-      const horariosDisponibles = [];
-      let horaActual = horaInicio;
-
-      while (horaActual < horaFin) {
-        const horaInicioSlot = `${horaActual.toString().padStart(2, '0')}:00:00`;
-        const horaFinSlot = `${(horaActual + intervalo / 60).toString().padStart(2, '0')}:00:00`;
-
-        // Verificar si hay conflicto con citas existentes
-        const conflicto = citasDelDia.some(cita => {
-          const citaInicio = cita.hora_inicio;
-          const citaFin = cita.hora_fin;
-          return (horaInicioSlot < citaFin && horaFinSlot > citaInicio);
-        });
-
-        if (!conflicto) {
-          horariosDisponibles.push({
-            hora_inicio: horaInicioSlot,
-            hora_fin: horaFinSlot,
-            disponible: true
-          });
-        }
-
-        horaActual += intervalo / 60;
-      }
+          return !conflicto;
+        })
+        .map((slot) => ({
+          ...slot,
+          disponible: true
+        }));
 
       return {
         inmueble: {

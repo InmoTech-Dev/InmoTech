@@ -19,6 +19,12 @@ import { useToast } from '../../../shared/hooks/use-toast';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import citaApiService from '../../../shared/services/citaApiService';
 import { formatTimeTo12Hour, formatTimeTo24Hour } from '../../../shared/utils/time';
+import {
+  calculateEndTime,
+  formatScheduleTimeLabel,
+  isBusinessDay,
+  VALID_START_TIMES,
+} from '../../../shared/constants/appointmentSchedule';
 
 const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm }) => {
   const [formData, setFormData] = useState({
@@ -42,11 +48,7 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
 
   const daysOfWeek = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
-  const availableHours = [
-    "08:00 am", "08:30 am", "09:00 am", "09:30 am", "10:00 am", "10:30 am",
-    "11:00 am", "11:30 am", "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm",
-    "03:00 pm", "03:30 pm", "04:00 pm", "04:30 pm"
-  ];
+  const availableHours = VALID_START_TIMES.map(formatScheduleTimeLabel);
 
   // Cargar hora actual y datos iniciales
   useEffect(() => {
@@ -152,21 +154,14 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
     return formatTimeTo12Hour(timeString) || timeString;
   };
 
-  // ✅ Función para calcular hora_fin (30 minutos después)
+  // ✅ Función para calcular hora_fin con duración de una hora
   const calcularHoraFin = (horaInicio) => {
     if (!horaInicio) return "";
     const [horaStr, minutosStr] = horaInicio.split(':');
     let hora = parseInt(horaStr, 10);
     let minutos = parseInt(minutosStr, 10);
 
-    minutos += 30;
-
-    if (minutos >= 60) {
-      hora += Math.floor(minutos / 60);
-      minutos = 0;
-    }
-
-    return `${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+    return calculateEndTime(`${hora.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`);
   };
 
   // ✅ Extraer datos de objetos anidados con fallback usando datos del usuario autenticado
@@ -244,7 +239,7 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
       // ✅ BLOQUEAR: Solo permitir la fecha que fue arrastrada para reagendamiento
       const dateString = date.toISOString().split('T')[0];
       const isTargetDate = dateString === newDate;
-      const isDisabled = date < today || !isTargetDate;
+      const isDisabled = date < today || !isTargetDate || !isBusinessDay(date);
 
       days.push({
         date,

@@ -17,6 +17,8 @@ import { useAppointments } from '../../../../shared/contexts/AppointmentContext'
 import citaApiService from '../../../../shared/services/citaApiService';
 import { useAuth } from '../../../../shared/contexts/AuthContext';
 
+const ACTIVE_APPOINTMENT_STATUSES = ['solicitada', 'programada', 'confirmada', 're agendada'];
+
 const CitasPage = () => {
   const TABLE_HEADER_ESTIMATED_HEIGHT = 58;
   const TABLE_ROW_ESTIMATED_HEIGHT = 138;
@@ -27,7 +29,7 @@ const CitasPage = () => {
   const { user, hasPermission, hasRole } = useAuth(); // Obtener usuario logueado y funciones de permisos
   const [filteredCitas, setFilteredCitas] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('Todos los estados');
+  const [statusFilter, setStatusFilter] = useState('Activas');
   const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today'
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(3);
@@ -56,6 +58,20 @@ const CitasPage = () => {
   const appointmentsArray = Array.isArray(appointments) ? appointments : [];
   const pendingAppointments = appointmentsArray.filter(cita => cita.estado === 'solicitada');
 
+  const getCreationTimestamp = (cita) => {
+    const creationValue =
+      cita?.fecha_creacion ||
+      cita?.fechaCreacion ||
+      cita?.created_at ||
+      cita?.createdAt ||
+      null;
+
+    if (!creationValue) return 0;
+
+    const parsed = new Date(creationValue).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
   // Filtrar citas
   useEffect(() => {
     let filtered = Array.isArray(appointments) ? appointments : [];
@@ -77,14 +93,25 @@ const CitasPage = () => {
       });
     }
 
-    if (statusFilter !== 'Todos los estados') {
-      filtered = filtered.filter(cita => cita.estado === statusFilter);
+    if (statusFilter === 'Activas') {
+      filtered = filtered.filter(cita =>
+        ACTIVE_APPOINTMENT_STATUSES.includes(String(cita.estado || '').toLowerCase())
+      );
+    } else if (statusFilter !== 'Todos los estados') {
+      filtered = filtered.filter(cita => String(cita.estado || '').toLowerCase() === statusFilter);
     }
 
     if (dateFilter === 'today') {
       const today = new Date().toISOString().split('T')[0];
-      filtered = filtered.filter(cita => cita.fecha === today);
+      filtered = filtered.filter(cita => (cita.fecha_cita || cita.fecha) === today);
     }
+
+    filtered = [...filtered].sort((a, b) => {
+      const creationDiff = getCreationTimestamp(b) - getCreationTimestamp(a);
+      if (creationDiff !== 0) return creationDiff;
+
+      return (Number(b?.id || b?.id_cita || 0) - Number(a?.id || a?.id_cita || 0));
+    });
 
     setFilteredCitas(filtered);
     setCurrentPage(1);
@@ -169,7 +196,7 @@ const CitasPage = () => {
   // Función para filtrar por citas de hoy
   const handleFilterToday = () => {
     setDateFilter(dateFilter === 'today' ? 'all' : 'today');
-    setStatusFilter('Todos los estados'); // Reset status filter when filtering by date
+    setStatusFilter('Activas');
     setSearchTerm(''); // Reset search when filtering by date
   };
 
@@ -553,7 +580,12 @@ const CitasPage = () => {
   };
 
   return (
-    <div ref={pageContainerRef} className="flex h-[calc(100vh-200px)] overflow-hidden">
+    <div
+      ref={pageContainerRef}
+      className={`flex min-h-[calc(100vh-200px)] overflow-hidden ${
+        viewMode === 'table' ? 'h-auto xl:h-[calc(100vh-200px)]' : 'h-[calc(100vh-200px)]'
+      }`}
+    >
       {/* Main Content Area - No Scroll */}
       <div className={`flex-1 min-h-0 flex flex-col space-y-2 overflow-hidden ${isSidebarCollapsed ? 'pr-0' : 'pr-4'}`}>
         <div ref={controlsContainerRef} className="flex-shrink-0 space-y-2">
@@ -635,13 +667,14 @@ const CitasPage = () => {
               {/* Status Filter */}
               <div className="w-[180px]">
                 <Select
-                  value={statusFilter === 'solicitada' ? 'Todos los estados' : statusFilter}
+                  value={statusFilter}
                   onValueChange={(value) => setStatusFilter(value)}
                 >
                   <SelectTrigger className="w-full bg-white border-slate-200">
                     <SelectValue placeholder="Estado" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="Activas">Activas</SelectItem>
                     <SelectItem value="Todos los estados">Todos los estados</SelectItem>
                     <SelectItem value="programada">Programadas</SelectItem>
                     <SelectItem value="confirmada">Confirmadas</SelectItem>
@@ -668,14 +701,14 @@ const CitasPage = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setStatusFilter(statusFilter === 'solicitada' ? 'Todos los estados' : 'solicitada')}
+                onClick={() => setStatusFilter(statusFilter === 'solicitada' ? 'Activas' : 'solicitada')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${statusFilter === 'solicitada'
                   ? 'bg-indigo-600 text-white shadow-lg'
                   : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-indigo-300'
                   }`}
               >
                 <Eye className="w-4 h-4" />
-                {statusFilter === 'solicitada' ? 'Ocultar Solicitadas' : 'Ver Solicitadas'}
+                {statusFilter === 'solicitada' ? 'Volver a Activas' : 'Ver Solicitadas'}
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.05 }}

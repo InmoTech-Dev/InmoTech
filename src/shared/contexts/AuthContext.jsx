@@ -67,7 +67,7 @@ export const AuthProvider = ({ children }) => {
     sseService.disconnect();
   }, []);
 
-  const saveUserToStorage = useCallback((userData, rememberMe = false) => {
+  const saveUserToStorage = useCallback((userData, rememberMe = true) => {
     try {
       const userDataString = JSON.stringify(userData);
       localStorage.removeItem(USER_KEY);
@@ -119,7 +119,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [clearAuthData, saveUserToStorage]);
 
-  const login = async (email, password, rememberMe = false) => {
+  const login = async (email, password, rememberMe = true) => {
     try {
       setLoading(true);
       setError(null);

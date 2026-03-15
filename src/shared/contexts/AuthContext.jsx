@@ -368,14 +368,33 @@ export const AuthProvider = ({ children }) => {
       reloadProfile();
     };
 
+    const handleForcedLogout = (data) => {
+      console.warn('🚨 SSE: Sesión revocada forzosamente por el sistema:', data.reason);
+      // Limpiar datos y redirigir (clearAuthData ya hace sseService.disconnect)
+      clearAuthData();
+      
+      // Mostrar alerta al usuario
+      import('../../shared/hooks/use-toast').then(({ toast }) => {
+        toast({
+          title: "Sesión Finalizada",
+          description: data.message || "Tu sesión ha sido cerrada por un administrador o por cambios en tus permisos.",
+          variant: "destructive"
+        });
+      });
+    };
+
     const unsubUser = sseService.on('user.changed', handleUserChanged);
     const unsubRole = sseService.on('role.changed', handleRoleChanged);
+    const unsubLogout = sseService.on('session.force_logout', handleForcedLogout);
+    const unsubDisabled = sseService.on('user_disabled', handleForcedLogout);
 
     return () => {
       unsubUser();
       unsubRole();
+      unsubLogout();
+      unsubDisabled();
     };
-  }, [isAuthenticated, user, reloadProfile]);
+  }, [isAuthenticated, user, reloadProfile, clearAuthData]);
 
   useEffect(() => {
     loadAuthFromStorage();

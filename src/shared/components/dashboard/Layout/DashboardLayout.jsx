@@ -93,16 +93,16 @@ const DashboardLayout = ({ children }) => {
       <motion.div
         variants={contentVariants}
         animate={isCollapsed ? 'collapsed' : 'expanded'}
-        className="relative z-10"
+        className="relative z-10 min-w-0"
       >
         <Header />
 
-        <main className="p-4 md:p-6">
+        <main className="min-w-0 p-4 md:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="bg-white/60 backdrop-blur-sm border border-slate-200/60 rounded-2xl shadow-xl shadow-slate-200/20 p-4 md:p-8 min-h-[calc(100vh-6rem)] md:min-h-[calc(100vh-8rem)]"
+            className="min-w-0 bg-white/60 backdrop-blur-sm border border-slate-200/60 rounded-2xl shadow-xl shadow-slate-200/20 p-4 md:p-8 min-h-[calc(100vh-6rem)] md:min-h-[calc(100vh-8rem)]"
           >
             {children}
           </motion.div>

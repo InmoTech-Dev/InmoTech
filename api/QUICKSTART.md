@@ -3,7 +3,6 @@
 ## 1. Instalación (5 minutos)
 
 ### Paso 1: Instalar Dependencias
-
 ```bash
 cd api
 npm install
@@ -14,7 +13,6 @@ npm install
 Asegúrate de tener SQL Server instalado y ejecutándose.
 
 #### Opción A: SQL Server Local
-
 ```bash
 # Windows: SQL Server ya debe estar instalado
 # Linux/Mac: Usar Docker
@@ -52,7 +50,6 @@ npm start
 ```
 
 Deberías ver:
-
 ```
 =================================================
 🚀 Servidor corriendo en puerto 5000
@@ -66,13 +63,11 @@ Deberías ver:
 ## 2. Prueba Rápida (2 minutos)
 
 ### Health Check
-
 ```bash
 curl http://localhost:5000/api/v1/health
 ```
 
 Respuesta esperada:
-
 ```json
 {
   "success": true,
@@ -83,7 +78,6 @@ Respuesta esperada:
 ```
 
 ### Crear Primera Cita
-
 ```bash
 curl -X POST http://localhost:5000/api/v1/citas \
   -H "Content-Type: application/json" \
@@ -103,7 +97,6 @@ curl -X POST http://localhost:5000/api/v1/citas \
 ```
 
 ### Obtener Todas las Citas
-
 ```bash
 curl http://localhost:5000/api/v1/citas
 ```
@@ -123,30 +116,30 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 
 ```javascript
 // Configuración base
-const API_URL = "http://localhost:5000/api/v1";
+const API_URL = 'http://localhost:5000/api/v1';
 
 // Crear cita
 const crearCita = async (datosFormulario) => {
   try {
     const response = await fetch(`${API_URL}/citas`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(datosFormulario),
+      body: JSON.stringify(datosFormulario)
     });
 
     const data = await response.json();
 
     if (data.success) {
-      console.log("Cita creada:", data.data);
+      console.log('Cita creada:', data.data);
       return data.data;
     } else {
-      console.error("Error:", data.message);
+      console.error('Error:', data.message);
       throw new Error(data.message);
     }
   } catch (error) {
-    console.error("Error al crear cita:", error);
+    console.error('Error al crear cita:', error);
     throw error;
   }
 };
@@ -155,7 +148,7 @@ const crearCita = async (datosFormulario) => {
 const buscarPersona = async (tipoDocumento, numeroDocumento) => {
   try {
     const response = await fetch(
-      `${API_URL}/citas/buscar-persona?tipo_documento=${tipoDocumento}&numero_documento=${numeroDocumento}`,
+      `${API_URL}/citas/buscar-persona?tipo_documento=${tipoDocumento}&numero_documento=${numeroDocumento}`
     );
 
     const data = await response.json();
@@ -166,7 +159,7 @@ const buscarPersona = async (tipoDocumento, numeroDocumento) => {
       return null;
     }
   } catch (error) {
-    console.error("Error al buscar persona:", error);
+    console.error('Error al buscar persona:', error);
     return null;
   }
 };
@@ -178,7 +171,7 @@ const obtenerNotificaciones = async (idRol) => {
     const data = await response.json();
     return data.data;
   } catch (error) {
-    console.error("Error al obtener notificaciones:", error);
+    console.error('Error al obtener notificaciones:', error);
     return [];
   }
 };
@@ -191,24 +184,24 @@ const obtenerNotificaciones = async (idRol) => {
 ```javascript
 // 1. Usuario llena formulario
 const formulario = {
-  tipo_documento: "CC",
-  numero_documento: "1234567890",
-  primer_nombre: "Juan",
-  primer_apellido: "Pérez",
-  correo: "juan@example.com",
-  telefono: "+57 300 123 4567",
+  tipo_documento: 'CC',
+  numero_documento: '1234567890',
+  primer_nombre: 'Juan',
+  primer_apellido: 'Pérez',
+  correo: 'juan@example.com',
+  telefono: '+57 300 123 4567',
   id_inmueble: 1,
   id_servicio: 1,
-  fecha_cita: "2025-10-25",
-  hora_inicio: "10:00",
-  hora_fin: "11:00",
+  fecha_cita: '2025-10-25',
+  hora_inicio: '10:00',
+  hora_fin: '11:00'
 };
 
 // 2. Enviar a API
 const cita = await crearCita(formulario);
 // Estado de la cita: "Solicitada"
 
-console.log("Cita creada con ID:", cita.id_cita);
+console.log('Cita creada con ID:', cita.id_cita);
 ```
 
 ### Agente confirma cita:
@@ -220,9 +213,9 @@ const notificaciones = await obtenerNotificaciones(2); // 2 = Rol Agente
 // 2. Confirmar cita
 const confirmarCita = async (idCita, idAgente) => {
   const response = await fetch(`${API_URL}/citas/${idCita}/confirmar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id_agente_asignado: idAgente }),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_agente_asignado: idAgente })
   });
   return await response.json();
 };
@@ -244,11 +237,11 @@ const handleDocumentoChange = async (tipo, numero) => {
       setFormulario({
         ...formulario,
         primer_nombre: persona.primer_nombre,
-        segundo_nombre: persona.segundo_nombre || "",
+        segundo_nombre: persona.segundo_nombre || '',
         primer_apellido: persona.primer_apellido,
-        segundo_apellido: persona.segundo_apellido || "",
+        segundo_apellido: persona.segundo_apellido || '',
         correo: persona.correo,
-        telefono: persona.telefono,
+        telefono: persona.telefono
       });
     }
   }
@@ -260,7 +253,6 @@ const handleDocumentoChange = async (tipo, numero) => {
 ### Error: "Cannot connect to SQL Server"
 
 **Solución**:
-
 1. Verifica que SQL Server esté ejecutándose
 2. Confirma las credenciales en `.env`
 3. Verifica que el puerto 1433 esté abierto
@@ -269,14 +261,12 @@ const handleDocumentoChange = async (tipo, numero) => {
 ### Error: "Database does not exist"
 
 **Solución**:
-
 1. Ejecuta el script de base de datos
 2. Verifica el nombre de la base de datos en `.env`
 
 ### Error: "Rate limit exceeded"
 
 **Solución**:
-
 1. Espera el tiempo indicado
 2. Ajusta los límites en `.env`:
    ```env
@@ -286,7 +276,6 @@ const handleDocumentoChange = async (tipo, numero) => {
 ### Error: "CORS policy"
 
 **Solución**:
-
 1. Agrega tu dominio a `ALLOWED_ORIGINS` en `.env`
 2. Reinicia el servidor
 
@@ -343,18 +332,3 @@ Para reportar problemas o solicitar ayuda, contacta al equipo de desarrollo de I
 ---
 
 **¡Listo!** Tu API está funcionando y lista para integrarse con el frontend de Inmotech. 🚀
-
-{
-"setupKey": "tu_clave_secreta_para_setup_aqui",
-"adminData": {
-"nombre_completo": "Pablo Isaac",
-"apellido_completo": "Ruiz Delgado",
-"numero_documento": "1023631759",
-"email": "superadmin@inmotech.com",
-"telefono": "+573022693115",
-"password": "Admin123#",
-"codigo_empleado": "SUPER_ADMINISTRADOR",
-"fecha_ingreso": "2026-03-14",
-"tipo_documento": "CC"
-}
-}

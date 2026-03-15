@@ -1,4 +1,4 @@
-/*  */import React, { useMemo, useState } from "react";
+/*  */import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import {
   X,
@@ -36,7 +36,9 @@ export default function LeaseStatusModal({
 }) {
   if (!statusRent) return null;
 
-  const [activePage, setActivePage] = useState("tracking");
+  const isFinalizedLease = statusRent.estado === "Finalizado";
+
+  const [activePage, setActivePage] = useState(isFinalizedLease ? "payments" : "tracking");
   const [paymentsTab, setPaymentsTab] = useState("current");
   const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
   const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
@@ -71,6 +73,19 @@ export default function LeaseStatusModal({
       paidPayments,
     };
   }, [payments]);
+
+  const hasPendingPayments = useMemo(
+    () => payments.some((payment) => payment?.estado !== "Pagado" && !payment?.comprobante),
+    [payments]
+  );
+
+  const canFinalizeLease = !hasPendingPayments;
+
+  useEffect(() => {
+    if (isFinalizedLease) {
+      setActivePage("payments");
+    }
+  }, [isFinalizedLease]);
 
   const existingReceipts = useMemo(
     () =>
@@ -229,7 +244,7 @@ export default function LeaseStatusModal({
                 onChange={handleChange}
                 readOnly={hasReceipt}
                 className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-                placeholder="No. de transaccion"
+                placeholder="No. documento"
               />
             </div>
             <div className="flex flex-col">
@@ -237,9 +252,8 @@ export default function LeaseStatusModal({
               <input
                 name="monto_pagado"
                 value={form.monto_pagado}
-                onChange={handleChange}
-                readOnly={hasReceipt}
-                className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                readOnly
+                className="mt-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
                 placeholder="Ej: 1500000"
               />
             </div>
@@ -342,17 +356,19 @@ export default function LeaseStatusModal({
 
           <div className="px-4 sm:px-5 pb-2.5">
             <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-              <button
-                type="button"
-                onClick={() => setActivePage("tracking")}
-                className={`px-3 py-2 text-sm rounded-lg transition ${
-                  activePage === "tracking"
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Seguimiento
-              </button>
+              {!isFinalizedLease && (
+                <button
+                  type="button"
+                  onClick={() => setActivePage("tracking")}
+                  className={`px-3 py-2 text-sm rounded-lg transition ${
+                    activePage === "tracking"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Seguimiento
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setActivePage("payments")}
@@ -369,7 +385,7 @@ export default function LeaseStatusModal({
         </div>
 
         <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-3 space-y-3">
-          {activePage === "tracking" && (
+          {activePage === "tracking" && !isFinalizedLease && (
             <>
               <section className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">Resumen</h3>
@@ -409,11 +425,20 @@ export default function LeaseStatusModal({
                       onChange={(e) => onChangeEstado(e.target.value)}
                     >
                       {estados.map((estado) => (
-                        <option key={estado} value={estado}>
+                        <option
+                          key={estado}
+                          value={estado}
+                          disabled={estado === "Finalizado" && !canFinalizeLease}
+                        >
                           {estado}
                         </option>
                       ))}
                     </select>
+                    {!canFinalizeLease && (
+                      <p className="mt-1 text-xs text-red-500">
+                        Solo puedes cambiar a Finalizado cuando todos los pagos esten realizados.
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -515,13 +540,26 @@ export default function LeaseStatusModal({
           >
             Cancelar
           </button>
-          <button
-            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm transition text-sm"
-            onClick={onSave}
-            type="button"
-          >
-            Guardar
-          </button>
+          {!isFinalizedLease && (
+            <button
+              className={`px-5 py-2 rounded-xl text-white font-semibold shadow-sm transition text-sm ${
+                statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease
+                  ? "bg-blue-300 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
+              onClick={onSave}
+              disabled={statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease}
+              title={
+                statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease
+                  ? "Debes completar todos los pagos antes de finalizar el arriendo."
+                  : undefined
+              }
+              aria-disabled={statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease}
+              type="button"
+            >
+              Guardar
+            </button>
+          )}
         </div>
       </div>
     </div>

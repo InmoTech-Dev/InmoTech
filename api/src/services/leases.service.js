@@ -13,6 +13,95 @@ const logger = require('../utils/logger');
 const { buildPaginationMeta } = require('../utils/pagination');
 
 class LeaseService {
+  getFixedChargeDay() {
+    return 5;
+  }
+
+  normalizeFilterValue(value) {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  normalizeLeaseStatusFilter(value) {
+    const normalized = this.normalizeFilterValue(value);
+    const map = {
+      activo: 'Activo',
+      'al dia': 'Al día',
+      pendiente: 'Pendiente',
+      debe: 'Debe',
+      finalizado: 'Finalizado'
+    };
+
+    return map[normalized] || value;
+  }
+
+  normalizePropertyTypeFilter(value) {
+    const normalized = this.normalizeFilterValue(value);
+    const map = {
+      casa: 'Casa',
+      apartamento: 'Apartamento',
+      apartaestudio: 'Apartaestudio',
+      oficina: 'Oficina',
+      finca: 'Finca',
+      lote: 'Lote',
+      local: 'Local',
+      bodega: 'Bodega'
+    };
+
+    return map[normalized] || value;
+  }
+
+  normalizeStatus(value) {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  addUtcMonths(date, months) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+    const result = new Date(date.getTime());
+    result.setUTCMonth(result.getUTCMonth() + months);
+    return result;
+  }
+
+  isDateBefore(dateA, dateB) {
+    if (!(dateA instanceof Date) || !(dateB instanceof Date)) return false;
+    return dateA.getTime() < dateB.getTime();
+  }
+
+  ensureMinimumLeaseTerm(startDateInput, endDateInput) {
+    const startDate = this.parseDateFlexible(startDateInput);
+    const endDate = this.parseDateFlexible(endDateInput);
+
+    if (!startDate || !endDate) {
+      const error = new Error('Las fechas del arrendamiento no son válidas.');
+      error.status = 400;
+      throw error;
+    }
+
+    const minimumEndDate = this.addUtcMonths(startDate, 1);
+    if (!minimumEndDate || endDate < minimumEndDate) {
+      const error = new Error('La duración mínima del contrato de arriendo es de un mes.');
+      error.status = 400;
+      throw error;
+    }
+
+    return { startDate, endDate, minimumEndDate };
+  }
+
+  isInactiveRenant(renant) {
+    if (!renant) return true;
+
+    const renantStatus = this.normalizeStatus(renant.estado);
+    if (renantStatus === 'inactivo') return true;
+
+    const personaStatus = renant.persona?.estado;
+    if (personaStatus === false || personaStatus === 0) return true;
+
+    return false;
+  }
+
   getAutomaticTrackingComments() {
     return [
       'Cobros vencidos o exigibles sin pagar',
@@ -27,6 +116,20 @@ class LeaseService {
       order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
       transaction
     });
+  }
+
+  async hasPendingPayments(leaseId, transaction = null) {
+    const pendingCount = await Payment.count({
+      where: {
+        id_arrendamiento: leaseId,
+        estado: {
+          [Op.ne]: 'Pagado'
+        }
+      },
+      transaction
+    });
+
+    return pendingCount > 0;
   }
 
   async getLatestManualTrackingEntry(leaseId, transaction = null) {
@@ -65,76 +168,113 @@ class LeaseService {
     };
   }
 
+  parsePreNoticeDecisionTracking(comment = '') {
+    const text = String(comment || '');
+    if (!text.toLowerCase().includes('decision:')) {
+      return null;
+    }
+
+    const decisionMatch = text.match(/Decision:\s*(Aceptado|Rechazado)/i);
+    const observationMatch = text.match(/Observacion(?: decision)?:\s*(.*)$/i);
+
+    return {
+      decision: decisionMatch?.[1]
+        ? `${decisionMatch[1].charAt(0).toUpperCase()}${decisionMatch[1].slice(1).toLowerCase()}`
+        : null,
+      observacion_decision: observationMatch?.[1]?.trim() || ''
+    };
+  }
+
+  parseExtensionTracking(comment = '') {
+    const text = String(comment || '');
+    const normalized = this.normalizeFilterValue(text);
+    if (!normalized.includes('prorroga aplicada')) {
+      return null;
+    }
+
+    const fromMatch = text.match(/desde\s*(\d{4}-\d{2}-\d{2})/i);
+    const toMatch = text.match(/hasta\s*(\d{4}-\d{2}-\d{2})/i);
+    if (!fromMatch || !toMatch) {
+      return null;
+    }
+
+    const startDate = this.parseDateOnly(fromMatch[1]);
+    const endDate = this.parseDateOnly(toMatch[1]);
+    if (!startDate || !endDate || endDate <= startDate) {
+      return null;
+    }
+
+    return {
+      startDate,
+      endDate,
+      months: Math.max(this.diffMonths(startDate, endDate), 1)
+    };
+  }
+
   isPreNoticeDeletedTracking(comment = '') {
     return String(comment || '')
       .toLowerCase()
       .includes('preaviso eliminado del arrendamiento');
   }
 
-  async getLatestPreNoticeEntry(leaseId, transaction = null) {
+  async getPreNoticeHistory(leaseId, transaction = null) {
     const rows = await SeguimientoArrendamiento.findAll({
       where: {
         id_arrendamiento: leaseId
       },
-      order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
-      limit: 20,
+      order: [['fecha_creacion', 'ASC'], ['id_seguimiento', 'ASC']],
+      limit: 100,
       transaction
     });
 
-    let latestObservation = null;
-    let latestSupport = null;
+    const history = [];
 
     for (const row of rows) {
       if (this.isPreNoticeDeletedTracking(row?.comentario)) {
-        if (!latestObservation && !latestSupport) {
-          return null;
-        }
-        break;
+        continue;
       }
 
       const parsed = this.parsePreNoticeTracking(row?.comentario);
+      const parsedDecision = this.parsePreNoticeDecisionTracking(row?.comentario);
       if (parsed) {
-        if (!latestObservation && parsed.observacion) {
-          latestObservation = {
-            observacion: parsed.observacion,
-            fecha_creacion: row.fecha_creacion
-          };
+        const entryDate = row.fecha_creacion;
+        const entryDateKey = entryDate ? this.formatDateOnly(entryDate) : '';
+        const lastEntry = history[history.length - 1];
+        const isDuplicateOfLastEntry =
+          Boolean(lastEntry) &&
+          String(lastEntry.observacion || '').trim() === String(parsed.observacion || '').trim() &&
+          String(lastEntry.url_soporte || '').trim() === String(parsed.url_soporte || '').trim() &&
+          String(lastEntry.fecha_creacion ? this.formatDateOnly(lastEntry.fecha_creacion) : '').trim() === entryDateKey;
+
+        if (isDuplicateOfLastEntry) {
+          continue;
         }
 
-        if (!latestSupport && parsed.url_soporte) {
-          latestSupport = {
-            url_soporte: parsed.url_soporte,
-            fecha_creacion: row.fecha_creacion
-          };
-        }
-
-        if (latestObservation && latestSupport) {
-          return {
-            observacion: latestObservation.observacion,
-            url_soporte: latestSupport.url_soporte,
-            fecha_creacion: latestObservation.fecha_creacion || latestSupport.fecha_creacion,
-            fecha_soporte: latestSupport.fecha_creacion
-          };
-        }
+        history.push({
+          observacion: parsed.observacion || '',
+          url_soporte: parsed.url_soporte || '',
+          fecha_creacion: entryDate,
+          decision: parsedDecision?.decision || null,
+          observacion_decision: parsedDecision?.observacion_decision || '',
+          fecha_decision: parsedDecision?.decision ? row.fecha_creacion : null
+        });
+        continue;
       }
+
     }
 
-    if (!latestObservation && !latestSupport) {
-      return null;
-    }
+    return history.filter((item) => Boolean(item.decision)).reverse();
+  }
 
-    return {
-      observacion: latestObservation?.observacion || '',
-      url_soporte: latestSupport?.url_soporte || '',
-      fecha_creacion: latestObservation?.fecha_creacion || latestSupport?.fecha_creacion || null,
-      fecha_soporte: latestSupport?.fecha_creacion || null
-    };
+  async getLatestPreNoticeEntry(leaseId, transaction = null) {
+    const history = await this.getPreNoticeHistory(leaseId, transaction);
+    return history[0] || null;
   }
 
   async resolveStateAfterPaymentsAreUpToDate(lease, transaction = null) {
     if (!lease) return 'Al día';
 
-    if (['Finalizado', 'Cancelado'].includes(lease.estado)) {
+    if (['Finalizado'].includes(lease.estado)) {
       return lease.estado;
     }
 
@@ -158,7 +298,7 @@ class LeaseService {
     const currentLease = lease || await this.getLeaseById(leaseId, transaction);
     if (!currentLease) return null;
 
-    if (['Finalizado', 'Cancelado'].includes(currentLease.estado)) {
+    if (['Finalizado'].includes(currentLease.estado)) {
       return currentLease.estado;
     }
 
@@ -203,7 +343,7 @@ class LeaseService {
     const lease = await this.getLeaseById(leaseId, transaction);
     if (!lease) return null;
 
-    if (['Finalizado', 'Cancelado'].includes(lease.estado)) {
+    if (['Finalizado'].includes(lease.estado)) {
       return lease.estado;
     }
 
@@ -288,7 +428,15 @@ class LeaseService {
 
   async resolveCodeudor(codeudorPayload, transaction) {
     if (!codeudorPayload) return null;
-    const { tipo_documento, numero_documento, nombre_completo, apellido_completo, correo, telefono } = codeudorPayload;
+    const {
+      tipo_documento,
+      numero_documento,
+      nombre_completo,
+      apellido_completo,
+      correo,
+      telefono,
+      actividad_economica
+    } = codeudorPayload;
     if (!tipo_documento || !numero_documento) {
       throw new Error('Faltan datos del codeudor (tipo o número de documento)');
     }
@@ -308,6 +456,7 @@ class LeaseService {
           apellido_completo: apellido_completo || '',
           correo: correo || `${numero_documento}@placeholder.com`,
           telefono: telefono || null,
+          actividad_economica: actividad_economica || null,
           tiene_cuenta: false,
           estado: true
         }, { transaction });
@@ -327,7 +476,8 @@ class LeaseService {
         nombre_completo: nombre_completo || persona.nombre_completo,
         apellido_completo: apellido_completo || persona.apellido_completo,
         correo: correo || persona.correo,
-        telefono: telefono || persona.telefono
+        telefono: telefono || persona.telefono,
+        actividad_economica: actividad_economica || persona.actividad_economica || null
       }, { transaction });
     }
 
@@ -379,10 +529,20 @@ class LeaseService {
         }
 
         // 2. Validar que el arrendatario existe (tabla arrendatarios)
-        const arrendatario = await Renant.findByPk(leaseData.id_cliente, { transaction: t });
+        const arrendatario = await Renant.findByPk(leaseData.id_cliente, {
+          transaction: t,
+          include: [{ model: Persona, as: 'persona' }]
+        });
         if (!arrendatario) {
           throw new Error('Arrendatario no encontrado');
         }
+        if (this.isInactiveRenant(arrendatario)) {
+          const error = new Error('El arrendatario está inactivo y no puede registrarse en un arriendo.');
+          error.status = 400;
+          throw error;
+        }
+
+        this.ensureMinimumLeaseTerm(leaseData.fecha_inicio, leaseData.fecha_finalizacion);
 
         // 2.1. Resolver codeudor (Persona) si viene en el payload
         let codeudorId = null;
@@ -413,13 +573,9 @@ class LeaseService {
         }, { transaction: t });
 
         // 5. Generar cobros mensuales automáticamente
-        const chargeDay = (() => {
-          const src = leaseData.fecha_cobro || leaseData.fechaCobro;
-          if (!src) return null;
-          const d = this.parseDateOnly(src);
-          return d ? d.getUTCDate() : null;
-        })();
-        await this.generateMonthlyPayments(newLease.id_arrendamiento, t, { chargeDay });
+        await this.generateMonthlyPayments(newLease.id_arrendamiento, t, {
+          chargeDay: this.getFixedChargeDay()
+        });
 
         return await this.getLeaseById(newLease.id_arrendamiento, t);
 
@@ -484,6 +640,29 @@ class LeaseService {
     );
   }
 
+  async resolveLeaseTermMonths(lease, transaction = null) {
+    const leaseId = lease?.id_arrendamiento;
+    if (leaseId) {
+      const trackingRows = await SeguimientoArrendamiento.findAll({
+        where: { id_arrendamiento: leaseId },
+        attributes: ['comentario'],
+        order: [['fecha_creacion', 'ASC'], ['id_seguimiento', 'ASC']],
+        transaction
+      });
+
+      for (const row of trackingRows) {
+        const parsedExtension = this.parseExtensionTracking(row?.comentario);
+        if (parsedExtension?.months) {
+          return parsedExtension.months;
+        }
+      }
+    }
+
+    const parsedStartDate = this.parseDateOnly(lease?.fecha_inicio);
+    const parsedEndDate = this.parseDateOnly(lease?.fecha_finalizacion);
+    return Math.max(this.diffMonths(parsedStartDate, parsedEndDate), 1);
+  }
+
   addMonthsClamped(date, monthsToAdd) {
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth();
@@ -495,6 +674,60 @@ class LeaseService {
     return new Date(
       Date.UTC(targetMonthDate.getUTCFullYear(), targetMonthDate.getUTCMonth(), Math.min(day, lastDay))
     );
+  }
+
+  buildMonthlyChargeDate(year, month, chargeDay = this.getFixedChargeDay()) {
+    const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(year, month, Math.min(chargeDay, lastDayOfMonth)));
+  }
+
+  getFirstChargeDate(startDate, chargeDay = this.getFixedChargeDay()) {
+    if (!startDate) return null;
+
+    const sameMonthChargeDate = this.buildMonthlyChargeDate(
+      startDate.getUTCFullYear(),
+      startDate.getUTCMonth(),
+      chargeDay
+    );
+
+    if (startDate.getUTCDate() <= chargeDay) {
+      return sameMonthChargeDate;
+    }
+
+    return this.buildMonthlyChargeDate(
+      startDate.getUTCFullYear(),
+      startDate.getUTCMonth() + 1,
+      chargeDay
+    );
+  }
+
+  diffDays(startDate, endDate) {
+    if (!startDate || !endDate) return 0;
+    return Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 86400000));
+  }
+
+  roundCurrency(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return 0;
+    return Math.round((numericValue + Number.EPSILON) * 100) / 100;
+  }
+
+  calculateAdditionalChargeAmount(monthlyValue, startDate, chargeDate) {
+    const canonicalMonthlyValue = Number(monthlyValue);
+    if (!Number.isFinite(canonicalMonthlyValue)) {
+      return 0;
+    }
+
+    if (!startDate || !chargeDate || chargeDate.getTime() <= startDate.getTime()) {
+      return 0;
+    }
+
+    const daysToCharge = this.diffDays(startDate, chargeDate);
+    if (daysToCharge <= 0) {
+      return 0;
+    }
+
+    return this.roundCurrency((canonicalMonthlyValue / 30) * daysToCharge);
   }
 
   async generateExtensionPayments(leaseId, oldEndDate, newEndDate, transaction = null, options = {}) {
@@ -511,8 +744,7 @@ class LeaseService {
     const lastPayment = payments[0] || null;
     const chargeDay =
       this.parseDateOnly(lastPayment?.fecha_cobro)?.getUTCDate() ||
-      startDate?.getUTCDate() ||
-      1;
+      this.getFixedChargeDay();
 
     let cursor = lastPayment
       ? this.addMonthsClamped(this.parseDateOnly(lastPayment.fecha_cobro), 1)
@@ -559,7 +791,7 @@ class LeaseService {
 
   async generateMonthlyPayments(leaseId, transaction = null, options = {}) {
     try {
-      const { chargeDay: requestedChargeDay = null, graceDays = 10 } = options;
+      const { chargeDay: requestedChargeDay = this.getFixedChargeDay(), graceDays = 10 } = options;
 
       const lease = await this.getLeaseById(leaseId, transaction);
       const startDate = this.parseDateOnly(lease.fecha_inicio);
@@ -569,17 +801,34 @@ class LeaseService {
       }
 
       const payments = [];
-      const startDay = requestedChargeDay || startDate.getUTCDate();
+      const chargeDay = requestedChargeDay || this.getFixedChargeDay();
 
       // Primer cobro: mes de inicio; si el día cae antes del inicio, se mueve al mes siguiente
-      let cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDay));
-      if (cursor < startDate) {
-        cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, startDay));
+      const firstChargeDate = this.getFirstChargeDate(startDate, chargeDay);
+      const additionalChargeAmount = this.calculateAdditionalChargeAmount(
+        lease.valor_mensual,
+        startDate,
+        firstChargeDate
+      );
+
+      if (firstChargeDate && additionalChargeAmount > 0) {
+        payments.push({
+          id_arrendamiento: leaseId,
+          fecha_cobro: this.formatDateOnly(startDate),
+          fecha_limite: this.formatDateOnly(firstChargeDate),
+          valor_pago: additionalChargeAmount,
+          estado: 'Pendiente'
+        });
       }
 
-      while (cursor < endDate) {
-        const lastDayOfMonth = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
-        const chargeDate = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), Math.min(startDay, lastDayOfMonth)));
+      let cursor = firstChargeDate;
+
+      while (cursor && cursor < endDate) {
+        const chargeDate = this.buildMonthlyChargeDate(
+          cursor.getUTCFullYear(),
+          cursor.getUTCMonth(),
+          chargeDay
+        );
 
         const dueDate = new Date(chargeDate);
         dueDate.setUTCDate(dueDate.getUTCDate() + graceDays);
@@ -588,13 +837,15 @@ class LeaseService {
           id_arrendamiento: leaseId,
           fecha_cobro: this.formatDateOnly(chargeDate),
           fecha_limite: this.formatDateOnly(dueDate),
-          valor_pago: lease.valor_mensual,
+          valor_pago: this.roundCurrency(lease.valor_mensual),
           estado: 'Pendiente'
         });
 
-        // Siguiente mes
-        cursor = new Date(chargeDate);
-        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+        cursor = this.buildMonthlyChargeDate(
+          chargeDate.getUTCFullYear(),
+          chargeDate.getUTCMonth() + 1,
+          chargeDay
+        );
       }
 
       await Payment.bulkCreate(payments, { transaction });
@@ -650,7 +901,7 @@ class LeaseService {
         },
         {
           association: 'codeudor',
-          attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'tipo_documento', 'numero_documento']
+          attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'tipo_documento', 'numero_documento', 'actividad_economica']
         },
         {
           association: 'seguimientos',
@@ -664,6 +915,11 @@ class LeaseService {
     });
 
     if (!lease) throw new Error('Arrendamiento no encontrado');
+
+    lease.setDataValue(
+      'duracion_prorroga_meses',
+      await this.resolveLeaseTermMonths(lease, transaction)
+    );
 
     return lease;
   }
@@ -722,7 +978,7 @@ class LeaseService {
         },
         {
           association: 'codeudor',
-          attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'tipo_documento', 'numero_documento']
+          attributes: ['id_persona', 'nombre_completo', 'apellido_completo', 'correo', 'telefono', 'tipo_documento', 'numero_documento', 'actividad_economica']
         },
         {
           association: 'seguimientos',
@@ -759,9 +1015,15 @@ class LeaseService {
       ];
 
       const whereClause = {};
-      if (filters.estado) whereClause.estado = filters.estado;
+      const normalizedEstado = this.normalizeLeaseStatusFilter(filters.estado);
+      if (normalizedEstado) whereClause.estado = normalizedEstado;
       if (filters.id_cliente) whereClause.id_cliente = filters.id_cliente;
       if (filters.id_arrendatario) whereClause.id_cliente = filters.id_arrendatario;
+      if (filters.tipo_inmueble || filters.tipoInmueble) {
+        whereClause['$inmueble.categoria$'] = this.normalizePropertyTypeFilter(
+          filters.tipo_inmueble || filters.tipoInmueble
+        );
+      }
       if (filters.fecha_inicio && filters.fecha_fin) {
         whereClause.fecha_inicio = {
           [Op.between]: [filters.fecha_inicio, filters.fecha_fin]
@@ -846,6 +1108,8 @@ class LeaseService {
 
       const data = await Promise.all(leases.map(async (lease) => {
         const latestPreNotice = await this.getLatestPreNoticeEntry(lease.id_arrendamiento);
+        const preNoticeHistory = await this.getPreNoticeHistory(lease.id_arrendamiento);
+        const leaseTermMonths = await this.resolveLeaseTermMonths(lease);
 
         return {
           id_arrendamiento: lease.id_arrendamiento,
@@ -857,6 +1121,7 @@ class LeaseService {
           estado: await this.getDisplayedLeaseState(lease.id_arrendamiento, lease),
           estado_base: lease.estado,
           duracion_meses: lease.duracion_meses,
+          duracion_prorroga_meses: leaseTermMonths,
           fecha_creacion: lease.fecha_creacion,
           inmueble: lease.inmueble ? {
             id_inmueble: lease.inmueble.id_inmueble,
@@ -889,7 +1154,8 @@ class LeaseService {
             correo: lease.codeudor.correo,
             telefono: lease.codeudor.telefono,
             tipo_documento: lease.codeudor.tipo_documento,
-            numero_documento: lease.codeudor.numero_documento
+            numero_documento: lease.codeudor.numero_documento,
+            actividad_economica: lease.codeudor.actividad_economica
           } : null,
           ultimo_seguimiento_estado: lease.seguimientos?.[0]?.estado || null,
           ultimo_seguimiento_comentario: lease.seguimientos?.[0]?.comentario ?? lease.seguimientos?.[0]?.descripcion ?? null,
@@ -898,6 +1164,10 @@ class LeaseService {
           preaviso_observacion: latestPreNotice?.observacion || null,
           preaviso_url_soporte: latestPreNotice?.url_soporte || null,
           preaviso_fecha: latestPreNotice?.fecha_creacion || null,
+          preaviso_decision: latestPreNotice?.decision || null,
+          preaviso_observacion_decision: latestPreNotice?.observacion_decision || null,
+          preaviso_fecha_decision: latestPreNotice?.fecha_decision || null,
+          preavisos_historial: preNoticeHistory,
           total_seguimientos: Number(lease.get('total_seguimientos')) || 0
         };
       }));
@@ -935,12 +1205,82 @@ class LeaseService {
         payload.id_codeudor = codeudorId;
       }
 
+      const nextStartDate = payload.fecha_inicio ?? lease.fecha_inicio;
+      const nextEndDate = payload.fecha_finalizacion ?? lease.fecha_finalizacion;
+      this.ensureMinimumLeaseTerm(nextStartDate, nextEndDate);
+
       await lease.update(payload);
 
       return await this.getLeaseById(id);
     } catch (error) {
       throw error;
     }
+  }
+
+  async adjustRent(id, payload = {}, userId = null) {
+    return sequelize.transaction(async (t) => {
+      const lease = await this.getLeaseById(id, t);
+      if (!lease) {
+        throw new Error('Arrendamiento no encontrado');
+      }
+
+      if (['Finalizado'].includes(lease.estado)) {
+        throw new Error('No es posible reajustar el canon de un arrendamiento finalizado');
+      }
+
+      const adjustmentDate = this.parseDateFlexible(payload.fecha_reajuste);
+      const startDate = this.parseDateOnly(lease.fecha_inicio);
+      const endDate = this.parseDateOnly(lease.fecha_finalizacion);
+      const newMonthlyValue = Number(payload.valor_mensual);
+
+      if (!adjustmentDate || !startDate || !endDate) {
+        throw new Error('Las fechas del reajuste no son válidas');
+      }
+
+      if (!Number.isFinite(newMonthlyValue) || newMonthlyValue <= 0) {
+        throw new Error('El nuevo canon debe ser mayor a cero');
+      }
+
+      const minimumAdjustmentDate = this.addUtcMonths(startDate, 12);
+      if (this.isDateBefore(adjustmentDate, minimumAdjustmentDate)) {
+        throw new Error('El reajuste del canon solo puede aplicarse a partir del primer año del contrato');
+      }
+
+      if (adjustmentDate > endDate) {
+        throw new Error('La fecha del reajuste no puede ser posterior a la fecha final del contrato');
+      }
+
+      await lease.update(
+        { valor_mensual: this.roundCurrency(newMonthlyValue) },
+        { transaction: t }
+      );
+
+      await Payment.update(
+        { valor_pago: this.roundCurrency(newMonthlyValue) },
+        {
+          where: {
+            id_arrendamiento: id,
+            estado: { [Op.ne]: 'Pagado' },
+            fecha_cobro: { [Op.gte]: this.formatDateOnly(adjustmentDate) }
+          },
+          transaction: t
+        }
+      );
+
+      const comentarioReajuste =
+        payload.comentario?.trim() ||
+        `Reajuste de canon aplicado a ${this.roundCurrency(newMonthlyValue)} desde ${this.formatDateOnly(adjustmentDate)}`;
+
+      await this.logSeguimiento({
+        id_arrendamiento: id,
+        estado: lease.estado,
+        comentario: comentarioReajuste,
+        id_persona: userId,
+        transaction: t
+      });
+
+      return this.getLeaseById(id, t);
+    });
   }
 
   async extendLease(id, fechaFinalizacion, comentario = null, userId = null) {
@@ -950,20 +1290,29 @@ class LeaseService {
         throw new Error('Arrendamiento no encontrado');
       }
 
-      if (['Finalizado', 'Cancelado'].includes(lease.estado)) {
-        throw new Error('No es posible prorrogar un arrendamiento finalizado o cancelado');
+      if (['Finalizado'].includes(lease.estado)) {
+        throw new Error('No es posible prorrogar un arrendamiento finalizado');
       }
 
       const startDate = this.parseDateOnly(lease.fecha_inicio);
       const oldEndDate = this.parseDateOnly(lease.fecha_finalizacion);
-      const newEndDate = this.parseDateFlexible(fechaFinalizacion);
+      const requestedEndDate = this.parseDateFlexible(fechaFinalizacion);
 
-      if (!startDate || !oldEndDate || !newEndDate) {
+      if (!startDate || !oldEndDate) {
         throw new Error('Las fechas del arrendamiento no son válidas para aplicar la prórroga');
       }
 
-      if (newEndDate <= oldEndDate) {
-        throw new Error('La nueva fecha de finalización debe ser posterior a la fecha final actual');
+      const leaseTermMonths = await this.resolveLeaseTermMonths(lease, t);
+      const newEndDate = this.addMonthsClamped(oldEndDate, leaseTermMonths);
+
+      if (!newEndDate || newEndDate <= oldEndDate) {
+        throw new Error('No fue posible calcular la nueva fecha de finalización de la prórroga');
+      }
+
+      if (requestedEndDate && this.formatDateOnly(requestedEndDate) !== this.formatDateOnly(newEndDate)) {
+        logger.warn(
+          `La fecha de prórroga solicitada (${this.formatDateOnly(requestedEndDate)}) no coincide con la duración original del contrato. Se aplicará ${this.formatDateOnly(newEndDate)} para el arrendamiento ${id}.`
+        );
       }
 
       await lease.update(
@@ -975,7 +1324,7 @@ class LeaseService {
 
       const comentarioProrroga =
         comentario?.trim() ||
-        `Prórroga aplicada hasta ${this.formatDateOnly(newEndDate)}`;
+        `Prórroga aplicada desde ${this.formatDateOnly(oldEndDate)} hasta ${this.formatDateOnly(newEndDate)} (${leaseTermMonths} ${leaseTermMonths === 1 ? 'mes' : 'meses'})`;
 
       await this.logSeguimiento({
         id_arrendamiento: id,
@@ -995,10 +1344,32 @@ class LeaseService {
       throw new Error('Arrendamiento no encontrado');
     }
 
+    const decision = payload.decision?.trim() || null;
+
     const observation = payload.comentario?.trim() || 'Sin observaciones adicionales';
     const attachmentUrl = payload.url_soporte?.trim() || null;
+    const latestPreNotice = await this.getLatestPreNoticeEntry(id);
+    const sameObservation = String(latestPreNotice?.observacion || '').trim() === observation;
+    const sameSupport = String(latestPreNotice?.url_soporte || '').trim() === String(attachmentUrl || '').trim();
+    const sameDecision = String(latestPreNotice?.decision || '').trim() === String(decision || '').trim();
+
+    if (sameObservation && sameSupport && sameDecision) {
+      const updatedLease = await this.getLeaseById(id);
+      const preNoticeHistory = await this.getPreNoticeHistory(id);
+      return {
+        ...updatedLease.toJSON(),
+        preaviso_observacion: latestPreNotice?.observacion || null,
+        preaviso_url_soporte: latestPreNotice?.url_soporte || null,
+        preaviso_fecha: latestPreNotice?.fecha_creacion || null,
+        preaviso_decision: latestPreNotice?.decision || null,
+        preaviso_observacion_decision: latestPreNotice?.observacion_decision || null,
+        preaviso_fecha_decision: latestPreNotice?.fecha_decision || null,
+        preavisos_historial: preNoticeHistory,
+      };
+    }
     const comentario = [
       'Preaviso registrado por el arrendatario.',
+      `Decision: ${decision}`,
       `Observación: ${observation}`,
       attachmentUrl ? `Soporte: ${attachmentUrl}` : null
     ]
@@ -1012,7 +1383,19 @@ class LeaseService {
       id_persona: userId
     });
 
-    return this.getLeaseById(id);
+    const updatedLease = await this.getLeaseById(id);
+    const latestRegisteredPreNotice = await this.getLatestPreNoticeEntry(id);
+    const preNoticeHistory = await this.getPreNoticeHistory(id);
+    return {
+      ...updatedLease.toJSON(),
+      preaviso_observacion: latestRegisteredPreNotice?.observacion || null,
+      preaviso_url_soporte: latestRegisteredPreNotice?.url_soporte || null,
+      preaviso_fecha: latestRegisteredPreNotice?.fecha_creacion || null,
+      preaviso_decision: latestRegisteredPreNotice?.decision || null,
+      preaviso_observacion_decision: latestRegisteredPreNotice?.observacion_decision || null,
+      preaviso_fecha_decision: latestRegisteredPreNotice?.fecha_decision || null,
+      preavisos_historial: preNoticeHistory,
+    };
   }
 
   async deletePreNotice(id, userId = null) {
@@ -1038,17 +1421,15 @@ class LeaseService {
 
   async updateLeaseStatus(id, estado, comentario = null, userId = null) {
     try {
-      const allowedStatuses = ['Activo', 'Al día', 'Pendiente', 'Recuperación', 'Finalizado', 'Cancelado'];
+      const allowedStatuses = ['Activo', 'Al d\u00eda', 'Pendiente', 'Debe', 'Finalizado'];
       if (!allowedStatuses.includes(estado)) {
         throw new Error('Estado de arrendamiento no válido');
       }
 
       let updatedLease;
 
-      // Reutilizar lógicas existentes para estados terminales
-      if (estado === 'Cancelado') {
-        updatedLease = await this.cancelLease(id);
-      } else if (estado === 'Finalizado') {
+      // Reutilizar l?gica existente para estado terminal
+      if (estado === 'Finalizado') {
         updatedLease = await this.finalizeLease(id);
       } else {
         const lease = await this.getLeaseById(id);
@@ -1074,38 +1455,9 @@ class LeaseService {
   }
 
   async cancelLease(id) {
-    try {
-      const lease = await this.getLeaseById(id);
-
-      if (!lease) {
-        throw new Error('Arrendamiento no encontrado');
-      }
-
-      await lease.update({
-        estado: 'Cancelado'
-      });
-
-      // Liberar el inmueble
-      await lease.inmueble.update({
-        estado: true,
-        estado_frontend: 'Disponible'
-      });
-
-      // Cancelar cobros pendientes
-      await Payment.update(
-        { estado: 'Cancelado' },
-        { 
-          where: { 
-            id_arrendamiento: id,
-            estado: 'Pendiente'
-          }
-        }
-      );
-
-      return await this.getLeaseById(id);
-    } catch (error) {
-      throw error;
-    }
+    const error = new Error('El estado Cancelado ya no est\u00e1 disponible para arrendamientos. Usa Finalizado.');
+    error.status = 400;
+    throw error;
   }
 
   async finalizeLease(id) {
@@ -1114,6 +1466,13 @@ class LeaseService {
 
       if (!lease) {
         throw new Error('Arrendamiento no encontrado');
+      }
+
+      const hasPendingPayments = await this.hasPendingPayments(id);
+      if (hasPendingPayments) {
+        const error = new Error('No se puede finalizar el arriendo hasta que todos los pagos esten realizados.');
+        error.status = 400;
+        throw error;
       }
 
       await lease.update({
@@ -1311,3 +1670,4 @@ class LeaseService {
 }
 
 module.exports = new LeaseService();
+

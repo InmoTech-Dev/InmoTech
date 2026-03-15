@@ -90,13 +90,28 @@ export default function BuyerForm({
     setValue("estado", buyer.estado || "Activo");
   }, []);
 
+  const clearAutofillFields = useCallback(() => {
+    [
+      "primerNombre",
+      "segundoNombre",
+      "primerApellido",
+      "segundoApellido",
+      "correo",
+      "telefono",
+    ].forEach((field) => setValue(field, ""));
+  }, []);
+
   const cleanDocument = (value = "") => value.replace(/\\D/g, "").trim();
 
   const lookupBuyer = useCallback(async () => {
     const tipoDocumento = (valuesRef.current.tipoDocumento || "").trim();
     const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
 
-    if (!tipoDocumento || !numeroDocumento) return;
+    if (!tipoDocumento || !numeroDocumento) {
+      clearAutofillFields();
+      setLookupState({ loading: false, message: "", error: null });
+      return;
+    }
 
     const validationError = validateDocument(tipoDocumento, numeroDocumento);
     if (validationError) {
@@ -129,6 +144,7 @@ export default function BuyerForm({
           variant: "default",
         });
       } else {
+        clearAutofillFields();
         setLookupState({
           loading: false,
           message: "",
@@ -152,7 +168,7 @@ export default function BuyerForm({
         variant: "destructive",
       });
     }
-  }, [applyBuyerData]);
+  }, [applyBuyerData, clearAutofillFields]);
 
   const triggerLookup = useCallback(() => {
     if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
@@ -198,6 +214,7 @@ export default function BuyerForm({
   };
 
   const isValidName = (value) => /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]*$/.test(value);
+  const isValidNameUnicode = (value) => /^[\p{L}\s]*$/u.test(value);
   const isValidNumeric = (value) => /^\d*$/.test(value);
   const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
 
@@ -226,6 +243,16 @@ export default function BuyerForm({
     }
     valuesRef.current[name] = cleanValue;
 
+    if ((name === "documento" || name === "tipoDocumento")) {
+      const tipoDocumento = name === "tipoDocumento" ? cleanValue : (valuesRef.current.tipoDocumento || "");
+      const numeroDocumento = cleanDocument(name === "documento" ? cleanValue : (valuesRef.current.documento || ""));
+
+      if (!tipoDocumento || !numeroDocumento) {
+        if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+        clearAutofillFields();
+      }
+    }
+
     if (errors[name]) {
       setErrors((prev) => {
         const n = { ...prev };
@@ -246,7 +273,7 @@ export default function BuyerForm({
     }
 
     if (!errorMessage && value.trim()) {
-      if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
+      if (nameFields.includes(name) && !isValidNameUnicode(displayValuesRef.current[name])) {
         errorMessage = "Solo se permiten letras y espacios.";
       } else if (docFields.includes(name)) {
         const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
@@ -274,6 +301,13 @@ export default function BuyerForm({
 
     // Al salir de tipo o documento, intentar autocompletar
     if ((name === "documento" || name === "tipoDocumento") && !errorMessage) {
+      const tipoDocumento = (valuesRef.current.tipoDocumento || "").trim();
+      const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
+      if (!tipoDocumento || !numeroDocumento) {
+        clearAutofillFields();
+        setLookupState({ loading: false, message: "", error: null });
+        return;
+      }
       triggerLookup();
     }
   };
@@ -292,7 +326,7 @@ export default function BuyerForm({
     // Validar en bloque con las mismas reglas que blur
     nameFields.forEach((name) => {
       const v = valuesRef.current[name] || "";
-      if (v && !isValidName(displayValuesRef.current[name])) {
+      if (v && !isValidNameUnicode(displayValuesRef.current[name])) {
         nextErrors[name] = "Solo se permiten letras y espacios.";
       }
     });

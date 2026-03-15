@@ -31,6 +31,8 @@ class BuyersController {
     try {
       const filters = {
         status: req.query.status,
+        estado: req.query.estado,
+        asociacion: req.query.asociacion,
         tipo_compra: req.query.tipo_compra,
         tipo_comprador: req.query.tipo_comprador,
         id_inmueble: req.query.id_inmueble ? parseInt(req.query.id_inmueble, 10) : undefined,
@@ -45,7 +47,7 @@ class BuyersController {
         }
       });
 
-      filters.pagination = normalizePagination(req.query);
+      filters.pagination = normalizePagination(req.query, { defaultLimit: 5, maxLimit: 5 });
       const result = await buyerService.getAllBuyers(filters);
 
       return res.status(200).json({
@@ -130,7 +132,10 @@ class BuyersController {
   async searchBuyers(req, res, next) {
     try {
       const { criterio } = req.params;
-      const criteria = req.query;
+      const criteria = {
+        ...req.query,
+        criterio
+      };
 
       const buyers = await buyerService.searchBuyers(criteria);
 

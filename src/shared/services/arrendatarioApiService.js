@@ -146,9 +146,9 @@ const mapRenantFromApi = (record = {}) => {
     (Array.isArray(record.arriendos) && record.arriendos[0]?.codeudor) ||
     {};
   const codeudorPersona =
-    codeudor.persona ||
-    codeudor.Persona ||
-    (codeudor.id_persona ? codeudor : {}) ||
+    codeudor?.persona ||
+    codeudor?.Persona ||
+    (codeudor?.id_persona ? codeudor : {}) ||
     {};
 
   const { first: primerNombre, rest: segundoNombre } = splitNames(
@@ -216,7 +216,12 @@ const mapRenantFromApi = (record = {}) => {
     segundoApellido,
     correo: persona.correo || renant.correo || '',
     telefono: persona.telefono || renant.telefono || '',
-    estado: renant.estado || (persona.estado === false ? 'Inactivo' : 'Activo'),
+    estado:
+      renant.estado_arrendatario ||
+      renant.estado ||
+      record.estado_arrendatario ||
+      record.raw?.estado_arrendatario ||
+      (persona.estado === false ? 'Inactivo' : 'Activo'),
     ciudadResidencia: renant.ciudad_residencia || null,
     direccionAnterior: renant.direccion_anterior || null,
     observaciones: renant.observaciones || null,
@@ -242,6 +247,10 @@ const mapRenantFromApi = (record = {}) => {
       codeudorPersona.correo ||
       codeudor.correo ||
       '',
+    actividadEconomicaCodeudor:
+      codeudorPersona.actividad_economica ||
+      codeudor.actividad_economica ||
+      null,
     rawLease: primaryLease || null,
     codeudorNombre: codeudorPersona.nombre_completo || codeudor.nombre_completo || '',
     codeudorTelefono: codeudorPersona.telefono || codeudor.telefono || '',
@@ -266,6 +275,8 @@ const mapRenantFromApi = (record = {}) => {
     codeudorNombre: codeudorNombreCompleto || null,
     codeudorTelefono: codeudorPersona.telefono || codeudor.telefono || null,
     codeudorCorreo: codeudorPersona.correo || codeudor.correo || null,
+    actividadEconomicaCodeudor:
+      codeudorPersona.actividad_economica || codeudor.actividad_economica || null,
     primerNombreCodeudor: primerNombreCodeudor || null,
     segundoNombreCodeudor: segundoNombreCodeudor || null,
     primerApellidoCodeudor: primerApellidoCodeudor || null,
@@ -474,7 +485,10 @@ export const renantsApiService = {
   },
 
   async getAll(params = {}) {
-    const response = await apiClient.get('/leases/renants', { params });
+    const response = await apiClient.get('/leases/renants', {
+      params,
+      disableDedup: Boolean(params?.search),
+    });
     return {
       data: extractList(response).map(mapRenantFromApi),
       pagination: extractPagination(response, params)

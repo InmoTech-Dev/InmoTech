@@ -5,6 +5,77 @@ const logger = require('../utils/logger');
 const { buildPaginationMeta } = require('../utils/pagination');
 
 class SaleService {
+  _normalizeFilterValue(value) {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  _normalizeTipoCompra(value) {
+    const normalized = this._normalizeFilterValue(value);
+    const map = {
+      directa: 'Directa',
+      financiada: 'Financiada',
+      mixta: 'Mixta'
+    };
+
+    return map[normalized] || value;
+  }
+
+  _buildEstadoFilterCondition(value) {
+    const normalized = this._normalizeFilterValue(value);
+    if (!normalized || normalized === 'todos') return null;
+
+    const detailMap = {
+      pagado: 'Pagado',
+      debe: 'Debe',
+      'en espera': 'En espera',
+      cancelado: 'Cancelado',
+      'en negociacion': 'En negociación',
+      completada: 'Completada'
+    };
+
+    const generalFallbackMap = {
+      cancelado: 'Cancelada',
+      completada: 'Finalizada'
+    };
+
+    const detailStatus = detailMap[normalized];
+    if (!detailStatus) {
+      return { estado: value };
+    }
+
+    const generalFallback = generalFallbackMap[normalized];
+    if (!generalFallback) {
+      return { estado_seguimiento: detailStatus };
+    }
+
+    return {
+      [Op.or]: [
+        { estado_seguimiento: detailStatus },
+        { estado: generalFallback }
+      ]
+    };
+  }
+
+  _normalizeStatus(value) {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  _isInactiveBuyer(buyer) {
+    if (!buyer) return true;
+
+    const buyerStatus = this._normalizeStatus(buyer.estado);
+    if (buyerStatus === 'inactivo') return true;
+
+    const personaStatus = buyer.persona?.estado;
+    if (personaStatus === false || personaStatus === 0) return true;
+
+    return false;
+  }
+
   _normalizeSaleDate(value) {
     const now = new Date();
     const isDateOnly = (input) => /^\d{4}-\d{2}-\d{2}$/.test(String(input || '').trim());
@@ -153,9 +224,13 @@ class SaleService {
       }
     ];
 
-    if (filters.estado) whereClause.estado = filters.estado;
+    const estadoFilter = this._buildEstadoFilterCondition(filters.estado);
+    if (estadoFilter) andConditions.push(estadoFilter);
     if (filters.id_persona) whereClause.id_comprador = filters.id_persona;
     if (filters.id_comprador) whereClause.id_comprador = filters.id_comprador;
+    if (filters.tipo_compra) {
+      whereClause.tipo_compra = this._normalizeTipoCompra(filters.tipo_compra);
+    }
     if (filters.fecha_inicio && filters.fecha_fin) {
       whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
     }
@@ -214,6 +289,19 @@ class SaleService {
     }
 
     const estadoVenta = await this._getEstadoVentaActivo(trackingData.id_estado_venta, transaction);
+    const estadoVentaNormalizado = this._normalizeFilterValue(estadoVenta.nombre_estado);
+
+    if (estadoVentaNormalizado === 'completada') {
+      const adjuntos = Array.isArray(sale.adjuntos) ? sale.adjuntos : [];
+      const hasComprobante = adjuntos.some((adj) => String(adj.tipo || '').trim().toLowerCase() === 'comprobante');
+      const hasContrato = adjuntos.some((adj) => String(adj.tipo || '').trim().toLowerCase() === 'contrato');
+
+      if (!hasComprobante || !hasContrato) {
+        const error = new Error('Debes cargar contrato y comprobante antes de marcar la venta como Completada.');
+        error.status = 400;
+        throw error;
+      }
+    }
 
     const personaId =
       trackingData.id_persona ||
@@ -252,6 +340,38 @@ class SaleService {
       { transaction }
     );
 
+    if (sale.id_inmueble) {
+      const inmueble = await Inmueble.findByPk(sale.id_inmueble, { transaction });
+      if (inmueble) {
+        if (nuevoEstadoGeneral === 'Finalizada') {
+          await inmueble.update(
+            {
+              estado: false,
+              estado_frontend: 'Vendido',
+              destacado: false
+            },
+            { transaction }
+          );
+        } else if (nuevoEstadoGeneral === 'Cancelada') {
+          await inmueble.update(
+            {
+              estado: true,
+              estado_frontend: 'Disponible'
+            },
+            { transaction }
+          );
+        } else {
+          await inmueble.update(
+            {
+              estado: false,
+              estado_frontend: 'En proceso de venta'
+            },
+            { transaction }
+          );
+        }
+      }
+    }
+
     return { seguimiento, estadoVenta };
   }
 
@@ -265,6 +385,11 @@ class SaleService {
         const compradorId = saleData.id_comprador || saleData.id_persona;
         const comprador = await Buyer.findByPk(compradorId, { transaction: t, include: ['persona'] });
         if (!comprador) throw new Error('Comprador no encontrado');
+        if (this._isInactiveBuyer(comprador)) {
+          const error = new Error('El comprador está inactivo y no puede registrarse en una venta.');
+          error.status = 400;
+          throw error;
+        }
 
         const normalizedSaleDate = this._normalizeSaleDate(saleData.fecha_venta);
 
@@ -288,7 +413,7 @@ class SaleService {
         await inmueble.update(
           {
             estado: false,
-            estado_frontend: 'Vendido',
+            estado_frontend: 'En proceso de venta',
             destacado: false
           },
           { transaction: t }
@@ -604,7 +729,7 @@ class SaleService {
 
     await sale.update({ estado: 'Cancelada' });
     if (sale.inmueble) {
-      await sale.inmueble.update({ estado: 'Disponible' });
+      await sale.inmueble.update({ estado: true, estado_frontend: 'Disponible' });
     }
 
     return this.getSaleById(id);
@@ -614,6 +739,9 @@ class SaleService {
     const sale = await this.getSaleById(id);
     if (!sale) throw new Error('Venta no encontrada');
     await sale.update({ estado: 'Finalizada' });
+    if (sale.inmueble) {
+      await sale.inmueble.update({ estado: false, estado_frontend: 'Vendido', destacado: false });
+    }
     return this.getSaleById(id);
   }
 

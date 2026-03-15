@@ -31,6 +31,25 @@ const BUYER_ATTRS = [
 ];
 
 class BuyerService {
+  normalizeFilterValue(value) {
+    return String(value ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  normalizeBuyerStatus(value) {
+    const normalized = this.normalizeFilterValue(value);
+    const statusMap = {
+      activo: 'Activo',
+      inactivo: 'Inactivo',
+      proceso: 'Proceso'
+    };
+
+    return statusMap[normalized] || value;
+  }
+
   async generateBuyerCode(transaction) {
     const total = await Buyer.count({ transaction });
     // Intento secuencial primero
@@ -334,7 +353,8 @@ class BuyerService {
             id_venta: sale.id_venta,
             fecha_venta: sale.fecha_venta,
             valor_venta: sale.valor_venta,
-            estado: sale.estado
+            estado: sale.estado,
+            medio_pago: sale.medio_pago
           }
         : null,
       inmueble: this.mapInmuebleSummary(sale?.inmueble)
@@ -343,7 +363,8 @@ class BuyerService {
 
   async getAllBuyers(filters = {}) {
     const buyerWhere = {};
-    if (filters.status) buyerWhere.estado = filters.status;
+    const normalizedStatus = this.normalizeBuyerStatus(filters.status || filters.estado);
+    if (normalizedStatus) buyerWhere.estado = normalizedStatus;
     if (filters.tipo_comprador || filters.tipo_compra) {
       buyerWhere.tipo_comprador = filters.tipo_comprador || filters.tipo_compra;
     }
@@ -394,18 +415,38 @@ class BuyerService {
       offset: filters.pagination?.offset || 0
     };
 
+    const buyerInclude = {
+      association: 'buyer',
+      attributes: BUYER_ATTRS,
+      where: buyerHasFilters ? buyerWhere : undefined,
+      required: true
+    };
+
+    const associationFilter = this.normalizeFilterValue(filters.asociacion);
+    if (associationFilter === 'con-inmueble' || associationFilter === 'sin-inmueble') {
+      buyerInclude.include = [
+        {
+          association: 'ventas',
+          attributes: ['id_venta'],
+          required: associationFilter === 'con-inmueble'
+        }
+      ];
+
+      if (associationFilter === 'sin-inmueble') {
+        personaWhere['$buyer.ventas.id_venta$'] = null;
+      }
+    }
+
     const query = {
       ...this.personaQuery(personaWhere),
-      include: [
-        {
-          association: 'buyer',
-          attributes: BUYER_ATTRS,
-          where: buyerHasFilters ? buyerWhere : undefined,
-          required: true
-        }
-      ],
+      include: [buyerInclude],
       distinct: true,
-      col: 'id_persona'
+      col: 'id_persona',
+      order: [
+        [Sequelize.literal("CASE WHEN [buyer].[estado] = 'Activo' THEN 0 ELSE 1 END"), 'ASC'],
+        [{ model: Buyer, as: 'buyer' }, 'fecha_creacion', 'DESC'],
+        ['id_persona', 'DESC']
+      ]
     };
 
     if (pagination.enabled) {
@@ -433,7 +474,8 @@ class BuyerService {
                 id_venta: sale.id_venta,
                 fecha_venta: sale.fecha_venta,
                 valor_venta: sale.valor_venta,
-                estado: sale.estado
+                estado: sale.estado,
+                medio_pago: sale.medio_pago
               }
             : null,
           inmueble: this.mapInmuebleSummary(sale?.inmueble)
@@ -530,36 +572,17 @@ class BuyerService {
   }
 
   async searchBuyers(criteria = {}) {
-    const personaWhere = {};
-    const buyerWhere = {};
-
-    if (criteria.tipo_documento) personaWhere.tipo_documento = criteria.tipo_documento;
-    if (criteria.numero_documento) personaWhere.numero_documento = criteria.numero_documento;
-    if (criteria.nombre) {
-      personaWhere[Op.or] = [
-        { nombre_completo: { [Op.like]: `%${criteria.nombre}%` } },
-        { apellido_completo: { [Op.like]: `%${criteria.nombre}%` } }
-      ];
-    }
-
-    if (criteria.status) buyerWhere.estado = criteria.status;
-    if (criteria.tipo_comprador) buyerWhere.tipo_comprador = criteria.tipo_comprador;
-
-    const personas = await Persona.findAll({
-      ...this.personaQuery(personaWhere),
-      include: [
-        {
-          association: 'buyer',
-          attributes: BUYER_ATTRS,
-          where: Object.keys(buyerWhere).length ? buyerWhere : undefined,
-          required: true
-        }
-      ]
+    const result = await this.getAllBuyers({
+      tipo_documento: criteria.tipo_documento,
+      numero_documento: criteria.numero_documento,
+      nombre: criteria.nombre,
+      status: criteria.status || criteria.estado,
+      estado: criteria.estado || criteria.status,
+      tipo_comprador: criteria.tipo_comprador,
+      search: criteria.search || criteria.criterio || criteria.nombre
     });
 
-    return personas
-      .map((p) => this.normalizePersonaRecord(p))
-      .filter(Boolean);
+    return result.data;
   }
 }
 

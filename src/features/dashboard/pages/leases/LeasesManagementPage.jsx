@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaPhone, FaEnvelope } from "react-icons/fa";
@@ -14,23 +14,122 @@ import { useToast } from "../../../../shared/hooks/use-toast";
 import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
 
 const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
-const hasAssociatedLease = (tenant = {}) =>
-  Boolean(
-    tenant.rawLease ||
-    tenant.fechaInicio ||
-    tenant.fechaFin ||
-    tenant.valorMensual ||
-    tenant.estadoContrato ||
-    (Array.isArray(tenant.inmueblesArrendados) && tenant.inmueblesArrendados.length > 0)
+const getTenantStatusSortWeight = (estado = "") => {
+  const normalized = normalizeEstado(estado);
+  if (normalized === "activo" || normalized === "al dia") return 0;
+  if (normalized === "moroso") return 1;
+  if (normalized === "proceso") return 2;
+  if (normalized === "inactivo") return 3;
+  return 9;
+};
+
+const sortTenantsByStatus = (tenants = []) =>
+  [...tenants].sort((a, b) => {
+    const statusDiff =
+      getTenantStatusSortWeight(a?.estado) - getTenantStatusSortWeight(b?.estado);
+    if (statusDiff !== 0) return statusDiff;
+
+    const nameA = String(
+      a?.nombreCompleto ||
+        [a?.primerNombre, a?.segundoNombre, a?.primerApellido, a?.segundoApellido]
+          .filter(Boolean)
+          .join(" ")
+    ).trim();
+    const nameB = String(
+      b?.nombreCompleto ||
+        [b?.primerNombre, b?.segundoNombre, b?.primerApellido, b?.segundoApellido]
+          .filter(Boolean)
+          .join(" ")
+    ).trim();
+
+    return nameA.localeCompare(nameB, "es", { sensitivity: "base" });
+  });
+
+const normalizeDocumentValue = (value = "") =>
+  String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+const getTenantDocumentKey = (tenant = {}) => {
+  const tipo = String(
+    tenant.tipoDocumento ||
+      tenant.persona?.tipo_documento ||
+      tenant.arrendatario?.persona?.tipo_documento ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
+  const documento = normalizeDocumentValue(
+    tenant.documento ||
+      tenant.persona?.numero_documento ||
+      tenant.arrendatario?.persona?.numero_documento
   );
+  return tipo && documento ? `${tipo}:${documento}` : "";
+};
+
+const getLeaseTenantIdentity = (lease = {}) => {
+  const arr = lease.arrendatario || lease.Arrendatario || {};
+  const persona = arr.persona || arr.Persona || {};
+  const tipo = String(arr.tipo_documento || persona.tipo_documento || "").trim().toUpperCase();
+  const documento = normalizeDocumentValue(arr.numero_documento || persona.numero_documento);
+
+  return {
+    arrendatarioId: arr.id_arrendatario || arr.id || arr.idCliente || arr.id_cliente || null,
+    personaId: persona.id_persona || null,
+    documentKey: tipo && documento ? `${tipo}:${documento}` : "",
+  };
+};
+
+const tenantMatchesLease = (tenant = {}, lease = {}) => {
+  const tenantArrendatarioId = tenant.id_arrendatario || tenant.arrendatario?.id_arrendatario || null;
+  const tenantPersonaId =
+    tenant.personaId || tenant.persona?.id_persona || tenant.arrendatario?.persona?.id_persona || null;
+  const tenantDocumentKey = getTenantDocumentKey(tenant);
+  const leaseIdentity = getLeaseTenantIdentity(lease);
+
+  if (tenantArrendatarioId && leaseIdentity.arrendatarioId) {
+    return tenantArrendatarioId === leaseIdentity.arrendatarioId;
+  }
+
+  if (tenantDocumentKey && leaseIdentity.documentKey) {
+    return tenantDocumentKey === leaseIdentity.documentKey;
+  }
+
+  if (!tenantArrendatarioId && !leaseIdentity.arrendatarioId && tenantPersonaId && leaseIdentity.personaId) {
+    return tenantPersonaId === leaseIdentity.personaId;
+  }
+
+  return false;
+};
+const hasAssociatedLease = (tenant = {}) => {
+  const raw = tenant.raw || tenant.arrendatarioRaw || {};
+  const relatedLeases = [
+    ...(Array.isArray(raw.arriendos) ? raw.arriendos : []),
+    ...(Array.isArray(raw.arriendosComoArrendatario) ? raw.arriendosComoArrendatario : []),
+    ...(Array.isArray(tenant.arriendos) ? tenant.arriendos : []),
+    ...(Array.isArray(tenant.arriendosComoArrendatario) ? tenant.arriendosComoArrendatario : []),
+  ].filter(Boolean);
+
+  return Boolean(
+    tenant.rawLease ||
+    tenant.id_arriendo ||
+    tenant.idArriendo ||
+    tenant.arriendo?.id_arriendo ||
+    tenant.arriendo?.id ||
+    relatedLeases.length > 0
+  );
+};
 
 export function LeasesManagementPage() {
   const PAGE_SIZE = 5;
+  const fetchRequestIdRef = useRef(0);
   const [arrendatarios, setArrendatarios] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("todos");
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({
     total: 0,
@@ -46,35 +145,14 @@ export function LeasesManagementPage() {
   const [statusMenuId, setStatusMenuId] = useState(null);
   const { toast } = useToast();
 
-  const getTenantIdentifiers = (tenant = {}) =>
-    [
-      tenant.id_arrendatario,
-      tenant.id_cliente,
-      tenant.idCliente,
-      tenant.id,
-      tenant.personaId,
-      tenant.persona?.id_persona,
-      tenant.arrendatario?.id_arrendatario,
-      tenant.arrendatario?.id,
-      tenant.arrendatario?.persona?.id_persona,
-    ].filter(Boolean);
+  const getTenantRowId = (tenant = {}) =>
+    tenant.id ?? tenant.id_arrendatario ?? tenant.personaId ?? null;
+
+  const getTenantApiId = (tenant = {}) =>
+    tenant.id_arrendatario ?? tenant.id ?? tenant.personaId ?? null;
 
   const pickBestLeaseForTenant = (tenant, arriendos = []) => {
-    const tenantIds = getTenantIdentifiers(tenant);
-    if (!tenantIds.length) return null;
-
-    const matches = arriendos.filter((a) => {
-      const arr = a.arrendatario || a.Arrendatario || {};
-      const persona = arr.persona || arr.Persona || {};
-      const ids = [
-        arr.id_arrendatario,
-        arr.id,
-        arr.idCliente,
-        arr.id_cliente,
-        persona.id_persona,
-      ].filter(Boolean);
-      return ids.some((id) => tenantIds.includes(id));
-    });
+    const matches = arriendos.filter((a) => tenantMatchesLease(tenant, a));
 
     if (!matches.length) return null;
 
@@ -92,31 +170,9 @@ export function LeasesManagementPage() {
     try {
       const full = await renantsApiService.getById(tenant.id || tenant.id_arrendatario || tenant.personaId);
 
-      // Obtener arriendos para este arrendatario (reutilizamos mapping de compradores)
-      const tenantId =
-        full.id_arrendatario ||
-        full.id_cliente ||
-        full.idCliente ||
-        full.id ||
-        full.personaId ||
-        tenant.id_arrendatario ||
-        tenant.id ||
-        tenant.personaId;
-
       let leaseData = {};
       const pickBestLease = (arrList = []) => {
-        const matches = arrList.filter((a) => {
-          const arr = a.arrendatario || a.Arrendatario || {};
-          const persona = arr.persona || arr.Persona || {};
-          const ids = [
-            arr.id_arrendatario,
-            arr.id,
-            arr.idCliente,
-            arr.id_cliente,
-            persona.id_persona,
-          ].filter(Boolean);
-          return ids.includes(tenantId);
-        });
+        const matches = arrList.filter((a) => tenantMatchesLease(full, a) || tenantMatchesLease(tenant, a));
         if (!matches.length) return null;
         // elegir el más reciente por fecha_inicio
         return matches
@@ -248,15 +304,16 @@ export function LeasesManagementPage() {
 
   const handleToggleEstado = async (tenant, forcedEstado) => {
     if (!tenant) return;
-    const targetId = tenant.id || tenant.id_arrendatario || tenant.personaId;
-    if (!targetId) {
+    const rowId = getTenantRowId(tenant);
+    const targetId = getTenantApiId(tenant);
+    if (!rowId || !targetId) {
       setStatusMessage({ type: "error", message: "No se pudo identificar el arrendatario." });
       return;
     }
     const current = normalizeEstado(tenant.estado || "Activo");
     const nextEstado = forcedEstado || (current === "activo" ? "Inactivo" : "Activo");
     try {
-      setStatusChangingId(targetId);
+      setStatusChangingId(rowId);
       const payload = {
         estado: nextEstado,
         tipoDocumento: tenant.tipoDocumento || tenant.persona?.tipo_documento || "CC",
@@ -271,7 +328,7 @@ export function LeasesManagementPage() {
       const updated = await renantsApiService.update(targetId, payload);
       setArrendatarios((prev) =>
         prev.map((t) =>
-          (t.id === targetId || t.id_arrendatario === targetId || t.personaId === targetId)
+          getTenantRowId(t) === rowId
             ? { ...t, estado: updated.estado || nextEstado }
             : t
         )
@@ -380,18 +437,17 @@ export function LeasesManagementPage() {
   };
 
     const fetchTenants = async (query = "", page = 1) => {
+        const requestId = ++fetchRequestIdRef.current;
         try {
             setIsLoading(true);
             const tenantParams = { page, limit: PAGE_SIZE };
-            if (query) tenantParams.search = query;
+            if (query) {
+              tenantParams.search = query;
+            }
+            if (estadoFilter !== "todos") tenantParams.estado = estadoFilter;
             const tenantsResult = await renantsApiService.getAll(tenantParams);
-            const baseTenants = tenantsResult?.data || [];
-            const backendPagination = tenantsResult?.pagination || {
-              total: baseTenants.length,
-              pagina: page,
-              limite: PAGE_SIZE,
-              paginas_totales: 1,
-            };
+            const apiTenants = tenantsResult?.data || [];
+            const baseTenants = apiTenants;
 
             let tenants = baseTenants;
             try {
@@ -400,6 +456,10 @@ export function LeasesManagementPage() {
 
               tenants = await Promise.all(
                 baseTenants.map(async (tenant) => {
+                  if (normalizeEstado(tenant.estado) !== "activo") {
+                    return tenant;
+                  }
+
                   if (
                     tenant.inmueble?.titulo ||
                     tenant.inmueble?.nombre ||
@@ -514,14 +574,42 @@ export function LeasesManagementPage() {
               tenants = baseTenants;
             }
 
-            setArrendatarios(tenants);
-            setPagination(backendPagination);
-            setCurrentPage(backendPagination.pagina || page);
+            if (requestId !== fetchRequestIdRef.current) {
+              return {
+                tenants,
+                pagination: tenantsResult?.pagination || null,
+              };
+            }
+
+            setArrendatarios(sortTenantsByStatus(tenants));
+            setPagination(tenantsResult?.pagination || {
+              total: tenants.length,
+              pagina: page,
+              limite: PAGE_SIZE,
+              paginas_totales: 1,
+              has_next_page: false,
+              has_prev_page: page > 1,
+            });
+            setCurrentPage(tenantsResult?.pagination?.pagina || page);
+            return {
+              tenants,
+              pagination: tenantsResult?.pagination || null,
+            };
     } catch (error) {
+      if (requestId !== fetchRequestIdRef.current) {
+        return {
+          tenants: [],
+          pagination: null,
+        };
+      }
       setStatusMessage({
         type: "error",
         message: error.message || "No fue posible obtener los arrendatarios"
       });
+      return {
+        tenants: [],
+        pagination: null,
+      };
     } finally {
       setIsLoading(false);
     }
@@ -540,6 +628,11 @@ export function LeasesManagementPage() {
 
     return () => clearTimeout(timeoutId);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchTenants(searchTerm.trim(), 1);
+  }, [estadoFilter]);
 
   useEffect(() => {
     if (!statusMenuId) return undefined;
@@ -562,8 +655,26 @@ export function LeasesManagementPage() {
     setFormSubmitting(true);
     try {
       const newTenant = await renantsApiService.create(formData);
-      setArrendatarios((prev) => [newTenant, ...prev]);
-      fetchTenants(searchTerm.trim(), 1);
+      const createdTenantId = getTenantRowId(newTenant);
+      const createdDocumentKey = getTenantDocumentKey(newTenant);
+      setArrendatarios((prev) => {
+        const withoutDuplicate = prev.filter((tenant) => {
+          const tenantId = getTenantRowId(tenant);
+          const tenantDocumentKey = getTenantDocumentKey(tenant);
+          return !(
+            (createdTenantId && tenantId && String(createdTenantId) === String(tenantId)) ||
+            (createdDocumentKey && tenantDocumentKey && createdDocumentKey === tenantDocumentKey)
+          );
+        });
+        return [newTenant, ...withoutDuplicate].slice(0, PAGE_SIZE);
+      });
+      setPagination((prev) => ({
+        ...prev,
+        pagina: 1,
+        total: (prev?.total || 0) + 1,
+        paginas_totales: Math.max(Math.ceil(((prev?.total || 0) + 1) / PAGE_SIZE), 1),
+      }));
+      setCurrentPage(1);
       toast({ title: "Arrendatario creado", description: MESSAGES.leaseTenant.create, variant: "default" });
       handleCloseForm();
     } catch (error) {
@@ -800,15 +911,19 @@ const renderDeleteModal = () => {
             </div>
           </div>
           
-          <div className="flex gap-2">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-blue-300"
-            >
-              <Filter className="w-4 h-4" />
-              Filtros
-            </motion.button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+              <select
+                value={estadoFilter}
+                onChange={(e) => setEstadoFilter(e.target.value)}
+                className="pl-10 pr-8 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:border-blue-500"
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="activo">Activos</option>
+                <option value="inactivo">Inactivos</option>
+              </select>
+            </div>
           </div>
         </motion.div>
 
@@ -858,8 +973,9 @@ const renderDeleteModal = () => {
                       const estadoNormalized = normalizeEstado(tenant.estado);
                       const estadoLabel = tenant.estado || "Pendiente";
                       const isEditBlocked = hasAssociatedLease(tenant);
+                      const tenantRowId = getTenantRowId(tenant);
                       return (
-                      <tr key={tenant.id} className="hover:bg-slate-50 transition-colors">
+                      <tr key={tenantRowId} className="hover:bg-slate-50 transition-colors">
                         {/* INFORMACIÓN PERSONAL */}
                         <td className="px-6 py-4">
                           <div className="text-center">
@@ -927,27 +1043,27 @@ const renderDeleteModal = () => {
                               type="button"
                               onClick={() =>
                                 setStatusMenuId((prev) =>
-                                  prev === (tenant.id || tenant.id_arrendatario || tenant.personaId)
+                                  prev === tenantRowId
                                     ? null
-                                    : (tenant.id || tenant.id_arrendatario || tenant.personaId)
+                                    : tenantRowId
                                 )
                               }
-                              disabled={statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId)}
+                              disabled={statusChangingId === tenantRowId}
                               className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
                                 estadoNormalized === "activo"
                                   ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
                                   : estadoNormalized === "moroso"
                                   ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200 hover:ring-2 hover:ring-red-200"
                                   : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
-                              } ${statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId) ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === (tenant.id || tenant.id_arrendatario || tenant.personaId) ? "ring-2 ring-slate-200" : ""}`}
+                              } ${statusChangingId === tenantRowId ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === tenantRowId ? "ring-2 ring-slate-200" : ""}`}
                             >
-                              {statusChangingId === (tenant.id || tenant.id_arrendatario || tenant.personaId) && (
+                              {statusChangingId === tenantRowId && (
                                 <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
                               )}
                               <span>{estadoLabel}</span>
                               <ChevronDown className="w-3 h-3 ml-2" />
                             </button>
-                            {statusMenuId === (tenant.id || tenant.id_arrendatario || tenant.personaId) && (
+                            {statusMenuId === tenantRowId && (
                               <div className="absolute left-1/2 -translate-x-1/2 bottom-10 z-[60] bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
                                 {["Activo", "Inactivo"].map((estadoOpcion) => (
                                   <button

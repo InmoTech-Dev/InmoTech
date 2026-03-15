@@ -120,6 +120,11 @@ class ArriendoApiService {
     return response;
   }
 
+  async reajustarCanon(id, payload) {
+    const response = await apiClient.patch(`/leases/${id}/adjust-rent`, payload);
+    return response;
+  }
+
   async registrarPreaviso(id, payload) {
     const response = await apiClient.patch(`/leases/${id}/pre-notice`, payload);
     return response;

@@ -352,7 +352,10 @@ export default function BuyerView({ buyer, onClose }) {
     if (!base && !desc) return fallback || "-";
     if (!base) return desc || fallback;
     if (!desc) return base;
-    const lowerBase = base.toString().toLowerCase();
+    const normalizedBase = base.toString().trim().toLowerCase();
+    const normalizedDesc = desc.toString().trim().toLowerCase();
+    if (normalizedBase === normalizedDesc) return base;
+    const lowerBase = normalizedBase;
     if (lowerBase === "mixto") return `${base}: ${desc}`;
     return `${base} - ${desc}`;
   }, [buyer?.entidadFinanciera, buyer?.montoFinanciado, buyer?.numeroCredito, medioPago, medioPagoDescripcion, operacion?.entidad_financiera, operacion?.monto_financiado, operacion?.numero_credito]);

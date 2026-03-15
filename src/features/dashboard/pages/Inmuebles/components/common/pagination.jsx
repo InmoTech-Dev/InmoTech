@@ -4,8 +4,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 export const Pagination = ({ currentPage, totalPages, onPageChange, hasPrevPage, hasNextPage }) => {
   const safeCurrentPage = Math.max(currentPage || 1, 1);
   const safeTotalPages = Math.max(totalPages || 1, 1);
-  const canGoBack = hasPrevPage ?? safeCurrentPage > 1;
-  const canGoForward = hasNextPage ?? safeCurrentPage < safeTotalPages;
+  const canGoBack =
+    typeof hasPrevPage === 'boolean' ? hasPrevPage || safeCurrentPage > 1 : safeCurrentPage > 1;
+  const canGoForward =
+    typeof hasNextPage === 'boolean'
+      ? hasNextPage || safeCurrentPage < safeTotalPages
+      : safeCurrentPage < safeTotalPages;
 
   return (
     <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between">

@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { FaUserPlus, FaSearch, FaHome, FaCalendar, FaDollarSign } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Trash2, Home, Calendar, ListChecks, X, AlertCircle, Wrench } from 'lucide-react';
+import { FaUserPlus, FaSearch, FaHome, FaCalendar } from "react-icons/fa";
+import { Plus, Search, Filter, Eye, Trash2, Home, ListChecks, X, Wrench } from 'lucide-react';
 import RenantForm from "../../components/leases/RenantForm";
 import ViewRenant from "../../components/leases/ViewRenant"; 
 import LeaseStatusModal from "../../components/leases/LeaseStatusModal";
+import LeaseOptionsContractModal from "../../components/leases/LeaseOptionsContractModal";
+import LeaseExtensionModal from "../../components/leases/LeaseExtensionModal";
+import LeaseAdjustmentModal from "../../components/leases/LeaseAdjustmentModal";
+import LeasePreNoticeModal from "../../components/leases/LeasePreNoticeModal";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 import "../../../../shared/styles/globals.css";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
@@ -52,6 +56,27 @@ const diffMonthsUtc = (startDate, endDate) => {
   );
 };
 
+const parseExtensionMonthsFromComment = (comment) => {
+  const text = String(comment || "");
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!normalized.includes("prorroga aplicada")) return null;
+
+  const fromMatch = text.match(/desde\s*(\d{4}-\d{2}-\d{2})/i);
+  const toMatch = text.match(/hasta\s*(\d{4}-\d{2}-\d{2})/i);
+  if (!fromMatch || !toMatch) return null;
+
+  const startDate = parseIsoDate(fromMatch[1]);
+  const endDate = parseIsoDate(toMatch[1]);
+  if (!startDate || !endDate || endDate <= startDate) return null;
+
+  return Math.max(diffMonthsUtc(startDate, endDate), 1);
+};
+
 const addMonthsClampedUtc = (date, monthsToAdd) => {
   if (!date) return null;
   const year = date.getUTCFullYear();
@@ -81,11 +106,11 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     {};
 
   const codeudorPersona =
-    codeudor.persona ||
-    codeudor.Persona ||
+    codeudor?.persona ||
+    codeudor?.Persona ||
     arriendo.codeudor_persona ||
     arriendo.codeudorPersona ||
-    (codeudor.id_persona ? codeudor : {});
+    (codeudor?.id_persona ? codeudor : {});
 
   const nombreCompletoBase = arrendatario.nombre_completo || persona.nombre_completo || "";
   const apellidosBase = arrendatario.apellido_completo || persona.apellido_completo || "";
@@ -179,6 +204,23 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     arriendo.preaviso_fecha ||
     arriendo.preavisoFecha ||
     "";
+  const preavisoDecision =
+    arriendo.preaviso_decision ||
+    arriendo.preavisoDecision ||
+    "";
+  const preavisoObservacionDecision =
+    arriendo.preaviso_observacion_decision ||
+    arriendo.preavisoObservacionDecision ||
+    "";
+  const preavisoFechaDecision =
+    arriendo.preaviso_fecha_decision ||
+    arriendo.preavisoFechaDecision ||
+    "";
+  const preavisosHistorial = Array.isArray(arriendo.preavisos_historial)
+    ? arriendo.preavisos_historial
+    : Array.isArray(arriendo.preavisosHistorial)
+      ? arriendo.preavisosHistorial
+      : [];
 
   return {
     id: arriendo.id_arrendamiento || arriendo.id_arriendo || arriendo.id || Date.now(),
@@ -204,6 +246,8 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     segundoApellidoCodeudor: segundoApellidoCod,
     correoCodeudor: codeudor.correo || codeudorPersona.correo || "",
     telefonoCodeudor: codeudor.telefono || codeudorPersona.telefono || "",
+    actividadEconomicaCodeudor:
+      codeudor.actividad_economica || codeudorPersona.actividad_economica || "",
     tipoInmueble: inmueble.categoria || inmueble.tipo || "",
     registroInmobiliario: inmueble.registro_inmobiliario || inmueble.registro || "",
     nombreInmueble: inmueble.nombre || inmueble.titulo || "",
@@ -213,11 +257,13 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     departamento: inmueble.departamento || "",
     ciudad: inmueble.ciudad || "",
     barrio: inmueble.barrio || "",
-    estrato: inmueble.estrato || "",
     direccion: inmueble.direccion || "",
     precioInmueble: formatCurrency(inmueble.precio_arriendo || inmueble.precio || valor),
     fechaInicio: fechaInicio || "",
     fechaFinal: fechaFin || "",
+    duracionMeses: Number(arriendo.duracion_meses) > 0 ? Number(arriendo.duracion_meses) : null,
+    duracionProrrogaMeses:
+      Number(arriendo.duracion_prorroga_meses) > 0 ? Number(arriendo.duracion_prorroga_meses) : null,
     fechaCobro: fechaCobroStr || "No especificada",
     precio: formatCurrency(valor),
     descripcion: descripcionContrato,
@@ -232,6 +278,18 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     preavisoObservacion,
     preavisoUrlSoporte,
     preavisoFecha: preavisoFecha ? String(preavisoFecha).slice(0, 10) : "",
+    preavisoDecision,
+    preavisoObservacionDecision,
+    preavisoFechaDecision: preavisoFechaDecision ? String(preavisoFechaDecision).slice(0, 10) : "",
+    preavisosHistorial: preavisosHistorial.map((item, index) => ({
+      id: item.id || `${arriendo.id_arrendamiento || arriendo.id || "pre"}-${index}`,
+      observacion: item.observacion || "",
+      urlSoporte: item.url_soporte || item.urlSoporte || "",
+      fecha: item.fecha_creacion ? String(item.fecha_creacion).slice(0, 10) : "",
+      decision: item.decision || "",
+      observacionDecision: item.observacion_decision || item.observacionDecision || "",
+      fechaDecision: item.fecha_decision ? String(item.fecha_decision).slice(0, 10) : "",
+    })),
     totalSeguimientos,
     rawLease: arriendo,
   };
@@ -243,6 +301,8 @@ export function RenantManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("todos");
+  const [tipoInmuebleFilter, setTipoInmuebleFilter] = useState("todos");
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({
     total: 0,
@@ -254,17 +314,19 @@ export function RenantManagementPage() {
   const [viewingRent, setViewingRent] = useState(null);
   const [statusRent, setStatusRent] = useState(null); // arriendo en seguimiento (solo estado)
   const [leaseOptionsRent, setLeaseOptionsRent] = useState(null);
+  const [adjustmentRent, setAdjustmentRent] = useState(null);
   const [extensionRent, setExtensionRent] = useState(null);
   const [preNoticeRent, setPreNoticeRent] = useState(null);
   const [preNoticePreviewOpen, setPreNoticePreviewOpen] = useState(false);
+  const [preNoticePreviewAsset, setPreNoticePreviewAsset] = useState({ url: "", name: "" });
   const [preNoticePdfViewer, setPreNoticePdfViewer] = useState({ isOpen: false, url: "", name: "" });
   const [statusMessage, setStatusMessage] = useState(null);
   const [payments, setPayments] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [uploadingPaymentId, setUploadingPaymentId] = useState(null);
   const [applyingExtension, setApplyingExtension] = useState(false);
+  const [applyingAdjustment, setApplyingAdjustment] = useState(false);
   const [savingPreNotice, setSavingPreNotice] = useState(false);
-  const [deletingPreNotice, setDeletingPreNotice] = useState(false);
   const { toast } = useToast();
   const fetchArriendos = useCallback(async (query = "", page = 1) => {
     setIsLoading(true);
@@ -273,19 +335,20 @@ export function RenantManagementPage() {
         page,
         limit: PAGE_SIZE,
         search: query || undefined,
+        estado: estadoFilter !== "todos" ? estadoFilter : undefined,
+        tipo_inmueble: tipoInmuebleFilter !== "todos" ? tipoInmuebleFilter : undefined,
       });
       const list = response?.data || [];
-      const rowsBase = list.map(mapApiArriendoToRow);
-      // Ya no forzamos sincronizaciÃ³n automÃ¡tica de estado para respetar cambios manuales
-      setArriendos(rowsBase);
-      const pagination = response?.pagination || {
-        total: rowsBase.length,
+      setArriendos(list.map(mapApiArriendoToRow));
+      setPagination(response?.pagination || {
+        total: list.length,
         pagina: page,
         limite: PAGE_SIZE,
         paginas_totales: 1,
-      };
-      setPagination(pagination);
-      setCurrentPage(pagination.pagina);
+        has_next_page: false,
+        has_prev_page: page > 1,
+      });
+      setCurrentPage(response?.pagination?.pagina || page);
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage({
@@ -300,7 +363,7 @@ export function RenantManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [setStatusMessage]);
+  }, [estadoFilter, setStatusMessage, tipoInmuebleFilter]);
 
   useEffect(() => {
     fetchArriendos();
@@ -315,6 +378,11 @@ export function RenantManagementPage() {
 
     return () => clearTimeout(timeoutId);
   }, [searchTerm, fetchArriendos]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchArriendos(searchTerm.trim(), 1);
+  }, [estadoFilter, tipoInmuebleFilter, fetchArriendos, searchTerm]);
 
   const loadPayments = useCallback(async (leaseId) => {
     if (!leaseId) return;
@@ -350,7 +418,7 @@ export function RenantManagementPage() {
   const openStatusModal = (rent) => {
     setStatusRent({
       ...rent,
-      nuevoEstado: rent.estado === "Debe" ? "Activo" : (rent.estado || "Activo"),
+      nuevoEstado: rent.estado || "Activo",
       comentario: "",
     });
     loadPayments(rent.id);
@@ -373,10 +441,35 @@ export function RenantManagementPage() {
     setLeaseOptionsRent(null);
   };
 
+  const openAdjustmentModal = (rent) => {
+    const startDate = parseIsoDate(rent.fechaInicio);
+    const defaultAdjustmentDate = addMonthsClampedUtc(startDate, 12);
+
+    setLeaseOptionsRent(null);
+    setAdjustmentRent({
+      ...rent,
+      adjustmentDate: formatIsoDate(defaultAdjustmentDate),
+      newMonthlyValue: String(rent.valorMensual || "").replace(/[^\d]/g, ""),
+      adjustmentComment: "",
+    });
+  };
+
+  const closeAdjustmentModal = () => {
+    if (applyingAdjustment) return;
+    setAdjustmentRent(null);
+  };
+
   const openExtensionModal = (rent) => {
     const startDate = parseIsoDate(rent.fechaInicio);
     const endDate = parseIsoDate(rent.fechaFinal);
-    const durationMonths = Math.max(diffMonthsUtc(startDate, endDate), 1);
+    const trackedExtensionMonths = parseExtensionMonthsFromComment(rent.ultimoSeguimientoComentario);
+    const durationMonths = Number(trackedExtensionMonths) > 0
+      ? Number(trackedExtensionMonths)
+      : Number(rent.duracionProrrogaMeses) > 0
+      ? Number(rent.duracionProrrogaMeses)
+      : Number(rent.duracionMeses) > 0
+        ? Number(rent.duracionMeses)
+      : Math.max(diffMonthsUtc(startDate, endDate), 1);
     const suggestedEndDate = addMonthsClampedUtc(endDate, durationMonths);
 
     setLeaseOptionsRent(null);
@@ -400,33 +493,40 @@ export function RenantManagementPage() {
     setLeaseOptionsRent(null);
     setPreNoticeRent({
       ...rent,
-      observacion: rent.preavisoObservacion || "",
+      observacion: "",
+      decision: "",
       soporte: null,
       existingObservacion: rent.preavisoObservacion || "",
       existingSoporteUrl: rent.preavisoUrlSoporte || "",
       existingFecha: rent.preavisoFecha || "",
+      existingDecision: rent.preavisoDecision || "",
+      existingDecisionObservation: rent.preavisoObservacionDecision || "",
+      existingDecisionDate: rent.preavisoFechaDecision || "",
+      preNoticeHistory: Array.isArray(rent.preavisosHistorial) ? rent.preavisosHistorial : [],
     });
   };
 
   const closePreNoticeModal = () => {
-    if (savingPreNotice || deletingPreNotice) return;
+    if (savingPreNotice) return;
     setPreNoticeRent(null);
     setPreNoticePreviewOpen(false);
+    setPreNoticePreviewAsset({ url: "", name: "" });
     setPreNoticePdfViewer({ isOpen: false, url: "", name: "" });
   };
 
-  const openPreNoticeSupportViewer = () => {
-    if (!preNoticeRent?.existingSoporteUrl) return;
+  const openPreNoticeSupportViewer = (targetUrl = preNoticeRent?.existingSoporteUrl, targetName = `Preaviso ${preNoticeRent?.existingFecha || ""}`.trim()) => {
+    if (!targetUrl) return;
 
-    if (isPdfUrl(preNoticeRent.existingSoporteUrl)) {
+    if (isPdfUrl(targetUrl)) {
       setPreNoticePdfViewer({
         isOpen: true,
-        url: preNoticeRent.existingSoporteUrl,
-        name: `Preaviso ${preNoticeRent.existingFecha || ""}`.trim(),
+        url: targetUrl,
+        name: targetName,
       });
       return;
     }
 
+    setPreNoticePreviewAsset({ url: targetUrl, name: targetName });
     setPreNoticePreviewOpen(true);
   };
 
@@ -513,6 +613,14 @@ export function RenantManagementPage() {
   const handleStatusSave = async () => {
     if (!statusRent) return;
     const { id, nuevoEstado, comentario } = statusRent;
+    if (nuevoEstado === "Finalizado") {
+      const shouldFinalize = window.confirm(
+        "Al finalizar este arriendo ya no podras hacer prorroga ni mas seguimiento. ¿Deseas continuar?"
+      );
+      if (!shouldFinalize) {
+        return;
+      }
+    }
     try {
       setStatusMessage(null);
       await arriendoApiService.actualizarEstado(id, {
@@ -664,6 +772,53 @@ export function RenantManagementPage() {
     }
   };
 
+  const handleApplyAdjustment = async () => {
+    if (!adjustmentRent) return;
+
+    const newMonthlyValue = Number(String(adjustmentRent.newMonthlyValue || "").replace(/[^\d]/g, ""));
+    if (!adjustmentRent.adjustmentDate) {
+      toast({
+        title: "Fecha requerida",
+        description: "Debes seleccionar la fecha del reajuste.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!newMonthlyValue || newMonthlyValue <= 0) {
+      toast({
+        title: "Canon inválido",
+        description: "Ingresa un nuevo canon mayor a cero.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setApplyingAdjustment(true);
+    try {
+      await arriendoApiService.reajustarCanon(adjustmentRent.id, {
+        fecha_reajuste: adjustmentRent.adjustmentDate,
+        valor_mensual: newMonthlyValue,
+        comentario: adjustmentRent.adjustmentComment?.trim() || undefined,
+      });
+      await fetchArriendos(searchTerm.trim(), currentPage);
+      setAdjustmentRent(null);
+      toast({
+        title: "Reajuste aplicado",
+        description: "El canon del arriendo se actualizó correctamente.",
+        variant: "default",
+      });
+    } catch (error) {
+      toast({
+        title: "Error al aplicar reajuste",
+        description: error?.response?.data?.message || error?.message || "No fue posible aplicar el reajuste.",
+        variant: "destructive",
+      });
+    } finally {
+      setApplyingAdjustment(false);
+    }
+  };
+
   const handleSavePreNotice = async () => {
     if (!preNoticeRent) return;
     if (!preNoticeRent.soporte && !preNoticeRent.observacion?.trim()) {
@@ -674,13 +829,17 @@ export function RenantManagementPage() {
       });
       return;
     }
+    if (!preNoticeRent.decision) {
+      toast({
+        title: "Decision requerida",
+        description: "Debes seleccionar si el preaviso fue aceptado o rechazado.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setSavingPreNotice(true);
     try {
-      const wasUpdating =
-        Boolean(preNoticeRent.existingObservacion?.trim()) ||
-        Boolean(preNoticeRent.existingSoporteUrl);
-
       let supportUrl = null;
       if (preNoticeRent.soporte) {
         const upload = await uploadToCloudinary(preNoticeRent.soporte, { folder: 'inmotech/preavisos' });
@@ -690,14 +849,13 @@ export function RenantManagementPage() {
       await arriendoApiService.registrarPreaviso(preNoticeRent.id, {
         comentario: preNoticeRent.observacion?.trim() || null,
         url_soporte: supportUrl,
+        decision: preNoticeRent.decision,
       });
       await fetchArriendos(searchTerm.trim(), currentPage);
       setPreNoticeRent(null);
       toast({
-        title: wasUpdating ? "Preaviso actualizado" : "Preaviso registrado",
-        description: wasUpdating
-          ? "La observaci?n o el soporte del preaviso se actualizaron correctamente."
-          : "La observaci?n o el soporte del preaviso se guardaron correctamente.",
+        title: "Preaviso registrado",
+        description: "El preaviso se guardó correctamente.",
         variant: "default",
       });
     } catch (error) {
@@ -708,35 +866,6 @@ export function RenantManagementPage() {
       });
     } finally {
       setSavingPreNotice(false);
-    }
-  };
-
-  const handleDeletePreNotice = async () => {
-    if (!preNoticeRent) return;
-    const shouldDelete = window.confirm(
-      "Se eliminar? el preaviso visible de este contrato. ?Deseas continuar?"
-    );
-
-    if (!shouldDelete) return;
-
-    setDeletingPreNotice(true);
-    try {
-      await arriendoApiService.eliminarPreaviso(preNoticeRent.id);
-      await fetchArriendos(searchTerm.trim(), currentPage);
-      setPreNoticeRent(null);
-      toast({
-        title: "Preaviso eliminado",
-        description: "El preaviso del contrato fue eliminado correctamente.",
-        variant: "default",
-      });
-    } catch (error) {
-      toast({
-        title: "Error al eliminar preaviso",
-        description: error?.response?.data?.message || error?.message || "No fue posible eliminar el preaviso.",
-        variant: "destructive",
-      });
-    } finally {
-      setDeletingPreNotice(false);
     }
   };
 
@@ -915,7 +1044,7 @@ const renderDeleteModal = () => {
 
   const renderStatusModal = () => {
     if (!statusRent) return null;
-    const estados = ["Activo", "Al día", "Pendiente", "Recuperación", "Finalizado", "Cancelado"];
+    const estados = ["Activo", "Al d\u00eda", "Pendiente", "Debe", "Finalizado"];
 
     return (
       <LeaseStatusModal
@@ -933,8 +1062,10 @@ const renderDeleteModal = () => {
     );
   };
 
+  /*
   const renderLeaseOptionsModal = () => {
     if (!leaseOptionsRent) return null;
+    const isFinalizedLease = leaseOptionsRent.estado === "Finalizado";
 
     const nombre =
       `${leaseOptionsRent.primerNombreArrendatario || ""} ${leaseOptionsRent.primerApellidoArrendatario || ""}`.trim() ||
@@ -970,22 +1101,66 @@ const renderDeleteModal = () => {
           <div className="space-y-3 px-5 py-5">
             <button
               type="button"
-              onClick={() => openExtensionModal(leaseOptionsRent)}
-              className="flex w-full items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-4 text-left transition hover:bg-violet-100"
+              onClick={() => {
+                if (isFinalizedLease) return;
+                openExtensionModal(leaseOptionsRent);
+              }}
+              disabled={isFinalizedLease}
+              className={`flex w-full items-center gap-3 rounded-xl px-4 py-4 text-left transition ${
+                isFinalizedLease
+                  ? "cursor-not-allowed border border-slate-200 bg-slate-100"
+                  : "border border-violet-200 bg-violet-50 hover:bg-violet-100"
+              }`}
             >
-              <Calendar className="h-5 w-5 text-violet-700" />
+              <Calendar className={`h-5 w-5 ${isFinalizedLease ? "text-slate-400" : "text-violet-700"}`} />
               <div>
                 <p className="text-sm font-semibold text-slate-900">Prórroga</p>
-                <p className="text-xs text-slate-600">Extender la fecha final del contrato.</p>
+                <p className="text-xs text-slate-600">
+                  {isFinalizedLease
+                    ? "No disponible porque el arriendo ya esta finalizado."
+                    : "Extender la fecha final del contrato."}
+                </p>
               </div>
             </button>
 
             <button
               type="button"
-              onClick={() => openPreNoticeModal(leaseOptionsRent)}
-              className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-left transition hover:bg-amber-100"
+              onClick={() => {
+                if (isFinalizedLease) return;
+                openAdjustmentModal(leaseOptionsRent);
+              }}
+              disabled={isFinalizedLease}
+              className={`flex w-full items-center gap-3 rounded-xl px-4 py-4 text-left transition ${
+                isFinalizedLease
+                  ? "cursor-not-allowed border border-slate-200 bg-slate-100"
+                  : "border border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+              }`}
             >
-              <AlertCircle className="h-5 w-5 text-amber-700" />
+              <FaDollarSign className={`h-5 w-5 ${isFinalizedLease ? "text-slate-400" : "text-emerald-700"}`} />
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Reajuste</p>
+                <p className="text-xs text-slate-600">
+                  {isFinalizedLease
+                    ? "No disponible porque el arriendo ya esta finalizado."
+                    : "Actualizar el canon anual del contrato."}
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (isFinalizedLease) return;
+                openPreNoticeModal(leaseOptionsRent);
+              }}
+              disabled={isFinalizedLease}
+              className={`flex w-full items-center gap-3 rounded-xl px-4 py-4 text-left transition ${
+                isFinalizedLease
+                  ? "cursor-not-allowed border border-slate-200 bg-slate-100"
+                  : "border border-amber-200 bg-amber-50 hover:bg-amber-100"
+              }`}
+            >
+              <AlertCircle className={`h-5 w-5 ${isFinalizedLease ? "text-slate-400" : "text-amber-700"}`} />
               <div>
                 <p className="text-sm font-semibold text-slate-900">Preaviso</p>
                 <p className="text-xs text-slate-600">Registrar aviso de terminación del contrato.</p>
@@ -1018,7 +1193,7 @@ const renderDeleteModal = () => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
           transition={{ duration: 0.2 }}
-          className="relative flex w-full max-w-[620px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          className="relative flex w-full max-w-md flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
@@ -1036,7 +1211,7 @@ const renderDeleteModal = () => {
             </button>
           </div>
 
-          <div className="space-y-2 overflow-y-visible px-3.5 py-2.5">
+          <div className="space-y-3 px-5 py-4">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -1116,7 +1291,7 @@ const renderDeleteModal = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50 px-3.5 py-2.5">
+          <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50 px-5 py-4">
             <button
               type="button"
               onClick={closeExtensionModal}
@@ -1132,6 +1307,130 @@ const renderDeleteModal = () => {
               className="rounded-xl bg-violet-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               {applyingExtension ? "Aplicando..." : "Guardar prorroga"}
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+
+    return ReactDOM.createPortal(
+      modalContent,
+      document.getElementById('modal-root') || document.body
+    );
+  };
+
+  const renderAdjustmentModal = () => {
+    if (!adjustmentRent) return null;
+
+    const modalContent = (
+      <div className="fixed inset-0 z-[75] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeAdjustmentModal} />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 12 }}
+          transition={{ duration: 0.2 }}
+          className="relative flex w-full max-w-md flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Reajuste de canon</h3>
+              <p className="mt-0.5 text-xs text-slate-600">
+                Actualiza el valor mensual del contrato y los cobros futuros.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeAdjustmentModal}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
+              aria-label="Cerrar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="space-y-3 px-5 py-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Canon actual
+                </p>
+                <p className="mt-1 text-xl font-bold text-slate-900">{adjustmentRent.valorMensual}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Fecha sugerida
+                </p>
+                <p className="mt-1 text-xl font-bold text-slate-900">{adjustmentRent.adjustmentDate}</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Fecha del reajuste *</label>
+              <input
+                type="date"
+                value={adjustmentRent.adjustmentDate || ""}
+                onChange={(e) =>
+                  setAdjustmentRent((prev) => ({ ...prev, adjustmentDate: e.target.value }))
+                }
+                disabled={applyingAdjustment}
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Nuevo canon mensual *</label>
+              <input
+                type="text"
+                value={adjustmentRent.newMonthlyValue || ""}
+                onChange={(e) =>
+                  setAdjustmentRent((prev) => ({
+                    ...prev,
+                    newMonthlyValue: String(e.target.value || "").replace(/\D+/g, ""),
+                  }))
+                }
+                disabled={applyingAdjustment}
+                placeholder="Ej: 3200000"
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Valor formateado: {formatCurrency(adjustmentRent.newMonthlyValue || 0)}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Descripción</label>
+              <textarea
+                value={adjustmentRent.adjustmentComment || ""}
+                onChange={(e) =>
+                  setAdjustmentRent((prev) => ({ ...prev, adjustmentComment: e.target.value }))
+                }
+                disabled={applyingAdjustment}
+                rows={3}
+                placeholder="Describe el motivo del reajuste (opcional)"
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50 px-5 py-4">
+            <button
+              type="button"
+              onClick={closeAdjustmentModal}
+              className="rounded-xl border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              disabled={applyingAdjustment}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyAdjustment}
+              disabled={applyingAdjustment}
+              className="rounded-xl bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              {applyingAdjustment ? "Aplicando..." : "Guardar reajuste"}
             </button>
           </div>
         </motion.div>
@@ -1164,7 +1463,7 @@ const renderDeleteModal = () => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
           transition={{ duration: 0.2 }}
-          className="relative flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          className="relative flex w-full max-w-md flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
@@ -1182,7 +1481,7 @@ const renderDeleteModal = () => {
             </button>
           </div>
 
-          <div className="space-y-3 overflow-y-auto px-5 py-4">
+          <div className="space-y-3 px-5 py-4">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Periodo actual del arriendo</p>
               <p className="mt-1 text-sm text-slate-900">
@@ -1294,6 +1593,7 @@ const renderDeleteModal = () => {
       document.getElementById('modal-root') || document.body
     );
   };
+  */
 
   return (
     <>
@@ -1344,15 +1644,41 @@ const renderDeleteModal = () => {
             </div>
           </div>
           
-          <div className="flex gap-2">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-blue-300"
-            >
-              <Filter className="w-4 h-4" />
-              Filtros
-            </motion.button>
+          <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-white">
+              <Filter className="w-4 h-4 text-slate-500" />
+              <select
+                value={estadoFilter}
+                onChange={(e) => setEstadoFilter(e.target.value)}
+                className="bg-transparent text-sm text-slate-700 focus:outline-none"
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="activo">Activo</option>
+                <option value="al dia">Al dia</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="debe">Debe</option>
+                <option value="finalizado">Finalizado</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-white">
+              <Home className="w-4 h-4 text-slate-500" />
+              <select
+                value={tipoInmuebleFilter}
+                onChange={(e) => setTipoInmuebleFilter(e.target.value)}
+                className="bg-transparent text-sm text-slate-700 focus:outline-none"
+              >
+                <option value="todos">Todos los inmuebles</option>
+                <option value="casa">Casa</option>
+                <option value="apartamento">Apartamento</option>
+                <option value="apartaestudio">Apartaestudio</option>
+                <option value="oficina">Oficina</option>
+                <option value="finca">Finca</option>
+                <option value="lote">Lote</option>
+                <option value="local">Local</option>
+                <option value="bodega">Bodega</option>
+              </select>
+            </div>
           </div>
         </motion.div>
 
@@ -1481,25 +1807,11 @@ const renderDeleteModal = () => {
             </div>
             <Pagination
               currentPage={currentPage}
-              totalPages={
-                (Boolean(pagination?.has_next_page) ||
-                  ((pagination?.paginas_totales || 1) <= currentPage && arriendos.length === PAGE_SIZE))
-                  ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                  : Math.max(pagination?.paginas_totales || 1, currentPage)
-              }
-              hasPrevPage={currentPage > 1}
-              hasNextPage={
-                Boolean(pagination?.has_next_page) ||
-                ((pagination?.paginas_totales || 1) <= currentPage && arriendos.length === PAGE_SIZE)
-              }
+              totalPages={Math.max(pagination?.paginas_totales || 1, 1)}
+              hasPrevPage={Boolean(pagination?.has_prev_page)}
+              hasNextPage={Boolean(pagination?.has_next_page)}
               onPageChange={(page) => {
-                const hasNextPage =
-                  Boolean(pagination?.has_next_page) ||
-                  ((pagination?.paginas_totales || 1) <= currentPage && arriendos.length === PAGE_SIZE);
-                const totalPages = hasNextPage
-                  ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                  : Math.max(pagination?.paginas_totales || 1, currentPage);
-                if (page === currentPage || page < 1 || (page > totalPages && !hasNextPage)) return;
+                if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
                 setCurrentPage(page);
                 fetchArriendos(searchTerm.trim(), page);
               }}
@@ -1512,19 +1824,54 @@ const renderDeleteModal = () => {
       {renderFormModal()}
       {renderViewModal()}
       {renderStatusModal()}
-      {renderLeaseOptionsModal()}
-      {renderExtensionModal()}
-      {renderPreNoticeModal()}
+      <LeaseOptionsContractModal
+        rent={leaseOptionsRent}
+        onClose={closeLeaseOptionsModal}
+        onOpenExtension={openExtensionModal}
+        onOpenAdjustment={openAdjustmentModal}
+        onOpenPreNotice={openPreNoticeModal}
+      />
+      <LeaseAdjustmentModal
+        rent={adjustmentRent}
+        applyingAdjustment={applyingAdjustment}
+        formatCurrency={formatCurrency}
+        onClose={closeAdjustmentModal}
+        onChangeDate={(value) => setAdjustmentRent((prev) => ({ ...prev, adjustmentDate: value }))}
+        onChangeValue={(value) => setAdjustmentRent((prev) => ({ ...prev, newMonthlyValue: value }))}
+        onChangeComment={(value) => setAdjustmentRent((prev) => ({ ...prev, adjustmentComment: value }))}
+        onApply={handleApplyAdjustment}
+      />
+      <LeaseExtensionModal
+        rent={extensionRent}
+        applyingExtension={applyingExtension}
+        onClose={closeExtensionModal}
+        onToggleApply={(checked) => setExtensionRent((prev) => ({ ...prev, applyExtension: checked }))}
+        onChangeComment={(value) => setExtensionRent((prev) => ({ ...prev, extensionComment: value }))}
+        onApply={handleApplyExtension}
+      />
+      <LeasePreNoticeModal
+        rent={preNoticeRent}
+        savingPreNotice={savingPreNotice}
+        onClose={closePreNoticeModal}
+        onFileChange={(file) => setPreNoticeRent((prev) => ({ ...prev, soporte: file }))}
+        onChangeObservation={(value) => setPreNoticeRent((prev) => ({ ...prev, observacion: value }))}
+        onChangeDecision={(value) => setPreNoticeRent((prev) => ({ ...prev, decision: value }))}
+        onOpenSupport={openPreNoticeSupportViewer}
+        onSave={handleSavePreNotice}
+      />
       {ReactDOM.createPortal(
         <ImageViewer
-          isOpen={preNoticePreviewOpen && Boolean(preNoticeRent?.existingSoporteUrl) && !isPdfUrl(preNoticeRent?.existingSoporteUrl)}
-          onClose={() => setPreNoticePreviewOpen(false)}
+          isOpen={preNoticePreviewOpen && Boolean(preNoticePreviewAsset.url) && !isPdfUrl(preNoticePreviewAsset.url)}
+          onClose={() => {
+            setPreNoticePreviewOpen(false);
+            setPreNoticePreviewAsset({ url: "", name: "" });
+          }}
           images={
-            preNoticeRent?.existingSoporteUrl
+            preNoticePreviewAsset.url
               ? [
                   {
-                    url: preNoticeRent.existingSoporteUrl,
-                    name: `Preaviso ${preNoticeRent.existingFecha || ""}`.trim(),
+                    url: preNoticePreviewAsset.url,
+                    name: preNoticePreviewAsset.name || "Soporte del preaviso",
                   },
                 ]
               : []
@@ -1579,6 +1926,7 @@ const renderDeleteModal = () => {
     </>
   );
 }
+
 
 
 

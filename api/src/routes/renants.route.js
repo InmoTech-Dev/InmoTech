@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const renantsController = require('../controllers/renants.controller');
-const { validate } = require('../middlewares/validate.middleware');
+const { validate, validateQuery } = require('../middlewares/validate.middleware');
 const { renantsLimiter, strictLimiter } = require('../middlewares/security.middleware');
 
 const {
@@ -20,6 +20,13 @@ router.post(
 
 // GET /api/v1/leases/renants - Obtener todos los arrendatarios
 router.get('/', renantsController.getAllRenants);
+
+// GET /api/v1/leases/renants/search/:criterio - Buscar arrendatarios
+router.get(
+  '/search/:criterio',
+  validateQuery(searchRenantsSchema),
+  renantsController.searchRenants
+);
 
 // GET /api/v1/leases/renants/:id - Obtener arrendatario por ID
 router.get('/:id', renantsController.getRenantById);
@@ -45,12 +52,5 @@ router.delete('/:id', strictLimiter, renantsController.deleteRenant);
 
 // PATCH /api/v1/leases/renants/:id/deactivate - Desactivar arrendatario
 router.patch('/:id/deactivate', strictLimiter, renantsController.deactivateRenant);
-
-// GET /api/v1/leases/renants/search/:criterio - Buscar arrendatarios
-router.get(
-  '/search/:criterio',
-  validate(searchRenantsSchema),
-  renantsController.searchRenants
-);
 
 module.exports = router;

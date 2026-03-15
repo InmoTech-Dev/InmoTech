@@ -40,8 +40,11 @@ const updateRenantSchema = Joi.object({
 const searchRenantsSchema = Joi.object({
   tipo_documento: Joi.string().valid(...documentTypes),
   numero_documento: Joi.string().max(20),
+  criterio: Joi.string().max(100),
   nombre: Joi.string().max(100),
+  search: Joi.string().max(100),
   status: Joi.string().valid(...tenantStatuses),
+  estado: Joi.string().valid(...tenantStatuses),
   tipo_arrendatario: Joi.string().valid(...tenantTypes)
 });
 

@@ -34,6 +34,10 @@ class SalesController {
         filters.estado = req.query.estado;
       }
 
+      if (req.query.tipo_compra) {
+        filters.tipo_compra = req.query.tipo_compra;
+      }
+
       if (req.query.id_persona) {
         filters.id_persona = parseInt(req.query.id_persona);
       }
@@ -47,7 +51,7 @@ class SalesController {
         filters.search = req.query.search;
       }
 
-      filters.pagination = normalizePagination(req.query);
+      filters.pagination = normalizePagination(req.query, { defaultLimit: 5, maxLimit: 5 });
 
       const result = await saleService.getAllSales(filters);
 

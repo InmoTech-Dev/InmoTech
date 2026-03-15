@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { Plus, Search, Filter, Eye, Edit, AlertCircle, Mail, Home, Phone, ChevronDown } from 'lucide-react';
@@ -101,15 +101,18 @@ const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowe
 
 export function BuyersManagementPage() {
     const PAGE_SIZE = 5;
+    const statusButtonRefs = useRef({});
     const [compradores, setCompradores] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [, setStatusMessage] = useState(null);
     const [statusChangingId, setStatusChangingId] = useState(null);
     const [statusMenuId, setStatusMenuId] = useState(null);
+    const [statusMenuPosition, setStatusMenuPosition] = useState(null);
 
     // --- ESTADOS DE ACCION ---
     const [searchTerm, setSearchTerm] = useState("");
+    const [estadoFilter, setEstadoFilter] = useState("todos");
     const [currentPage, setCurrentPage] = useState(1);
     const [pagination, setPagination] = useState({
         total: 0,
@@ -133,30 +136,17 @@ export function BuyersManagementPage() {
             setIsLoading(true);
             const params = { page, limit: PAGE_SIZE };
             if (query) params.search = query;
+            if (estadoFilter !== "todos") params.estado = estadoFilter;
             const result = await buyersApiService.getAll(params);
-            const rows = normalizeBuyers(filterRealBuyers(result.data));
-            const pagination = result.pagination || {
-                total: rows.length,
-                pagina: page,
-                limite: PAGE_SIZE,
-                paginas_totales: 1,
-            };
-            setCompradores(rows);
-            setPagination(pagination);
-            setCurrentPage(pagination.pagina);
+            setCompradores(normalizeBuyers(filterRealBuyers(result.data)));
+            setPagination(result.pagination);
+            setCurrentPage(result.pagination?.pagina || page);
         } catch (error) {
             showStatus("error", error.message || MESSAGES.buyer.loadError);
         } finally {
             setIsLoading(false);
         }
-    }, []);
-
-    const buyerHasNextPage =
-        Boolean(pagination?.has_next_page) ||
-        ((pagination?.paginas_totales || 1) <= currentPage && compradores.length === PAGE_SIZE);
-    const buyerTotalPages = buyerHasNextPage
-        ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-        : Math.max(pagination?.paginas_totales || 1, currentPage);
+    }, [estadoFilter]);
 
     useEffect(() => {
         fetchBuyers();
@@ -172,15 +162,45 @@ export function BuyersManagementPage() {
     }, [searchTerm, fetchBuyers]);
 
     useEffect(() => {
+        setCurrentPage(1);
+        fetchBuyers(searchTerm.trim(), 1);
+    }, [estadoFilter, fetchBuyers, searchTerm]);
+
+    useEffect(() => {
         if (!statusMenuId) return undefined;
 
         const handleOutsideClick = (event) => {
             if (event.target.closest("[data-status-menu]")) return;
             setStatusMenuId(null);
+            setStatusMenuPosition(null);
         };
 
         document.addEventListener("mousedown", handleOutsideClick);
         return () => document.removeEventListener("mousedown", handleOutsideClick);
+    }, [statusMenuId]);
+
+    useEffect(() => {
+        if (!statusMenuId) return undefined;
+
+        const updatePosition = () => {
+            const button = statusButtonRefs.current[statusMenuId];
+            if (!button) return;
+
+            const rect = button.getBoundingClientRect();
+            setStatusMenuPosition({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
+            });
+        };
+
+        updatePosition();
+        window.addEventListener("resize", updatePosition);
+        window.addEventListener("scroll", updatePosition, true);
+
+        return () => {
+            window.removeEventListener("resize", updatePosition);
+            window.removeEventListener("scroll", updatePosition, true);
+        };
     }, [statusMenuId]);
 
     // --- HANDLERS GENERALES ---
@@ -344,8 +364,55 @@ export function BuyersManagementPage() {
             });
         } finally {
             setStatusMenuId(null);
+            setStatusMenuPosition(null);
             setStatusChangingId(null);
         }
+    };
+
+    const handleStatusMenuToggle = (buyerId) => {
+        if (statusMenuId === buyerId) {
+            setStatusMenuId(null);
+            setStatusMenuPosition(null);
+            return;
+        }
+
+        const button = statusButtonRefs.current[buyerId];
+        if (button) {
+            const rect = button.getBoundingClientRect();
+            setStatusMenuPosition({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
+            });
+        }
+
+        setStatusMenuId(buyerId);
+    };
+
+    const renderStatusMenu = (buyer) => {
+        if (!buyer || statusMenuId !== buyer.id || !statusMenuPosition) return null;
+
+        return ReactDOM.createPortal(
+            <div
+                data-status-menu
+                className="fixed z-[9999] w-36 -translate-x-1/2 rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-xl"
+                style={{
+                    top: `${statusMenuPosition.top}px`,
+                    left: `${statusMenuPosition.left}px`,
+                }}
+            >
+                {["Activo", "Inactivo"].map((estadoOpcion) => (
+                    <button
+                        key={estadoOpcion}
+                        type="button"
+                        onClick={() => handleToggleEstado(buyer, estadoOpcion)}
+                        className="w-full px-3 py-2 text-center hover:bg-slate-50"
+                    >
+                        {estadoOpcion}
+                    </button>
+                ))}
+            </div>,
+            document.getElementById('modal-root') || document.body
+        );
     };
 
 
@@ -432,15 +499,19 @@ export function BuyersManagementPage() {
                         </div>
                     </div>
                     
-                    <div className="flex gap-2">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-blue-300"
-                        >
-                            <Filter className="w-4 h-4" />
-                            Filtros
-                        </motion.button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="relative">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                            <select
+                                value={estadoFilter}
+                                onChange={(e) => setEstadoFilter(e.target.value)}
+                                className="pl-10 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="todos">Todos los estados</option>
+                                <option value="activo">Activos</option>
+                                <option value="inactivo">Inactivos</option>
+                            </select>
+                        </div>
                     </div>
                 </motion.div>
 
@@ -524,9 +595,14 @@ export function BuyersManagementPage() {
                                                     <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
                                                         <button
                                                             type="button"
-                                                            onClick={() =>
-                                                                setStatusMenuId((prev) => prev === c.id ? null : c.id)
-                                                            }
+                                                            ref={(element) => {
+                                                                if (element) {
+                                                                    statusButtonRefs.current[c.id] = element;
+                                                                } else {
+                                                                    delete statusButtonRefs.current[c.id];
+                                                                }
+                                                            }}
+                                                            onClick={() => handleStatusMenuToggle(c.id)}
                                                             disabled={statusChangingId === c.id}
                                                             className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
                                                                 estadoNormalized === "activo"
@@ -540,20 +616,7 @@ export function BuyersManagementPage() {
                                                             <span>{estado}</span>
                                                             <ChevronDown className="w-3 h-3 ml-2" />
                                                         </button>
-                                                        {statusMenuId === c.id && (
-                                                            <div className="absolute left-1/2 -translate-x-1/2 top-12 z-50 bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
-                                                                {["Activo", "Inactivo"].map((estadoOpcion) => (
-                                                                    <button
-                                                                        key={estadoOpcion}
-                                                                        type="button"
-                                                                        onClick={() => handleToggleEstado(c, estadoOpcion)}
-                                                                        className="w-full text-left px-3 py-2 hover:bg-slate-50"
-                                                                    >
-                                                                        {estadoOpcion}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        )}
+                                                        {renderStatusMenu(c)}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
@@ -598,11 +661,11 @@ export function BuyersManagementPage() {
                     </div>
                     <Pagination
                         currentPage={currentPage}
-                        totalPages={buyerTotalPages}
-                        hasPrevPage={currentPage > 1}
-                        hasNextPage={buyerHasNextPage}
+                        totalPages={Math.max(pagination?.paginas_totales || 1, 1)}
+                        hasPrevPage={Boolean(pagination?.has_prev_page)}
+                        hasNextPage={Boolean(pagination?.has_next_page)}
                         onPageChange={(page) => {
-                            if (page === currentPage || page < 1 || (page > buyerTotalPages && !buyerHasNextPage)) return;
+                            if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
                             setCurrentPage(page);
                             fetchBuyers(searchTerm.trim(), page);
                         }}

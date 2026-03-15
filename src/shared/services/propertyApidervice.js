@@ -470,7 +470,7 @@ export const inmueblesAPI = {
       const normalizedClean = clean.toLowerCase();
       const matched =
         items.find((item) => (item.registro || '').trim().toLowerCase() === normalizedClean) ||
-        items[0];
+        null;
 
       return matched || null;
     } catch (error) {

@@ -153,7 +153,7 @@ export default function ViewRenant({ renant, onClose }) {
     renant?.codeudorRaw ||
     renant?.codeudorPersona ||
     renant?.codeudor?.persona ||
-    (renant?.codeudor && renant.codeudor.id_persona ? renant.codeudor : {}) ||
+    (renant?.codeudor?.id_persona ? renant.codeudor : {}) ||
     renant?.codeudor_persona ||
     {};
 
@@ -161,6 +161,8 @@ export default function ViewRenant({ renant, onClose }) {
   const numeroDocCod = codeudorPersona.numero_documento || renant?.numeroDocCodeudor || "";
   const correoCod = codeudorPersona.correo || renant?.correoCodeudor || "";
   const telefonoCod = codeudorPersona.telefono || renant?.telefonoCodeudor || "";
+  const actividadEconomicaCod =
+    codeudorPersona.actividad_economica || renant?.actividadEconomicaCodeudor || "";
   const nombreCod =
     codeudorPersona.nombre_completo ||
     renant?.nombreCodeudor ||
@@ -380,6 +382,7 @@ export default function ViewRenant({ renant, onClose }) {
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                     <Field label="Documento" value={formatDocument(tipoDocCod, numeroDocCod)} />
                     <Field label="Teléfono" value={telefonoCod} />
+                    <Field label="Actividad económica" value={actividadEconomicaCod || "-"} />
                     <Field label="Correo" value={correoCod || "-"} />
                     <Field label="Nombre" value={nombreCod || "-"} className="col-span-2" />
                   </div>

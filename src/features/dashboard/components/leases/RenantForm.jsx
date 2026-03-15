@@ -1,9 +1,9 @@
 ﻿import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { FaTimes } from "react-icons/fa";
+import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { renantsApiService } from "../../../../shared/services/arrendatarioApiService";
-import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { toast } from "../../../../shared/hooks/use-toast";
@@ -17,7 +17,7 @@ const requiredFields = [
     // Codeudor
     "tipoDocCodeudor", "numeroDocCodeudor", "primerNombreCodeudor",
     "primerApellidoCodeudor", "telefonoCodeudor", "correoCodeudor",
-    "estabilidadLaboral",
+    "actividadEconomicaCodeudor",
     // Inmueble (Todos los campos excepto Garaje)
     "tipoInmueble", "registroInmobiliario", "nombreInmueble",
     "departamento", "ciudad", "barrio",
@@ -34,6 +34,8 @@ const DOCUMENT_OPTIONS = [
     { value: "Pasaporte", label: "Pasaporte" },
     { value: "TI", label: "Tarjeta de Identidad (TI)" },
 ];
+
+const FIXED_CHARGE_DAY = 5;
 
 const normalizeTextValue = (value = "") =>
     typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -180,6 +182,18 @@ const isOnOrAfterToday = (dateString) => {
     return d.getTime() <= today.getTime();
 };
 
+const hasMinimumOneMonthTerm = (startDateString, endDateString) => {
+    if (!startDateString || !endDateString) return true;
+    const startDate = new Date(`${startDateString}T00:00:00`);
+    const endDate = new Date(`${endDateString}T00:00:00`);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return true;
+
+    const minimumEndDate = new Date(startDate.getTime());
+    minimumEndDate.setMonth(minimumEndDate.getMonth() + 1);
+
+    return endDate.getTime() >= minimumEndDate.getTime();
+};
+
 const combineNames = (first = "", second = "") => {
     return [first, second]
         .map((part) => (part || "").trim())
@@ -198,6 +212,23 @@ const parseNumberField = (value) => {
 const sanitizeNumericString = (value) => {
     if (value === undefined || value === null) return "";
     return value.toString().replace(/[^0-9]/g, "");
+};
+
+const buildFixedChargeDate = (startDateString, chargeDay = FIXED_CHARGE_DAY) => {
+    if (!startDateString) return "";
+    const startDate = new Date(`${startDateString}T00:00:00`);
+    if (Number.isNaN(startDate.getTime())) return "";
+
+    const year = startDate.getFullYear();
+    const month = startDate.getMonth();
+    const sameMonthChargeDate = new Date(year, month, chargeDay);
+
+    if (startDate.getDate() <= chargeDay) {
+        return sameMonthChargeDate.toISOString().slice(0, 10);
+    }
+
+    const nextMonthChargeDate = new Date(year, month + 1, chargeDay);
+    return nextMonthChargeDate.toISOString().slice(0, 10);
 };
 
 const normalizePhone = (value = "") => {
@@ -252,7 +283,8 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         nombre_completo: combineNames(values.primerNombreCodeudor, values.segundoNombreCodeudor),
         apellido_completo: combineNames(values.primerApellidoCodeudor, values.segundoApellidoCodeudor),
         correo: values.correoCodeudor,
-        telefono: values.telefonoCodeudor
+        telefono: values.telefonoCodeudor,
+        actividad_economica: values.actividadEconomicaCodeudor
     };
 
     const valorMensual =
@@ -328,12 +360,18 @@ export default function RentForm({ onClose, onSubmit }) {
     const arrendatarioLookupTimeoutRef = useRef(null);
     const arrendatarioLookupRequestId = useRef(0);
     const manuallyEditedArrendatarioFieldsRef = useRef(new Set());
+    const arrendatarioMatchedDocumentRef = useRef({
+        tipo: "",
+        numero: "",
+    });
     const [inmuebleLookupState, setInmuebleLookupState] = useState({
         loading: false,
         message: "",
         error: null
     });
+    const [, setLeaseUiVersion] = useState(0);
     const inmuebleLookupRequestId = useRef(0);
+    const inmuebleRegistroSnapshotRef = useRef("");
     const totalSteps = 4;
 
     const initial = {
@@ -343,7 +381,7 @@ export default function RentForm({ onClose, onSubmit }) {
 
         tipoDocCodeudor: "", numeroDocCodeudor: "", primerNombreCodeudor: "", segundoNombreCodeudor: "",
         primerApellidoCodeudor: "", segundoApellidoCodeudor: "", correoCodeudor: "", telefonoCodeudor: "",
-        estabilidadLaboral: "",
+        actividadEconomicaCodeudor: "",
 
         tipoInmueble: "", registroInmobiliario: "", nombreInmueble: "",
         departamento: "", ciudad: "", barrio: "", direccion: "", precioInmueble: "",
@@ -380,7 +418,7 @@ export default function RentForm({ onClose, onSubmit }) {
         2: [
             "tipoDocCodeudor", NUMERO_DOC_COD, "primerNombreCodeudor", "segundoNombreCodeudor",
             "primerApellidoCodeudor", "segundoApellidoCodeudor", "correoCodeudor", "telefonoCodeudor",
-            "estabilidadLaboral",
+            "actividadEconomicaCodeudor",
         ],
         3: [
             "tipoInmueble", "registroInmobiliario", "nombreInmueble",
@@ -470,7 +508,7 @@ export default function RentForm({ onClose, onSubmit }) {
             numeroDocCodeudor: "Numero de Documento Codeudor", primerNombreCodeudor: "Primer Nombre Codeudor",
             segundoNombreCodeudor: "Segundo Nombre Codeudor", primerApellidoCodeudor: "Primer Apellido Codeudor",
             segundoApellidoCodeudor: "Segundo Apellido Codeudor", correoCodeudor: "Correo Electronico Codeudor",
-            telefonoCodeudor: "Telefono Codeudor", estabilidadLaboral: "Estabilidad Economica", tipoInmueble: "Tipo de Inmueble",
+            telefonoCodeudor: "Telefono Codeudor", actividadEconomicaCodeudor: "Actividad Economica", tipoInmueble: "Tipo de Inmueble",
             registroInmobiliario: "Registro Inmobiliario", nombreInmueble: "Nombre del Inmueble",
             departamento: "Departamento", ciudad: "Ciudad", barrio: "Barrio", direccion: "Direccion",
             precioInmueble: "Precio del Inmueble",
@@ -482,11 +520,15 @@ export default function RentForm({ onClose, onSubmit }) {
 
     // FunciÃ³n para obtener la clase de estilo (incluyendo el resaltado de error)
     const getFieldClass = useCallback((fieldName) => {
-        const errorClass = errors[fieldName]
+        const hasFieldError =
+            Boolean(errors[fieldName]) ||
+            (fieldName === NUMERO_DOC_ARR && Boolean(arrendatarioLookupState.error)) ||
+            (fieldName === "registroInmobiliario" && Boolean(inmuebleLookupState.error));
+        const errorClass = hasFieldError
             ? "border-red-500 ring-2 ring-red-200"
             : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200";
         return `w-full rounded-xl bg-white px-3 py-2 text-sm shadow-sm focus:outline-none transition ${errorClass}`;
-    }, [errors]);
+    }, [errors, arrendatarioLookupState.error, inmuebleLookupState.error]);
 
     // Formatea un nÃºmero con separadores de miles
     const formatNumberWithThousandsSeparator = (value) => {
@@ -567,6 +609,36 @@ export default function RentForm({ onClose, onSubmit }) {
         manuallyEditedArrendatarioFieldsRef.current.clear();
     };
 
+    const syncChargeDateWithStartDate = useCallback((startDateValue) => {
+        const nextChargeDate = buildFixedChargeDate(startDateValue, FIXED_CHARGE_DAY);
+        setFieldValue("fechaCobro", nextChargeDate);
+        setLeaseUiVersion((version) => version + 1);
+    }, [setFieldValue]);
+
+    const clearArrendatarioAutofill = useCallback((options = {}) => {
+        const { resetValidation = true } = options;
+        arrendatarioMatchedDocumentRef.current = {
+            tipo: "",
+            numero: "",
+        };
+        [
+            "primerNombreArrendatario",
+            "segundoNombreArrendatario",
+            "primerApellidoArrendatario",
+            "segundoApellidoArrendatario",
+            "correoArrendatario",
+            "telefonoArrendatario",
+        ].forEach((field) => setFieldValue(field, ""));
+
+        if (resetValidation) {
+            setErrors((prev) => {
+                const next = { ...prev };
+                delete next.numeroDocArrendatario;
+                return next;
+            });
+        }
+    }, [setFieldValue]);
+
     const applyArrendatarioData = useCallback((renant) => {
         if (!renant) return;
         if (!renantIsActive(renant)) {
@@ -576,6 +648,10 @@ export default function RentForm({ onClose, onSubmit }) {
                 message: "",
                 error: inactiveMsg,
             });
+            setErrors((prev) => ({
+                ...prev,
+                numeroDocArrendatario: inactiveMsg,
+            }));
             toast({
                 title: "Arrendatario inactivo",
                 description: inactiveMsg,
@@ -583,6 +659,11 @@ export default function RentForm({ onClose, onSubmit }) {
             });
             return;
         }
+
+        arrendatarioMatchedDocumentRef.current = {
+            tipo: String(renant.tipoDocumento || renant.raw?.persona?.tipo_documento || "").trim().toUpperCase(),
+            numero: cleanDocument(renant.documento || renant.raw?.persona?.numero_documento || ""),
+        };
 
         const replacements = {
             primerNombreArrendatario: renant.primerNombre || "",
@@ -609,6 +690,7 @@ export default function RentForm({ onClose, onSubmit }) {
             arrendatarioAutoFillFields.forEach((field) => {
                 delete next[field];
             });
+            delete next.numeroDocArrendatario;
             return next;
         });
     }, [arrendatarioAutoFillFields]);
@@ -618,6 +700,7 @@ export default function RentForm({ onClose, onSubmit }) {
 
         const raw = inmueble.metadata?.raw || {};
         valuesRef.current.idInmueble = inmueble.id ?? inmueble.id_inmueble ?? valuesRef.current.idInmueble;
+        inmuebleRegistroSnapshotRef.current = (inmueble.registro || inmueble.registro_inmobiliario || "").trim().toLowerCase();
 
         setFieldValue("tipoInmueble", inmueble.categoria || inmueble.tipo || "");
         setFieldValue("nombreInmueble", inmueble.titulo || inmueble.nombre || inmueble.nombre_comercial || raw.nombre || "");
@@ -637,6 +720,21 @@ export default function RentForm({ onClose, onSubmit }) {
         setFieldValue("precioInmueble", precioAutoFill);
         setFieldValue("precio", precioAutoFill);
 
+    }, [setFieldValue]);
+
+    const clearInmuebleAutofill = useCallback(() => {
+        inmuebleRegistroSnapshotRef.current = "";
+        valuesRef.current.idInmueble = undefined;
+        [
+            "tipoInmueble",
+            "nombreInmueble",
+            "departamento",
+            "ciudad",
+            "barrio",
+            "direccion",
+            "precioInmueble",
+            "precio",
+        ].forEach((field) => setFieldValue(field, ""));
     }, [setFieldValue]);
 
     const handleInmuebleLookup = useCallback(async (registro = "") => {
@@ -748,11 +846,7 @@ export default function RentForm({ onClose, onSubmit }) {
         setArrendatarioLookupState({ loading: true, message: "", error: null });
 
         try {
-            // Mismo flujo que funciona en Compradores: primero buyers (ventas), luego Personas, luego renants.
-            let match = await buyersApiService.findByDocument(tipoDocumento, numeroDocumento);
-            if (!match) {
-                match = await buyersApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
-            }
+            let match = await renantsApiService.findByDocument(tipoDocumento, numeroDocumento);
             if (!match) {
                 match = await renantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
             }
@@ -783,6 +877,10 @@ export default function RentForm({ onClose, onSubmit }) {
                         message: "",
                         error: inactiveMsg,
                     });
+                    setErrors((prev) => ({
+                        ...prev,
+                        numeroDocArrendatario: inactiveMsg,
+                    }));
                     toast({
                         title: "Arrendatario inactivo",
                         description: inactiveMsg,
@@ -792,7 +890,7 @@ export default function RentForm({ onClose, onSubmit }) {
                     applyArrendatarioData(match);
                     setArrendatarioLookupState({
                         loading: false,
-                        message: "Persona encontrada y datos autocompletados.",
+                        message: "",
                         error: null
                     });
                     toast({
@@ -874,10 +972,15 @@ export default function RentForm({ onClose, onSubmit }) {
 
             if (name === "registroInmobiliario") {
                 valuesRef.current.idInmueble = undefined;
-                setInmuebleLookupState((prev) => {
-                    if (!prev.loading && !prev.message && !prev.error) return prev;
-                    return { loading: false, message: "", error: null };
-                });
+                const normalizedRegistro = String(cleanValue || "").trim().toLowerCase();
+                if (
+                    inmuebleRegistroSnapshotRef.current &&
+                    normalizedRegistro !== inmuebleRegistroSnapshotRef.current
+                ) {
+                    clearInmuebleAutofill();
+                } else if (!normalizedRegistro) {
+                    clearInmuebleAutofill();
+                }
             }
         }
 
@@ -893,18 +996,30 @@ export default function RentForm({ onClose, onSubmit }) {
             manuallyEditedArrendatarioFieldsRef.current.add(name);
         }
 
-        // Disparar bÃºsqueda solo con tipo y >=6 dÃ­gitos para no bloquear escritura
         if (name === "numeroDocArrendatario" || name === "tipoDocArrendatario") {
-            const tipo = name === "tipoDocArrendatario" ? cleanValue : valuesRef.current.tipoDocArrendatario;
-            const numero = name === "numeroDocArrendatario" ? cleanValue : valuesRef.current.numeroDocArrendatario;
-            const numeroLimpio = sanitizeNumericString(numero);
-            if (tipo && numeroLimpio.length >= MIN_DOC_LOOKUP_LENGTH) {
-                triggerArrendatarioLookup(120);
-            } else {
-                setArrendatarioLookupState((prev) => {
-                    if (!prev.loading && !prev.message && !prev.error) return prev;
-                    return { loading: false, message: "", error: null };
-                });
+            const tipo = String(
+                name === "tipoDocArrendatario" ? cleanValue : valuesRef.current.tipoDocArrendatario || ""
+            ).trim().toUpperCase();
+            const numero = cleanDocument(
+                name === "numeroDocArrendatario" ? cleanValue : valuesRef.current.numeroDocArrendatario || ""
+            );
+
+            if (
+                arrendatarioMatchedDocumentRef.current.numero &&
+                (
+                    arrendatarioMatchedDocumentRef.current.tipo !== tipo ||
+                    arrendatarioMatchedDocumentRef.current.numero !== numero
+                )
+            ) {
+                if (arrendatarioLookupTimeoutRef.current) {
+                    clearTimeout(arrendatarioLookupTimeoutRef.current);
+                }
+                clearArrendatarioAutofill({ resetValidation: false });
+            } else if (!shouldTriggerArrLookup(tipo, numero)) {
+                if (arrendatarioLookupTimeoutRef.current) {
+                    clearTimeout(arrendatarioLookupTimeoutRef.current);
+                }
+                clearArrendatarioAutofill({ resetValidation: false });
             }
         }
 
@@ -971,9 +1086,18 @@ export default function RentForm({ onClose, onSubmit }) {
         return days;
     };
 
-    const FancyDatePicker = ({ name, label }) => {
-        const errorMessage = errors[name];
+    const FancyDatePicker = ({ name, label, locked = false, helperText = "" }) => {
+        const errorMessage =
+            errors[name] ||
+            (name === NUMERO_DOC_ARR
+                ? arrendatarioLookupState.error
+                : name === "registroInmobiliario"
+                ? inmuebleLookupState.error
+                : "");
         const [open, setOpen] = useState(false);
+        const [panelStyle, setPanelStyle] = useState(null);
+        const triggerRef = useRef(null);
+        const panelRef = useRef(null);
         const selectedValue = valuesRef.current[name];
         const selectedDate = parseYMDToLocalDate(selectedValue);
         const initialMonth = selectedDate || new Date();
@@ -994,10 +1118,37 @@ export default function RentForm({ onClose, onSubmit }) {
             }
         }, [selectedValue]);
 
+        useEffect(() => {
+            if (!open) return undefined;
+
+            const handleOutsideClick = (event) => {
+                if (triggerRef.current?.contains(event.target)) return;
+                if (panelRef.current?.contains(event.target)) return;
+                setOpen(false);
+            };
+
+            setPanelStyle({
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "min(420px, calc(100vw - 2rem))",
+                zIndex: 1100,
+            });
+            document.addEventListener("mousedown", handleOutsideClick);
+
+            return () => {
+                document.removeEventListener("mousedown", handleOutsideClick);
+            };
+        }, [open]);
+
         const handleSelect = (day) => {
             if (day.isDisabled) return;
             const formatted = formatDateForInput(day.date);
             setFieldValue(name, formatted);
+            if (name === "fechaInicio") {
+                syncChargeDateWithStartDate(formatted);
+            }
             setOpen(false);
         };
 
@@ -1011,16 +1162,22 @@ export default function RentForm({ onClose, onSubmit }) {
                 </label>
                 <button
                     type="button"
-                    onClick={() => setOpen((v) => !v)}
-                    className={`w-full flex items-center justify-between rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200 ${errorMessage ? "border-red-400" : ""}`}
+                    ref={triggerRef}
+                    onClick={() => {
+                        if (locked) return;
+                        setOpen((v) => !v);
+                    }}
+                    className={`w-full flex items-center justify-between rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 ${locked ? "cursor-not-allowed bg-gray-50 text-gray-500" : "hover:border-blue-400"} ${errorMessage ? "border-red-400" : ""}`}
+                    disabled={locked}
                 >
                     <span className={selectedValue ? "text-slate-800" : "text-slate-400"}>{displayText}</span>
                     <CalendarIcon className="w-4 h-4 text-slate-500" />
                 </button>
                 {errorMessage && <p className="text-red-500 text-xs mt-1">{errorMessage}</p>}
+                {!errorMessage && helperText && <p className="text-xs text-slate-500 mt-1">{helperText}</p>}
 
-                {open && (
-                    <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 bg-white shadow-2xl p-3">
+                {open && panelStyle && ReactDOM.createPortal(
+                    <div ref={panelRef} style={panelStyle} className="rounded-2xl border border-gray-200 bg-white shadow-2xl p-3">
                         <div className="flex items-center justify-between mb-3">
                             <button
                                 type="button"
@@ -1065,14 +1222,15 @@ export default function RentForm({ onClose, onSubmit }) {
                                 );
                             })}
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 )}
             </div>
         );
     };
 
     // Funciones de validaciÃ³n de formato
-    const isValidName = (value) => /^[a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘Ã¼Ãœ\s]*$/.test(value);
+    const isValidName = (value) => /^[\p{L}\s]*$/u.test(value);
     const isValidNumeric = (value) => /^\d*$/.test(value);
     const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
 
@@ -1120,8 +1278,8 @@ export default function RentForm({ onClose, onSubmit }) {
                 else if (phoneFields.includes(name)) {
                     if (!isValidNumeric(value)) {
                         errorMessage = `Solo se permiten números.`;
-                    } else if (value.length < 7) {
-                        errorMessage = "El teléfono debe tener al menos 7 digitos";
+                    } else if (value.length !== 10) {
+                        errorMessage = "El teléfono debe tener exactamente 10 digitos";
                     }
                 } 
                 else if (emailFields.includes(name) && !isValidEmail(value)) {
@@ -1172,13 +1330,20 @@ export default function RentForm({ onClose, onSubmit }) {
             const tipo = valuesRef.current.tipoDocArrendatario || "";
             const numero = valuesRef.current.numeroDocArrendatario || "";
             if (shouldTriggerArrLookup(tipo, numero)) {
-                triggerArrendatarioLookup(0);
                 fetchArrendatarioByDocument();
+            } else {
+                clearArrendatarioAutofill();
+                setArrendatarioLookupState({ loading: false, message: "", error: null });
             }
         }
 
-        if (name === "registroInmobiliario" && !errorMessage && value.trim().length > 0) {
-            handleInmuebleLookup(value);
+        if (name === "registroInmobiliario") {
+            if (!value.trim()) {
+                clearInmuebleAutofill();
+                setInmuebleLookupState({ loading: false, message: "", error: null });
+            } else if (!errorMessage) {
+                handleInmuebleLookup(value);
+            }
         }
     };
 
@@ -1227,6 +1392,9 @@ export default function RentForm({ onClose, onSubmit }) {
                 } 
                 else if (phoneFields.includes(fieldName) && !isValidNumeric(value)) {
                     error = `Solo se permiten di­gitos.`;
+                }
+                else if (phoneFields.includes(fieldName) && value.length !== 10) {
+                    error = "El teléfono debe tener exactamente 10 digitos";
                 } 
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
                     error = `Debe ser un correo electrónico valido.`;
@@ -1287,6 +1455,26 @@ export default function RentForm({ onClose, onSubmit }) {
             }
             if (currentErrors[NUMERO_DOC_COD] === conflictErrorMsg) {
                  delete currentErrors[NUMERO_DOC_COD];
+            }
+        }
+
+        const shouldValidateLeaseDates =
+            fieldsToCheck.includes("fechaInicio") || fieldsToCheck.includes("fechaFinal");
+        if (shouldValidateLeaseDates) {
+            const fechaInicio = valuesRef.current.fechaInicio || "";
+            const fechaFinal = valuesRef.current.fechaFinal || "";
+
+            if (
+                fechaInicio &&
+                fechaFinal &&
+                !currentErrors.fechaInicio &&
+                !currentErrors.fechaFinal &&
+                !hasMinimumOneMonthTerm(fechaInicio, fechaFinal)
+            ) {
+                const termError = "La duración mínima del contrato debe ser de un mes.";
+                currentErrors.fechaFinal = termError;
+                hasError = true;
+                if (!firstErrorField) firstErrorField = "fechaFinal";
             }
         }
 
@@ -1452,6 +1640,7 @@ export default function RentForm({ onClose, onSubmit }) {
         const isStrictNumeric = strictNumericFields.includes(name);
         const isCurrencyField = currencyFields.includes(name);
         const isNameField = nameFields.includes(name);
+        const isReadOnlyField = name === "precio" || name === "precioInmueble";
 
         // Determinar si necesita validaciÃ³n en blur (incluye los requeridos para feedback inmediato)
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
@@ -1540,14 +1729,15 @@ export default function RentForm({ onClose, onSubmit }) {
                     id={name}
                     name={name}
                     ref={setElRef(name)}
-                    className={getFieldClass(name)}
+                    className={`${getFieldClass(name)} ${isReadOnlyField ? "bg-gray-50 text-gray-500 cursor-not-allowed" : ""}`}
                     type={inputType}
                     inputMode={inputMode}
                     pattern={pattern}
                     placeholder={fieldPlaceholder}
                     defaultValue={(displayValuesRef.current[name] || initial[name]) ?? ""} 
-                    onChange={handleInputChange}
+                    onChange={isReadOnlyField ? undefined : handleInputChange}
                     onBlur={onBlurHandler}
+                    readOnly={isReadOnlyField}
                 />
                 {errorMessage && (
                     <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
@@ -1632,19 +1822,6 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="correoArrendatario" placeholder="correo@dominio.com" type="email" />
                                     <Field name="telefonoArrendatario" placeholder="Ej: 3001234567 (10 dígitos mínimo)" />
                                 </div>
-                                {(arrendatarioLookupState.loading || arrendatarioLookupState.message || arrendatarioLookupState.error) && (
-                                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                        {arrendatarioLookupState.loading && (
-                                            <p className="text-blue-700">Buscando arrendatario existente...</p>
-                                        )}
-                                        {!arrendatarioLookupState.loading && arrendatarioLookupState.message && (
-                                            <p className="text-green-700">{arrendatarioLookupState.message}</p>
-                                        )}
-                                        {!arrendatarioLookupState.loading && arrendatarioLookupState.error && (
-                                            <p className="text-red-700">{arrendatarioLookupState.error}</p>
-                                        )}
-                                    </div>
-                                )}
                             </section>
                         )}
 
@@ -1668,7 +1845,14 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="segundoApellidoCodeudor" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="correoCodeudor" placeholder="correo@dominio.com" type="email" />
                                     <Field name="telefonoCodeudor" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
-                                    <Field name="estabilidadLaboral" placeholder="Ej: 5 años" />
+                                    <Field
+                                        name="actividadEconomicaCodeudor"
+                                        as="select"
+                                        options={[
+                                            { value: "Empleado", label: "Empleado" },
+                                            { value: "Independiente", label: "Independiente" },
+                                        ]}
+                                    />
                                 </div>
                             </section>
                         )}
@@ -1691,21 +1875,6 @@ export default function RentForm({ onClose, onSubmit }) {
                                         ]}
                                     />
                                     <Field name="registroInmobiliario" placeholder="Ej: 12345-ABC" />
-                                    <div className="md:col-span-3">
-                                        {(inmuebleLookupState.loading || inmuebleLookupState.message || inmuebleLookupState.error) && (
-                                            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                                {inmuebleLookupState.loading && (
-                                                    <p className="text-blue-700">Buscando inmueble...</p>
-                                                )}
-                                                {!inmuebleLookupState.loading && inmuebleLookupState.message && (
-                                                    <p className="text-green-700">{inmuebleLookupState.message}</p>
-                                                )}
-                                                {!inmuebleLookupState.loading && inmuebleLookupState.error && (
-                                                    <p className="text-red-700">{inmuebleLookupState.error}</p>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
                                     <Field name="nombreInmueble" placeholder="Ej: Edificio Central" />
                                     <Field name="departamento" placeholder="Ej: Antioquia" />
                                     <Field name="ciudad" placeholder="Ej: Medellín" />
@@ -1726,7 +1895,12 @@ export default function RentForm({ onClose, onSubmit }) {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FancyDatePicker name="fechaInicio" label="Fecha de Inicio" />
                                     <FancyDatePicker name="fechaFinal" label="Fecha de Finalización" />
-                                    <FancyDatePicker name="fechaCobro" label="Fecha de Cobro" />
+                                    <FancyDatePicker
+                                        name="fechaCobro"
+                                        label="Fecha de Cobro"
+                                        locked
+                                        helperText="Se fija automáticamente al día 5 de cada mes."
+                                    />
                                     <Field name="precio" placeholder="Ej: 1500000 (Solo números enteros mayores a 0)." />
                                 </div>
                             </section>

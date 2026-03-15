@@ -25,6 +25,7 @@ const {
 } = require('../constants/appointmentSchedule');
 const EmailService = require('./email.service');
 const sseService = require('./sse.service');
+const notificacionService = require('./notificacion.service');
 
 class CitaService {
 
@@ -271,7 +272,47 @@ class CitaService {
           id_usuario_creador: dataCita.id_usuario_creador // âœ… Agregado: quiÃ©n creÃ³ la cita
         }, { transaction: t });
 
-        return await this.obtenerCitaPorId(nuevaCita.id_cita, t);
+        const citaCreada = await this.obtenerCitaPorId(nuevaCita.id_cita, t);
+
+        // Notificar a roles con acceso al módulo de citas
+        try {
+          const { Permiso } = require('../models');
+          // Buscar roles que tengan permiso de 'ver' en el módulo 'citas'
+          const rolesConAcceso = await Permiso.findAll({
+            where: {
+              modulo: 'citas',
+              permiso: 'ver',
+              estado: true
+            },
+            attributes: ['id_rol']
+          });
+
+          if (rolesConAcceso && rolesConAcceso.length > 0) {
+            // Crear una notificación para cada rol (o podríamos elegir el primero si la lógica de negocio lo permite)
+            // Aquí creamos una para cada rol identificado para asegurar que todos los autorizados la vean.
+            for (const rol of rolesConAcceso) {
+              await notificacionService.crearNotificacion({
+                tipo: 'CITA_SOLICITADA',
+                titulo: 'Nueva cita solicitada',
+                mensaje: `El cliente ${persona.nombre_completo} ${persona.apellido_completo} ha solicitado una cita para ${citaCreada.servicio?.nombre_servicio || 'un servicio'}.`,
+                id_cita: citaCreada.id_cita,
+                id_rol_destino: rol.id_rol
+              });
+            }
+          }
+          
+          // Emitimos evento de que las citas cambiaron
+          sseService.emitAppointmentChanged({
+            action: 'created',
+            appointmentId: citaCreada.id_cita
+          });
+        } catch (notifierr) {
+          logger.error(`Error al crear notificación para nueva cita: ${notifierr.message}`);
+        }
+
+
+        return citaCreada;
+
 
       } catch (error) {
         throw error;

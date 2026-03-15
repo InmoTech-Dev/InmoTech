@@ -30,6 +30,8 @@ const Header = () => {
   const [isBellFxActive, setIsBellFxActive] = useState(false);
   const [unreadNotificationIds, setUnreadNotificationIds] = useState([]);
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
+  const [previousTotalCount, setPreviousTotalCount] = useState(0);
+  const audioRef = useRef(null);
   const [isMarkingRead, setIsMarkingRead] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [reports, setReports] = useState([]);
@@ -97,6 +99,17 @@ const Header = () => {
 
   const unseenReportsCount = reports.filter(r => !seenReportIds.includes(r.id_reporte || r.id)).length;
   const totalNotificationsCount = (canViewCitas ? pendingAppointments.length : 0) + (canViewReportes ? unseenReportsCount : 0);
+
+  // Efecto para sonido de notificación
+  useEffect(() => {
+    if (totalNotificationsCount > previousTotalCount) {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('https://cdn.pixabay.com/audio/2022/10/16/audio_2cadc3d64f.mp3');
+      }
+      audioRef.current.play().catch(e => console.warn('Audio play blocked or failed:', e));
+    }
+    setPreviousTotalCount(totalNotificationsCount);
+  }, [totalNotificationsCount, previousTotalCount]);
 
   const triggerBellFx = useCallback(() => {
     if (bellFxTimeoutRef.current) {
@@ -471,76 +484,78 @@ const Header = () => {
 
       <div className="flex items-center space-x-4">
         {/* Notifications */}
-        <div className="relative">
-          <motion.button
-            ref={notificationButtonRef}
-            animate={isBellFxActive
-              ? {
-                  rotate: [0, -12, 10, -8, 6, -4, 2, 0],
-                  scale: [1, 1.07, 1]
-                }
-              : { rotate: 0, scale: 1 }
-            }
-            transition={isBellFxActive
-              ? {
-                  duration: 0.8,
-                  ease: 'easeInOut',
-                  times: [0, 0.12, 0.24, 0.36, 0.5, 0.64, 0.78, 1]
-                }
-              : { duration: 0.2 }
-            }
-            whileHover={{
-              scale: 1.05,
-              backgroundColor: 'rgba(59, 130, 246, 0.05)',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)'
-            }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleNotificationToggle}
-            className="relative p-2.5 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-300 hover:bg-blue-50/50"
-            style={{
-              border: '1px solid transparent',
-              backgroundColor: 'rgba(255, 255, 255, 0.4)'
-            }}
-          >
-            <AnimatePresence>
-              {isBellFxActive && (
+        {canViewAnyNotifications && (
+          <div className="relative">
+            <motion.button
+              ref={notificationButtonRef}
+              animate={isBellFxActive
+                ? {
+                    rotate: [0, -12, 10, -8, 6, -4, 2, 0],
+                    scale: [1, 1.07, 1]
+                  }
+                : { rotate: 0, scale: 1 }
+              }
+              transition={isBellFxActive
+                ? {
+                    duration: 0.8,
+                    ease: 'easeInOut',
+                    times: [0, 0.12, 0.24, 0.36, 0.5, 0.64, 0.78, 1]
+                  }
+                : { duration: 0.2 }
+              }
+              whileHover={{
+                scale: 1.05,
+                backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)'
+              }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleNotificationToggle}
+              className="relative p-2.5 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-300 hover:bg-blue-50/50"
+              style={{
+                border: '1px solid transparent',
+                backgroundColor: 'rgba(255, 255, 255, 0.4)'
+              }}
+            >
+              <AnimatePresence>
+                {isBellFxActive && (
+                  <motion.span
+                    initial={{ opacity: 0.65, scale: 0.75 }}
+                    animate={{ opacity: 0, scale: 1.7 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.85, ease: 'easeOut' }}
+                    className="pointer-events-none absolute inset-0 rounded-xl border-2 border-blue-300/70"
+                  />
+                )}
+              </AnimatePresence>
+              <MdNotifications size={22} />
+              {totalNotificationsCount > 0 && (
                 <motion.span
-                  initial={{ opacity: 0.65, scale: 0.75 }}
-                  animate={{ opacity: 0, scale: 1.7 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.85, ease: 'easeOut' }}
-                  className="pointer-events-none absolute inset-0 rounded-xl border-2 border-blue-300/70"
-                />
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white shadow-sm pointer-events-none"
+                >
+                  {totalNotificationsCount}
+                </motion.span>
               )}
-            </AnimatePresence>
-            <MdNotifications size={22} />
-            {totalNotificationsCount > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white shadow-sm pointer-events-none"
-              >
-                {totalNotificationsCount}
-              </motion.span>
-            )}
-          </motion.button>
+            </motion.button>
 
-          <NotificationDropdown
-            isOpen={isNotificationOpen}
-            onClose={() => setIsNotificationOpen(false)}
-            notifications={pendingAppointments}
-            reports={reports}
-            seenReportIds={seenReportIds}
-            canViewCitas={canViewCitas}
-            canViewReportes={canViewReportes}
-            onAcceptAppointment={handleAcceptAppointmentRequest}
-            onRejectAppointment={handleRejectAppointmentRequest}
-            onViewAppointment={handleViewAppointment}
-            onOpenReport={handleOpenReport}
-            triggerRef={notificationButtonRef}
-            userRole={getUserRole()}
-          />
-        </div>
+            <NotificationDropdown
+              isOpen={isNotificationOpen}
+              onClose={() => setIsNotificationOpen(false)}
+              notifications={pendingAppointments}
+              reports={reports}
+              seenReportIds={seenReportIds}
+              canViewCitas={canViewCitas}
+              canViewReportes={canViewReportes}
+              onAcceptAppointment={handleAcceptAppointmentRequest}
+              onRejectAppointment={handleRejectAppointmentRequest}
+              onViewAppointment={handleViewAppointment}
+              onOpenReport={handleOpenReport}
+              triggerRef={notificationButtonRef}
+              userRole={getUserRole()}
+            />
+          </div>
+        )}
 
         {/* User Profile */}
         <div className="relative" ref={userMenuRef}>

@@ -55,6 +55,36 @@ class NotificacionService {
       });
 
       logger.info(`Notificacion creada: ${tipo} - Cita ${id_cita}`);
+      
+      // Emitir evento SSE en tiempo real
+      const sseService = require('./sse.service');
+      // Obtenemos los IDs de los roles de Administrador y Super Administrador
+      const rolesAdmin = await Rol.findAll({
+        where: {
+          nombre_rol: { [Op.in]: ['Administrador', 'Super Administrador'] },
+          estado: true
+        },
+        attributes: ['id_rol']
+      });
+      
+      const roleIds = rolesAdmin.map(r => r.id_rol);
+      
+      // Buscamos usuarios con esos roles (Persona -> Rol)
+      const { UsuarioRol } = require('../models');
+      const usuariosInteresados = await UsuarioRol.findAll({
+        where: { id_rol: { [Op.in]: roleIds } },
+        attributes: ['id_persona']
+      });
+      
+      const userIds = [...new Set(usuariosInteresados.map(u => u.id_persona))];
+      
+      if (userIds.length > 0) {
+        sseService.emitNotificationChanged({
+          userIds,
+          scope: 'citas'
+        });
+      }
+
       return notificacion;
     } catch (error) {
       logger.error('Error al crear notificacion:', error);

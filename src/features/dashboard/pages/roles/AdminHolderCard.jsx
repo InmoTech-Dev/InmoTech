@@ -430,38 +430,41 @@ export default function AdminHolderCard({ className = "" }) {
   return (
     <>
       <div
-        className={`min-w-0 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 ${className}`}
+        className={`min-w-0 w-full flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 sm:flex-nowrap ${className}`}
         title="Desde aqui se cambia quien ocupa el rol Administrador del sistema."
       >
         <ShieldCheck className="h-4 w-4 text-amber-700 shrink-0" />
-        <span className="text-xs font-medium text-amber-800 whitespace-nowrap">Titular:</span>
-        <span
-          className={`text-xs ${holderError ? "text-red-600" : "text-slate-700"
-            } truncate max-w-[220px]`}
-          title={holderError || holderSummary}
-        >
-          {holderError || holderSummary}
-        </span>
-        <span className="hidden xl:inline text-[11px] text-amber-800/90 whitespace-nowrap">
+        <span className="shrink-0 text-xs font-medium text-amber-800 whitespace-nowrap">Titular:</span>
+        <div className="min-w-0 flex-1">
+          <span
+            className={`block text-xs ${holderError ? "text-red-600" : "text-slate-700"} truncate`}
+            title={holderError || holderSummary}
+          >
+            {holderError || holderSummary}
+          </span>
+        </div>
+        <span className="hidden shrink-0 xl:inline text-[11px] text-amber-800/90 whitespace-nowrap">
           Cambia aqui quien ocupa el rol Administrador.
         </span>
-        <button
-          type="button"
-          onClick={loadCurrentHolder}
-          className="p-1.5 rounded-md border border-amber-300 text-amber-800 hover:bg-amber-100 transition-colors"
-          title="Actualizar titular"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={handleOpenModal}
-          disabled={loadingHolder || !adminRoleId}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-        >
-          <ArrowRightLeft className="h-3.5 w-3.5" />
-          Cambiar titular
-        </button>
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap sm:justify-start">
+          <button
+            type="button"
+            onClick={loadCurrentHolder}
+            className="shrink-0 p-1.5 rounded-md border border-amber-300 text-amber-800 hover:bg-amber-100 transition-colors"
+            title="Actualizar titular"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenModal}
+            disabled={loadingHolder || !adminRoleId}
+            className="inline-flex w-full items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap sm:w-auto"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" />
+            Cambiar titular
+          </button>
+        </div>
       </div>
       {modal}
       <ConfirmationDialog

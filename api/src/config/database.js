@@ -89,16 +89,18 @@ const testConnection = async () => {
     await sequelize.authenticate();
     logger.info('Conexion exitosa a SQL Server');
 
-     const [results] = await sequelize.query(`
-       SELECT
-         DB_NAME() AS [database_name],
-         @@SERVERNAME AS server_name
-     `);
+    const [results] = await sequelize.query(`
+      SELECT
+        DB_NAME() AS [database_name],
+        @@SERVERNAME AS server_name,
+        @@SERVICENAME AS service_name
+    `);
 
-     logger.info(`Base de datos: ${results[0]?.database_name}`);
-     logger.info(`Servidor: ${results[0]?.server_name}`);
+    logger.info(`Base de datos: ${results[0]?.database_name}`);
+    logger.info(`Servidor: ${results[0]?.server_name}`);
+    logger.info(`Servicio SQL: ${results[0]?.service_name}`);
 
-     return true;
+    return true;
   } catch (error) {
     logger.error('Error al conectar con SQL Server:');
     logger.error(`  - Host: ${hostFromServer}`);

@@ -73,10 +73,6 @@ const mergeStatusCatalog = (apiStatuses = []) => {
 
 
 
-const PAGE_SIZE = 5;
-
-
-
 const INITIAL_VENTAS = [
 
   {
@@ -545,6 +541,13 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     id: sale.id ?? sale.id_venta ?? fallback.id ?? Date.now(),
 
+    id_inmueble:
+      sale.id_inmueble ??
+      inmueble.id_inmueble ??
+      fallback.id_inmueble ??
+      fallback?.raw?.id_inmueble ??
+      null,
+
     registro:
 
       fallback.inmuebleRegistro ??
@@ -620,7 +623,7 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
       comprador.numero_documento ?? fallback.compradorDocumento ?? "N/D",
 
-    compradorNombreCompleto:
+        compradorNombreCompleto:
 
       (fallback.compradorNombreCompleto ?? compradorNombre) || "Sin comprador",
 
@@ -633,35 +636,35 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
     vendedor: vendedor && Object.keys(vendedor).length
       ? vendedor
       : {
-        tipo_documento:
-          sale.tipo_doc_vendedor ||
-          sale.tipo_documento_vendedor ||
-          sale.vendedor_tipo_documento ||
-          fallback.vendedorTipoDocumento ||
-          null,
-        numero_documento:
-          sale.numero_doc_vendedor ||
-          sale.vendedor_numero_documento ||
-          sale.documento_vendedor ||
-          fallback.vendedorDocumento ||
-          null,
-        nombre_completo:
-          sale.nombre_vendedor ||
-          sale.vendedor_nombre ||
-          sale.vendedor_nombre_completo ||
-          fallback.vendedorNombreCompleto ||
-          null,
-        correo:
-          sale.correo_vendedor ||
-          sale.vendedor_correo ||
-          fallback.vendedorCorreo ||
-          null,
-        telefono:
-          sale.telefono_vendedor ||
-          sale.vendedor_telefono ||
-          fallback.vendedorTelefono ||
-          null
-      },
+          tipo_documento:
+            sale.tipo_doc_vendedor ||
+            sale.tipo_documento_vendedor ||
+            sale.vendedor_tipo_documento ||
+            fallback.vendedorTipoDocumento ||
+            null,
+          numero_documento:
+            sale.numero_doc_vendedor ||
+            sale.vendedor_numero_documento ||
+            sale.documento_vendedor ||
+            fallback.vendedorDocumento ||
+            null,
+          nombre_completo:
+            sale.nombre_vendedor ||
+            sale.vendedor_nombre ||
+            sale.vendedor_nombre_completo ||
+            fallback.vendedorNombreCompleto ||
+            null,
+          correo:
+            sale.correo_vendedor ||
+            sale.vendedor_correo ||
+            fallback.vendedorCorreo ||
+            null,
+          telefono:
+            sale.telefono_vendedor ||
+            sale.vendedor_telefono ||
+            fallback.vendedorTelefono ||
+            null
+        },
 
     vendedorTipoDocumento:
 
@@ -835,26 +838,31 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
 
 const toISODate = (value) => {
+  const pad = (num) => String(num).padStart(2, "0");
+  const toYmd = (date) =>
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
-  if (!value) return new Date().toISOString();
+  if (!value) {
+    return toYmd(new Date());
+  }
 
-  const directDate = new Date(value);
+  const raw = String(value).trim();
+  const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymdMatch) {
+    return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
+  }
 
+  const directDate = new Date(raw);
   if (!Number.isNaN(directDate.getTime())) {
-
-    return directDate.toISOString();
-
+    return toYmd(directDate);
   }
 
-  const dateOnly = new Date(`${value}T00:00:00`);
-
+  const dateOnly = new Date(`${raw}T00:00:00`);
   if (!Number.isNaN(dateOnly.getTime())) {
-
-    return dateOnly.toISOString();
-
+    return toYmd(dateOnly);
   }
 
-  return new Date().toISOString();
+  return toYmd(new Date());
 
 };
 
@@ -870,6 +878,76 @@ const mapPaymentToPurchaseType = (medioPago = "") => {
 
   return normalized === "transferencia" ? "Directa" : "Directa";
 
+};
+
+const INMUEBLES_FICHAS_STORAGE_KEY = "inmuebles:fichas-tecnicas";
+
+const getFichaHistory = () => {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(INMUEBLES_FICHAS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_error) {
+    return {};
+  }
+};
+
+const saveFichaHistory = (history = {}) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(INMUEBLES_FICHAS_STORAGE_KEY, JSON.stringify(history));
+  } catch (_error) {
+    // noop
+  }
+};
+
+const buildFichaSnapshotFromSale = (sale = {}, overrides = {}) => ({
+  titulo: sale.inmuebleNombre || overrides.titulo || "",
+  direccion: sale.inmuebleDireccion || overrides.direccion || "",
+  ciudad: sale.inmuebleCiudad || overrides.ciudad || "",
+  departamento: sale.inmuebleDepartamento || overrides.departamento || "",
+  pais: sale.inmueblePais || overrides.pais || "",
+  tipo: sale.inmuebleTipo || overrides.tipo || "",
+  operacion: sale.tipo || overrides.operacion || "Venta",
+  estado: overrides.estado || sale.inmuebleEstado || "Disponible",
+  precio_venta: sale.inmueblePrecio || sale.valor || overrides.precio_venta || "",
+  precio_arriendo: overrides.precio_arriendo || "",
+  descripcion: overrides.descripcion || "",
+  comodidades: [],
+  imagenes: [],
+  propietario: null,
+  registro: sale.inmuebleRegistro || sale.registro || overrides.registro || "",
+  area_construida: sale.inmuebleArea || overrides.area_construida || ""
+});
+
+const appendFichaTecnicaToLocalHistory = ({ inmuebleId, snapshot, cambios = "" }) => {
+  if (!inmuebleId || !snapshot) return;
+  const key = String(inmuebleId);
+  const history = getFichaHistory();
+  const list = Array.isArray(history[key]) ? history[key] : [];
+  const lastVersion = Number(list?.[0]?.version || 0);
+  const currentEstado = String(snapshot.estado || "").trim();
+  const previousEstado = String(list?.[0]?.snapshot?.estado || "").trim();
+
+  if (
+    previousEstado &&
+    currentEstado &&
+    previousEstado.toLowerCase() === currentEstado.toLowerCase() &&
+    String(cambios || "").trim() === String(list?.[0]?.cambios || "").trim()
+  ) {
+    return;
+  }
+
+  const ficha = {
+    id: `ficha-${Date.now()}`,
+    version: lastVersion + 1,
+    fecha: new Date().toLocaleDateString("es-CO"),
+    cambios: cambios || "Actualización de seguimiento de venta",
+    snapshot,
+  };
+
+  history[key] = [ficha, ...list];
+  saveFichaHistory(history);
 };
 
 
@@ -1052,6 +1130,7 @@ const EstadoBadge = ({ estado }) => {
 
 
 export function SalesManagementPage() {
+  const PAGE_SIZE = 5;
 
   const [ventas, setVentas] = useState(INITIAL_VENTAS);
 
@@ -1251,7 +1330,7 @@ export function SalesManagementPage() {
 
         error?.message ||
 
-        "No fue posible cargar el catálogo de inmuebles. Intenta recargar antes de crear una venta."
+          "No fue posible cargar el catálogo de inmuebles. Intenta recargar antes de crear una venta."
 
       );
 
@@ -1284,20 +1363,26 @@ export function SalesManagementPage() {
 
 
 
-  const fetchVentas = useCallback(async (query = searchTerm, page = currentPage) => {
+  const fetchVentas = useCallback(async (query = "", page = 1) => {
+
     setLoadingVentas(true);
+
     setStatusMessage(null);
 
     try {
+
       const response = await ventaApiService.obtenerVentas({
         page,
         limit: PAGE_SIZE,
-        search: query?.trim() || undefined,
+        search: query || undefined,
         estado: estadoFilter !== "todos" ? estadoFilter : undefined,
         tipo_compra: tipoCompraFilter !== "todos" ? tipoCompraFilter : undefined,
       });
 
-      const payload = response?.data || [];
+      const payload = Array.isArray(response?.data) ? response.data : [];
+
+
+
       if (Array.isArray(payload)) {
         setVentas(payload.map((venta) => normalizeSaleRecord(venta)));
         setPagination(response?.pagination || {
@@ -1309,6 +1394,7 @@ export function SalesManagementPage() {
           has_prev_page: page > 1,
         });
         setCurrentPage(response?.pagination?.pagina || page);
+
       }
 
     } catch (error) {
@@ -1328,9 +1414,12 @@ export function SalesManagementPage() {
       });
 
     } finally {
+
       setLoadingVentas(false);
+
     }
-  }, [estadoFilter, tipoCompraFilter, searchTerm, currentPage, toast]);
+
+  }, [estadoFilter, tipoCompraFilter]);
 
 
 
@@ -1733,24 +1822,24 @@ export function SalesManagementPage() {
       const buyerIdForUpdate =
         buyerInfo?.id ||
         buyerInfo?.compradorId ||
-        buyerInfo?.raw?.id_comprador ||
-        buyerInfo?.personaId;
+        buyerInfo?.raw?.id_comprador;
 
       try {
+        if (buyerIdForUpdate) {
+          await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
 
-        await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
+            id_inmueble: payload.id_inmueble,
 
-          id_inmueble: payload.id_inmueble,
+            id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
 
-          id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
+            fecha_compra: payload.fecha_venta,
 
-          fecha_compra: payload.fecha_venta,
+            valor_compra: payload.valor_venta,
 
-          valor_compra: payload.valor_venta,
+            tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
 
-          tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
-
-        });
+          });
+        }
 
       } catch (error) {
 
@@ -1882,13 +1971,13 @@ export function SalesManagementPage() {
       const finalEstado = (merged.estadoSeguimiento || merged.estado || "").toString().toLowerCase();
       const mergedForState = finalEstado.includes("cancel")
         ? {
-          ...merged,
-          estado: "Cancelado",
-          estadoSeguimiento: "Cancelado",
-          comprador: "Sin comprador",
-          compradorNombreCompleto: "Sin comprador",
-          id_comprador: null,
-        }
+            ...merged,
+            estado: "Cancelado",
+            estadoSeguimiento: "Cancelado",
+            comprador: "Sin comprador",
+            compradorNombreCompleto: "Sin comprador",
+            id_comprador: null,
+          }
         : merged;
 
       setVentas((prevVentas) =>
@@ -1952,31 +2041,6 @@ export function SalesManagementPage() {
 
 
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  const filteredVentas = ventas.filter((v) => {
-    if (!normalizedSearch) return true;
-
-    const registro = v.registro ? v.registro.toLowerCase() : "";
-    const comprador = v.comprador ? v.comprador.toLowerCase() : "";
-    const compradorCorreo = v.compradorCorreo ? v.compradorCorreo.toLowerCase() : "";
-    const compradorDocumento = v.compradorDocumento ? String(v.compradorDocumento).toLowerCase() : "";
-    const tipo = v.tipo ? v.tipo.toLowerCase() : "";
-    const estado = v.estado ? v.estado.toLowerCase() : "";
-    const fecha = v.fecha ? String(v.fecha).toLowerCase() : "";
-    const valor = v.valor ? String(v.valor).toLowerCase() : "";
-
-    return (
-      registro.includes(normalizedSearch) ||
-      comprador.includes(normalizedSearch) ||
-      compradorCorreo.includes(normalizedSearch) ||
-      compradorDocumento.includes(normalizedSearch) ||
-      tipo.includes(normalizedSearch) ||
-      estado.includes(normalizedSearch) ||
-      fecha.includes(normalizedSearch) ||
-      valor.includes(normalizedSearch)
-    );
-  });
 
 
 
@@ -1984,13 +2048,13 @@ export function SalesManagementPage() {
 
   const stats = {
 
-    total: filteredVentas.length,
+    total: pagination.total,
 
-    pagadas: filteredVentas.filter(v => v.estado === 'Pagado').length,
+    pagadas: ventas.filter(v => v.estado === 'Pagado').length,
 
-    pendientes: filteredVentas.filter(v => v.estado === 'Pendiente').length,
+    pendientes: ventas.filter(v => v.estado === 'Pendiente').length,
 
-    totalValor: filteredVentas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
+    totalValor: ventas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
 
   };
 
@@ -2094,17 +2158,17 @@ export function SalesManagementPage() {
 
     const modalContent = (
 
-      <PurchaseTrackingModal
+        <PurchaseTrackingModal
 
-        venta={trackingSale}
+          venta={trackingSale}
 
-        statusOptions={statusCatalog.length ? statusCatalog : DEFAULT_STATUS_CATALOG}
+          statusOptions={statusCatalog.length ? statusCatalog : DEFAULT_STATUS_CATALOG}
 
-        onClose={() => setTrackingSale(null)}
+          onClose={() => setTrackingSale(null)}
 
-        onUpdate={handleUpdateTracking}
+          onUpdate={handleUpdateTracking}
 
-      />
+        />
 
     );
 
@@ -2150,7 +2214,7 @@ export function SalesManagementPage() {
 
           </div>
 
-
+          
 
           {/* BOTÓN CREAR VENTA EN POSICIÓN DESTACADA - COLOR AZUL */}
 
@@ -2164,13 +2228,15 @@ export function SalesManagementPage() {
 
             disabled={savingVenta}
 
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 ${savingVenta
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
 
-              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+              savingVenta 
 
-              : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl'
+                ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
 
-              }`}
+                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl'
+
+            }`}
 
           >
 
@@ -2363,9 +2429,9 @@ export function SalesManagementPage() {
 
                     </tr>
 
-                  ) : filteredVentas.length > 0 ? (
+                  ) : ventas.length > 0 ? (
 
-                    filteredVentas.map((v) => (
+                    ventas.map((v) => (
 
                       <tr
 
@@ -2523,34 +2589,6 @@ export function SalesManagementPage() {
   );
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

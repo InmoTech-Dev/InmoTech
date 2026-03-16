@@ -1,18 +1,14 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { FaUserPlus, FaSearch, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone, X, ChevronDown } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, AlertCircle, Mail, Home, Phone, ChevronDown } from 'lucide-react';
 import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 import { useToast } from "../../../../shared/hooks/use-toast";
-
 import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
-
-const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
 
 const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
     const info = {
@@ -31,6 +27,33 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
         fechaCompra: buyer.fechaCompra || buyer.compra?.fecha_compra || "",
         valorCompra: buyer.valorCompra || buyer.compra?.valor_compra || "",
         tipoCompra: buyer.tipoCompra || buyer.compra?.tipo_compra || "",
+        medioPago:
+            buyer.medioPago ||
+            buyer.medio_pago ||
+            buyer.compra?.medioPago ||
+            buyer.compra?.medio_pago ||
+            buyer.ultimaVenta?.medioPago ||
+            buyer.ultimaVenta?.medio_pago ||
+            buyer.ultima_venta?.medioPago ||
+            buyer.ultima_venta?.medio_pago ||
+            buyer.tipoCompra ||
+            buyer.ultimaVenta?.tipo_compra ||
+            buyer.ultima_venta?.tipo_compra ||
+            buyer.compra?.tipo_compra ||
+            "",
+        medioPagoDescripcion:
+            buyer.medioPagoDescripcion ||
+            buyer.medio_pago_descripcion ||
+            buyer.compra?.medioPagoDescripcion ||
+            buyer.compra?.medio_pago_descripcion ||
+            buyer.compra?.descripcion_pago ||
+            buyer.ultimaVenta?.medioPagoDescripcion ||
+            buyer.ultimaVenta?.medio_pago_descripcion ||
+            buyer.ultimaVenta?.descripcion_pago ||
+            buyer.ultima_venta?.medioPagoDescripcion ||
+            buyer.ultima_venta?.medio_pago_descripcion ||
+            buyer.ultima_venta?.descripcion_pago ||
+            "",
         ciudadResidencia: buyer.ciudadResidencia || buyer.compra?.ciudad_residencia || "",
         direccionAnterior: buyer.direccionAnterior || buyer.compra?.direccion_anterior || "",
         entidadFinanciera: buyer.entidadFinanciera || buyer.compra?.entidad_financiera || "",
@@ -38,7 +61,7 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
         montoFinanciado: buyer.montoFinanciado || buyer.compra?.monto_financiado || "",
         observaciones: buyer.observaciones || buyer.compra?.observaciones || "",
         inmueble: buyer.inmueble || buyer.compra?.inmueble || null,
-        ultimaVenta: buyer.ultima_venta || buyer.compra || null,
+        ultimaVenta: buyer.ultimaVenta || buyer.ultima_venta || buyer.compra || null,
         inmueblesComprados: (buyer.inmueble || buyer.compra?.inmueble) ? [buyer.inmueble || buyer.compra?.inmueble] : [],
         formData: buyer.formData || formData,
         compra: buyer.compra || null,
@@ -46,6 +69,17 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
     };
     return info;
 };
+
+const hasAssociatedSale = (buyer = {}) =>
+    Boolean(
+        buyer.compra ||
+        buyer.ultimaVenta ||
+        buyer.ultima_venta ||
+        buyer.fechaCompra ||
+        buyer.valorCompra ||
+        buyer.inmueble ||
+        (Array.isArray(buyer.inmueblesComprados) && buyer.inmueblesComprados.length > 0)
+    );
 
 const filterRealBuyers = (list = []) => {
     if (!Array.isArray(list)) return [];
@@ -63,6 +97,8 @@ const filterRealBuyers = (list = []) => {
     });
 };
 
+const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
+
 export function BuyersManagementPage() {
     const PAGE_SIZE = 5;
     const statusButtonRefs = useRef({});
@@ -73,7 +109,6 @@ export function BuyersManagementPage() {
     const [statusChangingId, setStatusChangingId] = useState(null);
     const [statusMenuId, setStatusMenuId] = useState(null);
     const [statusMenuPosition, setStatusMenuPosition] = useState(null);
-    const [isDeleting, setIsDeleting] = useState(false);
 
     // --- ESTADOS DE ACCION ---
     const [searchTerm, setSearchTerm] = useState("");
@@ -88,7 +123,6 @@ export function BuyersManagementPage() {
     const [showForm, setShowForm] = useState(false);
     const [buyerToEdit, setBuyerToEdit] = useState(null);
     const [buyerToView, setBuyerToView] = useState(null);
-    const [buyerToDelete, setBuyerToDelete] = useState(null);
     const { toast } = useToast();
 
     const showStatus = (type, message) => {
@@ -97,16 +131,16 @@ export function BuyersManagementPage() {
 
     const normalizeBuyers = (list) =>
         list.map((buyer) => mapApiBuyerToRow(buyer));
-    const fetchBuyers = useCallback(async (query = "", pageNum = 1) => {
+    const fetchBuyers = useCallback(async (query = "", page = 1) => {
         try {
             setIsLoading(true);
-            const params = { page: pageNum, limit: PAGE_SIZE };
+            const params = { page, limit: PAGE_SIZE };
             if (query) params.search = query;
             if (estadoFilter !== "todos") params.estado = estadoFilter;
             const result = await buyersApiService.getAll(params);
             setCompradores(normalizeBuyers(filterRealBuyers(result.data)));
             setPagination(result.pagination);
-            setCurrentPage(result.pagination?.pagina || pageNum);
+            setCurrentPage(result.pagination?.pagina || page);
         } catch (error) {
             showStatus("error", error.message || MESSAGES.buyer.loadError);
         } finally {
@@ -121,7 +155,8 @@ export function BuyersManagementPage() {
     useEffect(() => {
         const trimmed = searchTerm.trim();
         const timeoutId = setTimeout(() => {
-            fetchBuyers(trimmed);
+            setCurrentPage(1);
+            fetchBuyers(trimmed, 1);
         }, 400);
         return () => clearTimeout(timeoutId);
     }, [searchTerm, fetchBuyers]);
@@ -183,8 +218,16 @@ export function BuyersManagementPage() {
         setBuyerToEdit(null);
         setShowForm(true);
     };
-
+    
     const handleEditClick = (buyer) => {
+        if (hasAssociatedSale(buyer)) {
+            toast({
+                title: "Edición bloqueada",
+                description: "No puedes editar un comprador con una venta asociada.",
+                variant: "destructive",
+            });
+            return;
+        }
         setBuyerToEdit(buyer);
         setShowForm(true);
     };
@@ -199,6 +242,7 @@ export function BuyersManagementPage() {
             const newBuyer = await buyersApiService.create(formData);
             const mapped = mapApiBuyerToRow(newBuyer, formData);
             setCompradores((prev) => [mapped, ...prev.filter((buyer) => buyer.id !== mapped.id)]);
+            fetchBuyers(searchTerm.trim(), 1);
             showStatus("success", MESSAGES.buyer.create);
             toast({
                 title: "Comprador creado",
@@ -240,6 +284,7 @@ export function BuyersManagementPage() {
             setCompradores((prev) =>
                 prev.map((buyer) => (buyer.id === mapped.id ? mapped : buyer))
             );
+            fetchBuyers(searchTerm.trim(), currentPage);
             showStatus("success", MESSAGES.buyer.update);
             toast({
                 title: "Comprador actualizado",
@@ -268,41 +313,52 @@ export function BuyersManagementPage() {
         return handleCreateBuyer(formData);
     };
 
-    // --- HANDLERS ELIMINAR ---
-    const handleDeleteRequest = (buyer) => {
-        setBuyerToDelete(buyer);
-    };
+    const handleToggleEstado = async (buyer, estadoOpcion) => {
+        if (!buyer) return;
+        const targetId =
+            buyer.id ||
+            buyer.buyerId ||
+            buyer.id_buyer ||
+            buyer.id_comprador ||
+            buyer.personaId;
 
-    const handleCancelDelete = () => {
-        setBuyerToDelete(null);
-    };
-
-    const handleConfirmDelete = async () => {
-        if (!buyerToDelete) return;
-        const targetId = buyerToDelete.id || buyerToDelete.personaId;
         if (!targetId) {
-            showStatus("error", "No se pudo determinar el identificador del comprador a eliminar.");
+            showStatus("error", "No se pudo determinar el comprador para cambiar el estado.");
             return;
         }
 
+        const currentEstado = normalizeEstado(buyer.estado || "Activo");
+        const nextEstado = estadoOpcion || (currentEstado === "activo" ? "Inactivo" : "Activo");
+
         try {
-            setIsDeleting(true);
-            const removedBuyer = await buyersApiService.delete(targetId);
-            const removedId = removedBuyer?.id ?? targetId;
+            setStatusChangingId(targetId);
+            const payload = {
+                estado: nextEstado,
+                tipoDocumento: buyer.tipoDocumento || buyer.persona?.tipo_documento || "CC",
+                documento: buyer.documento || buyer.persona?.numero_documento || "",
+                primerNombre: buyer.primerNombre || buyer.persona?.nombre_completo?.split(" ")?.[0] || "",
+                segundoNombre: buyer.segundoNombre || "",
+                primerApellido: buyer.primerApellido || buyer.persona?.apellido_completo?.split(" ")?.[0] || "",
+                segundoApellido: buyer.segundoApellido || "",
+                correo: buyer.correo || buyer.persona?.correo || "",
+                telefono: buyer.telefono || buyer.persona?.telefono || "",
+            };
+            const updated = await buyersApiService.update(targetId, payload);
+            const mapped = mapApiBuyerToRow({ ...buyer, ...updated, estado: nextEstado }, buyer.formData);
             setCompradores((prev) =>
-                prev.filter((b) => (b.id ?? b.personaId) !== removedId)
+                prev.map((c) => (c.id === mapped.id ? { ...c, estado: mapped.estado || nextEstado } : c))
             );
-            showStatus("success", MESSAGES.buyer.delete);
+            fetchBuyers(searchTerm.trim(), currentPage);
             toast({
-                title: "Comprador eliminado",
-                description: MESSAGES.buyer.delete,
+                title: "Estado actualizado",
+                description: `El comprador ahora está ${nextEstado}.`,
                 variant: "default",
             });
         } catch (error) {
-            const errMsg = error.message || MESSAGES.buyer.deleteError || "No fue posible eliminar al comprador";
+            const errMsg = error.message || "No se pudo cambiar el estado del comprador";
             showStatus("error", errMsg);
             toast({
-                title: "Error al eliminar",
+                title: "Error al cambiar estado",
                 description: errMsg,
                 variant: "destructive",
             });
@@ -330,45 +386,6 @@ export function BuyersManagementPage() {
         }
 
         setStatusMenuId(buyerId);
-    };
-
-    const handleToggleEstado = async (buyer, forcedEstado) => {
-        if (!buyer) return;
-        const targetId = buyer.id || buyer.buyerId || buyer.id_buyer || buyer.id_comprador || buyer.personaId;
-        if (!targetId) {
-            toast({
-                title: "Error",
-                description: "No se pudo identificar al comprador.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        const current = normalizeEstado(buyer.estado || "Activo");
-        const nextEstado = forcedEstado || (current === "activo" ? "Inactivo" : "Activo");
-
-        try {
-            setStatusChangingId(buyer.id);
-            const updated = await buyersApiService.update(targetId, { estado: nextEstado });
-            setCompradores((prev) =>
-                prev.map((b) => (b.id === buyer.id ? { ...b, estado: updated.estado || nextEstado } : b))
-            );
-            toast({
-                title: "Estado actualizado",
-                description: `El comprador ahora está ${nextEstado}.`,
-                variant: "default",
-            });
-            setStatusMenuId(null);
-        } catch (error) {
-            const errMsg = error.message || "No se pudo cambiar el estado del comprador";
-            toast({
-                title: "Error al cambiar estado",
-                description: errMsg,
-                variant: "destructive",
-            });
-        } finally {
-            setStatusChangingId(null);
-        }
     };
 
     const renderStatusMenu = (buyer) => {
@@ -433,113 +450,6 @@ export function BuyersManagementPage() {
         );
     };
 
-    const renderDeleteModal = () => {
-        if (!buyerToDelete) return null;
-
-        const modalContent = (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center">
-                {/* Backdrop estilo formularios */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                    onClick={handleCancelDelete}
-                />
-
-                {/* Modal card estilo formularios */}
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    transition={{ duration: 0.25 }}
-                    className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {/* Header */}
-                    <div className="flex items-start justify-between p-6 border-b border-slate-200">
-                        <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
-                                <Trash2 className="w-5 h-5 text-red-600" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
-                                <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
-                            </div>
-                        </div>
-
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleCancelDelete}
-                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                            aria-label="Cerrar"
-                        >
-                            <X className="w-5 h-5 text-slate-500" />
-                        </motion.button>
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-6">
-                        <p className="text-slate-700">
-                            ¿Estás seguro de que deseas eliminar a{" "}
-                            <span className="font-semibold text-slate-900">
-                                {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}
-                            </span>
-                            ? Esta acción no se puede deshacer.
-                        </p>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
-                        <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={handleCancelDelete}
-                            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-                        >
-                            Cancelar
-                        </motion.button>
-
-                        <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={handleConfirmDelete}
-                            disabled={isDeleting}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isDeleting
-                                ? "bg-slate-400 text-slate-200 cursor-not-allowed"
-                                : "bg-red-600 hover:bg-red-700 text-white"
-                                }`}
-                        >
-                            {isDeleting ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    Eliminando...
-                                </>
-                            ) : (
-                                <>
-                                    <Trash2 className="w-4 h-4" />
-                                    Eliminar
-                                </>
-                            )}
-                        </motion.button>
-                    </div>
-                </motion.div>
-            </div>
-        );
-
-        return ReactDOM.createPortal(
-            modalContent,
-            document.getElementById("modal-root") || document.body
-        );
-    };
-
-    // Calcular estadísticas
-    const stats = {
-        total: compradores.length,
-        activos: compradores.filter(b => normalizeEstado(b.estado) === 'activo').length,
-        inactivos: compradores.filter(b => normalizeEstado(b.estado) === 'inactivo').length,
-    };
 
     // --- RENDERIZADO PRINCIPAL ---
     return (
@@ -588,7 +498,7 @@ export function BuyersManagementPage() {
                             />
                         </div>
                     </div>
-
+                    
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <div className="relative">
                             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
@@ -611,26 +521,26 @@ export function BuyersManagementPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.3 }}
                 >
-                    {/* TABLA ESTILO ARRENDATARIOS */}
-                    <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-slate-50 border-b border-slate-200">
-                                    <tr>
-                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Información Personal</th>
-                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Documento</th>
-                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Inmueble Asignado</th>
-                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto</th>
-                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
-                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-200">
+                {/* TABLA ESTILO ARRENDATARIOS */}
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-visible">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-slate-50 border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Información Personal</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Documento</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Inmueble Asignado</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
                                     {isLoading ? (
                                         <tr>
                                             <td
                                                 colSpan="6"
-                                                className="px-6 py-8 text-center text-slate-500"
+                                            className="px-6 py-8 text-center text-slate-500"
                                             >
                                                 <div className="flex items-center justify-center gap-2">
                                                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
@@ -643,114 +553,101 @@ export function BuyersManagementPage() {
                                             const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
                                             const estado = c.estado || 'Activo';
                                             const estadoNormalized = normalizeEstado(estado);
-                                            const estadoClass =
-                                                estadoNormalized === 'activo'
-                                                    ? 'bg-green-100 text-green-700 border-green-200'
-                                                    : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                                            const isEditBlocked = hasAssociatedSale(c);
                                             return (
-                                                <tr
-                                                    key={c.id}
-                                                    className="hover:bg-slate-50 transition-colors"
-                                                >
-                                                    <td className="px-6 py-4 text-center">
-                                                        <div className="text-sm font-semibold text-slate-800">{nombreCompleto || 'Sin nombre'}</div>
-                                                        <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
-                                                            <Mail className="w-3 h-3" />
-                                                            {c.correo || 'Sin correo'}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center text-sm text-slate-700">
-                                                        <div className="text-xs text-slate-500">Tipo</div>
-                                                        <div className="font-medium">{c.tipoDocumento || 'N/D'}</div>
-                                                        <div className="text-xs text-slate-500 mt-1">Número</div>
-                                                        <div className="text-sm font-semibold text-slate-800">{c.documento || 'N/D'}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center text-sm text-slate-600">
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <Home className="w-4 h-4 text-slate-400" />
-                                                            <span className="text-xs text-slate-500">
-                                                                {c.inmueble
-                                                                    ? (c.inmueble.titulo ||
-                                                                        c.inmueble.registro_inmobiliario ||
-                                                                        c.inmueble.direccion ||
-                                                                        'Inmueble asignado')
-                                                                    : 'Sin inmuebles asignados'}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center text-sm text-slate-700">
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <Phone className="w-4 h-4 text-slate-400" />
-                                                            <span>{c.telefono || 'Sin teléfono'}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center relative">
-                                                        <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
-                                                            <button
-                                                                type="button"
-                                                                ref={(element) => {
-                                                                    if (element) {
-                                                                        statusButtonRefs.current[c.id] = element;
-                                                                    } else {
-                                                                        delete statusButtonRefs.current[c.id];
-                                                                    }
-                                                                }}
-                                                                onClick={() => handleStatusMenuToggle(c.id)}
-                                                                disabled={statusChangingId === c.id}
-                                                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${estadoNormalized === "activo"
+                                            <tr
+                                                key={c.id}
+                                                className="hover:bg-slate-50 transition-colors"
+                                            >
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="text-sm font-semibold text-slate-800">{nombreCompleto || 'Sin nombre'}</div>
+                                                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                                                        <Mail className="w-3 h-3" />
+                                                        {c.correo || 'Sin correo'}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                    <div className="text-xs text-slate-500">Tipo</div>
+                                                    <div className="font-medium">{c.tipoDocumento || 'N/D'}</div>
+                                                    <div className="text-xs text-slate-500 mt-1">Número</div>
+                                                    <div className="text-sm font-semibold text-slate-800">{c.documento || 'N/D'}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-sm text-slate-600">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <Home className="w-4 h-4 text-slate-400" />
+                                                        <span className="text-xs text-slate-500">
+                                                            {c.inmueble
+                                                                ? (c.inmueble.titulo ||
+                                                                    c.inmueble.registro_inmobiliario ||
+                                                                    c.inmueble.direccion ||
+                                                                    'Inmueble asignado')
+                                                                : 'Sin inmuebles asignados'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Phone className="w-4 h-4 text-slate-400" />
+                                                        <span>{c.telefono || 'Sin teléfono'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center relative">
+                                                    <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
+                                                        <button
+                                                            type="button"
+                                                            ref={(element) => {
+                                                                if (element) {
+                                                                    statusButtonRefs.current[c.id] = element;
+                                                                } else {
+                                                                    delete statusButtonRefs.current[c.id];
+                                                                }
+                                                            }}
+                                                            onClick={() => handleStatusMenuToggle(c.id)}
+                                                            disabled={statusChangingId === c.id}
+                                                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
+                                                                estadoNormalized === "activo"
                                                                     ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
                                                                     : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
-                                                                    } ${statusChangingId === c.id ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === c.id ? "ring-2 ring-slate-200" : ""}`}
-                                                            >
-                                                                {statusChangingId === c.id && (
-                                                                    <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                                                                )}
-                                                                <span>{estado}</span>
-                                                                <ChevronDown className="w-3 h-3 ml-2" />
-                                                            </button>
-                                                            {renderStatusMenu(c)}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <div className="flex gap-2 justify-center">
-                                                            <motion.button
-                                                                whileHover={{ scale: 1.1 }}
-                                                                whileTap={{ scale: 0.9 }}
-                                                                aria-label="Ver comprador"
-                                                                className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
-                                                                onClick={() => handleViewClick(c)}
-                                                            >
-                                                                <Eye className="w-4 h-4" />
-                                                            </motion.button>
-                                                            <motion.button
-                                                                whileHover={{ scale: 1.1 }}
-                                                                whileTap={{ scale: 0.9 }}
-                                                                aria-label="Editar comprador"
-                                                                className="p-2 text-green-600 hover:text-green-800 transition-colors"
-                                                                onClick={() => handleEditClick(c)}
-                                                            >
-                                                                <Edit className="w-4 h-4" />
-                                                            </motion.button>
-                                                            <motion.button
-                                                                whileHover={{ scale: 1.1 }}
-                                                                whileTap={{ scale: 0.9 }}
-                                                                aria-label="Eliminar comprador"
-                                                                className="p-2 text-red-600 hover:text-red-800 transition-colors"
-                                                                onClick={() => handleDeleteRequest(c)}
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </motion.button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )
-                                        })
+                                                            } ${statusChangingId === c.id ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === c.id ? "ring-2 ring-slate-200" : ""}`}
+                                                        >
+                                                            {statusChangingId === c.id && (
+                                                                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                                            )}
+                                                            <span>{estado}</span>
+                                                            <ChevronDown className="w-3 h-3 ml-2" />
+                                                        </button>
+                                                        {renderStatusMenu(c)}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="flex gap-2 justify-center">
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.1 }}
+                                                            whileTap={{ scale: 0.9 }}
+                                                            aria-label="Ver comprador"
+                                                            className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                                            onClick={() => handleViewClick(c)}
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </motion.button>
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.1 }}
+                                                            whileTap={{ scale: 0.9 }}
+                                                            aria-label="Editar comprador"
+                                                            disabled={isEditBlocked}
+                                                            title={isEditBlocked ? "No puedes editar un comprador con una venta asociada" : "Editar comprador"}
+                                                            className={`p-2 transition-colors ${isEditBlocked ? "text-slate-300 cursor-not-allowed" : "text-green-600 hover:text-green-800"}`}
+                                                            onClick={() => handleEditClick(c)}
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </motion.button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )})
                                     ) : (
                                         <tr>
-                                            <td
-                                                colSpan="6"
-                                                className="px-6 py-8 text-center text-slate-500"
-                                            >
+                                            <td colSpan="6" className="px-6 py-8 text-center text-slate-500">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <AlertCircle className="w-8 h-8 text-slate-400" />
                                                     <p>No se encontraron compradores.</p>
@@ -779,7 +676,6 @@ export function BuyersManagementPage() {
             {/* MODALES CON PORTAL - TODOS SE RENDERIZAN EN EL MISMO SITIO */}
             {renderFormModal()}
             {renderViewModal()}
-            {renderDeleteModal()}
         </>
     );
 }

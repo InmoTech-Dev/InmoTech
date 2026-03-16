@@ -31,15 +31,15 @@ const sortTenantsByStatus = (tenants = []) =>
 
     const nameA = String(
       a?.nombreCompleto ||
-      [a?.primerNombre, a?.segundoNombre, a?.primerApellido, a?.segundoApellido]
-        .filter(Boolean)
-        .join(" ")
+        [a?.primerNombre, a?.segundoNombre, a?.primerApellido, a?.segundoApellido]
+          .filter(Boolean)
+          .join(" ")
     ).trim();
     const nameB = String(
       b?.nombreCompleto ||
-      [b?.primerNombre, b?.segundoNombre, b?.primerApellido, b?.segundoApellido]
-        .filter(Boolean)
-        .join(" ")
+        [b?.primerNombre, b?.segundoNombre, b?.primerApellido, b?.segundoApellido]
+          .filter(Boolean)
+          .join(" ")
     ).trim();
 
     return nameA.localeCompare(nameB, "es", { sensitivity: "base" });
@@ -54,16 +54,16 @@ const normalizeDocumentValue = (value = "") =>
 const getTenantDocumentKey = (tenant = {}) => {
   const tipo = String(
     tenant.tipoDocumento ||
-    tenant.persona?.tipo_documento ||
-    tenant.arrendatario?.persona?.tipo_documento ||
-    ""
+      tenant.persona?.tipo_documento ||
+      tenant.arrendatario?.persona?.tipo_documento ||
+      ""
   )
     .trim()
     .toUpperCase();
   const documento = normalizeDocumentValue(
     tenant.documento ||
-    tenant.persona?.numero_documento ||
-    tenant.arrendatario?.persona?.numero_documento
+      tenant.persona?.numero_documento ||
+      tenant.arrendatario?.persona?.numero_documento
   );
   return tipo && documento ? `${tipo}:${documento}` : "";
 };
@@ -393,15 +393,15 @@ export function LeasesManagementPage() {
     const inmuebleSimple =
       inmuebleNombre || inmuebleRegistro || inmuebleId
         ? [
-          {
-            id: inmuebleId,
-            nombre: inmuebleNombre || "Inmueble",
-            direccion: inmuebleDireccion || "",
-            registro: inmuebleRegistro || "",
-            imagen_principal: imagenPrincipal?.ruta_archivo || imagenPrincipal?.url || imagenPrincipal?.secure_url || imagenPrincipal || "",
-            imagenes: inmuebleImagenes,
-          },
-        ]
+            {
+              id: inmuebleId,
+              nombre: inmuebleNombre || "Inmueble",
+              direccion: inmuebleDireccion || "",
+              registro: inmuebleRegistro || "",
+              imagen_principal: imagenPrincipal?.ruta_archivo || imagenPrincipal?.url || imagenPrincipal?.secure_url || imagenPrincipal || "",
+              imagenes: inmuebleImagenes,
+            },
+          ]
         : [];
     return {
       inmueble,
@@ -436,165 +436,165 @@ export function LeasesManagementPage() {
     };
   };
 
-  const fetchTenants = async (query = "", page = 1) => {
-    const requestId = ++fetchRequestIdRef.current;
-    try {
-      setIsLoading(true);
-      const tenantParams = { page, limit: PAGE_SIZE };
-      if (query) {
-        tenantParams.search = query;
-      }
-      if (estadoFilter !== "todos") tenantParams.estado = estadoFilter;
-      const tenantsResult = await renantsApiService.getAll(tenantParams);
-      const apiTenants = tenantsResult?.data || [];
-      const baseTenants = apiTenants;
+    const fetchTenants = async (query = "", page = 1) => {
+        const requestId = ++fetchRequestIdRef.current;
+        try {
+            setIsLoading(true);
+            const tenantParams = { page, limit: PAGE_SIZE };
+            if (query) {
+              tenantParams.search = query;
+            }
+            if (estadoFilter !== "todos") tenantParams.estado = estadoFilter;
+            const tenantsResult = await renantsApiService.getAll(tenantParams);
+            const apiTenants = tenantsResult?.data || [];
+            const baseTenants = apiTenants;
 
-      let tenants = baseTenants;
-      try {
-        const arriendosResp = await arriendoApiService.obtenerArriendos({ page: 1, limit: 200 });
-        const arriendosList = arriendosResp?.data || [];
+            let tenants = baseTenants;
+            try {
+              const arriendosResp = await arriendoApiService.obtenerArriendos({ page: 1, limit: 200 });
+              const arriendosList = arriendosResp?.data || [];
 
-        tenants = await Promise.all(
-          baseTenants.map(async (tenant) => {
-            if (normalizeEstado(tenant.estado) !== "activo") {
-              return tenant;
+              tenants = await Promise.all(
+                baseTenants.map(async (tenant) => {
+                  if (normalizeEstado(tenant.estado) !== "activo") {
+                    return tenant;
+                  }
+
+                  if (
+                    tenant.inmueble?.titulo ||
+                    tenant.inmueble?.nombre ||
+                    tenant.nombreInmueble ||
+                    tenant.inmueblesArrendados?.[0]?.nombre
+                  ) {
+                    return tenant;
+                  }
+
+                  const match = pickBestLeaseForTenant(tenant, arriendosList);
+                  if (!match) return tenant;
+
+                  const leaseData = mapArriendoToLeaseData(match);
+                  const registroInmueble =
+                    leaseData.registroInmobiliario ||
+                    leaseData.inmueble?.registro ||
+                    leaseData.inmueble?.registro_inmobiliario ||
+                    match?.Inmueble?.registro_inmobiliario ||
+                    match?.Inmueble?.registro ||
+                    match?.inmueble?.registro_inmobiliario ||
+                    match?.inmueble?.registro;
+
+                  let fetchedProperty = null;
+                  if (registroInmueble) {
+                    try {
+                      fetchedProperty = await inmueblesAPI.getInmuebleByRegistro(registroInmueble);
+                    } catch (_error) {
+                      fetchedProperty = null;
+                    }
+                  }
+
+                  if (!fetchedProperty) {
+                    return {
+                      ...tenant,
+                      ...leaseData,
+                    };
+                  }
+
+                  const enrichedInmueble = {
+                    ...(leaseData.inmueble || tenant.inmueble || {}),
+                    ...fetchedProperty,
+                    registro:
+                      fetchedProperty.registro ||
+                      fetchedProperty.registro_inmobiliario ||
+                      leaseData.registroInmobiliario ||
+                      "",
+                    registro_inmobiliario:
+                      fetchedProperty.registro ||
+                      fetchedProperty.registro_inmobiliario ||
+                      leaseData.registroInmobiliario ||
+                      "",
+                  };
+
+                  return {
+                    ...tenant,
+                    ...leaseData,
+                    inmueble: enrichedInmueble,
+                    nombreInmueble:
+                      fetchedProperty.titulo ||
+                      fetchedProperty.nombre ||
+                      fetchedProperty.nombre_comercial ||
+                      leaseData.nombreInmueble ||
+                      tenant.nombreInmueble,
+                    imagenInmueble:
+                      fetchedProperty.image ||
+                      fetchedProperty.imagen_principal ||
+                      fetchedProperty.imagen_portada ||
+                      fetchedProperty.portada ||
+                      leaseData.imagenInmueble ||
+                      tenant.imagenInmueble,
+                    inmueblesArrendados: [
+                      {
+                        ...(leaseData.inmueblesArrendados?.[0] || tenant.inmueblesArrendados?.[0] || {}),
+                        id: fetchedProperty.id || leaseData.inmueblesArrendados?.[0]?.id || tenant.inmueblesArrendados?.[0]?.id,
+                        nombre:
+                          fetchedProperty.titulo ||
+                          fetchedProperty.nombre ||
+                          fetchedProperty.nombre_comercial ||
+                          leaseData.nombreInmueble ||
+                          tenant.nombreInmueble ||
+                          "Inmueble asignado",
+                        direccion:
+                          fetchedProperty.direccion ||
+                          leaseData.direccion ||
+                          tenant.direccion ||
+                          "",
+                        registro:
+                          fetchedProperty.registro ||
+                          fetchedProperty.registro_inmobiliario ||
+                          leaseData.registroInmobiliario ||
+                          tenant.registroInmobiliario ||
+                          "",
+                        imagen_principal:
+                          fetchedProperty.image ||
+                          fetchedProperty.imagen_principal ||
+                          fetchedProperty.imagen_portada ||
+                          fetchedProperty.portada ||
+                          leaseData.imagenInmueble ||
+                          tenant.imagenInmueble ||
+                          "",
+                        imagenes:
+                          fetchedProperty.imagenes ||
+                          leaseData.inmueblesArrendados?.[0]?.imagenes ||
+                          tenant.inmueblesArrendados?.[0]?.imagenes ||
+                          [],
+                      },
+                    ],
+                  };
+                })
+              );
+            } catch (_error) {
+              tenants = baseTenants;
             }
 
-            if (
-              tenant.inmueble?.titulo ||
-              tenant.inmueble?.nombre ||
-              tenant.nombreInmueble ||
-              tenant.inmueblesArrendados?.[0]?.nombre
-            ) {
-              return tenant;
-            }
-
-            const match = pickBestLeaseForTenant(tenant, arriendosList);
-            if (!match) return tenant;
-
-            const leaseData = mapArriendoToLeaseData(match);
-            const registroInmueble =
-              leaseData.registroInmobiliario ||
-              leaseData.inmueble?.registro ||
-              leaseData.inmueble?.registro_inmobiliario ||
-              match?.Inmueble?.registro_inmobiliario ||
-              match?.Inmueble?.registro ||
-              match?.inmueble?.registro_inmobiliario ||
-              match?.inmueble?.registro;
-
-            let fetchedProperty = null;
-            if (registroInmueble) {
-              try {
-                fetchedProperty = await inmueblesAPI.getInmuebleByRegistro(registroInmueble);
-              } catch (_error) {
-                fetchedProperty = null;
-              }
-            }
-
-            if (!fetchedProperty) {
+            if (requestId !== fetchRequestIdRef.current) {
               return {
-                ...tenant,
-                ...leaseData,
+                tenants,
+                pagination: tenantsResult?.pagination || null,
               };
             }
 
-            const enrichedInmueble = {
-              ...(leaseData.inmueble || tenant.inmueble || {}),
-              ...fetchedProperty,
-              registro:
-                fetchedProperty.registro ||
-                fetchedProperty.registro_inmobiliario ||
-                leaseData.registroInmobiliario ||
-                "",
-              registro_inmobiliario:
-                fetchedProperty.registro ||
-                fetchedProperty.registro_inmobiliario ||
-                leaseData.registroInmobiliario ||
-                "",
-            };
-
+            setArrendatarios(sortTenantsByStatus(tenants));
+            setPagination(tenantsResult?.pagination || {
+              total: tenants.length,
+              pagina: page,
+              limite: PAGE_SIZE,
+              paginas_totales: 1,
+              has_next_page: false,
+              has_prev_page: page > 1,
+            });
+            setCurrentPage(tenantsResult?.pagination?.pagina || page);
             return {
-              ...tenant,
-              ...leaseData,
-              inmueble: enrichedInmueble,
-              nombreInmueble:
-                fetchedProperty.titulo ||
-                fetchedProperty.nombre ||
-                fetchedProperty.nombre_comercial ||
-                leaseData.nombreInmueble ||
-                tenant.nombreInmueble,
-              imagenInmueble:
-                fetchedProperty.image ||
-                fetchedProperty.imagen_principal ||
-                fetchedProperty.imagen_portada ||
-                fetchedProperty.portada ||
-                leaseData.imagenInmueble ||
-                tenant.imagenInmueble,
-              inmueblesArrendados: [
-                {
-                  ...(leaseData.inmueblesArrendados?.[0] || tenant.inmueblesArrendados?.[0] || {}),
-                  id: fetchedProperty.id || leaseData.inmueblesArrendados?.[0]?.id || tenant.inmueblesArrendados?.[0]?.id,
-                  nombre:
-                    fetchedProperty.titulo ||
-                    fetchedProperty.nombre ||
-                    fetchedProperty.nombre_comercial ||
-                    leaseData.nombreInmueble ||
-                    tenant.nombreInmueble ||
-                    "Inmueble asignado",
-                  direccion:
-                    fetchedProperty.direccion ||
-                    leaseData.direccion ||
-                    tenant.direccion ||
-                    "",
-                  registro:
-                    fetchedProperty.registro ||
-                    fetchedProperty.registro_inmobiliario ||
-                    leaseData.registroInmobiliario ||
-                    tenant.registroInmobiliario ||
-                    "",
-                  imagen_principal:
-                    fetchedProperty.image ||
-                    fetchedProperty.imagen_principal ||
-                    fetchedProperty.imagen_portada ||
-                    fetchedProperty.portada ||
-                    leaseData.imagenInmueble ||
-                    tenant.imagenInmueble ||
-                    "",
-                  imagenes:
-                    fetchedProperty.imagenes ||
-                    leaseData.inmueblesArrendados?.[0]?.imagenes ||
-                    tenant.inmueblesArrendados?.[0]?.imagenes ||
-                    [],
-                },
-              ],
+              tenants,
+              pagination: tenantsResult?.pagination || null,
             };
-          })
-        );
-      } catch (_error) {
-        tenants = baseTenants;
-      }
-
-      if (requestId !== fetchRequestIdRef.current) {
-        return {
-          tenants,
-          pagination: tenantsResult?.pagination || null,
-        };
-      }
-
-      setArrendatarios(sortTenantsByStatus(tenants));
-      setPagination(tenantsResult?.pagination || {
-        total: tenants.length,
-        pagina: page,
-        limite: PAGE_SIZE,
-        paginas_totales: 1,
-        has_next_page: false,
-        has_prev_page: page > 1,
-      });
-      setCurrentPage(tenantsResult?.pagination?.pagina || page);
-      return {
-        tenants,
-        pagination: tenantsResult?.pagination || null,
-      };
     } catch (error) {
       if (requestId !== fetchRequestIdRef.current) {
         return {
@@ -775,93 +775,93 @@ export function LeasesManagementPage() {
     );
   };
 
-  const renderDeleteModal = () => {
-    return null;
+const renderDeleteModal = () => {
+  return null;
 
-    const modalContent = (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={() => setTenantToDelete(null)}
-        />
+  const modalContent = (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={() => setTenantToDelete(null)}
+      />
 
-        {/* Card */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ duration: 0.25 }}
-          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-start justify-between p-6 border-b border-slate-200">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
-                <Trash2 className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
-                <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
-              </div>
+      {/* Card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.25 }}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 border-b border-slate-200">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
+              <Trash2 className="w-5 h-5 text-red-600" />
             </div>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setTenantToDelete(null)}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              aria-label="Cerrar"
-            >
-              <X className="w-5 h-5 text-slate-500" />
-            </motion.button>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
+              <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
+            </div>
           </div>
 
-          {/* Content */}
-          <div className="p-6">
-            <p className="text-slate-700">
-              ¿Estás seguro de que deseas eliminar a{" "}
-              <span className="font-semibold text-slate-900">
-                {tenantToDelete.primerNombre} {tenantToDelete.primerApellido}
-              </span>
-              ? Esta acción no se puede deshacer.
-            </p>
-          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setTenantToDelete(null)}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Cerrar"
+          >
+            <X className="w-5 h-5 text-slate-500" />
+          </motion.button>
+        </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setTenantToDelete(null)}
-              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              Cancelar
-            </motion.button>
+        {/* Content */}
+        <div className="p-6">
+          <p className="text-slate-700">
+            ¿Estás seguro de que deseas eliminar a{" "}
+            <span className="font-semibold text-slate-900">
+              {tenantToDelete.primerNombre} {tenantToDelete.primerApellido}
+            </span>
+            ? Esta acción no se puede deshacer.
+          </p>
+        </div>
 
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleDeleteTenant}
-              className="flex items-center gap-2 px-6 py-2 rounded-lg transition-colors bg-red-600 hover:bg-red-700 text-white"
-            >
-              <Trash2 className="w-4 h-4" />
-              Eliminar
-            </motion.button>
-          </div>
-        </motion.div>
-      </div>
-    );
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setTenantToDelete(null)}
+            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Cancelar
+          </motion.button>
 
-    return ReactDOM.createPortal(
-      modalContent,
-      document.getElementById("modal-root") || document.body
-    );
-  };
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleDeleteTenant}
+            className="flex items-center gap-2 px-6 py-2 rounded-lg transition-colors bg-red-600 hover:bg-red-700 text-white"
+          >
+            <Trash2 className="w-4 h-4" />
+            Eliminar
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  return ReactDOM.createPortal(
+    modalContent,
+    document.getElementById("modal-root") || document.body
+  );
+};
 
   return (
     <>
@@ -910,7 +910,7 @@ export function LeasesManagementPage() {
               />
             </div>
           </div>
-
+          
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
@@ -975,142 +975,143 @@ export function LeasesManagementPage() {
                       const isEditBlocked = hasAssociatedLease(tenant);
                       const tenantRowId = getTenantRowId(tenant);
                       return (
-                        <tr key={tenantRowId} className="hover:bg-slate-50 transition-colors">
-                          {/* INFORMACIÓN PERSONAL */}
-                          <td className="px-6 py-4">
-                            <div className="text-center">
-                              <p className="font-semibold text-slate-800 text-sm">
-                                {tenant.primerNombre} {tenant.primerApellido}
-                              </p>
-                              <p className="text-xs text-slate-500 flex items-center justify-center gap-1 mt-1">
-                                <Mail className="w-3 h-3" />
-                                {tenant.correo}
+                      <tr key={tenantRowId} className="hover:bg-slate-50 transition-colors">
+                        {/* INFORMACIÓN PERSONAL */}
+                        <td className="px-6 py-4">
+                          <div className="text-center">
+                            <p className="font-semibold text-slate-800 text-sm">
+                              {tenant.primerNombre} {tenant.primerApellido}
+                            </p>
+                            <p className="text-xs text-slate-500 flex items-center justify-center gap-1 mt-1">
+                              <Mail className="w-3 h-3" />
+                              {tenant.correo}
+                            </p>
+                          </div>
+                        </td>
+
+                        {/* DOCUMENTO */}
+                        <td className="px-6 py-4 text-center">
+                          <div className="space-y-1">
+                            <span className="text-xs text-slate-500 block">Tipo</span>
+                            <span className="text-sm font-medium text-slate-700 block">{tenant.tipoDocumento}</span>
+                            <span className="text-xs text-slate-500 block">Número</span>
+                            <span className="text-sm font-semibold text-slate-800 block">{tenant.documento}</span>
+                          </div>
+                        </td>
+
+                        {/* INMUEBLE ASIGNADO */}
+                        <td className="px-6 py-4">
+                          {(tenant.inmueblesArrendados && tenant.inmueblesArrendados.length > 0) || tenant.nombreInmueble || tenant.inmueble ? (
+                            <div className="flex flex-col items-center justify-center gap-1 text-center">
+                              <Home className="w-4 h-4 text-slate-400" />
+                              <p className="text-xs text-slate-500">
+                                {tenant.inmueblesArrendados?.[0]?.nombre ||
+                                  tenant.nombreInmueble ||
+                                  tenant.inmueble?.titulo ||
+                                  tenant.inmueble?.nombre ||
+                                  tenant.inmueble?.nombre_comercial ||
+                                  (tenant.inmueblesArrendados?.[0]?.id ? `Inmueble #${tenant.inmueblesArrendados[0].id}` : "Inmueble asignado")}
                               </p>
                             </div>
-                          </td>
-
-                          {/* DOCUMENTO */}
-                          <td className="px-6 py-4 text-center">
-                            <div className="space-y-1">
-                              <span className="text-xs text-slate-500 block">Tipo</span>
-                              <span className="text-sm font-medium text-slate-700 block">{tenant.tipoDocumento}</span>
-                              <span className="text-xs text-slate-500 block">Número</span>
-                              <span className="text-sm font-semibold text-slate-800 block">{tenant.documento}</span>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center text-slate-400">
+                              <Home className="w-6 h-6 mb-1" />
+                              <span className="text-xs italic">Sin inmuebles asignados</span>
                             </div>
-                          </td>
+                          )}
+                        </td>
 
-                          {/* INMUEBLE ASIGNADO */}
-                          <td className="px-6 py-4">
-                            {(tenant.inmueblesArrendados && tenant.inmueblesArrendados.length > 0) || tenant.nombreInmueble || tenant.inmueble ? (
-                              <div className="flex flex-col items-center justify-center gap-1 text-center">
-                                <Home className="w-4 h-4 text-slate-400" />
-                                <p className="text-xs text-slate-500">
-                                  {tenant.inmueblesArrendados?.[0]?.nombre ||
-                                    tenant.nombreInmueble ||
-                                    tenant.inmueble?.titulo ||
-                                    tenant.inmueble?.nombre ||
-                                    tenant.inmueble?.nombre_comercial ||
-                                    (tenant.inmueblesArrendados?.[0]?.id ? `Inmueble #${tenant.inmueblesArrendados[0].id}` : "Inmueble asignado")}
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center text-slate-400">
-                                <Home className="w-6 h-6 mb-1" />
-                                <span className="text-xs italic">Sin inmuebles asignados</span>
+                        {/* CONTACTO */}
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex flex-col items-center justify-center space-y-1">
+                            <div className="flex items-center gap-1 text-slate-600">
+                              <Phone className="w-3 h-3" />
+                              <span className="text-sm font-medium">{tenant.telefono}</span>
+                            </div>
+                            {tenant.celular && (
+                              <div className="text-xs text-slate-500">
+                                Cel: {tenant.celular}
                               </div>
                             )}
-                          </td>
+                          </div>
+                        </td>
 
-                          {/* CONTACTO */}
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex flex-col items-center justify-center space-y-1">
-                              <div className="flex items-center gap-1 text-slate-600">
-                                <Phone className="w-3 h-3" />
-                                <span className="text-sm font-medium">{tenant.telefono}</span>
+                        {/* ESTADO */}
+                        <td className="px-6 py-4 text-center relative">
+                          <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setStatusMenuId((prev) =>
+                                  prev === tenantRowId
+                                    ? null
+                                    : tenantRowId
+                                )
+                              }
+                              disabled={statusChangingId === tenantRowId}
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
+                                estadoNormalized === "activo"
+                                  ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
+                                  : estadoNormalized === "moroso"
+                                  ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200 hover:ring-2 hover:ring-red-200"
+                                  : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
+                              } ${statusChangingId === tenantRowId ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === tenantRowId ? "ring-2 ring-slate-200" : ""}`}
+                            >
+                              {statusChangingId === tenantRowId && (
+                                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                              )}
+                              <span>{estadoLabel}</span>
+                              <ChevronDown className="w-3 h-3 ml-2" />
+                            </button>
+                            {statusMenuId === tenantRowId && (
+                              <div className="absolute left-1/2 -translate-x-1/2 bottom-10 z-[60] bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
+                                {["Activo", "Inactivo"].map((estadoOpcion) => (
+                                  <button
+                                    key={estadoOpcion}
+                                    type="button"
+                                    onClick={() => handleToggleEstado(tenant, estadoOpcion)}
+                                    className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                  >
+                                    {estadoOpcion}
+                                  </button>
+                                ))}
                               </div>
-                              {tenant.celular && (
-                                <div className="text-xs text-slate-500">
-                                  Cel: {tenant.celular}
-                                </div>
-                              )}
-                            </div>
-                          </td>
+                            )}
+                            {tenant.fechaInicio && (
+                              <span className="text-xs text-slate-500">
+                                Desde: {new Date(tenant.fechaInicio).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                          {/* ESTADO */}
-                          <td className="px-6 py-4 text-center relative">
-                            <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setStatusMenuId((prev) =>
-                                    prev === tenantRowId
-                                      ? null
-                                      : tenantRowId
-                                  )
-                                }
-                                disabled={statusChangingId === tenantRowId}
-                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${estadoNormalized === "activo"
-                                    ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
-                                    : estadoNormalized === "moroso"
-                                      ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200 hover:ring-2 hover:ring-red-200"
-                                      : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
-                                  } ${statusChangingId === tenantRowId ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === tenantRowId ? "ring-2 ring-slate-200" : ""}`}
-                              >
-                                {statusChangingId === tenantRowId && (
-                                  <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                                )}
-                                <span>{estadoLabel}</span>
-                                <ChevronDown className="w-3 h-3 ml-2" />
-                              </button>
-                              {statusMenuId === tenantRowId && (
-                                <div className="absolute left-1/2 -translate-x-1/2 bottom-10 z-[60] bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
-                                  {["Activo", "Inactivo"].map((estadoOpcion) => (
-                                    <button
-                                      key={estadoOpcion}
-                                      type="button"
-                                      onClick={() => handleToggleEstado(tenant, estadoOpcion)}
-                                      className="w-full text-left px-3 py-2 hover:bg-slate-50"
-                                    >
-                                      {estadoOpcion}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              {tenant.fechaInicio && (
-                                <span className="text-xs text-slate-500">
-                                  Desde: {new Date(tenant.fechaInicio).toLocaleDateString()}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* ACCIONES */}
-                          <td className="px-6 py-4">
-                            <div className="flex gap-2 justify-center">
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => handleViewTenant(tenant)}
-                                className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
-                                aria-label="Ver arrendatario"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </motion.button>
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                disabled={isEditBlocked}
-                                onClick={() => handleEditTenant(tenant)}
-                                className={`p-2 transition-colors ${isEditBlocked ? "text-slate-300 cursor-not-allowed" : "text-green-600 hover:text-green-800"}`}
-                                title={isEditBlocked ? "No puedes editar un arrendatario con un arriendo asociado" : "Editar arrendatario"}
-                                aria-label="Editar arrendatario"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </motion.button>
-                              {/* Acción de eliminar temporalmente deshabilitada */}
-                            </div>
-                          </td>
-                        </tr>
+                        {/* ACCIONES */}
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2 justify-center">
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleViewTenant(tenant)}
+                              className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
+                              aria-label="Ver arrendatario"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              disabled={isEditBlocked}
+                              onClick={() => handleEditTenant(tenant)}
+                              className={`p-2 transition-colors ${isEditBlocked ? "text-slate-300 cursor-not-allowed" : "text-green-600 hover:text-green-800"}`}
+                              title={isEditBlocked ? "No puedes editar un arrendatario con un arriendo asociado" : "Editar arrendatario"}
+                              aria-label="Editar arrendatario"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </motion.button>
+                            {/* Acción de eliminar temporalmente deshabilitada */}
+                          </div>
+                        </td>
+                      </tr>
                       );
                     })
                   )}

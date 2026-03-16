@@ -207,7 +207,47 @@ class RenantService {
       );
     }
 
-    return persona;
+    return { persona, created };
+  }
+
+  async ensureTenantRoleAssigned(personaId, transaction) {
+    let tenantRole = await Rol.findOne({
+      where: { nombre_rol: 'Arrendatario' },
+      transaction
+    });
+
+    if (!tenantRole) {
+      tenantRole = await Rol.create(
+        {
+          nombre_rol: 'Arrendatario',
+          descripcion: 'Usuario arrendatario con acceso a su portal de facturas',
+          es_rol_administrativo: false,
+          estado: true
+        },
+        { transaction }
+      );
+    }
+
+    const existingLink = await PersonasRol.findOne({
+      where: { id_persona: personaId, id_rol: tenantRole.id_rol },
+      transaction
+    });
+
+    if (existingLink) {
+      if (existingLink.estado === false) {
+        await existingLink.update({ estado: true }, { transaction });
+      }
+      return;
+    }
+
+    await PersonasRol.create(
+      {
+        id_persona: personaId,
+        id_rol: tenantRole.id_rol,
+        estado: true
+      },
+      { transaction }
+    );
   }
 
   buildRenantPayload(data, existing) {
@@ -233,7 +273,9 @@ class RenantService {
   async createRenant(renantData) {
     const transaction = await sequelize.transaction();
     try {
-      const persona = await this.upsertPersona(renantData, transaction);
+      const { persona, created } = await this.upsertPersona(renantData, transaction);
+
+      await this.ensureTenantRoleAssigned(persona.id_persona, transaction);
 
       const existing = await Renant.findOne({
         where: { id_persona: persona.id_persona },
@@ -288,6 +330,28 @@ class RenantService {
           { estado: 'Arrendado' },
           { transaction }
         );
+      }
+
+      const shouldSendActivationInvite =
+        (created || persona.tiene_cuenta === false) &&
+        typeof persona.correo === 'string' &&
+        persona.correo.trim().length > 0;
+
+      if (shouldSendActivationInvite) {
+        try {
+          await invitacionService.crearInvitacion({
+            id_persona: persona.id_persona,
+            creado_por: null,
+            tipo: 'user_invite',
+            rol_asignado: 'Arrendatario',
+            es_administrativo: false
+          });
+        } catch (inviteError) {
+          logger.warn('No se pudo enviar invitacion de activacion al arrendatario', {
+            id_persona: persona.id_persona,
+            error: inviteError.message
+          });
+        }
       }
 
       await transaction.commit();

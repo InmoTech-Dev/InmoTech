@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { dashboardRoutes } from './routes/index'
 import Navbar from './shared/components/Navbar'
 import Footer from './shared/components/Footer'
@@ -25,6 +25,7 @@ import { SalesManagementPage } from './features/dashboard/pages/sales/SalesManag
 import { BuyersManagementPage } from './features/dashboard/pages/sales/BuyerManagementPage'
 import { LeasesManagementPage } from './features/dashboard/pages/leases/LeasesManagementPage'
 import { RenantManagementPage } from './features/dashboard/pages/leases/RenantManagementPage'
+import TenantInvoicesPage from './features/dashboard/pages/leases/TenantInvoicesPage'
 import AppointmentPage from './features/dashboard/pages/appointment/AppointmentPage'
 import Reports from './features/dashboard/pages/reports/Reports'
 import Roles from './features/dashboard/pages/roles/Roles'
@@ -33,8 +34,35 @@ import OwnerDashboardPage from './features/dashboard/pages/propertyOwner/OwnerDa
 import AdministrativosPage from './features/dashboard/pages/administrativos/AdministrativosPage'
 import UsersPage from './features/dashboard/pages/users/UsersPage'
 import ProfilePage from './features/dashboard/pages/Profile/ProfilePage'
+import OwnerPortfolioPage from './features/dashboard/pages/propertyOwner/OwnerPortfolioPage'
+import { useAuth } from './shared/contexts/AuthContext'
+
+const isOwnerUser = (user) => {
+  if (!user) return false
+  const roles = Array.isArray(user.roles) ? user.roles : []
+  return roles.some((role) => {
+    if (typeof role === 'string') return role.trim().toLowerCase() === 'propietario'
+    const roleName = role?.nombre_rol || role?.nombre || role?.name
+    return typeof roleName === 'string' && roleName.trim().toLowerCase() === 'propietario'
+  })
+}
+
+const isTenantUser = (user) => {
+  if (!user) return false
+  const roles = Array.isArray(user.roles) ? user.roles : []
+  return roles.some((role) => {
+    if (typeof role === 'string') return role.trim().toLowerCase() === 'arrendatario'
+    const roleName = role?.nombre_rol || role?.nombre || role?.name
+    return typeof roleName === 'string' && roleName.trim().toLowerCase() === 'arrendatario'
+  })
+}
 
 function App() {
+  const { isAuthenticated, user } = useAuth()
+  const hasAdministrativeAccess = user?.es_administrativo === true
+  const hasOwnerAccess = isOwnerUser(user)
+  const hasTenantAccess = isTenantUser(user)
+
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
@@ -45,11 +73,25 @@ function App() {
         <Route
           path="/"
           element={
-            <>
-              <Navbar />
-              <HomePage />
-              <Footer />
-            </>
+            isAuthenticated && !hasAdministrativeAccess ? (
+              hasOwnerAccess ? (
+                <Navigate to={dashboardRoutes.ownerMyProperties} replace />
+              ) : hasTenantAccess ? (
+                <Navigate to={dashboardRoutes.tenantMyInvoices} replace />
+              ) : (
+                <>
+                  <Navbar />
+                  <HomePage />
+                  <Footer />
+                </>
+              )
+            ) : (
+              <>
+                <Navbar />
+                <HomePage />
+                <Footer />
+              </>
+            )
           }
         />
         <Route
@@ -136,8 +178,34 @@ function App() {
           path="/dashboard"
           element={
             <DashboardRoute>
+              {hasOwnerAccess && !hasAdministrativeAccess ? (
+                <Navigate to={dashboardRoutes.ownerMyProperties} replace />
+              ) : hasTenantAccess && !hasAdministrativeAccess ? (
+                <Navigate to={dashboardRoutes.tenantMyInvoices} replace />
+              ) : (
+                <DashboardLayout>
+                  <DashboardPage />
+                </DashboardLayout>
+              )}
+            </DashboardRoute>
+          }
+        />
+        <Route
+          path={dashboardRoutes.ownerMyProperties}
+          element={
+            <DashboardRoute>
               <DashboardLayout>
-                <DashboardPage />
+                <OwnerPortfolioPage />
+              </DashboardLayout>
+            </DashboardRoute>
+          }
+        />
+        <Route
+          path={dashboardRoutes.tenantMyInvoices}
+          element={
+            <DashboardRoute>
+              <DashboardLayout>
+                <TenantInvoicesPage />
               </DashboardLayout>
             </DashboardRoute>
           }

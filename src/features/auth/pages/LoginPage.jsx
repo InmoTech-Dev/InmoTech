@@ -16,6 +16,26 @@ export default function LoginPage() {
   const { login, requestPasswordReset } = useAuth()
   const navigate = useNavigate()
 
+  const isOwnerUser = (userData) => {
+    if (!userData) return false
+    const roles = Array.isArray(userData.roles) ? userData.roles : []
+    return roles.some((role) => {
+      if (typeof role === "string") return role.trim().toLowerCase() === "propietario"
+      const roleName = role?.nombre_rol || role?.nombre || role?.name
+      return typeof roleName === "string" && roleName.trim().toLowerCase() === "propietario"
+    })
+  }
+
+  const isTenantUser = (userData) => {
+    if (!userData) return false
+    const roles = Array.isArray(userData.roles) ? userData.roles : []
+    return roles.some((role) => {
+      if (typeof role === "string") return role.trim().toLowerCase() === "arrendatario"
+      const roleName = role?.nombre_rol || role?.nombre || role?.name
+      return typeof roleName === "string" && roleName.trim().toLowerCase() === "arrendatario"
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
@@ -24,7 +44,13 @@ export default function LoginPage() {
     try {
       const userData = await login(email, password)
       const hasAdministrativeAccess = userData?.es_administrativo === true
-      const redirectPath = hasAdministrativeAccess ? "/dashboard" : "/"
+      const redirectPath = hasAdministrativeAccess
+        ? "/dashboard"
+        : isOwnerUser(userData)
+          ? "/dashboard/propietario/inmuebles"
+          : isTenantUser(userData)
+            ? "/dashboard/arrendatario/facturas"
+          : "/"
 
       setPendingVerificationEmail(null)
       navigate(redirectPath, { replace: true })

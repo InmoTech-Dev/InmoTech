@@ -4,7 +4,8 @@ const {
   PropiedadInmueble,
   Comodidad,
   InmuebleComodidad,
-  InmuebleImagen
+  InmuebleImagen,
+  Lease
 } = require('../models');
 
 const { sequelize } = require('../config/database');
@@ -248,6 +249,195 @@ const syncImagenes = async (inmuebleId, imagenes = [], transaction) => {
   }
 };
 
+const isTruthyBoolean = (value) => {
+  if (value === true) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+  return value === 1;
+};
+
+const validateDestacadosLimit = async ({ transaction, excludeInmuebleId = null }) => {
+  const where = { destacado: true };
+  if (excludeInmuebleId) {
+    where.id_inmueble = { [Op.ne]: excludeInmuebleId };
+  }
+
+  const totalDestacados = await Inmueble.count({
+    where,
+    transaction
+  });
+
+  if (totalDestacados >= MAX_DESTACADOS) {
+    const error = new Error(`Solo se pueden destacar ${MAX_DESTACADOS} inmuebles.`);
+    error.status = 400;
+    throw error;
+  }
+};
+
+const clearPropietarioActual = async (inmuebleId, transaction) => {
+  await PropiedadInmueble.update(
+    {
+      estado: 'Inactivo',
+      es_propietario_actual: false,
+      fecha_final: new Date()
+    },
+    {
+      where: { id_inmueble: inmuebleId, es_propietario_actual: true },
+      transaction
+    }
+  );
+};
+
+const countSelectedAmenitiesByInmueble = async (inmuebleId, transaction) => {
+  return InmuebleComodidad.count({
+    where: {
+      id_inmueble: inmuebleId,
+      seleccionada: true
+    },
+    transaction
+  });
+};
+
+const normalizeEstadoFrontend = (value = '') =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const buildEstadoFrontendCondition = (valor, column = 'Inmuebles.estado_frontend') => {
+  if (valor === undefined || valor === null) {
+    return null;
+  }
+
+  if (typeof valor === 'string' && normalizeEstadoFrontend(valor) === 'todos') {
+    return null;
+  }
+
+  const normalized = normalizeEstadoFrontend(valor);
+  if (!normalized) return null;
+
+  const columnReference = sequelize.col(column);
+  return sequelize.where(
+    sequelize.fn('LOWER', sequelize.cast(columnReference, 'NVARCHAR(100)')),
+    normalized
+  );
+};
+
+const buildEstadoFrontendExclusionCondition = (values = [], column = 'Inmuebles.estado_frontend') => {
+  const normalizedValues = Array.isArray(values)
+    ? values
+        .map((value) => normalizeEstadoFrontend(value))
+        .filter(Boolean)
+    : [];
+
+  if (!normalizedValues.length) return null;
+
+  const columnReference = sequelize.col(column);
+  return sequelize.where(
+    sequelize.fn('LOWER', sequelize.cast(columnReference, 'NVARCHAR(100)')),
+    {
+      [Op.notIn]: normalizedValues
+    }
+  );
+};
+
+const shouldClearDestacadoByEstadoFrontend = (estadoFrontend) => {
+  if (typeof estadoFrontend !== 'string') return false;
+  const normalized = estadoFrontend.trim().toLowerCase();
+  return normalized === 'vendido' || normalized === 'arrendado';
+};
+
+const isEstadoFrontendVendido = (value) => normalizeEstadoFrontend(value) === 'vendido';
+
+const parseOwnerId = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getCurrentOwnerIdForInmueble = async (inmuebleId, transaction) => {
+  const ownerLink = await PropiedadInmueble.findOne({
+    where: {
+      id_inmueble: inmuebleId,
+      es_propietario_actual: true
+    },
+    attributes: ['id_persona'],
+    transaction
+  });
+
+  return parseOwnerId(ownerLink?.id_persona);
+};
+
+const validateRegistroReuseRules = async ({
+  registroInmobiliario,
+  ownerId,
+  excludeInmuebleId = null,
+  transaction
+}) => {
+  const registro = typeof registroInmobiliario === 'string'
+    ? registroInmobiliario.trim()
+    : '';
+
+  if (!registro) return;
+
+  const where = {
+    [Op.and]: [
+      sequelize.where(
+        sequelize.fn('LOWER', sequelize.cast(sequelize.col('registro_inmobiliario'), 'NVARCHAR(100)')),
+        registro.toLowerCase()
+      )
+    ]
+  };
+
+  if (excludeInmuebleId) {
+    where.id_inmueble = { [Op.ne]: excludeInmuebleId };
+  }
+
+  const duplicatedRecords = await Inmueble.findAll({
+    where,
+    attributes: ['id_inmueble', 'estado_frontend', 'registro_inmobiliario'],
+    include: [
+      {
+        model: PropiedadInmueble,
+        as: 'propietarios',
+        required: false,
+        where: { es_propietario_actual: true },
+        attributes: ['id_persona']
+      }
+    ],
+    transaction
+  });
+
+  if (!duplicatedRecords.length) return;
+
+  const hasNonSoldRecord = duplicatedRecords.some(
+    (record) => !isEstadoFrontendVendido(record.estado_frontend)
+  );
+
+  if (hasNonSoldRecord) {
+    const error = new Error(
+      'El registro inmobiliario ya existe y solo se puede reutilizar cuando el inmueble existente está en estado Vendido.'
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  const blockedOwnerIds = new Set();
+  duplicatedRecords.forEach((record) => {
+    (record.propietarios || []).forEach((ownerLink) => {
+      const parsed = parseOwnerId(ownerLink.id_persona);
+      if (parsed) blockedOwnerIds.add(parsed);
+    });
+  });
+
+  const normalizedOwnerId = parseOwnerId(ownerId);
+  if (normalizedOwnerId && blockedOwnerIds.has(normalizedOwnerId)) {
+    const error = new Error(
+      'No es posible asignar este registro al mismo propietario del inmueble vendido.'
+    );
+    error.status = 400;
+    throw error;
+  }
+};
+
 class InmueblesService {
   /**
    * Crear un nuevo inmueble
@@ -270,6 +460,21 @@ class InmueblesService {
           propietario,
           propietario_id,
           propietarioId
+        });
+
+        if (isTruthyBoolean(payload.destacado)) {
+          await validateDestacadosLimit({ transaction: t });
+        }
+
+        validateRequiredAmenitiesForCategory({
+          categoria: payload.categoria || payload.tipo,
+          comodidades
+        });
+
+        await validateRegistroReuseRules({
+          registroInmobiliario: payload.registro_inmobiliario,
+          ownerId,
+          transaction: t
         });
 
         // Crear inmueble
@@ -577,9 +782,85 @@ class InmueblesService {
           transaction: t
         });
 
-        if (!inmueble) {
-          throw new Error('Inmueble no encontrado');
-        }
+          if (!inmueble) {
+            throw new Error('Inmueble no encontrado');
+          }
+
+          const hasRegistroUpdate = Object.prototype.hasOwnProperty.call(payload, 'registro_inmobiliario');
+          const hasOwnerUpdate = Boolean(ownerId);
+
+          if (hasRegistroUpdate || hasOwnerUpdate) {
+            const targetOwnerId = ownerId || await getCurrentOwnerIdForInmueble(inmuebleId, t);
+            const targetRegistro = payload.registro_inmobiliario || inmueble.registro_inmobiliario;
+
+            await validateRegistroReuseRules({
+              registroInmobiliario: targetRegistro,
+              ownerId: targetOwnerId,
+              excludeInmuebleId: inmuebleId,
+              transaction: t
+            });
+          }
+
+          const targetCategory = payload.categoria || payload.tipo || inmueble.categoria;
+          const normalizedTargetCategory = normalizeCategory(targetCategory);
+          const requiresAmenities = CATEGORIES_WITH_REQUIRED_AMENITIES.has(normalizedTargetCategory);
+
+          if (hasComodidadesInPayload) {
+            validateRequiredAmenitiesForCategory({
+              categoria: targetCategory,
+              comodidades
+            });
+          } else if (requiresAmenities) {
+            const currentAmenitiesCount = await countSelectedAmenitiesByInmueble(inmuebleId, t);
+            if (currentAmenitiesCount < 2) {
+              const error = new Error('Casa y Apartamento requieren minimo 2 comodidades seleccionadas.');
+              error.status = 400;
+              throw error;
+            }
+          }
+
+          if (shouldClearDestacadoByEstadoFrontend(payload.estado_frontend)) {
+            payload.destacado = false;
+          }
+
+          const hasEstadoFrontendUpdate = Object.prototype.hasOwnProperty.call(payload, 'estado_frontend');
+          const hasEstadoBoolUpdate = Object.prototype.hasOwnProperty.call(payload, 'estado');
+          const currentEstadoFrontend = normalizeEstadoFrontend(inmueble.estado_frontend);
+          const nextEstadoFrontend = normalizeEstadoFrontend(payload.estado_frontend);
+
+          if (
+            (hasEstadoFrontendUpdate && currentEstadoFrontend === 'arrendado' && nextEstadoFrontend !== 'arrendado') ||
+            (hasEstadoBoolUpdate && currentEstadoFrontend === 'arrendado' && isTruthyBoolean(payload.estado))
+          ) {
+            const today = new Date().toISOString().slice(0, 10);
+            const activeLease = await Lease.findOne({
+              where: {
+                id_inmueble: inmuebleId,
+                estado: { [Op.notIn]: ['Finalizado', 'Cancelado'] },
+                fecha_finalizacion: { [Op.gte]: today }
+              },
+              attributes: ['id_arrendamiento'],
+              transaction: t
+            });
+
+            if (activeLease) {
+              const error = new Error(
+                'No puedes cambiar el estado del inmueble mientras exista un arrendamiento vigente. Se actualizara automaticamente al finalizar el contrato.'
+              );
+              error.status = 409;
+              throw error;
+            }
+          }
+
+          const quiereDestacar = isTruthyBoolean(payload.destacado);
+          const estabaDestacado = isTruthyBoolean(inmueble.destacado);
+
+          if (quiereDestacar && !estabaDestacado) {
+            await validateDestacadosLimit({
+              transaction: t,
+              excludeInmuebleId: inmuebleId
+            });
+          }
 
         await inmueble.update(payload, { transaction: t });
         await syncPropietario(inmuebleId, ownerId, t);

@@ -46,6 +46,7 @@ const INITIAL_FORM = {
   titulo: '',
   direccion: '',
   barrio: '',
+  estrato: '',
   ciudad: '',
   departamento: '',
   pais: 'Colombia',
@@ -92,6 +93,15 @@ const formatOwnerSummary = (owner) => {
   };
 };
 
+const normalizeStatusLabel = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const isSoldStatus = (value) => normalizeStatusLabel(value) === 'vendido';
+
 export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }) => {
   const [form, setForm] = useState(INITIAL_FORM);
   const [activeStep, setActiveStep] = useState(0);
@@ -106,6 +116,9 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
   const [saving, setSaving] = useState(false);
   const [checkingRegistro, setCheckingRegistro] = useState(false);
   const [registroDisponible, setRegistroDisponible] = useState(true);
+  const [registroErrorMessage, setRegistroErrorMessage] = useState('Este registro ya existe');
+  const [blockedOwnerIdsByRegistro, setBlockedOwnerIdsByRegistro] = useState([]);
+  const [descripcionCambioComodidades, setDescripcionCambioComodidades] = useState('');
   const lastFocusedRef = useRef(null);
   const lastFocusInfo = useRef({ name: null, selectionStart: null, selectionEnd: null });
 
@@ -153,6 +166,30 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     () => owners.find((owner) => String(owner.id) === String(selectedOwnerId)),
     [owners, selectedOwnerId]
   );
+  const blockedOwnersSet = useMemo(
+    () => new Set(blockedOwnerIdsByRegistro.map((id) => String(id))),
+    [blockedOwnerIdsByRegistro]
+  );
+  const ownersForSelection = useMemo(
+    () => owners.filter((owner) => !blockedOwnersSet.has(String(owner.id))),
+    [owners, blockedOwnersSet]
+  );
+  const amenitiesChangedInEdit = useMemo(() => {
+    if (!inmuebleEditar) return false;
+    const currentSignature = getSelectedAmenitiesSignature(amenities);
+    const initialSignature = getSelectedAmenitiesSignature(inmuebleEditar.comodidades || []);
+    return currentSignature !== initialSignature;
+  }, [amenities, inmuebleEditar]);
+
+  useEffect(() => {
+    if (!amenitiesChangedInEdit && errors.descripcionCambioComodidades) {
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated.descripcionCambioComodidades;
+        return updated;
+      });
+    }
+  }, [amenitiesChangedInEdit, errors.descripcionCambioComodidades]);
 
   const loadOwners = async () => {
     try {
@@ -197,6 +234,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       setAmenities(buildAmenitiesForType(INITIAL_FORM.tipo));
       setImagenes([]);
       setSelectedOwnerId('');
+      setBlockedOwnerIdsByRegistro([]);
+      setRegistroErrorMessage('Este registro ya existe');
       setOwnerModalOpen(false);
       setCustomAmenity({ nombre: '', cantidad: 1 });
       setErrors({});
@@ -217,6 +256,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         titulo: inmuebleEditar.titulo || '',
         direccion: inmuebleEditar.direccion || '',
         barrio: inmuebleEditar.barrio || '',
+        estrato: inmuebleEditar.estrato || '',
         ciudad: inmuebleEditar.ciudad || '',
         departamento: inmuebleEditar.departamento || '',
         pais: inmuebleEditar.pais || 'Colombia',
@@ -238,6 +278,9 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       setAmenities(buildAmenitiesForType(INITIAL_FORM.tipo));
       setImagenes([]);
       setSelectedOwnerId('');
+      setBlockedOwnerIdsByRegistro([]);
+      setRegistroErrorMessage('Este registro ya existe');
+      setDescripcionCambioComodidades('');
     }
     setActiveStep(0);
   }, [inmuebleEditar, isOpen]);
@@ -253,11 +296,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
   useEffect(() => {
     if (!form.registro.trim()) {
       setRegistroDisponible(true);
+      setRegistroErrorMessage('Este registro ya existe');
+      setBlockedOwnerIdsByRegistro([]);
       setErrors((prev) => {
         const updated = { ...prev };
-        if (updated.registro === 'Este registro ya existe') {
-          delete updated.registro;
-        }
+        delete updated.registro;
         return updated;
       });
       return;
@@ -277,7 +320,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           registro_inmobiliario: registroValue,
           busqueda: registroValue
         });
-        const exists = items.some((item) => {
+        const duplicatedItems = items.filter((item) => {
           const itemId = item.id_inmueble || item.id || item.inmuebleId;
           const sameRecord =
             (item.registro || '').toLowerCase() === registroValue.toLowerCase() ||
@@ -290,14 +333,52 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
 
           return sameRecord;
         });
-        setRegistroDisponible(!exists);
+
+        if (!duplicatedItems.length) {
+          setRegistroDisponible(true);
+          setRegistroErrorMessage('Este registro ya existe');
+          setBlockedOwnerIdsByRegistro([]);
+          setErrors((prev) => {
+            const updated = { ...prev };
+            delete updated.registro;
+            return updated;
+          });
+          return;
+        }
+
+        const hasNonSoldDuplicate = duplicatedItems.some(
+          (item) => !isSoldStatus(item.estado_frontend || item.estado)
+        );
+
+        if (hasNonSoldDuplicate) {
+          setRegistroDisponible(false);
+          setRegistroErrorMessage('Este registro ya existe en un inmueble no vendido');
+          setBlockedOwnerIdsByRegistro([]);
+          setErrors((prev) => ({
+            ...prev,
+            registro: 'Este registro ya existe en un inmueble no vendido'
+          }));
+          return;
+        }
+
+        const blockedIds = Array.from(
+          new Set(
+            duplicatedItems.flatMap((item) => {
+              const directOwnerId = item.propietario?.id;
+              const ownerIds = Array.isArray(item.ownerIds) ? item.ownerIds : [];
+
+              return [directOwnerId, ...ownerIds]
+                .map((rawId) => Number.parseInt(rawId, 10))
+                .filter((id) => Number.isInteger(id) && id > 0);
+            })
+          )
+        );
+
+        setRegistroDisponible(true);
+        setBlockedOwnerIdsByRegistro(blockedIds);
         setErrors((prev) => {
           const updated = { ...prev };
-          if (exists) {
-            updated.registro = 'Este registro ya existe';
-          } else if (updated.registro === 'Este registro ya existe') {
-            delete updated.registro;
-          }
+          delete updated.registro;
           return updated;
         });
       } catch (error) {
@@ -309,6 +390,26 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
 
     return () => clearTimeout(timeoutId);
   }, [form.registro]);
+
+  useEffect(() => {
+    if (!selectedOwnerId || !blockedOwnersSet.has(String(selectedOwnerId))) {
+      setErrors((prev) => {
+        if (prev.propietario !== 'No se puede asignar este registro al mismo propietario del inmueble vendido') {
+          return prev;
+        }
+        const updated = { ...prev };
+        delete updated.propietario;
+        return updated;
+      });
+      return;
+    }
+
+    setSelectedOwnerId('');
+    setErrors((prev) => ({
+      ...prev,
+      propietario: 'No se puede asignar este registro al mismo propietario del inmueble vendido'
+    }));
+  }, [selectedOwnerId, blockedOwnersSet]);
 
   const handleAmenityToggle = (amenityId) => {
     setAmenities((prev) =>
@@ -400,7 +501,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
 
     if (stepIndex === 0) {
       if (!form.registro.trim()) validationErrors.registro = 'El registro es obligatorio';
-      if (!registroDisponible) validationErrors.registro = 'Este registro ya existe';
+      if (!registroDisponible) validationErrors.registro = registroErrorMessage;
       if (!form.titulo.trim()) validationErrors.titulo = 'El título es obligatorio';
       if (!form.descripcion.trim()) validationErrors.descripcion = 'La descripción es obligatoria';
       if (form.operacion === 'Venta' && !form.precioVenta) validationErrors.precioVenta = 'Ingresa el precio de venta';
@@ -416,9 +517,24 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (!form.direccion.trim()) validationErrors.direccion = 'La dirección es obligatoria';
       if (!form.ciudad.trim()) validationErrors.ciudad = 'La ciudad es obligatoria';
       if (!form.departamento.trim()) validationErrors.departamento = 'El departamento es obligatorio';
+      if (form.estrato === '') {
+        validationErrors.estrato = 'El estrato es obligatorio';
+      } else if (!Number.isInteger(Number(form.estrato)) || Number(form.estrato) < 1 || Number(form.estrato) > 6) {
+        validationErrors.estrato = 'Ingresa un estrato valido (1 a 6)';
+      }
+    } else if (stepIndex === 2) {
+      const selectedAmenitiesCount = amenities.filter((amenity) => amenity.seleccionada).length;
+      if (MIN_AMENITIES_REQUIRED_TYPES.has(form.tipo) && selectedAmenitiesCount < 2) {
+        validationErrors.comodidades = 'Casa y Apartamento requieren minimo 2 comodidades.';
+      }
+      if (inmuebleEditar && amenitiesChangedInEdit && !descripcionCambioComodidades.trim()) {
+        validationErrors.descripcionCambioComodidades = 'Describe el cambio en comodidades';
+      }
     } else if (stepIndex === 3) {
       if (!selectedOwnerId) {
         validationErrors.propietario = 'Selecciona un propietario';
+      } else if (blockedOwnersSet.has(String(selectedOwnerId))) {
+        validationErrors.propietario = 'No se puede asignar este registro al mismo propietario del inmueble vendido';
       }
     }
 
@@ -432,7 +548,15 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     try {
       setSaving(true);
       if (!registroDisponible) {
-        setErrors((prev) => ({ ...prev, registro: 'Este registro ya existe' }));
+        setErrors((prev) => ({ ...prev, registro: registroErrorMessage }));
+        setSaving(false);
+        return;
+      }
+      if (selectedOwnerId && blockedOwnersSet.has(String(selectedOwnerId))) {
+        setErrors((prev) => ({
+          ...prev,
+          propietario: 'No se puede asignar este registro al mismo propietario del inmueble vendido'
+        }));
         setSaving(false);
         return;
       }
@@ -476,6 +600,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         titulo: form.titulo,
         direccion: form.direccion,
         barrio: form.barrio,
+        estrato: Number(form.estrato),
         ciudad: form.ciudad,
         departamento: form.departamento,
         pais: form.pais,
@@ -539,113 +664,113 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           <div>
             <label className="text-sm text-slate-600 flex justify-between">
               Registro inmobiliario
-              {errors.registro && <span className="text-xs text-red-500">{errors.registro}</span>}
-            </label>
-            <input
-              name="registro"
-              value={form.registro}
-              onChange={handleFieldChange}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-            {!registroDisponible && (
-              <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
-                <AlertCircle className="h-4 w-4" />
-                <span>El registro ya existe. Usa uno diferente.</span>
-              </div>
-            )}
-            {checkingRegistro && (
-              <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Verificando registro...</span>
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="text-sm text-slate-600 flex justify-between">
-              Título del inmueble
-              {errors.titulo && <span className="text-xs text-red-500">{errors.titulo}</span>}
-            </label>
-            <input
-              name="titulo"
-              value={form.titulo}
-              onChange={handleFieldChange}
-              placeholder="Casa moderna en El Poblado"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-slate-600">Tipo de propiedad</label>
-            <select
-              name="tipo"
-              value={form.tipo}
-              onChange={handleFieldChange}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            >
-              {PROPERTY_TYPES.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm text-slate-600">Operación</label>
-            <select
-              name="operacion"
-              value={form.operacion}
-              onChange={handleFieldChange}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            >
-              {OPERATION_OPTIONS.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-          {(form.operacion === 'Venta' || form.operacion === 'Venta y Arriendo') && (
-            <div>
-              <label className="text-sm text-slate-600 flex justify-between">
-                Precio de venta
-                {errors.precioVenta && <span className="text-xs text-red-500">{errors.precioVenta}</span>}
-              </label>
-              <input
-                name="precioVenta"
-                type="number"
-                min="0"
-                value={form.precioVenta}
-                onChange={handleFieldChange}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
+            {errors.registro && <span className="text-xs text-red-500">{errors.registro}</span>}
+          </label>
+          <input
+            name="registro"
+            value={form.registro}
+            onChange={handleFieldChange}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          {!registroDisponible && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+              <AlertCircle className="h-4 w-4" />
+              <span>{registroErrorMessage}</span>
             </div>
           )}
-          {(form.operacion === 'Arriendo' || form.operacion === 'Venta y Arriendo') && (
-            <div>
-              <label className="text-sm text-slate-600 flex justify-between">
-                Canon de arriendo
-                {errors.precioArriendo && <span className="text-xs text-red-500">{errors.precioArriendo}</span>}
-              </label>
-              <input
-                name="precioArriendo"
-                type="number"
-                min="0"
-                value={form.precioArriendo}
-                onChange={handleFieldChange}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
+          {checkingRegistro && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Verificando registro...</span>
             </div>
           )}
+        </div>
+        <div>
+          <label className="text-sm text-slate-600 flex justify-between">
+            Título del inmueble
+            {errors.titulo && <span className="text-xs text-red-500">{errors.titulo}</span>}
+          </label>
+          <input
+            name="titulo"
+            value={form.titulo}
+            onChange={handleFieldChange}
+            placeholder="Casa moderna en El Poblado"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="text-sm text-slate-600">Tipo de propiedad</label>
+          <select
+            name="tipo"
+            value={form.tipo}
+            onChange={handleFieldChange}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            {PROPERTY_TYPES.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-sm text-slate-600">Operación</label>
+          <select
+            name="operacion"
+            value={form.operacion}
+            onChange={handleFieldChange}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            {OPERATION_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        {(form.operacion === 'Venta' || form.operacion === 'Venta y Arriendo') && (
           <div>
             <label className="text-sm text-slate-600 flex justify-between">
-              Área construida (m²)
-              {errors.areaConstruida && <span className="text-xs text-red-500">{errors.areaConstruida}</span>}
+              Precio de venta
+              {errors.precioVenta && <span className="text-xs text-red-500">{errors.precioVenta}</span>}
             </label>
             <input
-              name="areaConstruida"
+              name="precioVenta"
               type="number"
               min="0"
-              value={form.areaConstruida}
+              value={form.precioVenta}
               onChange={handleFieldChange}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="Ej: 120"
             />
           </div>
+        )}
+        {(form.operacion === 'Arriendo' || form.operacion === 'Venta y Arriendo') && (
+          <div>
+            <label className="text-sm text-slate-600 flex justify-between">
+              Canon de arriendo
+              {errors.precioArriendo && <span className="text-xs text-red-500">{errors.precioArriendo}</span>}
+            </label>
+            <input
+              name="precioArriendo"
+              type="number"
+              min="0"
+              value={form.precioArriendo}
+              onChange={handleFieldChange}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+        )}
+        <div>
+          <label className="text-sm text-slate-600 flex justify-between">
+            Área construida (m²)
+            {errors.areaConstruida && <span className="text-xs text-red-500">{errors.areaConstruida}</span>}
+          </label>
+          <input
+            name="areaConstruida"
+            type="number"
+            min="0"
+            value={form.areaConstruida}
+            onChange={handleFieldChange}
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            placeholder="Ej: 120"
+          />
+        </div>
           <div className="md:col-span-2">
             <label className="text-sm text-slate-600 flex justify-between">
               Descripción
@@ -687,6 +812,22 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
               value={form.barrio}
               onChange={handleFieldChange}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-slate-600 flex justify-between">
+              Estrato
+              {errors.estrato && <span className="text-xs text-red-500">{errors.estrato}</span>}
+            </label>
+            <input
+              name="estrato"
+              type="number"
+              min="1"
+              max="6"
+              value={form.estrato}
+              onChange={handleFieldChange}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              placeholder="Ej: 4"
             />
           </div>
           <div>
@@ -856,7 +997,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           >
             <option value="">Seleccione</option>
             {ownersLoading && <option value="">Cargando propietarios...</option>}
-            {owners.map((owner) => (
+            {ownersForSelection.map((owner) => (
               <option key={owner.id} value={owner.id}>
                 {owner.nombreCompleto} · {owner.documento}
               </option>
@@ -871,6 +1012,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             Nuevo propietario
           </button>
         </div>
+        {blockedOwnerIdsByRegistro.length > 0 && (
+          <p className="mt-2 text-xs text-amber-600">
+            Para este registro no se listan propietarios asociados al inmueble vendido.
+          </p>
+        )}
       </SectionCard>
 
       <SectionCard title="Resumen final" subtitle="Paso 4">

@@ -60,6 +60,19 @@ const crearInmuebleSchema = Joi.object({
     .allow('', null)
     .optional(),
 
+  estrato: Joi.number()
+    .integer()
+    .min(1)
+    .max(6)
+    .required()
+    .messages({
+      'number.base': 'El estrato debe ser numerico',
+      'number.integer': 'El estrato debe ser un numero entero',
+      'number.min': 'El estrato minimo es 1',
+      'number.max': 'El estrato maximo es 6',
+      'any.required': 'El estrato es obligatorio'
+    }),
+
   ciudad: Joi.string()
     .min(2)
     .max(100)
@@ -242,6 +255,18 @@ const actualizarInmuebleSchema = Joi.object({
     .max(100)
     .allow('', null)
     .optional(),
+
+  estrato: Joi.number()
+    .integer()
+    .min(1)
+    .max(6)
+    .optional()
+    .messages({
+      'number.base': 'El estrato debe ser numerico',
+      'number.integer': 'El estrato debe ser un numero entero',
+      'number.min': 'El estrato minimo es 1',
+      'number.max': 'El estrato maximo es 6'
+    }),
 
   ciudad: Joi.string()
     .min(2)

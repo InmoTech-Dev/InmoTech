@@ -2,6 +2,7 @@ const { Op, Sequelize } = require('sequelize');
 const { Renant, Persona, Arriendo, Inmueble, Lease } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 const PERSONA_ATTRS = [
   'id_persona',

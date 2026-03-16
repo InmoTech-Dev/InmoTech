@@ -26,6 +26,7 @@ import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { useToast } from "../../../../shared/hooks/use-toast";
+import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
 
 
 const STATUS_NORMALIZE = (value = "") =>
@@ -69,6 +70,10 @@ const mergeStatusCatalog = (apiStatuses = []) => {
     (a, b) => (a.orden ?? 99) - (b.orden ?? 99)
   );
 };
+
+
+
+const PAGE_SIZE = 5;
 
 
 
@@ -1279,26 +1284,20 @@ export function SalesManagementPage() {
 
 
 
-  const fetchVentas = useCallback(async () => {
-
+  const fetchVentas = useCallback(async (query = searchTerm, page = currentPage) => {
     setLoadingVentas(true);
-
     setStatusMessage(null);
 
     try {
-
       const response = await ventaApiService.obtenerVentas({
         page,
         limit: PAGE_SIZE,
-        search: query || undefined,
+        search: query?.trim() || undefined,
         estado: estadoFilter !== "todos" ? estadoFilter : undefined,
         tipo_compra: tipoCompraFilter !== "todos" ? tipoCompraFilter : undefined,
       });
 
-      const payload = Array.isArray(response?.data) ? response.data : [];
-
-
-
+      const payload = response?.data || [];
       if (Array.isArray(payload)) {
         setVentas(payload.map((venta) => normalizeSaleRecord(venta)));
         setPagination(response?.pagination || {
@@ -1310,7 +1309,6 @@ export function SalesManagementPage() {
           has_prev_page: page > 1,
         });
         setCurrentPage(response?.pagination?.pagina || page);
-
       }
 
     } catch (error) {
@@ -1330,12 +1328,9 @@ export function SalesManagementPage() {
       });
 
     } finally {
-
       setLoadingVentas(false);
-
     }
-
-  }, [estadoFilter, tipoCompraFilter]);
+  }, [estadoFilter, tipoCompraFilter, searchTerm, currentPage, toast]);
 
 
 
@@ -2171,9 +2166,9 @@ export function SalesManagementPage() {
 
             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 ${savingVenta
 
-                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
 
-                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl'
+              : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl'
 
               }`}
 

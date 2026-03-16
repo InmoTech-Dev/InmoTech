@@ -35,8 +35,8 @@ class RenantsController {
       return res.status(200).json({
         success: true,
         message: 'Arrendatarios obtenidos exitosamente',
-        data: renants,
-        total: renants.length
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

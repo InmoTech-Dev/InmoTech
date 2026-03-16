@@ -16,6 +16,7 @@ import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 import { useToast } from "../../../../shared/hooks/use-toast";
 import { uploadToCloudinary } from "../../../../shared/services/cloudinary";
+import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
 
 const formatCurrency = (value) => {
   const numeric = Number(value);
@@ -284,6 +285,8 @@ const mapApiArriendoToRow = (arriendo = {}) => {
   };
 };
 
+const PAGE_SIZE = 5;
+
 export function RenantManagementPage() {
   const [arriendos, setArriendos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -316,7 +319,7 @@ export function RenantManagementPage() {
   const [applyingAdjustment, setApplyingAdjustment] = useState(false);
   const [savingPreNotice, setSavingPreNotice] = useState(false);
   const { toast } = useToast();
-  const fetchArriendos = useCallback(async () => {
+  const fetchArriendos = useCallback(async (query = searchTerm.trim(), page = currentPage) => {
     setIsLoading(true);
     try {
       const response = await arriendoApiService.obtenerArriendos({
@@ -351,7 +354,7 @@ export function RenantManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [estadoFilter, setStatusMessage, tipoInmuebleFilter]);
+  }, [estadoFilter, tipoInmuebleFilter, searchTerm, currentPage, toast]);
 
   useEffect(() => {
     fetchArriendos();
@@ -857,8 +860,8 @@ export function RenantManagementPage() {
               onClick={handleConfirmDelete}
               disabled={isDeleting}
               className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isDeleting
-                  ? "bg-slate-400 text-slate-200 cursor-not-allowed"
-                  : "bg-red-600 hover:bg-red-700 text-white"
+                ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700 text-white"
                 }`}
             >
               {isDeleting ? (

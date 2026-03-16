@@ -10,9 +10,12 @@ const extractList = (response) => {
 
 export const ventaApiService = {
   async obtenerVentas(params = {}) {
-    const response = await apiClient.get('/sales', params);
+    const response = await apiClient.get('/sales', { params });
     const data = extractList(response);
-    return { data };
+    return {
+      data,
+      pagination: response?.data?.pagination || response?.pagination || null
+    };
   },
 
   async obtenerVenta(id) {

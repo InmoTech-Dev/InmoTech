@@ -1,4 +1,5 @@
 const buyerService = require('../services/buyers.service');
+const { normalizePagination } = require('../utils/pagination');
 const logger = require('../utils/logger');
 
 class BuyersController {
@@ -51,8 +52,8 @@ class BuyersController {
       return res.status(200).json({
         success: true,
         message: 'Compradores obtenidos exitosamente',
-        data: buyers,
-        total: buyers.length
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

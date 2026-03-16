@@ -1,4 +1,5 @@
 const leaseService = require('../services/leases.service');
+const { normalizePagination } = require('../utils/pagination');
 const logger = require('../utils/logger');
 
 class LeasesController {
@@ -24,8 +25,8 @@ class LeasesController {
       return res.status(200).json({
         success: true,
         message: 'Arrendamientos obtenidos exitosamente',
-        data: leases,
-        total: leases.length
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

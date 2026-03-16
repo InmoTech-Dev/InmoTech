@@ -1,4 +1,4 @@
-import { apiClient } from './api.config';
+import { apiClient, extractPagination } from './api.config';
 
 const extractList = (response) => {
   const data = response?.data?.data ?? response?.data ?? response;
@@ -152,7 +152,10 @@ export const buyersApiService = {
 
   async getAll(params = {}) {
     const response = await apiClient.get('/sales/buyers', { params });
-    return extractList(response).map((item) => mapBuyerFromApi(item));
+    return {
+      data: extractList(response).map((item) => mapBuyerFromApi(item)),
+      pagination: extractPagination(response, params)
+    };
   },
 
   async findByDocument(tipoDocumento, numeroDocumento) {

@@ -1,4 +1,5 @@
 const saleService = require('../services/sales.service');
+const { normalizePagination } = require('../utils/pagination');
 const logger = require('../utils/logger');
 const { VentaAdjunto } = require('../models');
 const cloudinary = require('../config/cloudinary');
@@ -61,8 +62,8 @@ class SalesController {
       return res.status(200).json({
         success: true,
         message: 'Ventas obtenidas exitosamente',
-        data: sales,
-        total: sales.length
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

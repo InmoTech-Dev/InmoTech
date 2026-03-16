@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Sale, Buyer, Inmueble, Persona, SeguimientoVenta, EstadosVenta, VentaAdjunto } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 class SaleService {
   _normalizeFilterValue(value) {
@@ -605,12 +606,28 @@ class SaleService {
         whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
       }
 
-      const sales = await Sale.findAll({
+      const pagination = {
+        enabled: Boolean(filters.pagination?.enabled),
+        page: filters.pagination?.page || 1,
+        limit: filters.pagination?.limit || null,
+        offset: filters.pagination?.offset || 0
+      };
+
+      const queryOptions = {
         where: whereClause,
         include: includeOptions,
         order: [['fecha_venta', 'DESC']],
-        logging: false
-      });
+        logging: false,
+        distinct: true,
+        col: 'id_venta'
+      };
+
+      if (pagination.enabled) {
+        queryOptions.limit = pagination.limit;
+        queryOptions.offset = pagination.offset;
+      }
+
+      const { count, rows: sales } = await Sale.findAndCountAll(queryOptions);
 
       const ventaIds = sales.map((s) => s.id_venta);
       let trackingMap = {};
@@ -639,80 +656,84 @@ class SaleService {
         }, {});
       }
 
-      return sales.map((sale) => ({
-        id_venta: sale.id_venta,
-        id_estado_venta: sale.id_estado_venta,
-        fecha_venta: sale.fecha_venta,
-        valor_venta: sale.valor_venta,
-        medio_pago: sale.medio_pago,
-        // Datos del vendedor congelados al momento de la venta
-        tipo_doc_vendedor: sale.tipo_doc_vendedor,
-        numero_doc_vendedor: sale.numero_doc_vendedor,
-        nombre_vendedor: sale.nombre_vendedor,
-        correo_vendedor: sale.correo_vendedor,
-        telefono_vendedor: sale.telefono_vendedor,
-        vendedor: {
-          tipo_documento: sale.tipo_doc_vendedor,
-          numero_documento: sale.numero_doc_vendedor,
-          nombre_completo: sale.nombre_vendedor,
-          correo: sale.correo_vendedor,
-          telefono: sale.telefono_vendedor
-        },
-        // Mostrar en el frontend el estado detallado si existe; de lo contrario, el general
-        estado:
-          sale.estado_seguimiento ||
-          trackingMap[sale.id_venta]?.estado?.nombre_estado ||
-          sale.estado,
-        estado_seguimiento:
-          sale.estado_seguimiento ||
-          trackingMap[sale.id_venta]?.estado?.nombre_estado ||
-          sale.estado,
-        id_estado_seguimiento:
-          sale.id_estado_venta ||
-          trackingMap[sale.id_venta]?.id_estado_venta ||
-          null,
-        descripcion_seguimiento: trackingMap[sale.id_venta]?.descripcion || null,
-        fecha_creacion: sale.fecha_creacion,
-        inmueble: sale.inmueble
-          ? {
-            id_inmueble: sale.inmueble.id_inmueble,
-            registro_inmobiliario: sale.inmueble.registro_inmobiliario,
-            direccion: sale.inmueble.direccion,
-            ciudad: sale.inmueble.ciudad,
-            departamento: sale.inmueble.departamento,
-            categoria: sale.inmueble.categoria,
-            titulo: sale.inmueble.titulo,
-            barrio: sale.inmueble.barrio,
-            pais: sale.inmueble.pais,
-            precio_venta: sale.inmueble.precio_venta,
-            precio_arriendo: sale.inmueble.precio_arriendo,
-            area_construida: sale.inmueble.area_construida,
-            comodidades: sale.inmueble.comodidades
-          }
-          : null,
-        comprador: sale.comprador
-          ? {
-            id_comprador: sale.comprador.id_comprador,
-            registro_comprador: sale.comprador.registro_comprador,
-            id_persona: sale.comprador.persona?.id_persona,
-            tipo_documento: sale.comprador.persona?.tipo_documento,
-            numero_documento: sale.comprador.persona?.numero_documento,
-            nombre_completo: sale.comprador.persona?.nombre_completo,
-            apellido_completo: sale.comprador.persona?.apellido_completo,
-            correo: sale.comprador.persona?.correo,
-            telefono: sale.comprador.persona?.telefono
-          }
-          : null,
-        adjuntos: (sale.adjuntos || []).map((adj) => ({
-          id_adjunto: adj.id_adjunto,
-          tipo: adj.tipo,
-          nombre_archivo: adj.nombre_archivo,
-          url: adj.url,
-          mime_type: adj.mime_type,
-          tamano_bytes: adj.tamano_bytes,
-          fecha_creacion: adj.fecha_creacion
-        }))
-      }));
+      return {
+        data: sales.map((sale) => {
+          const latestTracking = trackingMap[sale.id_venta];
+          return {
+            id_venta: sale.id_venta,
+            id_estado_venta: sale.id_estado_venta,
+            fecha_venta: sale.fecha_venta,
+            valor_venta: sale.valor_venta,
+            medio_pago: sale.medio_pago,
+            vendedor: {
+              tipo_documento: sale.tipo_doc_vendedor,
+              numero_documento: sale.numero_doc_vendedor,
+              nombre_completo: sale.nombre_vendedor,
+              correo: sale.correo_vendedor,
+              telefono: sale.telefono_vendedor
+            },
+            estado:
+              sale.estado_seguimiento ||
+              latestTracking?.estado?.nombre_estado ||
+              sale.estado,
+            estado_seguimiento:
+              sale.estado_seguimiento ||
+              latestTracking?.estado?.nombre_estado ||
+              sale.estado,
+            id_estado_seguimiento:
+              sale.id_estado_venta ||
+              latestTracking?.id_estado_venta ||
+              null,
+            descripcion_seguimiento: latestTracking?.descripcion || null,
+            fecha_creacion: sale.fecha_creacion,
+            inmueble: sale.inmueble
+              ? {
+                id_inmueble: sale.inmueble.id_inmueble,
+                registro_inmobiliario: sale.inmueble.registro_inmobiliario,
+                direccion: sale.inmueble.direccion,
+                ciudad: sale.inmueble.ciudad,
+                departamento: sale.inmueble.departamento,
+                categoria: sale.inmueble.categoria,
+                titulo: sale.inmueble.titulo,
+                barrio: sale.inmueble.barrio,
+                pais: sale.inmueble.pais,
+                precio_venta: sale.inmueble.precio_venta,
+                precio_arriendo: sale.inmueble.precio_arriendo,
+                area_construida: sale.inmueble.area_construida,
+                comodidades: sale.inmueble.comodidades
+              }
+              : null,
+            comprador: sale.comprador
+              ? {
+                id_comprador: sale.comprador.id_comprador,
+                registro_comprador: sale.comprador.registro_comprador,
+                id_persona: sale.comprador.persona?.id_persona,
+                tipo_documento: sale.comprador.persona?.tipo_documento,
+                numero_documento: sale.comprador.persona?.numero_documento,
+                nombre_completo: sale.comprador.persona?.nombre_completo,
+                apellido_completo: sale.comprador.persona?.apellido_completo,
+                correo: sale.comprador.persona?.correo,
+                telefono: sale.comprador.persona?.telefono
+              }
+              : null,
+            adjuntos: (sale.adjuntos || []).map((adj) => ({
+              id_adjunto: adj.id_adjunto,
+              tipo: adj.tipo,
+              nombre_archivo: adj.nombre_archivo,
+              url: adj.url,
+              mime_type: adj.mime_type,
+              tamano_bytes: adj.tamano_bytes,
+              fecha_creacion: adj.fecha_creacion
+            }))
+          };
+        }),
+        pagination: buildPaginationMeta({
+          total: count,
+          page: pagination.page,
+          limit: pagination.limit,
+          enabled: pagination.enabled
+        })
+      };
     } catch (error) {
       const dbMsg = error.original?.message || error.message || 'Error consultando ventas';
       logger.error(`Error en getAllSales: ${dbMsg}`);

@@ -2,13 +2,17 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone, X } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Mail, Home, Phone, X, ChevronDown } from 'lucide-react';
 import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 import { useToast } from "../../../../shared/hooks/use-toast";
+
+import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
+
+const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
 
 const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
     const info = {
@@ -69,6 +73,7 @@ export function BuyersManagementPage() {
     const [statusChangingId, setStatusChangingId] = useState(null);
     const [statusMenuId, setStatusMenuId] = useState(null);
     const [statusMenuPosition, setStatusMenuPosition] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // --- ESTADOS DE ACCION ---
     const [searchTerm, setSearchTerm] = useState("");
@@ -92,16 +97,16 @@ export function BuyersManagementPage() {
 
     const normalizeBuyers = (list) =>
         list.map((buyer) => mapApiBuyerToRow(buyer));
-    const fetchBuyers = useCallback(async (query = "") => {
+    const fetchBuyers = useCallback(async (query = "", pageNum = 1) => {
         try {
             setIsLoading(true);
-            const params = { page, limit: PAGE_SIZE };
+            const params = { page: pageNum, limit: PAGE_SIZE };
             if (query) params.search = query;
             if (estadoFilter !== "todos") params.estado = estadoFilter;
             const result = await buyersApiService.getAll(params);
             setCompradores(normalizeBuyers(filterRealBuyers(result.data)));
             setPagination(result.pagination);
-            setCurrentPage(result.pagination?.pagina || page);
+            setCurrentPage(result.pagination?.pagina || pageNum);
         } catch (error) {
             showStatus("error", error.message || MESSAGES.buyer.loadError);
         } finally {
@@ -327,6 +332,45 @@ export function BuyersManagementPage() {
         setStatusMenuId(buyerId);
     };
 
+    const handleToggleEstado = async (buyer, forcedEstado) => {
+        if (!buyer) return;
+        const targetId = buyer.id || buyer.buyerId || buyer.id_buyer || buyer.id_comprador || buyer.personaId;
+        if (!targetId) {
+            toast({
+                title: "Error",
+                description: "No se pudo identificar al comprador.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const current = normalizeEstado(buyer.estado || "Activo");
+        const nextEstado = forcedEstado || (current === "activo" ? "Inactivo" : "Activo");
+
+        try {
+            setStatusChangingId(buyer.id);
+            const updated = await buyersApiService.update(targetId, { estado: nextEstado });
+            setCompradores((prev) =>
+                prev.map((b) => (b.id === buyer.id ? { ...b, estado: updated.estado || nextEstado } : b))
+            );
+            toast({
+                title: "Estado actualizado",
+                description: `El comprador ahora está ${nextEstado}.`,
+                variant: "default",
+            });
+            setStatusMenuId(null);
+        } catch (error) {
+            const errMsg = error.message || "No se pudo cambiar el estado del comprador";
+            toast({
+                title: "Error al cambiar estado",
+                description: errMsg,
+                variant: "destructive",
+            });
+        } finally {
+            setStatusChangingId(null);
+        }
+    };
+
     const renderStatusMenu = (buyer) => {
         if (!buyer || statusMenuId !== buyer.id || !statusMenuPosition) return null;
 
@@ -463,8 +507,8 @@ export function BuyersManagementPage() {
                             onClick={handleConfirmDelete}
                             disabled={isDeleting}
                             className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isDeleting
-                                    ? "bg-slate-400 text-slate-200 cursor-not-allowed"
-                                    : "bg-red-600 hover:bg-red-700 text-white"
+                                ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                                : "bg-red-600 hover:bg-red-700 text-white"
                                 }`}
                         >
                             {isDeleting ? (
@@ -492,9 +536,9 @@ export function BuyersManagementPage() {
 
     // Calcular estadísticas
     const stats = {
-        total: filteredBuyers.length,
-        activos: filteredBuyers.filter(b => b.estado === 'activo').length,
-        inactivos: filteredBuyers.filter(b => b.estado === 'inactivo').length,
+        total: compradores.length,
+        activos: compradores.filter(b => normalizeEstado(b.estado) === 'activo').length,
+        inactivos: compradores.filter(b => normalizeEstado(b.estado) === 'inactivo').length,
     };
 
     // --- RENDERIZADO PRINCIPAL ---
@@ -594,12 +638,13 @@ export function BuyersManagementPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ) : filteredBuyers.length > 0 ? (
-                                        filteredBuyers.map((c) => {
+                                    ) : compradores.length > 0 ? (
+                                        compradores.map((c) => {
                                             const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
                                             const estado = c.estado || 'Activo';
+                                            const estadoNormalized = normalizeEstado(estado);
                                             const estadoClass =
-                                                estado.toLowerCase() === 'activo'
+                                                estadoNormalized === 'activo'
                                                     ? 'bg-green-100 text-green-700 border-green-200'
                                                     : 'bg-yellow-100 text-yellow-700 border-yellow-200';
                                             return (
@@ -653,8 +698,8 @@ export function BuyersManagementPage() {
                                                                 onClick={() => handleStatusMenuToggle(c.id)}
                                                                 disabled={statusChangingId === c.id}
                                                                 className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${estadoNormalized === "activo"
-                                                                        ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
-                                                                        : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
+                                                                    ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
+                                                                    : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
                                                                     } ${statusChangingId === c.id ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === c.id ? "ring-2 ring-slate-200" : ""}`}
                                                             >
                                                                 {statusChangingId === c.id && (

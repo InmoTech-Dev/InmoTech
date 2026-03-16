@@ -1,4 +1,4 @@
-import { apiClient } from './api.config';
+import { apiClient, extractPagination } from './api.config';
 
 const extractList = (response) => {
   const data = response?.data?.data ?? response?.data ?? response;

@@ -25,6 +25,44 @@ const VALID_ORDER_COLUMNS = [
   'precio_arriendo'
 ];
 
+const MAX_DESTACADOS = 6;
+const CATEGORIES_WITH_REQUIRED_AMENITIES = new Set(['casa', 'apartamento']);
+
+const parseBooleanFilter = (value) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'boolean') return value;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'si', 'activo', 'disponible'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'inactivo', 'no disponible'].includes(normalized)) return false;
+
+  return undefined;
+};
+
+const normalizeCategory = (value) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const validateRequiredAmenitiesForCategory = ({ categoria, comodidades }) => {
+  const normalizedCategory = normalizeCategory(categoria);
+  if (!CATEGORIES_WITH_REQUIRED_AMENITIES.has(normalizedCategory)) {
+    return;
+  }
+
+  const selectedAmenities = normalizeAmenityPayload(comodidades).filter(
+    (amenidad) => amenidad?.seleccionada !== false
+  );
+
+  if (selectedAmenities.length < 2) {
+    const error = new Error('Casa y Apartamento requieren minimo 2 comodidades seleccionadas.');
+    error.status = 400;
+    throw error;
+  }
+};
+
 const buildEstadoCondition = (valor, column = 'Inmuebles.estado') => {
   if (valor === undefined || valor === null) {
     return null;
@@ -830,6 +868,7 @@ class InmueblesService {
           propietario_id,
           propietarioId
         });
+        const hasComodidadesInPayload = Object.prototype.hasOwnProperty.call(updateData, 'comodidades');
 
         const inmueble = await Inmueble.findOne({
           where: { id_inmueble: inmuebleId },

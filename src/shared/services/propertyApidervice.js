@@ -30,6 +30,23 @@ const cleanText = (value, fallback = '') => {
   return trimmed.length > 0 ? trimmed : fallback;
 };
 
+const hasOwn = (object, key) =>
+  Object.prototype.hasOwnProperty.call(object || {}, key);
+
+const getProvidedValue = (object, keys = []) => {
+  if (!object || typeof object !== 'object' || !Array.isArray(keys)) {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    if (hasOwn(object, key) && object[key] !== undefined) {
+      return object[key];
+    }
+  }
+
+  return undefined;
+};
+
 const normalizeEstadoValue = (value) => {
   if (value === undefined || value === null) {
     return undefined;

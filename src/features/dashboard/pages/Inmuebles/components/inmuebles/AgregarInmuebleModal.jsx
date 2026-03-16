@@ -20,6 +20,7 @@ const AMENITIES_BY_TYPE = {
   Otro: ['Habitaciones', 'Baños']
 };
 
+const MIN_AMENITIES_REQUIRED_TYPES = new Set(['Casa', 'Apartamento']);
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
@@ -40,6 +41,13 @@ const mapImageSources = (sources = []) =>
       remote: true,
       name: `Imagen ${index + 1}`
     }));
+
+const getSelectedAmenitiesSignature = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .filter((item) => item?.seleccionada)
+    .map((item) => `${String(item.nombre || '').trim().toLowerCase()}:${Number(item.cantidad) || 0}`)
+    .sort()
+    .join('|');
 
 const INITIAL_FORM = {
   registro: '',

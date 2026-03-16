@@ -27,6 +27,7 @@ import { SalesManagementPage } from './features/dashboard/pages/sales/SalesManag
 import { BuyersManagementPage } from './features/dashboard/pages/sales/BuyerManagementPage'
 import { LeasesManagementPage } from './features/dashboard/pages/leases/LeasesManagementPage'
 import { RenantManagementPage } from './features/dashboard/pages/leases/RenantManagementPage'
+import TenantInvoicesPage from './features/dashboard/pages/leases/TenantInvoicesPage'
 import AppointmentPage from './features/dashboard/pages/appointment/AppointmentPage'
 import Reports from './features/dashboard/pages/reports/Reports'
 import Roles from './features/dashboard/pages/roles/Roles'
@@ -48,10 +49,21 @@ const isOwnerUser = (user) => {
   })
 }
 
+const isTenantUser = (user) => {
+  if (!user) return false
+  const roles = Array.isArray(user.roles) ? user.roles : []
+  return roles.some((role) => {
+    if (typeof role === 'string') return role.trim().toLowerCase() === 'arrendatario'
+    const roleName = role?.nombre_rol || role?.nombre || role?.name
+    return typeof roleName === 'string' && roleName.trim().toLowerCase() === 'arrendatario'
+  })
+}
+
 function App() {
   const { isAuthenticated, user } = useAuth()
   const hasAdministrativeAccess = user?.es_administrativo === true
   const hasOwnerAccess = isOwnerUser(user)
+  const hasTenantAccess = isTenantUser(user)
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -63,8 +75,18 @@ function App() {
         <Route
           path="/"
           element={
-            isAuthenticated && hasOwnerAccess && !hasAdministrativeAccess ? (
-              <Navigate to={dashboardRoutes.ownerMyProperties} replace />
+            isAuthenticated && !hasAdministrativeAccess ? (
+              hasOwnerAccess ? (
+                <Navigate to={dashboardRoutes.ownerMyProperties} replace />
+              ) : hasTenantAccess ? (
+                <Navigate to={dashboardRoutes.tenantMyInvoices} replace />
+              ) : (
+                <>
+                  <Navbar />
+                  <HomePage />
+                  <Footer />
+                </>
+              )
             ) : (
               <>
                 <Navbar />
@@ -174,6 +196,8 @@ function App() {
             <DashboardRoute>
               {hasOwnerAccess && !hasAdministrativeAccess ? (
                 <Navigate to={dashboardRoutes.ownerMyProperties} replace />
+              ) : hasTenantAccess && !hasAdministrativeAccess ? (
+                <Navigate to={dashboardRoutes.tenantMyInvoices} replace />
               ) : (
                 <DashboardLayout>
                   <DashboardPage />
@@ -188,6 +212,16 @@ function App() {
             <DashboardRoute>
               <DashboardLayout>
                 <OwnerPortfolioPage />
+              </DashboardLayout>
+            </DashboardRoute>
+          }
+        />
+        <Route
+          path={dashboardRoutes.tenantMyInvoices}
+          element={
+            <DashboardRoute>
+              <DashboardLayout>
+                <TenantInvoicesPage />
               </DashboardLayout>
             </DashboardRoute>
           }

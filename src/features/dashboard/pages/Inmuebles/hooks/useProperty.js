@@ -83,7 +83,9 @@ const mergeInmuebleData = (apiData = {}, clientData = {}, previous = {}) => ({
   tipo: clientData.tipo ?? apiData.tipo ?? previous.tipo,
   categoria: clientData.categoria ?? apiData.categoria ?? previous.categoria,
   operacion: clientData.operacion ?? apiData.operacion ?? previous.operacion,
-  estado: clientData.estado ?? apiData.estado ?? previous.estado,
+  estado:
+    apiData.estado ??
+    (typeof clientData.estado === 'string' ? clientData.estado : previous.estado),
   descripcion: clientData.descripcion ?? apiData.descripcion ?? previous.descripcion,
   barrio: clientData.barrio ?? apiData.barrio ?? previous.barrio,
   pais: clientData.pais ?? apiData.pais ?? previous.pais,

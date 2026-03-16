@@ -74,10 +74,11 @@ const InmuebleDashboardPage = () => {
   const handleSaveInmueble = async (inmuebleData, esEdicion) => {
     try {
       if (esEdicion) {
+        const { estado: _estadoFormulario, ...editablePayload } = inmuebleData;
         const estadoActual = inmuebleEditar?.estado || 'Disponible';
-        const estadoFrontend = resolveEstadoFrontend(inmuebleData.operacion, estadoActual);
+        const estadoFrontend = resolveEstadoFrontend(editablePayload.operacion, estadoActual);
         await actualizarInmueble(inmuebleData.id, {
-          ...inmuebleData,
+          ...editablePayload,
           estado_frontend: estadoFrontend
         });
       } else {

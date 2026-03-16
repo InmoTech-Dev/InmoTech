@@ -28,6 +28,7 @@ export const dashboardRoutes = {
   owners: '/inmuebles/propietarios',
   ownerMyProperties: '/dashboard/propietario/inmuebles',
   ownerMyLeases: '/dashboard/propietario/arriendos',
+  tenantMyInvoices: '/dashboard/arrendatario/facturas',
   appointments: '/dashboard/citas',
   clients: '/dashboard/citas/clientes',
   sales: '/dashboard/salesManagement',

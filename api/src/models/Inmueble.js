@@ -10,8 +10,7 @@ const Inmueble = sequelize.define('Inmuebles', {
   },
   registro_inmobiliario: {
     type: DataTypes.STRING(50),
-    allowNull: false,
-    unique: true
+    allowNull: false
   },
   titulo: {
     type: DataTypes.STRING(200),
@@ -32,6 +31,10 @@ const Inmueble = sequelize.define('Inmuebles', {
   barrio: {
     type: DataTypes.STRING(100),
     allowNull: true
+  },
+  estrato: {
+    type: DataTypes.INTEGER,
+    allowNull: false
   },
   direccion: {
     type: DataTypes.STRING(100),

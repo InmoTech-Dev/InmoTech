@@ -235,6 +235,7 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
     titulo: inmueble.titulo || buildTitle(inmueble),
     direccion: inmueble.direccion,
     barrio: inmueble.barrio,
+    estrato: toNumber(inmueble.estrato) ?? null,
     ciudad: inmueble.ciudad,
     departamento: inmueble.departamento,
     pais: inmueble.pais,
@@ -307,6 +308,12 @@ const mapInmuebleToApi = (payload = {}) => {
   if (hasOwn(payload, 'titulo')) body.titulo = payload.titulo;
   if (hasOwn(payload, 'direccion')) body.direccion = payload.direccion;
   if (hasOwn(payload, 'barrio')) body.barrio = payload.barrio ?? null;
+  if (hasOwn(payload, 'estrato')) {
+    const estrato = toNumber(payload.estrato);
+    if (estrato !== null) {
+      body.estrato = estrato;
+    }
+  }
   if (hasOwn(payload, 'ciudad')) body.ciudad = payload.ciudad;
   if (hasOwn(payload, 'departamento')) body.departamento = payload.departamento;
   if (hasOwn(payload, 'pais')) body.pais = payload.pais || DEFAULT_COUNTRY;

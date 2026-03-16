@@ -27,6 +27,16 @@ export default function LoginPage() {
     })
   }
 
+  const isTenantUser = (userData) => {
+    if (!userData) return false
+    const roles = Array.isArray(userData.roles) ? userData.roles : []
+    return roles.some((role) => {
+      if (typeof role === "string") return role.trim().toLowerCase() === "arrendatario"
+      const roleName = role?.nombre_rol || role?.nombre || role?.name
+      return typeof roleName === "string" && roleName.trim().toLowerCase() === "arrendatario"
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
@@ -39,6 +49,8 @@ export default function LoginPage() {
         ? "/dashboard"
         : isOwnerUser(userData)
           ? "/dashboard/propietario/inmuebles"
+          : isTenantUser(userData)
+            ? "/dashboard/arrendatario/facturas"
           : "/"
 
       setPendingVerificationEmail(null)

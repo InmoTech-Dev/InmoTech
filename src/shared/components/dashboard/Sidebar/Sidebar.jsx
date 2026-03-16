@@ -61,6 +61,10 @@ const Sidebar = React.forwardRef(({
       return navigationItems.filter(item => item.id === 'dashboard');
     }
 
+    if (roleNames.includes('Arrendatario')) {
+      return navigationItems.filter(item => item.id === 'dashboard');
+    }
+
     return navigationItems.filter(item => {
       if (item.id === 'dashboard') {
         return true;
@@ -74,12 +78,17 @@ const Sidebar = React.forwardRef(({
     });
   }, [user, getAvailableModules]);
 
-  const isOwner = React.useMemo(() => {
+  const isOwnerOrTenant = React.useMemo(() => {
     const roles = Array.isArray(user?.roles) ? user.roles : [];
     return roles.some((role) => {
-      if (typeof role === 'string') return role.trim().toLowerCase() === 'propietario';
+      if (typeof role === 'string') {
+        const normalized = role.trim().toLowerCase();
+        return normalized === 'propietario' || normalized === 'arrendatario';
+      }
       const roleName = role?.nombre_rol || role?.nombre || role?.name;
-      return typeof roleName === 'string' && roleName.trim().toLowerCase() === 'propietario';
+      if (typeof roleName !== 'string') return false;
+      const normalizedName = roleName.trim().toLowerCase();
+      return normalizedName === 'propietario' || normalizedName === 'arrendatario';
     });
   }, [user]);
 
@@ -184,7 +193,7 @@ const Sidebar = React.forwardRef(({
         </nav>
       </div>
 
-      {!isOwner && (
+      {!isOwnerOrTenant && (
         <div className="p-2 border-t border-slate-700/50 bg-slate-800/30 backdrop-blur-sm">
           <motion.div
             whileHover={{
@@ -216,7 +225,7 @@ const Sidebar = React.forwardRef(({
       )}
 
       {/* Logout Button Fijo */}
-      <div className={`p-2 bg-slate-800/30 backdrop-blur-sm ${isOwner ? 'border-t border-slate-700/50' : ''}`}>
+      <div className={`p-2 bg-slate-800/30 backdrop-blur-sm ${isOwnerOrTenant ? 'border-t border-slate-700/50' : ''}`}>
         <motion.div
           whileHover={{
             scale: 1.02,

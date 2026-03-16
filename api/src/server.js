@@ -2,6 +2,7 @@ const app = require('./app');
 const { testConnection } = require('./config/database');
 const { runPermissionsBackfill } = require('./startup/backfillPermissions');
 const { runVentaAdjuntosBackfill } = require('./startup/backfillVentaAdjuntos');
+const { scheduleDailyLeaseAutoFinalize } = require('./jobs/leasesAutoFinalize.job');
 
 const PORT = process.env.PORT || 5000;
 const API_VERSION = String(process.env.API_VERSION || 'v1').toLowerCase();
@@ -31,6 +32,8 @@ const MAX_DB_RETRIES = parseInt(process.env.DB_MAX_RETRIES || '2', 10);
 const DB_RETRY_DELAY_MS = parseInt(process.env.DB_RETRY_DELAY_MS || '5000', 10);
 const PERMISSIONS_BACKFILL_FAIL_HARD = process.env.PERMISSIONS_BACKFILL_FAIL_HARD === 'true';
 const VENTA_ADJUNTOS_BACKFILL_FAIL_HARD = process.env.VENTA_ADJUNTOS_BACKFILL_FAIL_HARD === 'true';
+const LEASE_AUTO_FINALIZE_JOB_ENABLED =
+  String(process.env.LEASE_AUTO_FINALIZE_JOB_ENABLED || 'true').toLowerCase() !== 'false';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,6 +88,10 @@ const startServer = async () => {
           process.exit(1);
         }
       }
+
+      if (LEASE_AUTO_FINALIZE_JOB_ENABLED) {
+        scheduleDailyLeaseAutoFinalize();
+      }
     } else {
       console.warn('Backfill de permisos omitido por falta de conexión a BD.');
     }
@@ -131,3 +138,4 @@ const startServer = async () => {
 };
 
 startServer();
+

@@ -2,6 +2,33 @@ import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../../../shared/hooks/use-toast';
 import reportesInmobiliariosService from '../services/reportesInmobiliarios.service';
 
+const buildResponsibleName = (user) => {
+  if (!user) return 'Usuario actual';
+
+  if (typeof user === 'string') {
+    return user.trim() || 'Usuario actual';
+  }
+
+  if (user.nombre_completo) {
+    return String(user.nombre_completo).replace(/\s+/g, ' ').trim();
+  }
+
+  const fullName = [
+    user.primer_nombre,
+    user.segundo_nombre,
+    user.nombre,
+    user.primer_apellido,
+    user.segundo_apellido,
+    user.apellido
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return fullName || user.correo || user.email || 'Usuario actual';
+};
+
 export const useGeneralFollowUp = (reportId, currentUser) => {
   const [followUps, setFollowUps] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -94,19 +121,26 @@ export const useGeneralFollowUp = (reportId, currentUser) => {
         newFollowUp = response.data;
       } else {
         // Si es un reporte nuevo, crear un seguimiento temporal
+        const createdAt = new Date().toISOString();
+        const responsibleName = buildResponsibleName(currentUser);
+
         newFollowUp = {
           id_seguimiento: `temp_${Date.now()}`,
           id_reporte: reportId,
           descripcion: descripcion.trim(),
-          fecha: new Date().toISOString(),
+          fecha: createdAt,
+          fecha_creacion: createdAt,
           estado: 'Pendiente',
+          id_persona: currentUser.id_persona || currentUser.id || null,
           id_responsable: currentUser.id_persona,
           responsable: {
             id_persona: currentUser.id_persona,
+            nombre_completo: responsibleName,
             primer_nombre: currentUser.primer_nombre,
-            primer_apellido: currentUser.primer_apellido
+            primer_apellido: currentUser.primer_apellido,
+            correo: currentUser.correo,
+            email: currentUser.email
           },
-          fecha_creacion: new Date().toISOString(),
           temporal: true // Marca para identificar seguimientos temporales
         };
       }

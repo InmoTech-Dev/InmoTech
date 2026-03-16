@@ -166,7 +166,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
     if (!hora) return "La hora es requerida";
 
     if (!availableHours.includes(hora)) {
-      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de una hora`;
+      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de 30 minutos`;
     }
 
     return "";
@@ -714,7 +714,7 @@ const UserCreateAppointmentModal = ({ isOpen, onClose, preselectedDate, onAppoin
                       </h4>
                       <ul className="text-blue-700 text-sm space-y-1">
                         <li>• Te contactaremos en las próximas 2 horas para confirmar</li>
-                        <li>• Duración aproximada: 1 hora</li>
+                        <li>• Duración aproximada: 30 minutos</li>
                         <li>• Puedes reagendar con 24 horas de anticipación</li>
                         <li>• Algunos servicios requieren documentos específicos</li>
                       </ul>

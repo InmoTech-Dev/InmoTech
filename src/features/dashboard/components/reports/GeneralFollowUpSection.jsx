@@ -21,6 +21,9 @@ import {
 
 const formatResponsableName = (responsable) => {
   if (!responsable) return 'Desconocido';
+  if (typeof responsable === 'string') {
+    return responsable.trim() || 'Desconocido';
+  }
   const nombres = [
     responsable.nombre_completo,
     responsable.primer_nombre,
@@ -35,6 +38,12 @@ const formatResponsableName = (responsable) => {
   ].filter(Boolean);
   const nombreCompleto = [...nombres, ...apellidos].join(' ').trim();
   return nombreCompleto || responsable.email || responsable.correo || 'Desconocido';
+};
+
+const getResponsibleSortName = (responsable) => {
+  if (!responsable) return '';
+  if (typeof responsable === 'string') return responsable.toLowerCase();
+  return formatResponsableName(responsable).toLowerCase();
 };
 
 function GeneralFollowUpSection({
@@ -57,12 +66,12 @@ function GeneralFollowUpSection({
 
     switch (filterBy) {
       case 'date':
-        filtered = filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        filtered = filtered.sort((a, b) => new Date(b.fecha || b.fecha_creacion || 0) - new Date(a.fecha || a.fecha_creacion || 0));
         break;
       case 'responsible':
         filtered = filtered.sort(
           (a, b) =>
-            (a.responsable?.primer_nombre || '').localeCompare(b.responsable?.primer_nombre || '') || 0
+            getResponsibleSortName(a.responsable).localeCompare(getResponsibleSortName(b.responsable)) || 0
         );
         break;
       case 'pending':
@@ -72,7 +81,7 @@ function GeneralFollowUpSection({
         filtered = filtered.filter((f) => f.estado === 'Completado');
         break;
       default:
-        filtered = filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        filtered = filtered.sort((a, b) => new Date(b.fecha || b.fecha_creacion || 0) - new Date(a.fecha || a.fecha_creacion || 0));
     }
 
     setFilteredFollowUps(filtered);
@@ -105,7 +114,9 @@ function GeneralFollowUpSection({
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'Sin fecha';
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return 'Sin fecha';
     return date.toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'short',
@@ -279,11 +290,11 @@ function GeneralFollowUpSection({
                               </div>
                               <div className="flex flex-col text-xs text-gray-500 space-y-1">
                                 <div className="flex items-center">
-                                  <span>{formatDate(followUp.fecha)}</span>
+                                  <span>{formatDate(followUp.fecha || followUp.fecha_creacion)}</span>
                                 </div>
                                 <div className="flex items-center">
                                   <Calendar className="w-3 h-3 mr-1" />
-                                  <span>Creado: {formatDate(followUp.fecha_creacion)}</span>
+                                  <span>Creado: {formatDate(followUp.fecha_creacion || followUp.fecha)}</span>
                                 </div>
                               </div>
                             </div>
@@ -296,7 +307,8 @@ function GeneralFollowUpSection({
 
                         {isEditing &&
                           currentUser &&
-                          followUp.id_persona === currentUser.id_persona && (
+                          (followUp.id_persona === currentUser.id_persona ||
+                            followUp.id_responsable === currentUser.id_persona) && (
                             <div className="mt-3 pt-3 border-t border-gray-100">
                               <div className="flex items-center space-x-2">
                                 <span className="text-xs text-gray-500">Cambiar estado:</span>

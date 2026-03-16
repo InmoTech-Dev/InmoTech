@@ -60,8 +60,8 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
   const [dynamicAvailableHours, setDynamicAvailableHours] = useState([]);
   const [isLoadingHours, setIsLoadingHours] = useState(false);
 
-  const { toast } = useToast();
   const { addExistingAppointment } = useAppointments();
+  const { toast } = useToast();
 
   // ✅ AUTO-COMPLETAR DATOS CUANDO EL USUARIO ESTÁ AUTENTICADO
   useEffect(() => {
@@ -350,7 +350,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
 
     // Lista de horas válidas según el horario de atención centralizado.
     if (!availableHours.includes(hora)) {
-      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de una hora`;
+      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de 30 minutos`;
     }
 
     return "";
@@ -455,7 +455,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
   };
 
 
-  // ✅ Función auxiliar para calcular hora fin con duración de una hora
+  // ✅ Función auxiliar para calcular hora fin con duración de 30 minutos
   const calcularHoraFin = (horaInicio) => calculateEndTime(horaInicio);
 
   const handleClose = () => {
@@ -1161,7 +1161,7 @@ const PropertyVisitModal = ({ isOpen, onClose, property, onSubmit }) => {
                           • Te contactaremos en las próximas 2 horas para
                           confirmar
                         </li>
-                        <li>• Duración aproximada: 30-45 minutos</li>
+                        <li>• Duración aproximada: 30 minutos</li>
                         <li>
                           • Agradecemos tu puntualidad y asistencia. Tu
                           compromiso es fundamental para nosotros.

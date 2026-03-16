@@ -32,10 +32,6 @@ const Inmueble = sequelize.define('Inmuebles', {
     type: DataTypes.STRING(100),
     allowNull: true
   },
-  estrato: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
   direccion: {
     type: DataTypes.STRING(100),
     allowNull: false

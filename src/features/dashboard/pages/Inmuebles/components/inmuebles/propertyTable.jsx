@@ -27,6 +27,15 @@ const isFinalStatusForFeatured = (estado = '') => {
   return normalized === 'arrendado' || normalized === 'vendido';
 };
 
+const isSoldStatus = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'vendido';
+};
+
 export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange, onToggleFeatured }) => {
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
@@ -61,7 +70,11 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                 const fallback = property.titulo?.[0]?.toUpperCase() || property.tipo?.[0] || 'I';
                 const estadosDisponibles = getEstadosDisponibles(property.operacion);
                 const estadoActual = property.estado || 'Disponible';
-                const selectedEstado = estadosDisponibles.includes(estadoActual)
+                const soldStatusLocked = isSoldStatus(estadoActual);
+                const selectableEstados = soldStatusLocked && !estadosDisponibles.includes('Vendido')
+                  ? [...estadosDisponibles, 'Vendido']
+                  : estadosDisponibles;
+                const selectedEstado = selectableEstados.includes(estadoActual)
                   ? estadoActual
                   : 'Disponible';
                 const featuredDisabled = isFinalStatusForFeatured(estadoActual);
@@ -103,11 +116,12 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                     <td className="px-3 lg:px-4 py-3.5 align-middle">
                       {onStatusChange ? (
                         <select
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7 w-full max-w-[132px]`}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7 w-full max-w-[132px] ${soldStatusLocked ? 'cursor-not-allowed opacity-85' : ''}`}
                           value={selectedEstado}
                           onChange={(e) => onStatusChange(property, e.target.value)}
+                          disabled={soldStatusLocked}
                         >
-                          {estadosDisponibles.map((estado) => (
+                          {selectableEstados.map((estado) => (
                             <option key={estado} value={estado}>
                               {estado}
                             </option>

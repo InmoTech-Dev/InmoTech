@@ -557,15 +557,27 @@ class PersonaService {
    */
   async listarPersonas(filtros = {}, opciones = {}) {
     try {
+      const parseBooleanFilter = (value) => {
+        if (value === undefined || value === null || value === '') return undefined;
+        if (typeof value === 'boolean') return value;
+        const normalized = String(value).trim().toLowerCase();
+        if (['true', '1', 'si', 'activo'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'inactivo'].includes(normalized)) return false;
+        return undefined;
+      };
+
       const {
         tipo_documento,
         numero_documento,
         nombre,
+        busqueda,
+        search,
         correo,
         tiene_cuenta,
         estado
       } = filtros;
       const rolFiltro = filtros.rol || filtros.rol_nombre || null;
+      const cantidadFiltro = String(filtros.cantidad_inmuebles || filtros.cantidad || '').trim();
 
       const {
         pagina = 1,
@@ -577,11 +589,13 @@ class PersonaService {
       const offset = (pagina - 1) * limite;
       const whereClausePersona = {};
 
-      if (estado !== undefined) whereClausePersona.estado = estado;
+      const estadoFiltro = parseBooleanFilter(estado);
+      if (estadoFiltro !== undefined) whereClausePersona.estado = estadoFiltro;
       if (tipo_documento) whereClausePersona.tipo_documento = tipo_documento;
       if (numero_documento) whereClausePersona.numero_documento = { [sequelize.Op.like]: `%${numero_documento}%` };
       if (correo) whereClausePersona.correo = { [sequelize.Op.like]: `%${correo}%` };
-      if (tiene_cuenta !== undefined) whereClausePersona.tiene_cuenta = tiene_cuenta;
+      const tieneCuentaFiltro = parseBooleanFilter(tiene_cuenta);
+      if (tieneCuentaFiltro !== undefined) whereClausePersona.tiene_cuenta = tieneCuentaFiltro;
 
       if (nombre) {
         whereClausePersona[sequelize.Op.or] = [
@@ -619,6 +633,27 @@ class PersonaService {
 
       const validPersons = allPersonsResult.filter(p => p != null);
 
+      const normalize = (value = '') =>
+        String(value || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+
+      const rawSearch = String(busqueda || search || '').trim();
+      const searchTerms = rawSearch
+        .split(/\s+/)
+        .map((term) => normalize(term))
+        .filter(Boolean);
+
+      const matchesCantidadFilter = (cantidad) => {
+        if (!cantidadFiltro || cantidadFiltro === 'Todas las cantidades') return true;
+        if (cantidadFiltro === '1') return cantidad === 1;
+        if (cantidadFiltro === '2-3') return cantidad >= 2 && cantidad <= 3;
+        if (cantidadFiltro === '4+') return cantidad >= 4;
+        return true;
+      };
+
       const personasFiltradas = validPersons.filter(persona => {
         const roles = persona.roles || [];
         const propiedades = Array.isArray(persona.propiedades) ? persona.propiedades : [];
@@ -626,11 +661,38 @@ class PersonaService {
         if (rolFiltro === 'Propietario') {
           const esPorRol = roles.some(rol => rol.nombre_rol === 'Propietario');
           const esPorPropiedad = propiedades.length > 0;
-          return esPorRol || esPorPropiedad;
+          if (!esPorRol && !esPorPropiedad) return false;
         }
 
         if (rolFiltro === 'Usuario') {
-          return roles.some(rol => rol.nombre_rol === 'Usuario');
+          const esUsuario = roles.some(rol => rol.nombre_rol === 'Usuario');
+          if (!esUsuario) return false;
+        }
+
+        if (rolFiltro === 'Propietario' && !matchesCantidadFilter(propiedades.length)) {
+          return false;
+        }
+
+        if (searchTerms.length) {
+          const dynamicRegistro = `prop-${new Date().getFullYear()}-${String(persona.id_persona || 0).padStart(3, '0')}`;
+          const searchableValues = [
+            persona.nombre_completo,
+            persona.apellido_completo,
+            `${persona.nombre_completo || ''} ${persona.apellido_completo || ''}`.trim(),
+            persona.numero_documento,
+            persona.tipo_documento,
+            persona.correo,
+            persona.telefono,
+            dynamicRegistro
+          ]
+            .map((value) => normalize(value))
+            .filter(Boolean);
+
+          const matchesSearch = searchTerms.every((term) =>
+            searchableValues.some((value) => value.includes(term))
+          );
+
+          if (!matchesSearch) return false;
         }
 
         return true;
@@ -717,9 +779,8 @@ class PersonaService {
       };
     } catch (error) {
       logger.error('Error listando personas:', error);
-
-      const paginaSafe = filtros?.pagina || 1;
-      const limiteSafe = filtros?.limite || 20;
+      const paginaSafe = opciones?.pagina || 1;
+      const limiteSafe = opciones?.limite || 20;
 
       return {
         personas: [],

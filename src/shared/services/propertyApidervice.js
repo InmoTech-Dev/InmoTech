@@ -235,7 +235,6 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
     titulo: inmueble.titulo || buildTitle(inmueble),
     direccion: inmueble.direccion,
     barrio: inmueble.barrio,
-    estrato: toNumber(inmueble.estrato) ?? null,
     ciudad: inmueble.ciudad,
     departamento: inmueble.departamento,
     pais: inmueble.pais,
@@ -308,12 +307,6 @@ const mapInmuebleToApi = (payload = {}) => {
   if (hasOwn(payload, 'titulo')) body.titulo = payload.titulo;
   if (hasOwn(payload, 'direccion')) body.direccion = payload.direccion;
   if (hasOwn(payload, 'barrio')) body.barrio = payload.barrio ?? null;
-  if (hasOwn(payload, 'estrato')) {
-    const estrato = toNumber(payload.estrato);
-    if (estrato !== null) {
-      body.estrato = estrato;
-    }
-  }
   if (hasOwn(payload, 'ciudad')) body.ciudad = payload.ciudad;
   if (hasOwn(payload, 'departamento')) body.departamento = payload.departamento;
   if (hasOwn(payload, 'pais')) body.pais = payload.pais || DEFAULT_COUNTRY;
@@ -381,13 +374,50 @@ const mapInmuebleToApi = (payload = {}) => {
 
 const extractPayload = (response) => response?.data?.data || response?.data || response;
 
+const buildInmueblesQueryFilters = (filters = {}) => {
+  const query = {};
+
+  if (!filters || typeof filters !== 'object') {
+    return query;
+  }
+
+  const searchValue = (filters.busqueda || filters.search || '').toString().trim();
+  if (searchValue) {
+    query.busqueda = searchValue;
+  }
+
+  const estadoFrontend = (filters.estado_frontend || filters.estado || '').toString().trim();
+  if (estadoFrontend && estadoFrontend.toLowerCase() !== 'todos') {
+    query.estado_frontend = estadoFrontend;
+  }
+
+  const operacion = (filters.operacion || '').toString().trim();
+  if (operacion && operacion.toLowerCase() !== 'todas') {
+    query.operacion = operacion;
+  }
+
+  const categoria = (filters.categoria || filters.tipo || '').toString().trim();
+  if (categoria && categoria.toLowerCase() !== 'todos') {
+    query.categoria = categoria;
+  }
+
+  if (filters.propietario_id) query.propietario_id = filters.propietario_id;
+  if (filters.ciudad) query.ciudad = filters.ciudad;
+  if (filters.destacado !== undefined) query.destacado = filters.destacado;
+  if (filters.ordenar_por) query.ordenar_por = filters.ordenar_por;
+  if (filters.orden) query.orden = filters.orden;
+
+  return query;
+};
+
 export const inmueblesAPI = {
   async getInmuebles(page = 1, limit = DEFAULT_LIMIT, filters = {}) {
     try {
+      const queryFilters = buildInmueblesQueryFilters(filters);
       const response = await apiClient.get('/inmuebles', {
-        page,
-        limit,
-        ...filters
+        pagina: page,
+        limite: limit,
+        ...queryFilters
       });
 
       const payload = extractPayload(response) || {};

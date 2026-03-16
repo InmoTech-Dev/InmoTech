@@ -149,13 +149,35 @@ class OwnersApiService {
     return onlyOwners.length ? onlyOwners : normalized;
   }
 
-  async getOwners({ page = 1, limit = this.defaultLimit } = {}) {
+  async getOwners({
+    page = 1,
+    limit = this.defaultLimit,
+    search = '',
+    estado = 'Todos los estados',
+    cantidad = 'Todas las cantidades'
+  } = {}) {
     try {
-      const response = await apiClient.get('/personas', {
+      const query = {
         pagina: page,
         limite: limit,
-        estado: true,
         rol: OWNER_ROLE
+      };
+
+      const normalizedSearch = String(search || '').trim();
+      if (normalizedSearch) {
+        query.busqueda = normalizedSearch;
+      }
+
+      if (estado && estado !== 'Todos los estados') {
+        query.estado = estado === 'Activo';
+      }
+
+      if (cantidad && cantidad !== 'Todas las cantidades') {
+        query.cantidad_inmuebles = cantidad;
+      }
+
+      const response = await apiClient.get('/personas', {
+        ...query
       });
 
       const payload = response?.data || {};

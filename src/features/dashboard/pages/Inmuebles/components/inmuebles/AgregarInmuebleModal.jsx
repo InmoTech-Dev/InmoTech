@@ -48,7 +48,6 @@ const INITIAL_FORM = {
   titulo: '',
   direccion: '',
   barrio: '',
-  estrato: '',
   ciudad: '',
   departamento: '',
   pais: 'Colombia',
@@ -271,7 +270,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         titulo: inmuebleEditar.titulo || '',
         direccion: inmuebleEditar.direccion || '',
         barrio: inmuebleEditar.barrio || '',
-        estrato: inmuebleEditar.estrato || '',
         ciudad: inmuebleEditar.ciudad || '',
         departamento: inmuebleEditar.departamento || '',
         pais: inmuebleEditar.pais || 'Colombia',
@@ -553,11 +551,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (!form.direccion.trim()) validationErrors.direccion = 'La dirección es obligatoria';
       if (!form.ciudad.trim()) validationErrors.ciudad = 'La ciudad es obligatoria';
       if (!form.departamento.trim()) validationErrors.departamento = 'El departamento es obligatorio';
-      if (form.estrato === '') {
-        validationErrors.estrato = 'El estrato es obligatorio';
-      } else if (!Number.isInteger(Number(form.estrato)) || Number(form.estrato) < 1 || Number(form.estrato) > 6) {
-        validationErrors.estrato = 'Ingresa un estrato valido (1 a 6)';
-      }
     } else if (stepIndex === 2) {
       const selectedAmenitiesCount = amenities.filter((amenity) => amenity.seleccionada).length;
       if (MIN_AMENITIES_REQUIRED_TYPES.has(form.tipo) && selectedAmenitiesCount < 2) {
@@ -636,7 +629,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         titulo: form.titulo,
         direccion: form.direccion,
         barrio: form.barrio,
-        estrato: Number(form.estrato),
         ciudad: form.ciudad,
         departamento: form.departamento,
         pais: form.pais,
@@ -850,22 +842,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
               value={form.barrio}
               onChange={handleFieldChange}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-slate-600 flex justify-between">
-              Estrato
-              {errors.estrato && <span className="text-xs text-red-500">{errors.estrato}</span>}
-            </label>
-            <input
-              name="estrato"
-              type="number"
-              min="1"
-              max="6"
-              value={form.estrato}
-              onChange={handleFieldChange}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="Ej: 4"
             />
           </div>
           <div>

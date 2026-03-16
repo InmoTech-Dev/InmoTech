@@ -30,8 +30,8 @@ class InmueblesController {
     try {
       const filtros = req.query;
       const opciones = {
-        pagina: parseInt(req.query.pagina) || 1,
-        limite: parseInt(req.query.limite) || 20,
+        pagina: parseInt(req.query.pagina ?? req.query.page) || 1,
+        limite: parseInt(req.query.limite ?? req.query.limit) || 20,
         ordenarPor: req.query.ordenar_por || 'id_inmueble',
         orden: req.query.orden || 'DESC'
       };
@@ -67,8 +67,8 @@ class InmueblesController {
         propietario_id: propietarioId
       };
       const opciones = {
-        pagina: parseInt(req.query.pagina) || 1,
-        limite: parseInt(req.query.limite) || 20,
+        pagina: parseInt(req.query.pagina ?? req.query.page) || 1,
+        limite: parseInt(req.query.limite ?? req.query.limit) || 20,
         ordenarPor: req.query.ordenar_por || 'id_inmueble',
         orden: req.query.orden || 'DESC'
       };

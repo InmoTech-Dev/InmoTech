@@ -34,8 +34,11 @@ const updateBuyerSchema = Joi.object({
 const searchBuyersSchema = Joi.object({
   tipo_documento: Joi.string().valid(...documentTypes),
   numero_documento: Joi.string().max(20),
+  criterio: Joi.string().max(100),
   nombre: Joi.string().max(100),
   status: Joi.string().valid(...buyerStatuses),
+  estado: Joi.string().valid(...buyerStatuses),
+  search: Joi.string().max(100),
   tipo_comprador: Joi.string().valid(...buyerTypes)
 });
 

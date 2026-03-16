@@ -13,16 +13,16 @@ class SalesController {
     try {
       const data = req.validatedData || req.body;
       const newSale = await saleService.createSale(data);
-      return res.status(201).json({ 
-        success: true, 
+      return res.status(201).json({
+        success: true,
         message: 'Venta creada exitosamente',
-        data: newSale 
+        data: newSale
       });
     } catch (error) {
       if (error.message.includes('no encontrado')) {
-        return res.status(400).json({ 
-          success: false, 
-          message: error.message 
+        return res.status(400).json({
+          success: false,
+          message: error.message
         });
       }
       next(error);
@@ -37,6 +37,10 @@ class SalesController {
         filters.estado = req.query.estado;
       }
 
+      if (req.query.tipo_compra) {
+        filters.tipo_compra = req.query.tipo_compra;
+      }
+
       if (req.query.id_persona) {
         filters.id_persona = parseInt(req.query.id_persona);
       }
@@ -46,7 +50,13 @@ class SalesController {
         filters.fecha_fin = req.query.fecha_fin;
       }
 
-      const sales = await saleService.getAllSales(filters);
+      if (req.query.search) {
+        filters.search = req.query.search;
+      }
+
+      filters.pagination = normalizePagination(req.query, { defaultLimit: 5, maxLimit: 5 });
+
+      const result = await saleService.getAllSales(filters);
 
       return res.status(200).json({
         success: true,

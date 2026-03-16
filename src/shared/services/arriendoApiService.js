@@ -45,6 +45,26 @@ class ArriendoApiService {
     return response;
   }
 
+  async prorrogarArriendo(id, payload) {
+    const response = await apiClient.patch(`/leases/${id}/extend`, payload);
+    return response;
+  }
+
+  async reajustarCanon(id, payload) {
+    const response = await apiClient.patch(`/leases/${id}/adjust-rent`, payload);
+    return response;
+  }
+
+  async registrarPreaviso(id, payload) {
+    const response = await apiClient.patch(`/leases/${id}/pre-notice`, payload);
+    return response;
+  }
+
+  async eliminarPreaviso(id) {
+    const response = await apiClient.delete(`/leases/${id}/pre-notice`);
+    return response;
+  }
+
   // Cobros del arriendo
   async obtenerCobros(id) {
     const response = await apiClient.get(`/leases/${id}/payments`);

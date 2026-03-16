@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const buyersController = require('../controllers/buyers.controller');
-const { validate } = require('../middlewares/validate.middleware');
+const { validate, validateQuery } = require('../middlewares/validate.middleware');
 const { createLimiter, strictLimiter } = require('../middlewares/security.middleware');
 
 const {
@@ -49,7 +49,7 @@ router.patch('/:id/deactivate', strictLimiter, buyersController.deactivateBuyer)
 // GET /api/v1/sales/buyers/search/:criterio - Buscar compradores
 router.get(
   '/search/:criterio',
-  validate(searchBuyersSchema),
+  validateQuery(searchBuyersSchema),
   buyersController.searchBuyers
 );
 

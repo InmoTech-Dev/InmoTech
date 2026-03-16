@@ -2,6 +2,7 @@ const { Buyer, Persona, Sale, Inmueble } = require('../models');
 const { sequelize } = require('../config/database');
 const { Sequelize, Op } = require('sequelize');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 const PERSONA_ATTRS = [
   'id_persona',
@@ -30,6 +31,25 @@ const BUYER_ATTRS = [
 ];
 
 class BuyerService {
+  normalizeFilterValue(value) {
+    return String(value ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  normalizeBuyerStatus(value) {
+    const normalized = this.normalizeFilterValue(value);
+    const statusMap = {
+      activo: 'Activo',
+      inactivo: 'Inactivo',
+      proceso: 'Proceso'
+    };
+
+    return statusMap[normalized] || value;
+  }
+
   async generateBuyerCode(transaction) {
     const total = await Buyer.count({ transaction });
     // Intento secuencial primero
@@ -111,6 +131,13 @@ class BuyerService {
             'categoria',
             'precio_venta',
             'precio_arriendo'
+          ],
+          include: [
+            {
+              association: 'imagenes',
+              attributes: ['id_imagen', 'ruta_archivo', 'nombre_archivo', 'es_principal', 'orden'],
+              required: false
+            }
           ]
         }
       ],
@@ -125,6 +152,43 @@ class BuyerService {
       if (!acc[sale.id_comprador]) acc[sale.id_comprador] = sale;
       return acc;
     }, {});
+  }
+
+  mapInmuebleSummary(inmueble) {
+    if (!inmueble) return null;
+
+    const imagenes = Array.isArray(inmueble.imagenes)
+      ? [...inmueble.imagenes]
+        .sort((a, b) => {
+          if (Boolean(b?.es_principal) !== Boolean(a?.es_principal)) {
+            return Number(Boolean(b?.es_principal)) - Number(Boolean(a?.es_principal));
+          }
+          return (a?.orden ?? Number.MAX_SAFE_INTEGER) - (b?.orden ?? Number.MAX_SAFE_INTEGER);
+        })
+        .map((img) => ({
+          id_imagen: img.id_imagen,
+          ruta_archivo: img.ruta_archivo,
+          nombre_archivo: img.nombre_archivo,
+          es_principal: Boolean(img.es_principal),
+          orden: img.orden
+        }))
+      : [];
+
+    const imagenPrincipal = imagenes.find((img) => img.es_principal)?.ruta_archivo || imagenes[0]?.ruta_archivo || null;
+
+    return {
+      id_inmueble: inmueble.id_inmueble,
+      registro_inmobiliario: inmueble.registro_inmobiliario,
+      titulo: inmueble.titulo,
+      direccion: inmueble.direccion,
+      ciudad: inmueble.ciudad,
+      departamento: inmueble.departamento,
+      categoria: inmueble.categoria,
+      precio_venta: inmueble.precio_venta,
+      precio_arriendo: inmueble.precio_arriendo,
+      imagen_principal: imagenPrincipal,
+      imagenes
+    };
   }
 
   async upsertPersona(personaData, transaction) {
@@ -286,53 +350,111 @@ class BuyerService {
       ...normalized,
       ultima_venta: sale
         ? {
-            id_venta: sale.id_venta,
-            fecha_venta: sale.fecha_venta,
-            valor_venta: sale.valor_venta,
-            estado: sale.estado
-          }
+          id_venta: sale.id_venta,
+          fecha_venta: sale.fecha_venta,
+          valor_venta: sale.valor_venta,
+          estado: sale.estado,
+          medio_pago: sale.medio_pago
+        }
         : null,
-      inmueble: sale?.inmueble
-        ? {
-            id_inmueble: sale.inmueble.id_inmueble,
-            registro_inmobiliario: sale.inmueble.registro_inmobiliario,
-            titulo: sale.inmueble.titulo,
-            direccion: sale.inmueble.direccion,
-            ciudad: sale.inmueble.ciudad,
-            departamento: sale.inmueble.departamento,
-            categoria: sale.inmueble.categoria,
-            precio_venta: sale.inmueble.precio_venta,
-            precio_arriendo: sale.inmueble.precio_arriendo
-          }
-        : null
+      inmueble: this.mapInmuebleSummary(sale?.inmueble)
     };
   }
 
   async getAllBuyers(filters = {}) {
     const buyerWhere = {};
-    if (filters.status) buyerWhere.estado = filters.status;
-    if (filters.tipo_comprador) buyerWhere.tipo_comprador = filters.tipo_comprador;
+    const normalizedStatus = this.normalizeBuyerStatus(filters.status || filters.estado);
+    if (normalizedStatus) buyerWhere.estado = normalizedStatus;
+    if (filters.tipo_comprador || filters.tipo_compra) {
+      buyerWhere.tipo_comprador = filters.tipo_comprador || filters.tipo_compra;
+    }
     const buyerHasFilters = Object.keys(buyerWhere).length > 0;
 
-    const personaWhere = {};
+    const andConditions = [];
     if (filters.nombre) {
-      personaWhere[Op.or] = [
-        { nombre_completo: { [Op.like]: `%${filters.nombre}%` } },
-        { apellido_completo: { [Op.like]: `%${filters.nombre}%` } }
-      ];
+      const byName = `%${String(filters.nombre).trim()}%`;
+      andConditions.push({
+        [Op.or]: [
+          { nombre_completo: { [Op.like]: byName } },
+          { apellido_completo: { [Op.like]: byName } }
+        ]
+      });
     }
 
-    const personas = await Persona.findAll({
-      ...this.personaQuery(personaWhere),
-      include: [
+    if (filters.tipo_documento) {
+      andConditions.push({ tipo_documento: filters.tipo_documento });
+    }
+
+    if (filters.numero_documento) {
+      andConditions.push({ numero_documento: filters.numero_documento });
+    }
+
+    if (filters.search) {
+      const search = `%${String(filters.search).trim()}%`;
+      andConditions.push({
+        [Op.or]: [
+          { nombre_completo: { [Op.like]: search } },
+          { apellido_completo: { [Op.like]: search } },
+          { numero_documento: { [Op.like]: search } },
+          { correo: { [Op.like]: search } },
+          { telefono: { [Op.like]: search } },
+          { '$buyer.registro_comprador$': { [Op.like]: search } },
+          { '$buyer.tipo_comprador$': { [Op.like]: search } },
+          { '$buyer.ciudad_residencia$': { [Op.like]: search } },
+          { '$buyer.direccion_anterior$': { [Op.like]: search } },
+          { '$buyer.observaciones$': { [Op.like]: search } }
+        ]
+      });
+    }
+
+    const personaWhere = andConditions.length ? { [Op.and]: andConditions } : {};
+    const pagination = {
+      enabled: Boolean(filters.pagination?.enabled),
+      page: filters.pagination?.page || 1,
+      limit: filters.pagination?.limit || null,
+      offset: filters.pagination?.offset || 0
+    };
+
+    const buyerInclude = {
+      association: 'buyer',
+      attributes: BUYER_ATTRS,
+      where: buyerHasFilters ? buyerWhere : undefined,
+      required: true
+    };
+
+    const associationFilter = this.normalizeFilterValue(filters.asociacion);
+    if (associationFilter === 'con-inmueble' || associationFilter === 'sin-inmueble') {
+      buyerInclude.include = [
         {
-          association: 'buyer',
-          attributes: BUYER_ATTRS,
-          where: buyerHasFilters ? buyerWhere : undefined,
-          required: true
+          association: 'ventas',
+          attributes: ['id_venta'],
+          required: associationFilter === 'con-inmueble'
         }
+      ];
+
+      if (associationFilter === 'sin-inmueble') {
+        personaWhere['$buyer.ventas.id_venta$'] = null;
+      }
+    }
+
+    const query = {
+      ...this.personaQuery(personaWhere),
+      include: [buyerInclude],
+      distinct: true,
+      col: 'id_persona',
+      order: [
+        [Sequelize.literal("CASE WHEN [buyer].[estado] = 'Activo' THEN 0 ELSE 1 END"), 'ASC'],
+        [{ model: Buyer, as: 'buyer' }, 'fecha_creacion', 'DESC'],
+        ['id_persona', 'DESC']
       ]
-    });
+    };
+
+    if (pagination.enabled) {
+      query.limit = pagination.limit;
+      query.offset = pagination.offset;
+    }
+
+    const { count, rows: personas } = await Persona.findAndCountAll(query);
 
     const buyerIds = personas
       .map((p) => p?.buyer?.id_comprador)
@@ -340,7 +462,7 @@ class BuyerService {
 
     const salesMap = await this._getLatestSalesByBuyerIds(buyerIds);
 
-    return personas
+    const data = personas
       .map((p) => {
         const base = this.normalizePersonaRecord(p);
         if (!base) return null;
@@ -349,28 +471,27 @@ class BuyerService {
           ...base,
           ultima_venta: sale
             ? {
-                id_venta: sale.id_venta,
-                fecha_venta: sale.fecha_venta,
-                valor_venta: sale.valor_venta,
-                estado: sale.estado
-              }
+              id_venta: sale.id_venta,
+              fecha_venta: sale.fecha_venta,
+              valor_venta: sale.valor_venta,
+              estado: sale.estado,
+              medio_pago: sale.medio_pago
+            }
             : null,
-          inmueble: sale?.inmueble
-            ? {
-                id_inmueble: sale.inmueble.id_inmueble,
-                registro_inmobiliario: sale.inmueble.registro_inmobiliario,
-                titulo: sale.inmueble.titulo,
-                direccion: sale.inmueble.direccion,
-                ciudad: sale.inmueble.ciudad,
-                departamento: sale.inmueble.departamento,
-                categoria: sale.inmueble.categoria,
-                precio_venta: sale.inmueble.precio_venta,
-                precio_arriendo: sale.inmueble.precio_arriendo
-              }
-            : null
+          inmueble: this.mapInmuebleSummary(sale?.inmueble)
         };
       })
       .filter(Boolean);
+
+    return {
+      data,
+      pagination: buildPaginationMeta({
+        total: count,
+        page: pagination.page,
+        limit: pagination.limit,
+        enabled: pagination.enabled
+      })
+    };
   }
 
   async updateBuyer(id, updateData) {
@@ -384,6 +505,15 @@ class BuyerService {
 
       if (!persona || !persona.buyer) {
         throw new Error('Comprador no encontrado');
+      }
+
+      const salesCount = await Sale.count({ where: { id_comprador: id }, transaction });
+      if (salesCount > 0) {
+        const err = new Error(
+          'No puedes editar un comprador con ventas asociadas. Anula o elimina la venta antes de editar.'
+        );
+        err.status = 409;
+        throw err;
       }
 
       await persona.update(
@@ -442,36 +572,17 @@ class BuyerService {
   }
 
   async searchBuyers(criteria = {}) {
-    const personaWhere = {};
-    const buyerWhere = {};
-
-    if (criteria.tipo_documento) personaWhere.tipo_documento = criteria.tipo_documento;
-    if (criteria.numero_documento) personaWhere.numero_documento = criteria.numero_documento;
-    if (criteria.nombre) {
-      personaWhere[Op.or] = [
-        { nombre_completo: { [Op.like]: `%${criteria.nombre}%` } },
-        { apellido_completo: { [Op.like]: `%${criteria.nombre}%` } }
-      ];
-    }
-
-    if (criteria.status) buyerWhere.estado = criteria.status;
-    if (criteria.tipo_comprador) buyerWhere.tipo_comprador = criteria.tipo_comprador;
-
-    const personas = await Persona.findAll({
-      ...this.personaQuery(personaWhere),
-      include: [
-        {
-          association: 'buyer',
-          attributes: BUYER_ATTRS,
-          where: Object.keys(buyerWhere).length ? buyerWhere : undefined,
-          required: true
-        }
-      ]
+    const result = await this.getAllBuyers({
+      tipo_documento: criteria.tipo_documento,
+      numero_documento: criteria.numero_documento,
+      nombre: criteria.nombre,
+      status: criteria.status || criteria.estado,
+      estado: criteria.estado || criteria.status,
+      tipo_comprador: criteria.tipo_comprador,
+      search: criteria.search || criteria.criterio || criteria.nombre
     });
 
-    return personas
-      .map((p) => this.normalizePersonaRecord(p))
-      .filter(Boolean);
+    return result.data;
   }
 }
 

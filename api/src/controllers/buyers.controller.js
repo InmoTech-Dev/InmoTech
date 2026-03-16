@@ -6,10 +6,10 @@ class BuyersController {
     try {
       const data = req.body;
       const newBuyer = await buyerService.createBuyer(data);
-      return res.status(201).json({ 
-        success: true, 
+      return res.status(201).json({
+        success: true,
         message: 'Comprador creado exitosamente',
-        data: newBuyer 
+        data: newBuyer
       });
     } catch (error) {
       const status =
@@ -30,6 +30,8 @@ class BuyersController {
     try {
       const filters = {
         status: req.query.status,
+        estado: req.query.estado,
+        asociacion: req.query.asociacion,
         tipo_compra: req.query.tipo_compra,
         id_inmueble: req.query.id_inmueble ? parseInt(req.query.id_inmueble, 10) : undefined,
         tipo_documento: req.query.tipo_documento,
@@ -43,7 +45,8 @@ class BuyersController {
         }
       });
 
-      const buyers = await buyerService.getAllBuyers(filters);
+      filters.pagination = normalizePagination(req.query, { defaultLimit: 5, maxLimit: 5 });
+      const result = await buyerService.getAllBuyers(filters);
 
       return res.status(200).json({
         success: true,
@@ -126,7 +129,10 @@ class BuyersController {
   async searchBuyers(req, res, next) {
     try {
       const { criterio } = req.params;
-      const criteria = req.query;
+      const criteria = {
+        ...req.query,
+        criterio
+      };
 
       const buyers = await buyerService.searchBuyers(criteria);
 

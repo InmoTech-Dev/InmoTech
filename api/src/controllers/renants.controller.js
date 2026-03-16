@@ -1,4 +1,6 @@
 const renantService = require('../services/renants.service');
+const { normalizePagination } = require('../utils/pagination');
+const logger = require('../utils/logger');
 
 class RenantsController {
   async createRenant(req, res, next) {
@@ -17,7 +19,19 @@ class RenantsController {
   async getAllRenants(req, res, next) {
     try {
       const filters = { ...req.query };
-      const renants = await renantService.getAllRenants(filters);
+      filters.pagination = normalizePagination(req.query, { defaultLimit: 5, maxLimit: 5 });
+      const result = await renantService.getAllRenants(filters);
+
+      logger.info('Listado de arrendatarios consultado', {
+        search: filters.search || null,
+        estado: filters.estado || filters.status || null,
+        asociacion: filters.asociacion || null,
+        page: filters.pagination.page,
+        limit: filters.pagination.limit,
+        total: result.pagination.total,
+        returned: Array.isArray(result.data) ? result.data.length : 0
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Arrendatarios obtenidos exitosamente',
@@ -95,7 +109,10 @@ class RenantsController {
 
   async searchRenants(req, res, next) {
     try {
-      const criteria = req.query;
+      const criteria = {
+        ...req.query,
+        ...(req.params?.criterio ? { criterio: req.params.criterio, search: req.params.criterio } : {})
+      };
       const renants = await renantService.searchRenants(criteria);
       return res.status(200).json({
         success: true,

@@ -78,7 +78,12 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
     segundoApellido: segundoApellido || buyer.segundoApellido || '',
     correo: persona.correo || buyer.correo || '',
     telefono: persona.telefono || buyer.telefono || '',
-    estado: buyer.estado || compra?.estado || (persona.estado === false ? 'Inactivo' : 'Activo'),
+    estado:
+      buyer.estado_comprador ||
+      buyer.estado ||
+      buyer.raw?.estado_comprador ||
+      compra?.estado ||
+      (persona.estado === false ? 'Inactivo' : 'Activo'),
     fechaCompra: buyer.fechaCompra || compra?.fecha_compra || '',
     valorCompra: buyer.valorCompra || compra?.valor_compra || '',
     tipoCompra: buyer.tipoCompra || compra?.tipo_compra || '',

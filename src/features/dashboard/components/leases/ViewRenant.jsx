@@ -91,7 +91,7 @@ export default function ViewRenant({ renant, onClose }) {
     renant?.codeudorRaw ||
     renant?.codeudorPersona ||
     renant?.codeudor?.persona ||
-    (renant?.codeudor && renant.codeudor.id_persona ? renant.codeudor : {}) ||
+    (renant?.codeudor?.id_persona ? renant.codeudor : {}) ||
     renant?.codeudor_persona ||
     renant?.codeudorPersona ||
     {};
@@ -100,7 +100,19 @@ export default function ViewRenant({ renant, onClose }) {
   const numeroDocCod = codeudorPersona.numero_documento || renant?.numeroDocCodeudor || "";
   const correoCod = codeudorPersona.correo || renant?.correoCodeudor || "";
   const telefonoCod = codeudorPersona.telefono || renant?.telefonoCodeudor || "";
-  const nombreCod = codeudorPersona.nombre_completo || renant?.nombreCodeudor || "";
+  const actividadEconomicaCod =
+    codeudorPersona.actividad_economica || renant?.actividadEconomicaCodeudor || "";
+  const nombreCod =
+    codeudorPersona.nombre_completo ||
+    renant?.nombreCodeudor ||
+    [
+      renant?.primerNombreCodeudor,
+      renant?.segundoNombreCodeudor,
+      renant?.primerApellidoCodeudor,
+      renant?.segundoApellidoCodeudor,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
   const money = useMemo(() => formatMoneyCOP(renant?.valorMensual), [renant?.valorMensual]);
   const inicio = useMemo(() => formatDate(renant?.fechaInicio), [renant?.fechaInicio]);
@@ -235,11 +247,9 @@ export default function ViewRenant({ renant, onClose }) {
                     <Field label="Tipo doc" value={tipoDocCod} />
                     <Field label="Documento" value={numeroDocCod} />
                     <Field label="Teléfono" value={telefonoCod} />
-                    <Field
-                      label="Correo"
-                      value={correoCod ? correoCod : "-"}
-                    />
-                    <Field label="Nombre" value={nombreCod} className="col-span-2" />
+                    <Field label="Actividad económica" value={actividadEconomicaCod || "-"} />
+                    <Field label="Correo" value={correoCod || "-"} />
+                    <Field label="Nombre" value={nombreCod || "-"} className="col-span-2" />
                   </div>
                 </section>
               </div>

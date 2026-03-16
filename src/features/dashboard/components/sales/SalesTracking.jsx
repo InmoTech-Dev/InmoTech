@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
 import ventaApiService from "../../../../shared/services/ventaApiService";
 import { useToast } from "../../../../shared/hooks/use-toast";
+import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 
 /**
  * Modal de seguimiento / cambio de estado de venta.
@@ -54,6 +55,7 @@ export default function PurchaseTrackingModal({
   const cleanDescription = (text) => {
     if (!text) return "";
     const trimmed = String(text).trim();
+    if (/^sin descripci[oó]n$/i.test(trimmed)) return "";
     const match = trimmed.match(/^\[[^\]]*?\]\s*(.*)$/);
     const body = match ? match[1].trim() : trimmed;
     return body;
@@ -66,8 +68,11 @@ export default function PurchaseTrackingModal({
   const [files, setFiles] = useState({ comprobante: null, contrato: null });
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const [adjuntos, setAdjuntos] = useState(Array.isArray(venta.adjuntos) ? venta.adjuntos : []);
+  const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
+  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
 
   // Refrescar adjuntos al abrir modal / cambiar venta para que el cierre persista tras recarga
   useEffect(() => {
@@ -86,14 +91,36 @@ export default function PurchaseTrackingModal({
   }, [venta]);
 
   const existingAdjuntos = adjuntos;
+  const imageAdjuntos = existingAdjuntos.filter((a) =>
+    (a.mime_type || a.url || "").toLowerCase().match(/(image\/|\.png$|\.jpe?g$|\.webp$|\.jfif$)/)
+  );
+  const buildImageItems = () =>
+    imageAdjuntos.map((a) => ({
+      url: a.url,
+      name: a.nombre_archivo || a.filename || a.url?.split("/").pop(),
+    }));
   const hasComprobante = existingAdjuntos.some((a) => (a.tipo || "").toLowerCase() === "comprobante");
   const hasContrato = existingAdjuntos.some((a) => (a.tipo || "").toLowerCase() === "contrato");
+  const hasSelectedComprobante = Boolean(files.comprobante);
+  const hasSelectedContrato = Boolean(files.contrato);
+  const canMarkAsPaid = hasComprobante || hasSelectedComprobante;
   const statusNorm = (venta.estado_seguimiento || venta.estado || "").toString().trim().toLowerCase();
-  const isClosed = (statusNorm === "completada" || statusNorm === "finalizada") && hasComprobante && hasContrato;
+  const isCompletedSale =
+    (statusNorm === "completada" || statusNorm === "finalizada") && hasComprobante && hasContrato;
+  const isCancelledSale = statusNorm === "cancelado";
+  const isLocked = isCompletedSale || isCancelledSale;
 
   const handleFileChange = (tipo, event) => {
     const file = event.target.files?.[0] || null;
     setFiles((prev) => ({ ...prev, [tipo]: file }));
+  };
+
+  const openImageViewer = (index) => {
+    setViewer({ isOpen: true, index, items: buildImageItems() });
+  };
+
+  const openPdfViewer = (url, name) => {
+    setPdfViewer({ isOpen: true, url, name });
   };
 
   const uploadSelectedAttachments = async (ventaId) => {
@@ -150,8 +177,29 @@ export default function PurchaseTrackingModal({
       3;
 
     const nextEstadoNombre = displayStatusName(resolvedEstadoId);
+    const isPaid = normalize(nextEstadoNombre) === "pagado";
     const isCompleting =
       (nextEstadoNombre || "").toString().trim().toLowerCase() === "completada";
+    const isCancelling =
+      (nextEstadoNombre || "").toString().trim().toLowerCase() === "cancelado";
+
+    if (isPaid && !canMarkAsPaid) {
+      toast({
+        title: "Comprobante requerido",
+        description: "Debes subir un comprobante antes de marcar la venta como Pagado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isCompleting && (!(hasComprobante || hasSelectedComprobante) || !(hasContrato || hasSelectedContrato))) {
+      toast({
+        title: "Documentos requeridos",
+        description: "Debes tener cargados el comprobante y el contrato antes de marcar la venta como Completada.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const basePayload = {
       ...venta,
@@ -165,6 +213,14 @@ export default function PurchaseTrackingModal({
 
     if (isCompleting && !confirmCloseOpen) {
       setPendingPayload(basePayload);
+      setConfirmAction("complete");
+      setConfirmCloseOpen(true);
+      return;
+    }
+
+    if (isCancelling && !confirmCloseOpen) {
+      setPendingPayload(basePayload);
+      setConfirmAction("cancel");
       setConfirmCloseOpen(true);
       return;
     }
@@ -175,17 +231,28 @@ export default function PurchaseTrackingModal({
   const confirmCloseSale = async () => {
     if (!pendingPayload) {
       setConfirmCloseOpen(false);
+      setConfirmAction(null);
       return;
     }
     await executeSave(pendingPayload);
     setPendingPayload(null);
+    setConfirmAction(null);
     setConfirmCloseOpen(false);
   };
 
   const cancelCloseSale = () => {
     setConfirmCloseOpen(false);
     setPendingPayload(null);
+    setConfirmAction(null);
   };
+
+  const confirmTitle =
+    confirmAction === "cancel" ? "Confirmar cancelación" : "Confirmar cierre";
+
+  const confirmDescription =
+    confirmAction === "cancel"
+      ? "Vas a marcar la venta como cancelada. ¿Deseas continuar?"
+      : "Vas a marcar la venta como completada. ¿Deseas continuar?";
 
   const buyerName =
     venta.comprador || venta.cliente || venta.arrendatario || "N/A";
@@ -410,7 +477,7 @@ export default function PurchaseTrackingModal({
 
                       <select
                         value={estadoId ?? ""}
-                        disabled={!statusList.length || isClosed}
+                        disabled={!statusList.length || isLocked}
                         onChange={(e) => setEstadoId(Number(e.target.value))}
                         className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 disabled:bg-gray-100"
                       >
@@ -418,7 +485,11 @@ export default function PurchaseTrackingModal({
                           <option value="">Cargando estados...</option>
                         )}
                         {statusList.map((opt) => (
-                          <option key={opt.id_estado_venta} value={opt.id_estado_venta}>
+                          <option
+                            key={opt.id_estado_venta}
+                            value={opt.id_estado_venta}
+                            disabled={normalize(opt.nombre_estado) === "pagado" && !canMarkAsPaid}
+                          >
                             {opt.nombre_estado}
                           </option>
                         ))}
@@ -426,59 +497,55 @@ export default function PurchaseTrackingModal({
                     </div>
 
                     <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Descripción (opcional)
-                    </label>
+                      <label className="text-xs font-semibold text-gray-500">
+                        Descripcion (opcional)
+                      </label>
 
-                    <textarea
-                      rows={4}
-                      className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900
-                                shadow-sm outline-none transition
-                                placeholder:text-gray-400
-                                focus:border-blue-500 focus:ring-2 focus:ring-blue-200
-                                disabled:bg-gray-100 disabled:text-gray-500"
-                      placeholder="Ej: Pago recibido, se cambia a 'Al día'"
-                      value={descripcion}
-                      onChange={(e) => setDescripcion(e.target.value)}
-                      disabled={isClosed}
-                    />
-                  </div>
+                      <textarea
+                        rows={3}
+                        className="mt-1 w-full min-h-[72px] rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder:text-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+                        placeholder="Ej: Pago recibido, se cambia a 'Al dia'"
+                        value={descripcion}
+                        onChange={(e) => setDescripcion(e.target.value)}
+                        disabled={isLocked}
+                      />
+                    </div>
                   </div>
                 </section>
 
                 {/* ADJUNTOS */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                    Adjuntar documentos
+                    {isLocked ? "Documentos adjuntos" : "Adjuntar documentos"}
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
-                      <span className="font-medium text-gray-700">
-                        Comprobante de pago
-                      </span>
-                      <input
-                        type="file"
-                        accept="application/pdf,image/*"
-                        className="mt-2 text-sm"
-                        onChange={(e) => handleFileChange("comprobante", e)}
-                        disabled={isClosed}
-                      />
-                    </label>
+                  {!isLocked && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
+                        <span className="font-medium text-gray-700">
+                          Comprobante de pago
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          className="mt-2 text-sm"
+                          onChange={(e) => handleFileChange("comprobante", e)}
+                        />
+                      </label>
 
-                    <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
-                      <span className="font-medium text-gray-700">
-                        Contrato de venta
-                      </span>
-                      <input
-                        type="file"
-                        accept="application/pdf,image/*"
-                        className="mt-2 text-sm"
-                        onChange={(e) => handleFileChange("contrato", e)}
-                        disabled={isClosed}
-                      />
-                    </label>
-                  </div>
+                      <label className="flex flex-col border border-dashed border-gray-300 rounded-xl p-3 text-sm cursor-pointer hover:border-blue-500">
+                        <span className="font-medium text-gray-700">
+                          Contrato de venta
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          className="mt-2 text-sm"
+                          onChange={(e) => handleFileChange("contrato", e)}
+                        />
+                      </label>
+                    </div>
+                  )}
 
                   {existingAdjuntos.length > 0 && (
                     <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-3">
@@ -487,30 +554,50 @@ export default function PurchaseTrackingModal({
                       </p>
 
                       <ul className="space-y-2 text-sm">
-                        {existingAdjuntos.map((adj) => (
-                          <li key={adj.id_adjunto} className="flex justify-between items-center">
-                            <span className="text-gray-900">
-                              {adj.tipo.toUpperCase()} — {adj.nombre_archivo}
-                            </span>
-                            <a
-                              href={adj.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              Ver
-                            </a>
-                          </li>
-                        ))}
+                        {existingAdjuntos.map((adj) => {
+                          const isPdf =
+                            (adj.mime_type || adj.url || "").toLowerCase().includes("pdf") ||
+                            /\.pdf$/i.test(adj.url || "");
+                          const imgIndex = imageAdjuntos.findIndex(
+                            (a) => a.id_adjunto === adj.id_adjunto
+                          );
+                          return (
+                            <li key={adj.id_adjunto} className="flex justify-between items-center">
+                              <span className="text-gray-900">
+                                {adj.tipo.toUpperCase()} — {adj.nombre_archivo}
+                              </span>
+                              <button
+                                type="button"
+                                className="text-blue-600 hover:underline"
+                                onClick={() => {
+                                  if (isPdf) {
+                                    openPdfViewer(adj.url, adj.nombre_archivo);
+                                  } else if (imgIndex >= 0) {
+                                    openImageViewer(imgIndex);
+                                  } else {
+                                    window.open(adj.url, "_blank", "noopener");
+                                  }
+                                }}
+                              >
+                                Ver
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
                 </section>
 
-                {isClosed && (
-                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-semibold">
+                {isLocked && (
+                  <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold ${isCancelledSale
+                      ? "bg-rose-50 border border-rose-200 text-rose-800"
+                      : "bg-green-50 border border-green-200 text-green-800"
+                    }`}>
                     <CheckCircle2 className="w-4 h-4" />
-                    Venta cerrada correctamente.
+                    {isCancelledSale
+                      ? "Venta cancelada. El seguimiento está bloqueado."
+                      : "Venta cerrada correctamente."}
                   </div>
                 )}
               </div>
@@ -527,7 +614,7 @@ export default function PurchaseTrackingModal({
 
                 <button
                   onClick={handleSave}
-                  disabled={saving || isClosed}
+                  disabled={saving || isLocked}
                   className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
                 >
                   {saving ? "Guardando..." : "Guardar estado"}
@@ -555,10 +642,8 @@ export default function PurchaseTrackingModal({
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirmar cierre</h3>
-              <p className="text-sm text-gray-700 mb-4">
-                Vas a marcar la venta como completada. ¿Deseas continuar?
-              </p>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{confirmTitle}</h3>
+              <p className="text-sm text-gray-700 mb-4">{confirmDescription}</p>
               <div className="flex justify-end gap-2">
                 <button
                   onClick={cancelCloseSale}
@@ -577,6 +662,53 @@ export default function PurchaseTrackingModal({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Visor de imágenes (mismo que Ver venta) */}
+      <ImageViewer
+        isOpen={viewer.isOpen}
+        onClose={() => setViewer((v) => ({ ...v, isOpen: false }))}
+        images={viewer.items}
+        currentIndex={viewer.index}
+        onIndexChange={(idx) => setViewer((v) => ({ ...v, index: idx }))}
+      />
+
+      {/* Visor PDF simple */}
+      {pdfViewer.isOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+              <span className="text-sm font-semibold text-gray-800 truncate">{pdfViewer.name || "Documento PDF"}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
+                  onClick={() => window.open(pdfViewer.url, "_blank", "noopener")}
+                >
+                  Abrir en nueva pestaña
+                </button>
+                <button
+                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                  onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-100">
+              <iframe
+                title={pdfViewer.name || "PDF"}
+                src={pdfViewer.url}
+                className="w-full h-full border-0"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

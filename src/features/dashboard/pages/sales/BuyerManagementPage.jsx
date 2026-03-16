@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaTimes, FaCalendar, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
@@ -60,14 +60,26 @@ const filterRealBuyers = (list = []) => {
 };
 
 export function BuyersManagementPage() {
+    const PAGE_SIZE = 5;
+    const statusButtonRefs = useRef({});
     const [compradores, setCompradores] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [formSubmitting, setFormSubmitting] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [statusMessage, setStatusMessage] = useState(null);
+    const [, setStatusMessage] = useState(null);
+    const [statusChangingId, setStatusChangingId] = useState(null);
+    const [statusMenuId, setStatusMenuId] = useState(null);
+    const [statusMenuPosition, setStatusMenuPosition] = useState(null);
 
     // --- ESTADOS DE ACCION ---
     const [searchTerm, setSearchTerm] = useState("");
+    const [estadoFilter, setEstadoFilter] = useState("todos");
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pagination, setPagination] = useState({
+        total: 0,
+        pagina: 1,
+        limite: PAGE_SIZE,
+        paginas_totales: 1,
+    });
     const [showForm, setShowForm] = useState(false);
     const [buyerToEdit, setBuyerToEdit] = useState(null);
     const [buyerToView, setBuyerToView] = useState(null);
@@ -83,15 +95,19 @@ export function BuyersManagementPage() {
     const fetchBuyers = useCallback(async (query = "") => {
         try {
             setIsLoading(true);
-            const params = query ? { search: query } : {};
-            const buyers = await buyersApiService.getAll(params);
-            setCompradores(normalizeBuyers(filterRealBuyers(buyers)));
+            const params = { page, limit: PAGE_SIZE };
+            if (query) params.search = query;
+            if (estadoFilter !== "todos") params.estado = estadoFilter;
+            const result = await buyersApiService.getAll(params);
+            setCompradores(normalizeBuyers(filterRealBuyers(result.data)));
+            setPagination(result.pagination);
+            setCurrentPage(result.pagination?.pagina || page);
         } catch (error) {
             showStatus("error", error.message || MESSAGES.buyer.loadError);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [estadoFilter]);
 
     useEffect(() => {
         fetchBuyers();
@@ -105,29 +121,47 @@ export function BuyersManagementPage() {
         return () => clearTimeout(timeoutId);
     }, [searchTerm, fetchBuyers]);
 
-    // --- FILTRO DE BÚSQUEDA ---
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    const filteredBuyers = normalizedSearch
-        ? compradores.filter((buyer) => {
-              const fullName = [
-                  buyer.primerNombre,
-                  buyer.segundoNombre,
-                  buyer.primerApellido,
-                  buyer.segundoApellido,
-              ]
-                  .filter(Boolean)
-                  .join(" ")
-                  .toLowerCase();
+    useEffect(() => {
+        setCurrentPage(1);
+        fetchBuyers(searchTerm.trim(), 1);
+    }, [estadoFilter, fetchBuyers, searchTerm]);
 
-              return (
-                  fullName.includes(normalizedSearch) ||
-                  (buyer.documento || "").toLowerCase().includes(normalizedSearch) ||
-                  (buyer.tipoDocumento || "").toLowerCase().includes(normalizedSearch) ||
-                  (buyer.correo || "").toLowerCase().includes(normalizedSearch) ||
-                  (buyer.telefono || "").toLowerCase().includes(normalizedSearch)
-              );
-          })
-        : compradores;
+    useEffect(() => {
+        if (!statusMenuId) return undefined;
+
+        const handleOutsideClick = (event) => {
+            if (event.target.closest("[data-status-menu]")) return;
+            setStatusMenuId(null);
+            setStatusMenuPosition(null);
+        };
+
+        document.addEventListener("mousedown", handleOutsideClick);
+        return () => document.removeEventListener("mousedown", handleOutsideClick);
+    }, [statusMenuId]);
+
+    useEffect(() => {
+        if (!statusMenuId) return undefined;
+
+        const updatePosition = () => {
+            const button = statusButtonRefs.current[statusMenuId];
+            if (!button) return;
+
+            const rect = button.getBoundingClientRect();
+            setStatusMenuPosition({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
+            });
+        };
+
+        updatePosition();
+        window.addEventListener("resize", updatePosition);
+        window.addEventListener("scroll", updatePosition, true);
+
+        return () => {
+            window.removeEventListener("resize", updatePosition);
+            window.removeEventListener("scroll", updatePosition, true);
+        };
+    }, [statusMenuId]);
 
     // --- HANDLERS GENERALES ---
     const handleCloseForm = () => {
@@ -144,7 +178,7 @@ export function BuyersManagementPage() {
         setBuyerToEdit(null);
         setShowForm(true);
     };
-    
+
     const handleEditClick = (buyer) => {
         setBuyerToEdit(buyer);
         setShowForm(true);
@@ -268,10 +302,58 @@ export function BuyersManagementPage() {
                 variant: "destructive",
             });
         } finally {
-            setIsDeleting(false);
-            setBuyerToDelete(null);
+            setStatusMenuId(null);
+            setStatusMenuPosition(null);
+            setStatusChangingId(null);
         }
     };
+
+    const handleStatusMenuToggle = (buyerId) => {
+        if (statusMenuId === buyerId) {
+            setStatusMenuId(null);
+            setStatusMenuPosition(null);
+            return;
+        }
+
+        const button = statusButtonRefs.current[buyerId];
+        if (button) {
+            const rect = button.getBoundingClientRect();
+            setStatusMenuPosition({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
+            });
+        }
+
+        setStatusMenuId(buyerId);
+    };
+
+    const renderStatusMenu = (buyer) => {
+        if (!buyer || statusMenuId !== buyer.id || !statusMenuPosition) return null;
+
+        return ReactDOM.createPortal(
+            <div
+                data-status-menu
+                className="fixed z-[9999] w-36 -translate-x-1/2 rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-xl"
+                style={{
+                    top: `${statusMenuPosition.top}px`,
+                    left: `${statusMenuPosition.left}px`,
+                }}
+            >
+                {["Activo", "Inactivo"].map((estadoOpcion) => (
+                    <button
+                        key={estadoOpcion}
+                        type="button"
+                        onClick={() => handleToggleEstado(buyer, estadoOpcion)}
+                        className="w-full px-3 py-2 text-center hover:bg-slate-50"
+                    >
+                        {estadoOpcion}
+                    </button>
+                ))}
+            </div>,
+            document.getElementById('modal-root') || document.body
+        );
+    };
+
 
     // --- FUNCIÓN PARA RENDERIZAR EL FORMULARIO COMO MODAL CON PORTAL ---
     const renderFormModal = () => {
@@ -312,94 +394,93 @@ export function BuyersManagementPage() {
 
         const modalContent = (
             <div className="fixed inset-0 z-[60] flex items-center justify-center">
-            {/* Backdrop estilo formularios */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                onClick={handleCancelDelete}
-            />
-
-            {/* Modal card estilo formularios */}
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ duration: 0.25 }}
-                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="flex items-start justify-between p-6 border-b border-slate-200">
-                <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
-                    <Trash2 className="w-5 h-5 text-red-600" />
-                    </div>
-                    <div>
-                    <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
-                    <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
-                    </div>
-                </div>
-
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                {/* Backdrop estilo formularios */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                     onClick={handleCancelDelete}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                    aria-label="Cerrar"
-                >
-                    <X className="w-5 h-5 text-slate-500" />
-                </motion.button>
-                </div>
+                />
 
-                {/* Content */}
-                <div className="p-6">
-                <p className="text-slate-700">
-                    ¿Estás seguro de que deseas eliminar a{" "}
-                    <span className="font-semibold text-slate-900">
-                    {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}
-                    </span>
-                    ? Esta acción no se puede deshacer.
-                </p>
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleCancelDelete}
-                    className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                {/* Modal card estilo formularios */}
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                    transition={{ duration: 0.25 }}
+                    className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
                 >
-                    Cancelar
-                </motion.button>
+                    {/* Header */}
+                    <div className="flex items-start justify-between p-6 border-b border-slate-200">
+                        <div className="flex items-start gap-3">
+                            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
+                                <Trash2 className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
+                                <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
+                            </div>
+                        </div>
 
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleConfirmDelete}
-                    disabled={isDeleting}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-                    isDeleting
-                        ? "bg-slate-400 text-slate-200 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700 text-white"
-                    }`}
-                >
-                    {isDeleting ? (
-                    <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Eliminando...
-                    </>
-                    ) : (
-                    <>
-                        <Trash2 className="w-4 h-4" />
-                        Eliminar
-                    </>
-                    )}
-                </motion.button>
-                </div>
-            </motion.div>
+                        <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleCancelDelete}
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                            aria-label="Cerrar"
+                        >
+                            <X className="w-5 h-5 text-slate-500" />
+                        </motion.button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6">
+                        <p className="text-slate-700">
+                            ¿Estás seguro de que deseas eliminar a{" "}
+                            <span className="font-semibold text-slate-900">
+                                {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}
+                            </span>
+                            ? Esta acción no se puede deshacer.
+                        </p>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={handleCancelDelete}
+                            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                        >
+                            Cancelar
+                        </motion.button>
+
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={handleConfirmDelete}
+                            disabled={isDeleting}
+                            className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isDeleting
+                                    ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                                    : "bg-red-600 hover:bg-red-700 text-white"
+                                }`}
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    Eliminando...
+                                </>
+                            ) : (
+                                <>
+                                    <Trash2 className="w-4 h-4" />
+                                    Eliminar
+                                </>
+                            )}
+                        </motion.button>
+                    </div>
+                </motion.div>
             </div>
         );
 
@@ -407,9 +488,9 @@ export function BuyersManagementPage() {
             modalContent,
             document.getElementById("modal-root") || document.body
         );
-        };
+    };
 
-// Calcular estadísticas
+    // Calcular estadísticas
     const stats = {
         total: filteredBuyers.length,
         activos: filteredBuyers.filter(b => b.estado === 'activo').length,
@@ -463,16 +544,20 @@ export function BuyersManagementPage() {
                             />
                         </div>
                     </div>
-                    
-                    <div className="flex gap-2">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-blue-300"
-                        >
-                            <Filter className="w-4 h-4" />
-                            Filtros
-                        </motion.button>
+
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="relative">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                            <select
+                                value={estadoFilter}
+                                onChange={(e) => setEstadoFilter(e.target.value)}
+                                className="pl-10 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="todos">Todos los estados</option>
+                                <option value="activo">Activos</option>
+                                <option value="inactivo">Inactivos</option>
+                            </select>
+                        </div>
                     </div>
                 </motion.div>
 
@@ -482,26 +567,26 @@ export function BuyersManagementPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.3 }}
                 >
-                {/* TABLA ESTILO ARRENDATARIOS */}
-                <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-slate-50 border-b border-slate-200">
-                                <tr>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Información Personal</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Documento</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Inmueble Asignado</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
-                                    <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
+                    {/* TABLA ESTILO ARRENDATARIOS */}
+                    <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Información Personal</th>
+                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Documento</th>
+                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Inmueble Asignado</th>
+                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto</th>
+                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
+                                        <th className="px-6 py-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200">
                                     {isLoading ? (
                                         <tr>
                                             <td
                                                 colSpan="6"
-                                            className="px-6 py-8 text-center text-slate-500"
+                                                className="px-6 py-8 text-center text-slate-500"
                                             >
                                                 <div className="flex items-center justify-center gap-2">
                                                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
@@ -514,84 +599,107 @@ export function BuyersManagementPage() {
                                             const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
                                             const estado = c.estado || 'Activo';
                                             const estadoClass =
-                                              estado.toLowerCase() === 'activo'
-                                                ? 'bg-green-100 text-green-700 border-green-200'
-                                                : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                                                estado.toLowerCase() === 'activo'
+                                                    ? 'bg-green-100 text-green-700 border-green-200'
+                                                    : 'bg-yellow-100 text-yellow-700 border-yellow-200';
                                             return (
-                                            <tr
-                                                key={c.id}
-                                                className="hover:bg-slate-50 transition-colors"
-                                            >
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className="text-sm font-semibold text-slate-800">{nombreCompleto || 'Sin nombre'}</div>
-                                                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
-                                                        <Mail className="w-3 h-3" />
-                                                        {c.correo || 'Sin correo'}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
-                                                    <div className="text-xs text-slate-500">Tipo</div>
-                                                    <div className="font-medium">{c.tipoDocumento || 'N/D'}</div>
-                                                    <div className="text-xs text-slate-500 mt-1">Número</div>
-                                                    <div className="text-sm font-semibold text-slate-800">{c.documento || 'N/D'}</div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-600">
-                                                    <div className="flex flex-col items-center gap-1">
-                                                        <Home className="w-4 h-4 text-slate-400" />
-                                                        <span className="text-xs text-slate-500">
-                                                            {c.inmueble
-                                                                ? (c.inmueble.titulo ||
-                                                                    c.inmueble.registro_inmobiliario ||
-                                                                    c.inmueble.direccion ||
-                                                                    'Inmueble asignado')
-                                                                : 'Sin inmuebles asignados'}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center text-sm text-slate-700">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <Phone className="w-4 h-4 text-slate-400" />
-                                                        <span>{c.telefono || 'Sin teléfono'}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${estadoClass}`}>
-                                                        {estado}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className="flex gap-2 justify-center">
-                                                        <motion.button
-                                                            whileHover={{ scale: 1.1 }}
-                                                            whileTap={{ scale: 0.9 }}
-                                                            aria-label="Ver comprador"
-                                                            className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
-                                                            onClick={() => handleViewClick(c)}
-                                                        >
-                                                            <Eye className="w-4 h-4" />
-                                                        </motion.button>
-                                                        <motion.button
-                                                            whileHover={{ scale: 1.1 }}
-                                                            whileTap={{ scale: 0.9 }}
-                                                            aria-label="Editar comprador"
-                                                            className="p-2 text-green-600 hover:text-green-800 transition-colors"
-                                                            onClick={() => handleEditClick(c)}
-                                                        >
-                                                            <Edit className="w-4 h-4" />
-                                                        </motion.button>
-                                                        <motion.button
-                                                            whileHover={{ scale: 1.1 }}
-                                                            whileTap={{ scale: 0.9 }}
-                                                            aria-label="Eliminar comprador"
-                                                            className="p-2 text-red-600 hover:text-red-800 transition-colors"
-                                                            onClick={() => handleDeleteRequest(c)}
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </motion.button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )})
+                                                <tr
+                                                    key={c.id}
+                                                    className="hover:bg-slate-50 transition-colors"
+                                                >
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className="text-sm font-semibold text-slate-800">{nombreCompleto || 'Sin nombre'}</div>
+                                                        <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                                                            <Mail className="w-3 h-3" />
+                                                            {c.correo || 'Sin correo'}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                        <div className="text-xs text-slate-500">Tipo</div>
+                                                        <div className="font-medium">{c.tipoDocumento || 'N/D'}</div>
+                                                        <div className="text-xs text-slate-500 mt-1">Número</div>
+                                                        <div className="text-sm font-semibold text-slate-800">{c.documento || 'N/D'}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center text-sm text-slate-600">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <Home className="w-4 h-4 text-slate-400" />
+                                                            <span className="text-xs text-slate-500">
+                                                                {c.inmueble
+                                                                    ? (c.inmueble.titulo ||
+                                                                        c.inmueble.registro_inmobiliario ||
+                                                                        c.inmueble.direccion ||
+                                                                        'Inmueble asignado')
+                                                                    : 'Sin inmuebles asignados'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center text-sm text-slate-700">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <Phone className="w-4 h-4 text-slate-400" />
+                                                            <span>{c.telefono || 'Sin teléfono'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center relative">
+                                                        <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
+                                                            <button
+                                                                type="button"
+                                                                ref={(element) => {
+                                                                    if (element) {
+                                                                        statusButtonRefs.current[c.id] = element;
+                                                                    } else {
+                                                                        delete statusButtonRefs.current[c.id];
+                                                                    }
+                                                                }}
+                                                                onClick={() => handleStatusMenuToggle(c.id)}
+                                                                disabled={statusChangingId === c.id}
+                                                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${estadoNormalized === "activo"
+                                                                        ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:ring-2 hover:ring-green-200"
+                                                                        : "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 hover:ring-2 hover:ring-yellow-200"
+                                                                    } ${statusChangingId === c.id ? "opacity-60 cursor-not-allowed" : ""} ${statusMenuId === c.id ? "ring-2 ring-slate-200" : ""}`}
+                                                            >
+                                                                {statusChangingId === c.id && (
+                                                                    <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                                                )}
+                                                                <span>{estado}</span>
+                                                                <ChevronDown className="w-3 h-3 ml-2" />
+                                                            </button>
+                                                            {renderStatusMenu(c)}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className="flex gap-2 justify-center">
+                                                            <motion.button
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                                aria-label="Ver comprador"
+                                                                className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                                                onClick={() => handleViewClick(c)}
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </motion.button>
+                                                            <motion.button
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                                aria-label="Editar comprador"
+                                                                className="p-2 text-green-600 hover:text-green-800 transition-colors"
+                                                                onClick={() => handleEditClick(c)}
+                                                            >
+                                                                <Edit className="w-4 h-4" />
+                                                            </motion.button>
+                                                            <motion.button
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                                aria-label="Eliminar comprador"
+                                                                className="p-2 text-red-600 hover:text-red-800 transition-colors"
+                                                                onClick={() => handleDeleteRequest(c)}
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </motion.button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })
                                     ) : (
                                         <tr>
                                             <td
@@ -609,6 +717,17 @@ export function BuyersManagementPage() {
                             </table>
                         </div>
                     </div>
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={Math.max(pagination?.paginas_totales || 1, 1)}
+                        hasPrevPage={Boolean(pagination?.has_prev_page)}
+                        hasNextPage={Boolean(pagination?.has_next_page)}
+                        onPageChange={(page) => {
+                            if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
+                            setCurrentPage(page);
+                            fetchBuyers(searchTerm.trim(), page);
+                        }}
+                    />
                 </motion.div>
             </div>
 

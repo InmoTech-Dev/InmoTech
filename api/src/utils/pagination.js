@@ -1,64 +1,45 @@
-/**
- * Utility to build pagination metadata for API responses.
- */
-
-/**
- * Builds the pagination metadata object.
- * 
- * @param {Object} options - Pagination options.
- * @param {number} options.total - Total number of items.
- * @param {number} options.page - Current page number.
- * @param {number} options.limit - Items per page.
- * @param {boolean} options.enabled - Whether pagination is enabled.
- * @returns {Object} Pagination metadata.
- */
-const buildPaginationMeta = ({ total, page, limit, enabled }) => {
-    if (!enabled) {
-        return {
-            total,
-            pagina: 1,
-            limite: total,
-            paginas_totales: 1,
-            has_next_page: false,
-            has_prev_page: false
-        };
-    }
-
-    const safePage = Math.max(Number(page) || 1, 1);
-    const safeLimit = Math.max(Number(limit) || 10, 1);
-    const totalPages = Math.ceil(total / safeLimit) || 1;
-
-    return {
-        total,
-        pagina: safePage,
-        limite: safeLimit,
-        paginas_totales: totalPages,
-        has_next_page: safePage < totalPages,
-        has_prev_page: safePage > 1
-    };
+const parsePositiveInt = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
-/**
- * Normalizes pagination parameters from request query.
- * 
- * @param {Object} query - Request query object.
- * @param {Object} options - Normalization options.
- * @returns {Object} Normalized pagination object.
- */
 const normalizePagination = (query = {}, options = {}) => {
-    const { defaultLimit = 10, maxLimit = 50 } = options;
-    const page = Math.max(parseInt(query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(query.limit, 10) || defaultLimit, 1), maxLimit);
+  const {
+    defaultLimit = 5,
+    maxLimit = 100
+  } = options;
 
-    return {
-        enabled: true,
-        page,
-        limit,
-        offset: (page - 1) * limit
-    };
+  const rawPage = parsePositiveInt(query.page ?? query.pagina);
+  const rawLimit = parsePositiveInt(query.limit ?? query.limite);
+  const hasExplicitPagination = rawPage !== null || rawLimit !== null;
+
+  const page = rawPage || 1;
+  const limitBase = rawLimit || defaultLimit || maxLimit;
+  const limit = Math.min(limitBase, maxLimit);
+
+  return {
+    enabled: true,
+    page,
+    limit,
+    offset: (page - 1) * limit
+  };
+};
+
+const buildPaginationMeta = ({ total = 0, page = 1, limit = null, enabled = false }) => {
+  const safeLimit = limit || Math.max(total, 1);
+  const totalPages = enabled ? Math.max(Math.ceil(total / safeLimit), 1) : 1;
+
+  return {
+    total,
+    pagina: page,
+    limite: safeLimit,
+    paginas_totales: totalPages,
+    has_next_page: page < totalPages,
+    has_prev_page: page > 1
+  };
 };
 
 module.exports = {
-    buildPaginationMeta,
-    normalizePagination
+  normalizePagination,
+  buildPaginationMeta
 };

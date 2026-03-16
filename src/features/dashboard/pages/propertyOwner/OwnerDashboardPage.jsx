@@ -25,12 +25,18 @@ const PropertyOwnersManagement = () => {
     crearInmueble
   } = useInmuebles();
 
-  const [rawOwners, setRawOwners] = useState([]);
   const [owners, setOwners] = useState([]);
   const [ownersLoading, setOwnersLoading] = useState(true);
   const [ownersError, setOwnersError] = useState(null);
+  const [ownersPagination, setOwnersPagination] = useState({
+    pagina: 1,
+    limite: 5,
+    paginas_totales: 1,
+    total: 0
+  });
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos los estados');
   const [filterCantidad, setFilterCantidad] = useState('Todas las cantidades');
   const [modalOpen, setModalOpen] = useState(false);
@@ -62,33 +68,35 @@ const PropertyOwnersManagement = () => {
 
   const formatPropertyForOwner = useCallback(
     (property) => ({
-      id: property.id,
+      id: property.id ?? property.id_inmueble,
       titulo: property.titulo,
-      tipo: property.tipo,
+      tipo: property.tipo ?? property.categoria,
       operacion: property.operacion,
       estado: property.estado,
-      precio: formatCurrency(property.precio),
+      precio: formatCurrency(
+        property.precio ?? property.precio_venta ?? property.precio_arriendo
+      ),
       ciudad: property.ciudad,
       direccion: property.direccion
     }),
     []
   );
 
-  const mergeSelectedProperties = useCallback((owner, selectedInmuebles = []) => {
-    if (!selectedInmuebles.length) {
-      return owner;
-    }
-
-    return {
-      ...owner,
-      inmuebles: selectedInmuebles,
-      cantidadInmuebles: selectedInmuebles.length
-    };
-  }, []);
-
   const attachProperties = useCallback(
     (owner) => {
       if (!owner?.id) return owner;
+
+      const inmueblesOwner = Array.isArray(owner.inmuebles)
+        ? owner.inmuebles.map(formatPropertyForOwner)
+        : [];
+
+      if (inmueblesOwner.length) {
+        return {
+          ...owner,
+          inmuebles: inmueblesOwner,
+          cantidadInmuebles: owner.cantidadInmuebles ?? inmueblesOwner.length
+        };
+      }
 
       const propiedadesAsociadas = availableInmuebles.filter((inmueble) =>
         inmueble.ownerIds?.includes(owner.id)
@@ -97,8 +105,8 @@ const PropertyOwnersManagement = () => {
       if (!propiedadesAsociadas.length) {
         return {
           ...owner,
-          cantidadInmuebles: owner.cantidadInmuebles ?? owner.inmuebles?.length ?? 0,
-          inmuebles: owner.inmuebles || []
+          cantidadInmuebles: owner.cantidadInmuebles ?? 0,
+          inmuebles: []
         };
       }
 
@@ -114,16 +122,36 @@ const PropertyOwnersManagement = () => {
   const fetchOwners = useCallback(async () => {
     setOwnersLoading(true);
     try {
-      const { owners: fetchedOwners } = await ownersApiService.getOwners();
-      setRawOwners(fetchedOwners);
+      const { owners: fetchedOwners, pagination } = await ownersApiService.getOwners({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: debouncedSearch,
+        estado: filterEstado,
+        cantidad: filterCantidad
+      });
+
+      const attached = fetchedOwners.map(attachProperties);
+      setOwners(attached);
+      setOwnersPagination(pagination);
       setOwnersError(null);
     } catch (error) {
       console.error('Error obteniendo propietarios:', error);
-      setOwnersError(error.message || 'No se pudo cargar la información de propietarios');
+      setOwnersError(error.message || 'No se pudo cargar la informacion de propietarios');
     } finally {
       setOwnersLoading(false);
     }
-  }, []);
+  }, [currentPage, itemsPerPage, debouncedSearch, filterEstado, filterCantidad, attachProperties]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+    }, 250);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, filterEstado, filterCantidad]);
 
   useEffect(() => {
     fetchOwners();
@@ -131,51 +159,31 @@ const PropertyOwnersManagement = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
-    const handleExternalOwner = (event) => {
-      const payload = event?.detail;
-      if (!payload) return;
-      const normalized = normalizeOwnerResponse(payload);
-      setRawOwners((prev) => {
-        if (prev.some((owner) => owner.id === normalized.id)) {
-          return prev;
-        }
-        return [...prev, normalized];
-      });
+    const handleExternalOwner = () => {
+      fetchOwners();
     };
 
     window.addEventListener('owner:created', handleExternalOwner);
     return () => window.removeEventListener('owner:created', handleExternalOwner);
-  }, []);
+  }, [fetchOwners]);
 
-  useEffect(() => {
-    setOwners(rawOwners.map(attachProperties));
-  }, [rawOwners, attachProperties]);
+  const hasActiveFilters =
+    searchTerm.trim().length > 0 ||
+    filterEstado !== 'Todos los estados' ||
+    filterCantidad !== 'Todas las cantidades';
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilterEstado('Todos los estados');
+    setFilterCantidad('Todas las cantidades');
+    setCurrentPage(1);
+  };
 
-  const filteredOwners = owners.filter(owner => {
-    const matchesSearch =
-      !normalizedSearch ||
-      owner.nombreCompleto?.toLowerCase().includes(normalizedSearch) ||
-      owner.documento?.toLowerCase().includes(normalizedSearch) ||
-      owner.registro?.toLowerCase().includes(normalizedSearch);
-
-    const matchesEstado =
-      filterEstado === 'Todos los estados' || owner.estado === filterEstado;
-
-    const matchesCantidad =
-      filterCantidad === 'Todas las cantidades' ||
-      (filterCantidad === '1' && owner.cantidadInmuebles === 1) ||
-      (filterCantidad === '2-3' && owner.cantidadInmuebles >= 2 && owner.cantidadInmuebles <= 3) ||
-      (filterCantidad === '4+' && owner.cantidadInmuebles >= 4);
-
-    return matchesSearch && matchesEstado && matchesCantidad;
-  });
-
-  const totalPages = Math.ceil(filteredOwners.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOwners = filteredOwners.slice(startIndex, endIndex);
+  const totalPages = Math.max(ownersPagination.paginas_totales || 1, 1);
+  const totalOwners = ownersPagination.total || 0;
+  const startIndex = totalOwners > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
+  const endIndex = Math.min(currentPage * itemsPerPage, totalOwners);
+  const currentOwners = owners;
 
   const openModal = (mode, owner = null) => {
     setModalMode(mode);
@@ -194,31 +202,90 @@ const PropertyOwnersManagement = () => {
     }
     setOwnerSubmitting(true);
     try {
+      const selectedIds = Array.from(
+        new Set((selectedInmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
+      );
+
+      if (modalMode === 'create' && selectedIds.length === 0) {
+        throw new Error('Debes asignar al menos un inmueble valido para crear el propietario.');
+      }
+
+      const syncOwnerAssignments = async (ownerId, previousIds = []) => {
+        const prevSet = new Set((previousIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
+        const selectedSet = new Set(selectedIds);
+
+        const toAssign = selectedIds.filter((id) => !prevSet.has(id));
+        const toKeepAssigned = selectedIds.filter((id) => prevSet.has(id));
+        const toUnassign = [...prevSet].filter((id) => !selectedSet.has(id));
+
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        const withDeadlockRetry = async (fn, maxAttempts = 3) => {
+          let attempt = 0;
+          while (attempt < maxAttempts) {
+            try {
+              return await fn();
+            } catch (error) {
+              attempt += 1;
+              const rawMessage = (error?.message || error?.data?.message || '').toLowerCase();
+              const isDeadlock =
+                rawMessage.includes('deadlock') ||
+                rawMessage.includes('was deadlocked on lock resources');
+
+              if (!isDeadlock || attempt >= maxAttempts) {
+                throw error;
+              }
+
+              await wait(200 * attempt);
+            }
+          }
+        };
+
+        for (const inmuebleId of toAssign) {
+          await withDeadlockRetry(() =>
+            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
+          );
+        }
+
+        for (const inmuebleId of toKeepAssigned) {
+          await withDeadlockRetry(() =>
+            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
+          );
+        }
+
+        for (const inmuebleId of toUnassign) {
+          await withDeadlockRetry(() =>
+            inmueblesAPI.updateInmueble(inmuebleId, { desasignar_propietario: true })
+          );
+        }
+      };
+
       if (modalMode === 'create') {
         const created = await ownersApiService.createOwner(formData);
         const normalized = normalizeOwnerResponse(created);
-        const enriched = mergeSelectedProperties(normalized, selectedInmuebles);
-        setRawOwners((prev) => [...prev, enriched]);
+        await syncOwnerAssignments(normalized.id, []);
         showAlert('success', `Propietario "${normalized.nombreCompleto}" creado exitosamente`);
       } else if (modalMode === 'edit' && selectedOwner) {
         const updated = await ownersApiService.updateOwner(selectedOwner.id, formData);
         const normalized = normalizeOwnerResponse(updated);
-        const enriched = mergeSelectedProperties(normalized, selectedInmuebles);
-        setRawOwners((prev) => prev.map((owner) => (owner.id === normalized.id ? enriched : owner)));
+        await syncOwnerAssignments(normalized.id, previousIds);
         showAlert('success', `Propietario "${normalized.nombreCompleto}" actualizado correctamente`);
       }
+
+      await cargarInmuebles();
+      await fetchOwners();
       closeModal();
     } catch (error) {
       console.error('Error guardando propietario:', error);
-      showAlert('error', error.message || 'No se pudo completar la operación');
+      showAlert('error', error.message || 'No se pudo completar la operacion');
     } finally {
       setOwnerSubmitting(false);
     }
   };
+
   return (
     <>
       <div className="max-w-7xl mx-auto px-2">
-        {/* Alert */}
         {alert.show && (
           <div className="fixed top-4 right-4 z-[70] animate-slide-in">
             <div
@@ -241,7 +308,7 @@ const PropertyOwnersManagement = () => {
               </div>
               <div className="flex-1">
                 <h3 className={`font-semibold ${alert.type === 'success' ? 'text-green-800' : 'text-blue-800'}`}>
-                  {alert.type === 'success' ? '¡Éxito!' : 'Información'}
+                  {alert.type === 'success' ? 'Exito' : 'Informacion'}
                 </h3>
                 <p className={`text-xs mt-0.5 ${alert.type === 'success' ? 'text-green-700' : 'text-blue-700'}`}>
                   {alert.message}
@@ -259,14 +326,13 @@ const PropertyOwnersManagement = () => {
           </div>
         )}
 
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <div className="bg-blue-100 p-3 rounded-xl">
               <User className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Gestión de Propietarios</h1>
+              <h1 className="text-xl font-bold text-gray-800">Gestion de Propietarios</h1>
               <p className="text-sm text-gray-600">Administra los propietarios registrados</p>
             </div>
           </div>
@@ -278,10 +344,10 @@ const PropertyOwnersManagement = () => {
           </button>
         </div>
 
-        {/* Search and Filters */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
-          <div className="mb-3">
-            <div className="relative">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+          <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Buscar propietario por nombre, documento o registro..."
@@ -337,20 +403,18 @@ const PropertyOwnersManagement = () => {
           </div>
         ) : (
           <>
-            {/* Results count */}
             <div className="mb-3 text-sm">
-              <span className="text-blue-600 font-semibold">{filteredOwners.length}</span>
+              <span className="text-blue-600 font-semibold">{totalOwners}</span>
               <span className="text-gray-600">
                 {' '}
-                resultados (Mostrando {startIndex + 1}-{Math.min(endIndex, filteredOwners.length)})
+                resultados (Mostrando {startIndex}-{endIndex})
               </span>
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
+              <div className="w-full">
+                <table className="table-fixed w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">ID</th>
                       <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Registro</th>
@@ -364,14 +428,12 @@ const PropertyOwnersManagement = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {currentOwners.map((owner, index) => (
-                      <tr key={owner.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-3 py-2 text-[13px] text-gray-900">#{startIndex + index + 1}</td>
-                        <td className="px-3 py-2 text-[13px] text-gray-900 font-medium">{owner.registro}</td>
-                        <td className="px-3 py-2 text-[13px] text-gray-900">{owner.nombreCompleto}</td>
-                        <td className="px-3 py-2 text-[13px] text-gray-600">{owner.documento}</td>
-                        <td className="px-3 py-2 text-[13px] text-gray-600">
-                          <div className="text-xs">{owner.email || 'Sin correo'}</div>
-                          <div className="text-xs text-gray-500">{owner.telefono || 'Sin teléfono'}</div>
+                      <tr key={owner.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="hidden xl:table-cell px-3 lg:px-4 py-3.5 align-middle text-[13px] text-slate-900">#{startIndex + index}</td>
+                        <td className="hidden lg:table-cell px-3 lg:px-4 py-3.5 align-middle text-[13px] text-slate-900 font-medium truncate" title={owner.registro}>{owner.registro}</td>
+                        <td className="px-3 lg:px-4 py-3.5 align-middle text-[13px] text-slate-900">
+                          <div className="font-medium truncate" title={owner.nombreCompleto}>{owner.nombreCompleto}</div>
+                          <div className="lg:hidden text-xs text-slate-500 truncate" title={owner.registro}>{owner.registro}</div>
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1 text-[13px]">
@@ -414,7 +476,6 @@ const PropertyOwnersManagement = () => {
                 </table>
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-1 p-3 border-t border-gray-200">
                   <button
@@ -449,10 +510,8 @@ const PropertyOwnersManagement = () => {
             </div>
           </>
         )}
-
       </div>
 
-      {/* Owner Form Modal */}
       {modalOpen && (
         <OwnerForm
           isOpen={modalOpen}
@@ -471,7 +530,6 @@ const PropertyOwnersManagement = () => {
 
 export default PropertyOwnersManagement;
 
-// Estilos de animación
 const style = document.createElement('style');
 style.textContent = `
   @keyframes slide-in {

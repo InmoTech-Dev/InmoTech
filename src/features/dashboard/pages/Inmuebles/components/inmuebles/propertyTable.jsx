@@ -3,15 +3,40 @@ import { Building2 } from 'lucide-react';
 import { ActionButtons } from './actionButton';
 import { getEstadoColor, getEstadoDotColor } from '../../utils/helpers';
 
-const ESTADOS_DISPONIBLES = [
-  'Disponible',
-  'Vendido',
-  'Arrendado',
-  'En proceso de venta',
-  'En proceso de arrendamiento'
-];
+const ESTADOS_POR_OPERACION = {
+  Arriendo: ['Disponible', 'En proceso de arrendamiento', 'Arrendado'],
+  Venta: ['Disponible', 'En proceso de venta', 'Vendido'],
+  'Venta y Arriendo': [
+    'Disponible',
+    'En proceso de venta',
+    'Vendido',
+    'En proceso de arrendamiento',
+    'Arrendado'
+  ]
+};
 
-export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange }) => {
+const getEstadosDisponibles = (operacion) =>
+  ESTADOS_POR_OPERACION[operacion] || ESTADOS_POR_OPERACION['Venta y Arriendo'];
+
+const isFinalStatusForFeatured = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'arrendado' || normalized === 'vendido';
+};
+
+const isSoldStatus = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'vendido';
+};
+
+export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange, onToggleFeatured }) => {
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
       <div className="overflow-x-auto">
@@ -43,6 +68,16 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
               properties.map((property) => {
                 const coverImage = property.imagenes?.[0];
                 const fallback = property.titulo?.[0]?.toUpperCase() || property.tipo?.[0] || 'I';
+                const estadosDisponibles = getEstadosDisponibles(property.operacion);
+                const estadoActual = property.estado || 'Disponible';
+                const soldStatusLocked = isSoldStatus(estadoActual);
+                const selectableEstados = soldStatusLocked && !estadosDisponibles.includes('Vendido')
+                  ? [...estadosDisponibles, 'Vendido']
+                  : estadosDisponibles;
+                const selectedEstado = selectableEstados.includes(estadoActual)
+                  ? estadoActual
+                  : 'Disponible';
+                const featuredDisabled = isFinalStatusForFeatured(estadoActual);
 
                 return (
                   <tr key={property.id} className="hover:bg-slate-50 transition-colors">
@@ -72,11 +107,12 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                     <td className="px-6 py-4">
                       {onStatusChange ? (
                         <select
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7`}
-                          value={property.estado || 'Disponible'}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7 w-full max-w-[132px] ${soldStatusLocked ? 'cursor-not-allowed opacity-85' : ''}`}
+                          value={selectedEstado}
                           onChange={(e) => onStatusChange(property, e.target.value)}
+                          disabled={soldStatusLocked}
                         >
-                          {ESTADOS_DISPONIBLES.map((estado) => (
+                          {selectableEstados.map((estado) => (
                             <option key={estado} value={estado}>
                               {estado}
                             </option>

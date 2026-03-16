@@ -1,20 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Plus } from 'lucide-react';
 
-// Components
 import { SearchBar } from '../Inmuebles/components/common/searchBar';
 import { Pagination } from '../Inmuebles/components/common/pagination';
 import { PropertyTable } from '../Inmuebles/components/inmuebles/propertyTable';
 import { AgregarInmuebleModal } from '../Inmuebles/components/inmuebles/AgregarInmuebleModal';
-
 import { VisualizarInmuebleModal } from '../Inmuebles/components/inmuebles/visualizarinmueblemodal';
 import { FichasTecnicasModal } from '../Inmuebles/components/inmuebles/fichasTecnicasModal';
 import { VerFichaTecnicaModal } from '../Inmuebles/components/inmuebles/verFichaTecnicaModal';
-
-// Hooks
 import { useInmuebles } from '../Inmuebles/hooks/useInmuebles';
+import { useToast } from '../../../../shared/hooks/use-toast';
+
+const ESTADOS_POR_OPERACION = {
+  Arriendo: ['Disponible', 'En proceso de arrendamiento', 'Arrendado'],
+  Venta: ['Disponible', 'En proceso de venta', 'Vendido'],
+  'Venta y Arriendo': [
+    'Disponible',
+    'En proceso de arrendamiento',
+    'Arrendado',
+    'En proceso de venta',
+    'Vendido'
+  ]
+};
+
+const isSoldStatus = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'vendido';
+};
+
+const resolveEstadoFrontend = (operacion, estadoActual) => {
+  if (isSoldStatus(estadoActual)) {
+    return 'Vendido';
+  }
+  const estadosPermitidos = ESTADOS_POR_OPERACION[operacion] || ESTADOS_POR_OPERACION['Venta y Arriendo'];
+  if (estadosPermitidos.includes(estadoActual)) {
+    return estadoActual;
+  }
+  return 'Disponible';
+};
+
+const isFinalStatusForFeatured = (estado = '') => {
+  const normalized = String(estado)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  return normalized === 'arrendado' || normalized === 'vendido';
+};
 
 const InmuebleDashboardPage = () => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     estado: 'Todos',
@@ -30,18 +69,29 @@ const InmuebleDashboardPage = () => {
   const [fichaSeleccionada, setFichaSeleccionada] = useState(null);
   const [inmuebleEditar, setInmuebleEditar] = useState(null);
 
-  // HOOK PRINCIPAL QUE CONECTA CON LA API
-  const { 
-    inmuebles, 
-    loading, 
-    error, 
-    crearInmueble, 
-    actualizarInmueble 
+  const {
+    inmuebles,
+    pagination,
+    loading,
+    error,
+    cargarInmuebles,
+    crearInmueble,
+    actualizarInmueble
   } = useInmuebles();
 
   const itemsPerPage = 5;
 
-  // Manejar guardar inmueble (crear o actualizar)
+  const getCurrentQueryFilters = () => ({
+    busqueda: searchTerm.trim() || undefined,
+    estado_frontend: filters.estado !== 'Todos' ? filters.estado : undefined,
+    operacion: filters.operacion !== 'Todas' ? filters.operacion : undefined,
+    categoria: filters.tipo !== 'Todos' ? filters.tipo : undefined
+  });
+
+  const refreshCurrentList = async () => {
+    await cargarInmuebles(currentPage, itemsPerPage, getCurrentQueryFilters());
+  };
+
   const handleSaveInmueble = async (inmuebleData, esEdicion) => {
     try {
       if (esEdicion) {
@@ -55,13 +105,12 @@ const InmuebleDashboardPage = () => {
       } else {
         await crearInmueble(inmuebleData);
       }
+      await refreshCurrentList();
     } catch (error) {
       console.error('Error al guardar inmueble:', error);
-      // Aquí podrías mostrar un toast de error
     }
   };
 
-  // Handlers para los modals
   const handleVerDetalle = (inmueble) => {
     setInmuebleSeleccionado(inmueble);
     setModalVisualizarOpen(true);
@@ -90,35 +139,60 @@ const InmuebleDashboardPage = () => {
 
   const handleEstadoChange = async (inmueble, nuevoEstado) => {
     try {
-      await actualizarInmueble(inmueble.id, { ...inmueble, estado: nuevoEstado });
+      if (isSoldStatus(inmueble.estado) && !isSoldStatus(nuevoEstado)) {
+        return;
+      }
+      await actualizarInmueble(inmueble.id, {
+        operacion: inmueble.operacion,
+        estado_frontend: nuevoEstado
+      });
+      await refreshCurrentList();
     } catch (err) {
+      const message = err?.message || 'No se pudo actualizar el estado del inmueble.';
+      toast({
+        title: 'No se pudo cambiar el estado',
+        description: message,
+        variant: 'destructive'
+      });
       console.error('Error actualizando estado del inmueble:', err);
     }
   };
 
-  // Filtrado y paginación
-  const filteredProperties = inmuebles.filter(property => {
-    const matchesSearch = 
-      property.direccion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.registro.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (property.titulo && property.titulo.toLowerCase().includes(searchTerm.toLowerCase()));
+  const handleToggleFeatured = async (inmueble) => {
+    try {
+      if (isFinalStatusForFeatured(inmueble.estado)) {
+        return;
+      }
 
-    const matchesEstado = filters.estado === 'Todos' || property.estado === filters.estado;
-    const matchesOperacion = filters.operacion === 'Todas' || property.operacion === filters.operacion;
-    const matchesTipo = filters.tipo === 'Todos' || property.tipo === filters.tipo;
-
-    return matchesSearch && matchesEstado && matchesOperacion && matchesTipo;
-  });
-
-  const totalPages = Math.ceil(filteredProperties.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentProperties = filteredProperties.slice(startIndex, endIndex);
+      const currentValue = inmueble.destacado ?? inmueble.featured ?? false;
+      await actualizarInmueble(inmueble.id, { destacado: !currentValue });
+    } catch (err) {
+      const message = err?.message || 'Error actualizando destacado del inmueble.';
+      toast({
+        title: 'No se pudo actualizar destacado',
+        description: message,
+        variant: 'destructive'
+      });
+      console.error('Error actualizando destacado del inmueble:', err);
+    }
+  };
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filters]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      cargarInmuebles(currentPage, itemsPerPage, getCurrentQueryFilters());
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, filters, currentPage, cargarInmuebles]);
+
+  const totalResults = pagination?.total ?? 0;
+  const totalPages = Math.max(pagination?.totalPages || 1, 1);
+  const startIndex = totalResults > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
+  const endIndex = Math.min(currentPage * itemsPerPage, totalResults);
 
   if (loading) {
     return <div className="flex justify-center items-center h-64">Cargando inmuebles...</div>;
@@ -136,7 +210,7 @@ const InmuebleDashboardPage = () => {
             <Building2 className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Gestión de Inmuebles</h1>
+            <h1 className="text-2xl font-bold text-slate-800">Gestion de Inmuebles</h1>
             <p className="text-sm text-slate-600">Administra los inmuebles registrados para venta o alquiler</p>
           </div>
         </div>
@@ -161,17 +235,17 @@ const InmuebleDashboardPage = () => {
 
       <div className="flex items-center justify-between mb-3 text-sm">
         <p className="text-slate-600">
-          <span className="font-semibold text-blue-600">{filteredProperties.length}</span> resultados
-          {filteredProperties.length > 0 && (
+          <span className="font-semibold text-blue-600">{totalResults}</span> resultados
+          {totalResults > 0 && (
             <span className="ml-1 text-slate-400">
-              (Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProperties.length)})
+              (Mostrando {startIndex}-{endIndex})
             </span>
           )}
         </p>
       </div>
 
       <PropertyTable
-        properties={currentProperties}
+        properties={inmuebles}
         onView={handleVerDetalle}
         onEdit={handleEditar}
         onDocument={handleVerFichas}
@@ -183,10 +257,11 @@ const InmuebleDashboardPage = () => {
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
+          hasPrevPage={currentPage > 1}
+          hasNextPage={currentPage < totalPages}
         />
       )}
 
-      {/* Modals */}
       <AgregarInmuebleModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
@@ -221,5 +296,3 @@ const InmuebleDashboardPage = () => {
 };
 
 export default InmuebleDashboardPage;
-
-

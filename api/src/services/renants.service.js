@@ -1,8 +1,9 @@
 const { Op, Sequelize } = require('sequelize');
-const { Renant, Persona, Arriendo, Inmueble, Lease } = require('../models');
+const { Renant, Persona, Arriendo, Inmueble, Lease, Rol, PersonasRol } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
 const { buildPaginationMeta } = require('../utils/pagination');
+const invitacionService = require('./invitacion.service');
 
 const PERSONA_ATTRS = [
   'id_persona',
@@ -337,28 +338,33 @@ class RenantService {
         typeof persona.correo === 'string' &&
         persona.correo.trim().length > 0;
 
+      await transaction.commit();
+      const refreshed = await this.getRenantById(renant.id_arrendatario);
+
+      // No bloquear la respuesta de creacion por el flujo de invitacion/email.
       if (shouldSendActivationInvite) {
-        try {
-          await invitacionService.crearInvitacion({
+        void invitacionService
+          .crearInvitacion({
             id_persona: persona.id_persona,
             creado_por: null,
             tipo: 'user_invite',
             rol_asignado: 'Arrendatario',
-            es_administrativo: false
+            es_administrativo: false,
+            deferEmail: true
+          })
+          .catch((inviteError) => {
+            logger.warn('No se pudo programar invitacion de activacion al arrendatario', {
+              id_persona: persona.id_persona,
+              error: inviteError.message
+            });
           });
-        } catch (inviteError) {
-          logger.warn('No se pudo enviar invitacion de activacion al arrendatario', {
-            id_persona: persona.id_persona,
-            error: inviteError.message
-          });
-        }
       }
 
-      await transaction.commit();
-      const refreshed = await this.getRenantById(renant.id_arrendatario);
       return refreshed;
     } catch (error) {
-      await transaction.rollback();
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       logger.error('Error creando arrendatario', { error: error.message });
       throw error;
     }

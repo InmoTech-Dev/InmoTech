@@ -2,6 +2,7 @@ const app = require('./app');
 const { testConnection } = require('./config/database');
 const { runPermissionsBackfill } = require('./startup/backfillPermissions');
 const { runVentaAdjuntosBackfill } = require('./startup/backfillVentaAdjuntos');
+const { scheduleAppointmentsExpiration } = require('./jobs/appointmentsExpiration.job');
 const { scheduleDailyLeaseAutoFinalize } = require('./jobs/leasesAutoFinalize.job');
 
 const PORT = process.env.PORT || 5000;

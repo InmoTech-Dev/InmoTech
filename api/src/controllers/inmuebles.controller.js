@@ -30,8 +30,8 @@ class InmueblesController {
     try {
       const filtros = req.query;
       const opciones = {
-        pagina: parseInt(req.query.pagina) || 1,
-        limite: parseInt(req.query.limite) || 20,
+        pagina: parseInt(req.query.pagina ?? req.query.page) || 1,
+        limite: parseInt(req.query.limite ?? req.query.limit) || 20,
         ordenarPor: req.query.ordenar_por || 'id_inmueble',
         orden: req.query.orden || 'DESC'
       };
@@ -45,6 +45,43 @@ class InmueblesController {
       });
     } catch (error) {
       logger.error('Error listando inmuebles:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Listar inmuebles por propietario
+   */
+  async listarInmueblesPorPropietario(req, res, next) {
+    try {
+      const propietarioId = parseInt(req.params.id, 10);
+      if (!Number.isInteger(propietarioId) || propietarioId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID de propietario invalido'
+        });
+      }
+
+      const filtros = {
+        ...req.query,
+        propietario_id: propietarioId
+      };
+      const opciones = {
+        pagina: parseInt(req.query.pagina ?? req.query.page) || 1,
+        limite: parseInt(req.query.limite ?? req.query.limit) || 20,
+        ordenarPor: req.query.ordenar_por || 'id_inmueble',
+        orden: req.query.orden || 'DESC'
+      };
+
+      const resultado = await inmueblesService.listarInmuebles(filtros, opciones);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Inmuebles del propietario listados exitosamente',
+        data: resultado
+      });
+    } catch (error) {
+      logger.error('Error listando inmuebles por propietario:', error);
       next(error);
     }
   }

@@ -45,6 +45,20 @@ const FIELD_LABELS = {
   descripcion: 'Descripción'
 };
 
+const normalizeEstado = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const isFinalInmuebleState = (value = '') => {
+  const normalized = normalizeEstado(value);
+  return normalized === 'arrendado' || normalized === 'vendido';
+};
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+
 const captureSnapshot = (data = {}) => ({
   titulo: data.titulo,
   direccion: data.direccion,
@@ -64,31 +78,40 @@ const captureSnapshot = (data = {}) => ({
   area_construida: data.area_construida
 });
 
-const mergeInmuebleData = (apiData = {}, clientData = {}, previous = {}) => ({
-  ...previous,
-  ...apiData,
-  titulo: clientData.titulo ?? apiData.titulo ?? previous.titulo,
-  tipo: clientData.tipo ?? apiData.tipo ?? previous.tipo,
-  categoria: clientData.categoria ?? apiData.categoria ?? previous.categoria,
-  operacion: clientData.operacion ?? apiData.operacion ?? previous.operacion,
-  estado:
-    apiData.estado ??
-    (typeof clientData.estado === 'string' ? clientData.estado : previous.estado),
-  descripcion: clientData.descripcion ?? apiData.descripcion ?? previous.descripcion,
-  barrio: clientData.barrio ?? apiData.barrio ?? previous.barrio,
-  pais: clientData.pais ?? apiData.pais ?? previous.pais,
-  precio_venta: clientData.precio_venta ?? apiData.precio_venta ?? previous.precio_venta,
-  precio_arriendo: clientData.precio_arriendo ?? apiData.precio_arriendo ?? previous.precio_arriendo,
-  comodidades: clientData.comodidades ?? apiData.comodidades ?? previous.comodidades ?? [],
-  imagenes: clientData.imagenes ?? apiData.imagenes ?? previous.imagenes ?? [],
-  fichasTecnicas: clientData.fichasTecnicas ?? apiData.fichasTecnicas ?? previous.fichasTecnicas ?? [],
-  propietario: clientData.propietario || apiData.propietario || previous.propietario || null,
-  propietarios: clientData.propietario
-    ? [clientData.propietario]
-    : apiData.propietarios?.length
-      ? apiData.propietarios
-      : previous.propietarios || []
-});
+const mergeInmuebleData = (apiData = {}, clientData = {}, previous = {}) => {
+  const clientHasImagenes = hasOwn(clientData, 'imagenes');
+  const apiHasImagenes = Array.isArray(apiData.imagenes) && apiData.imagenes.length > 0;
+  const imagenes = clientHasImagenes
+    ? (clientData.imagenes || [])
+    : (apiHasImagenes ? apiData.imagenes : (previous.imagenes || []));
+
+  return {
+    ...previous,
+    ...apiData,
+    titulo: clientData.titulo ?? apiData.titulo ?? previous.titulo,
+    tipo: clientData.tipo ?? apiData.tipo ?? previous.tipo,
+    categoria: clientData.categoria ?? apiData.categoria ?? previous.categoria,
+    operacion: clientData.operacion ?? apiData.operacion ?? previous.operacion,
+    estado:
+      apiData.estado ??
+      (typeof clientData.estado === 'string' ? clientData.estado : previous.estado),
+    descripcion: clientData.descripcion ?? apiData.descripcion ?? previous.descripcion,
+    barrio: clientData.barrio ?? apiData.barrio ?? previous.barrio,
+    pais: clientData.pais ?? apiData.pais ?? previous.pais,
+    precio_venta: clientData.precio_venta ?? apiData.precio_venta ?? previous.precio_venta,
+    precio_arriendo: clientData.precio_arriendo ?? apiData.precio_arriendo ?? previous.precio_arriendo,
+    comodidades: clientData.comodidades ?? apiData.comodidades ?? previous.comodidades ?? [],
+    imagenes,
+    image: imagenes[0] || previous.image || apiData.image || '',
+    fichasTecnicas: clientData.fichasTecnicas ?? apiData.fichasTecnicas ?? previous.fichasTecnicas ?? [],
+    propietario: clientData.propietario || apiData.propietario || previous.propietario || null,
+    propietarios: clientData.propietario
+      ? [clientData.propietario]
+      : apiData.propietarios?.length
+        ? apiData.propietarios
+        : previous.propietarios || []
+  };
+};
 
 const buildFichaTecnica = (previous = {}, next = {}, motivo = 'Actualización general') => {
   const cambios = [];
@@ -188,7 +211,6 @@ export const useProperty = () => {
       }));
       return enriched;
     } catch (err) {
-      setError(err.message);
       throw err;
     }
   };
@@ -212,7 +234,6 @@ export const useProperty = () => {
       saveLocalHistory(enriched.id, enriched.fichasTecnicas);
       return enriched;
     } catch (err) {
-      setError(err.message);
       throw err;
     }
   };
@@ -227,7 +248,6 @@ export const useProperty = () => {
         total: Math.max(prev.total - 1, 0)
       }));
     } catch (err) {
-      setError(err.message);
       throw err;
     }
   };

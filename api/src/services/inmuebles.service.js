@@ -519,7 +519,17 @@ class InmueblesService {
         precio_max,
         area_min,
         categoria,
-        estado
+        tipo,
+        operacion,
+        estado,
+        estado_frontend,
+        excluir_estados_frontend,
+        destacado,
+        propietario_id,
+        registro,
+        registro_inmobiliario,
+        busqueda,
+        search
       } = filtros;
 
       const {
@@ -542,8 +552,23 @@ class InmueblesService {
         whereClause[Op.and].push(estadoCondition);
       }
 
-      if (ciudad) whereClause.ciudad = { [Op.iLike]: `%${ciudad}%` };
-      if (categoria) whereClause.categoria = categoria;
+      const categoriaFiltro = categoria || tipo;
+
+      if (ciudad) whereClause.ciudad = { [Op.like]: `%${ciudad}%` };
+      if (categoriaFiltro && String(categoriaFiltro).toLowerCase() !== 'todos') {
+        whereClause.categoria = categoriaFiltro;
+      }
+      if (operacion && String(operacion).toLowerCase() !== 'todas') {
+        whereClause.operacion = operacion;
+      }
+      const registroFiltro = registro_inmobiliario || registro;
+      if (registroFiltro) {
+        whereClause.registro_inmobiliario = { [Op.like]: `%${registroFiltro}%` };
+      }
+      const destacadoFilter = parseBooleanFilter(destacado);
+      if (destacadoFilter !== undefined) {
+        whereClause.destacado = destacadoFilter;
+      }
       if (precio_min || precio_max) {
         whereClause.precio_venta = {};
         if (precio_min) whereClause.precio_venta[Op.gte] = precio_min;
@@ -551,10 +576,39 @@ class InmueblesService {
       }
       if (area_min) whereClause.area_construida = { [Op.gte]: area_min };
 
+      const searchQuery = String(busqueda || search || '').trim();
+      if (searchQuery) {
+        const searchTerms = searchQuery.split(/\s+/).filter(Boolean);
+        const normalizedAnd = whereClause[Op.and] || [];
+
+        searchTerms.forEach((term) => {
+          const likeTerm = `%${term}%`;
+          normalizedAnd.push({
+            [Op.or]: [
+              { direccion: { [Op.like]: likeTerm } },
+              { registro_inmobiliario: { [Op.like]: likeTerm } },
+              { categoria: { [Op.like]: likeTerm } },
+              { titulo: { [Op.like]: likeTerm } },
+              { ciudad: { [Op.like]: likeTerm } },
+              { barrio: { [Op.like]: likeTerm } },
+              { operacion: { [Op.like]: likeTerm } }
+            ]
+          });
+        });
+
+        whereClause[Op.and] = normalizedAnd;
+      }
+
+      const propietarioIdFilter = Number.parseInt(propietario_id, 10);
+      const hasPropietarioFilter = Number.isInteger(propietarioIdFilter) && propietarioIdFilter > 0;
+
       const { count, rows } = await Inmueble.findAndCountAll({
         where: whereClause,
         limit: limite,
         offset,
+        distinct: true,
+        col: 'id_inmueble',
+        subQuery: false,
         order: [[orderColumn, orden]],
         include: [
           {
@@ -827,6 +881,25 @@ class InmueblesService {
           const hasEstadoBoolUpdate = Object.prototype.hasOwnProperty.call(payload, 'estado');
           const currentEstadoFrontend = normalizeEstadoFrontend(inmueble.estado_frontend);
           const nextEstadoFrontend = normalizeEstadoFrontend(payload.estado_frontend);
+          const currentEstadoBool = parseBooleanFilter(inmueble.estado);
+          const nextEstadoBool = parseBooleanFilter(payload.estado);
+
+          if (
+            currentEstadoFrontend === 'vendido' &&
+            (
+              (hasEstadoFrontendUpdate && nextEstadoFrontend && nextEstadoFrontend !== 'vendido') ||
+              (
+                hasEstadoBoolUpdate &&
+                currentEstadoBool !== undefined &&
+                nextEstadoBool !== undefined &&
+                nextEstadoBool !== currentEstadoBool
+              )
+            )
+          ) {
+            const error = new Error('El inmueble esta en estado Vendido y ese estado no se puede modificar.');
+            error.status = 409;
+            throw error;
+          }
 
           if (
             (hasEstadoFrontendUpdate && currentEstadoFrontend === 'arrendado' && nextEstadoFrontend !== 'arrendado') ||

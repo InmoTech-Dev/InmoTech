@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
-import { FaUserPlus, FaSearch, FaCalendar, FaExclamationTriangle } from "react-icons/fa";
-import { Plus, Search, Filter, Eye, Edit, Trash2, Calendar, Clock, AlertCircle, Mail, Home, Phone, ChevronDown } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, AlertCircle, Mail, Home, Phone, ChevronDown } from 'lucide-react';
 import "../../../../shared/styles/globals.css"
 import BuyerForm from "../../components/sales/BuyerForm";
 import BuyerViewModal from "../../components/sales/BuyerView";
 import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 import { useToast } from "../../../../shared/hooks/use-toast";
+import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
 
 const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
     const info = {
@@ -27,6 +27,33 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
         fechaCompra: buyer.fechaCompra || buyer.compra?.fecha_compra || "",
         valorCompra: buyer.valorCompra || buyer.compra?.valor_compra || "",
         tipoCompra: buyer.tipoCompra || buyer.compra?.tipo_compra || "",
+        medioPago:
+            buyer.medioPago ||
+            buyer.medio_pago ||
+            buyer.compra?.medioPago ||
+            buyer.compra?.medio_pago ||
+            buyer.ultimaVenta?.medioPago ||
+            buyer.ultimaVenta?.medio_pago ||
+            buyer.ultima_venta?.medioPago ||
+            buyer.ultima_venta?.medio_pago ||
+            buyer.tipoCompra ||
+            buyer.ultimaVenta?.tipo_compra ||
+            buyer.ultima_venta?.tipo_compra ||
+            buyer.compra?.tipo_compra ||
+            "",
+        medioPagoDescripcion:
+            buyer.medioPagoDescripcion ||
+            buyer.medio_pago_descripcion ||
+            buyer.compra?.medioPagoDescripcion ||
+            buyer.compra?.medio_pago_descripcion ||
+            buyer.compra?.descripcion_pago ||
+            buyer.ultimaVenta?.medioPagoDescripcion ||
+            buyer.ultimaVenta?.medio_pago_descripcion ||
+            buyer.ultimaVenta?.descripcion_pago ||
+            buyer.ultima_venta?.medioPagoDescripcion ||
+            buyer.ultima_venta?.medio_pago_descripcion ||
+            buyer.ultima_venta?.descripcion_pago ||
+            "",
         ciudadResidencia: buyer.ciudadResidencia || buyer.compra?.ciudad_residencia || "",
         direccionAnterior: buyer.direccionAnterior || buyer.compra?.direccion_anterior || "",
         entidadFinanciera: buyer.entidadFinanciera || buyer.compra?.entidad_financiera || "",
@@ -34,7 +61,7 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
         montoFinanciado: buyer.montoFinanciado || buyer.compra?.monto_financiado || "",
         observaciones: buyer.observaciones || buyer.compra?.observaciones || "",
         inmueble: buyer.inmueble || buyer.compra?.inmueble || null,
-        ultimaVenta: buyer.ultima_venta || buyer.compra || null,
+        ultimaVenta: buyer.ultimaVenta || buyer.ultima_venta || buyer.compra || null,
         inmueblesComprados: (buyer.inmueble || buyer.compra?.inmueble) ? [buyer.inmueble || buyer.compra?.inmueble] : [],
         formData: buyer.formData || formData,
         compra: buyer.compra || null,
@@ -42,6 +69,17 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
     };
     return info;
 };
+
+const hasAssociatedSale = (buyer = {}) =>
+    Boolean(
+        buyer.compra ||
+        buyer.ultimaVenta ||
+        buyer.ultima_venta ||
+        buyer.fechaCompra ||
+        buyer.valorCompra ||
+        buyer.inmueble ||
+        (Array.isArray(buyer.inmueblesComprados) && buyer.inmueblesComprados.length > 0)
+    );
 
 const filterRealBuyers = (list = []) => {
     if (!Array.isArray(list)) return [];
@@ -62,20 +100,29 @@ const filterRealBuyers = (list = []) => {
 const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
 
 export function BuyersManagementPage() {
+    const PAGE_SIZE = 5;
+    const statusButtonRefs = useRef({});
     const [compradores, setCompradores] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [formSubmitting, setFormSubmitting] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [statusMessage, setStatusMessage] = useState(null);
+    const [, setStatusMessage] = useState(null);
     const [statusChangingId, setStatusChangingId] = useState(null);
     const [statusMenuId, setStatusMenuId] = useState(null);
+    const [statusMenuPosition, setStatusMenuPosition] = useState(null);
 
     // --- ESTADOS DE ACCION ---
     const [searchTerm, setSearchTerm] = useState("");
+    const [estadoFilter, setEstadoFilter] = useState("todos");
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pagination, setPagination] = useState({
+        total: 0,
+        pagina: 1,
+        limite: PAGE_SIZE,
+        paginas_totales: 1,
+    });
     const [showForm, setShowForm] = useState(false);
     const [buyerToEdit, setBuyerToEdit] = useState(null);
     const [buyerToView, setBuyerToView] = useState(null);
-    const [buyerToDelete, setBuyerToDelete] = useState(null);
     const { toast } = useToast();
 
     const showStatus = (type, message) => {
@@ -84,18 +131,22 @@ export function BuyersManagementPage() {
 
     const normalizeBuyers = (list) =>
         list.map((buyer) => mapApiBuyerToRow(buyer));
-    const fetchBuyers = useCallback(async (query = "") => {
+    const fetchBuyers = useCallback(async (query = "", page = 1) => {
         try {
             setIsLoading(true);
-            const params = query ? { search: query } : {};
-            const buyers = await buyersApiService.getAll(params);
-            setCompradores(normalizeBuyers(filterRealBuyers(buyers)));
+            const params = { page, limit: PAGE_SIZE };
+            if (query) params.search = query;
+            if (estadoFilter !== "todos") params.estado = estadoFilter;
+            const result = await buyersApiService.getAll(params);
+            setCompradores(normalizeBuyers(filterRealBuyers(result.data)));
+            setPagination(result.pagination);
+            setCurrentPage(result.pagination?.pagina || page);
         } catch (error) {
             showStatus("error", error.message || MESSAGES.buyer.loadError);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [estadoFilter]);
 
     useEffect(() => {
         fetchBuyers();
@@ -104,34 +155,53 @@ export function BuyersManagementPage() {
     useEffect(() => {
         const trimmed = searchTerm.trim();
         const timeoutId = setTimeout(() => {
-            fetchBuyers(trimmed);
+            setCurrentPage(1);
+            fetchBuyers(trimmed, 1);
         }, 400);
         return () => clearTimeout(timeoutId);
     }, [searchTerm, fetchBuyers]);
 
-    // --- FILTRO DE BÚSQUEDA ---
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    const filteredBuyers = normalizedSearch
-        ? compradores.filter((buyer) => {
-              const fullName = [
-                  buyer.primerNombre,
-                  buyer.segundoNombre,
-                  buyer.primerApellido,
-                  buyer.segundoApellido,
-              ]
-                  .filter(Boolean)
-                  .join(" ")
-                  .toLowerCase();
+    useEffect(() => {
+        setCurrentPage(1);
+        fetchBuyers(searchTerm.trim(), 1);
+    }, [estadoFilter, fetchBuyers, searchTerm]);
 
-              return (
-                  fullName.includes(normalizedSearch) ||
-                  (buyer.documento || "").toLowerCase().includes(normalizedSearch) ||
-                  (buyer.tipoDocumento || "").toLowerCase().includes(normalizedSearch) ||
-                  (buyer.correo || "").toLowerCase().includes(normalizedSearch) ||
-                  (buyer.telefono || "").toLowerCase().includes(normalizedSearch)
-              );
-          })
-        : compradores;
+    useEffect(() => {
+        if (!statusMenuId) return undefined;
+
+        const handleOutsideClick = (event) => {
+            if (event.target.closest("[data-status-menu]")) return;
+            setStatusMenuId(null);
+            setStatusMenuPosition(null);
+        };
+
+        document.addEventListener("mousedown", handleOutsideClick);
+        return () => document.removeEventListener("mousedown", handleOutsideClick);
+    }, [statusMenuId]);
+
+    useEffect(() => {
+        if (!statusMenuId) return undefined;
+
+        const updatePosition = () => {
+            const button = statusButtonRefs.current[statusMenuId];
+            if (!button) return;
+
+            const rect = button.getBoundingClientRect();
+            setStatusMenuPosition({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
+            });
+        };
+
+        updatePosition();
+        window.addEventListener("resize", updatePosition);
+        window.addEventListener("scroll", updatePosition, true);
+
+        return () => {
+            window.removeEventListener("resize", updatePosition);
+            window.removeEventListener("scroll", updatePosition, true);
+        };
+    }, [statusMenuId]);
 
     // --- HANDLERS GENERALES ---
     const handleCloseForm = () => {
@@ -150,6 +220,14 @@ export function BuyersManagementPage() {
     };
     
     const handleEditClick = (buyer) => {
+        if (hasAssociatedSale(buyer)) {
+            toast({
+                title: "Edición bloqueada",
+                description: "No puedes editar un comprador con una venta asociada.",
+                variant: "destructive",
+            });
+            return;
+        }
         setBuyerToEdit(buyer);
         setShowForm(true);
     };
@@ -164,6 +242,7 @@ export function BuyersManagementPage() {
             const newBuyer = await buyersApiService.create(formData);
             const mapped = mapApiBuyerToRow(newBuyer, formData);
             setCompradores((prev) => [mapped, ...prev.filter((buyer) => buyer.id !== mapped.id)]);
+            fetchBuyers(searchTerm.trim(), 1);
             showStatus("success", MESSAGES.buyer.create);
             toast({
                 title: "Comprador creado",
@@ -205,6 +284,7 @@ export function BuyersManagementPage() {
             setCompradores((prev) =>
                 prev.map((buyer) => (buyer.id === mapped.id ? mapped : buyer))
             );
+            fetchBuyers(searchTerm.trim(), currentPage);
             showStatus("success", MESSAGES.buyer.update);
             toast({
                 title: "Comprador actualizado",
@@ -268,6 +348,7 @@ export function BuyersManagementPage() {
             setCompradores((prev) =>
                 prev.map((c) => (c.id === mapped.id ? { ...c, estado: mapped.estado || nextEstado } : c))
             );
+            fetchBuyers(searchTerm.trim(), currentPage);
             toast({
                 title: "Estado actualizado",
                 description: `El comprador ahora está ${nextEstado}.`,
@@ -283,53 +364,57 @@ export function BuyersManagementPage() {
             });
         } finally {
             setStatusMenuId(null);
+            setStatusMenuPosition(null);
             setStatusChangingId(null);
         }
     };
 
-    // --- HANDLERS ELIMINAR ---
-    const handleDeleteRequest = (buyer) => {
-        setBuyerToDelete(buyer);
-    };
-
-    const handleCancelDelete = () => {
-        setBuyerToDelete(null);
-    };
-
-    const handleConfirmDelete = async () => {
-        if (!buyerToDelete) return;
-        const targetId = buyerToDelete.id || buyerToDelete.personaId;
-        if (!targetId) {
-            showStatus("error", "No se pudo determinar el identificador del comprador a eliminar.");
+    const handleStatusMenuToggle = (buyerId) => {
+        if (statusMenuId === buyerId) {
+            setStatusMenuId(null);
+            setStatusMenuPosition(null);
             return;
         }
 
-        try {
-            setIsDeleting(true);
-            const removedBuyer = await buyersApiService.delete(targetId);
-            const removedId = removedBuyer?.id ?? targetId;
-            setCompradores((prev) =>
-                prev.filter((b) => (b.id ?? b.personaId) !== removedId)
-            );
-            showStatus("success", MESSAGES.buyer.delete);
-            toast({
-                title: "Comprador eliminado",
-                description: MESSAGES.buyer.delete,
-                variant: "default",
+        const button = statusButtonRefs.current[buyerId];
+        if (button) {
+            const rect = button.getBoundingClientRect();
+            setStatusMenuPosition({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2,
             });
-        } catch (error) {
-            const errMsg = error.message || MESSAGES.buyer.deleteError || "No fue posible eliminar al comprador";
-            showStatus("error", errMsg);
-            toast({
-                title: "Error al eliminar",
-                description: errMsg,
-                variant: "destructive",
-            });
-        } finally {
-            setIsDeleting(false);
-            setBuyerToDelete(null);
         }
+
+        setStatusMenuId(buyerId);
     };
+
+    const renderStatusMenu = (buyer) => {
+        if (!buyer || statusMenuId !== buyer.id || !statusMenuPosition) return null;
+
+        return ReactDOM.createPortal(
+            <div
+                data-status-menu
+                className="fixed z-[9999] w-36 -translate-x-1/2 rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-xl"
+                style={{
+                    top: `${statusMenuPosition.top}px`,
+                    left: `${statusMenuPosition.left}px`,
+                }}
+            >
+                {["Activo", "Inactivo"].map((estadoOpcion) => (
+                    <button
+                        key={estadoOpcion}
+                        type="button"
+                        onClick={() => handleToggleEstado(buyer, estadoOpcion)}
+                        className="w-full px-3 py-2 text-center hover:bg-slate-50"
+                    >
+                        {estadoOpcion}
+                    </button>
+                ))}
+            </div>,
+            document.getElementById('modal-root') || document.body
+        );
+    };
+
 
     // --- FUNCIÓN PARA RENDERIZAR EL FORMULARIO COMO MODAL CON PORTAL ---
     const renderFormModal = () => {
@@ -365,114 +450,6 @@ export function BuyersManagementPage() {
         );
     };
 
-    const renderDeleteModal = () => {
-        if (!buyerToDelete) return null;
-
-        const modalContent = (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center">
-            {/* Backdrop estilo formularios */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                onClick={handleCancelDelete}
-            />
-
-            {/* Modal card estilo formularios */}
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ duration: 0.25 }}
-                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="flex items-start justify-between p-6 border-b border-slate-200">
-                <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
-                    <Trash2 className="w-5 h-5 text-red-600" />
-                    </div>
-                    <div>
-                    <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
-                    <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
-                    </div>
-                </div>
-
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleCancelDelete}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                    aria-label="Cerrar"
-                >
-                    <X className="w-5 h-5 text-slate-500" />
-                </motion.button>
-                </div>
-
-                {/* Content */}
-                <div className="p-6">
-                <p className="text-slate-700">
-                    ¿Estás seguro de que deseas eliminar a{" "}
-                    <span className="font-semibold text-slate-900">
-                    {buyerToDelete.primerNombre} {buyerToDelete.primerApellido}
-                    </span>
-                    ? Esta acción no se puede deshacer.
-                </p>
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleCancelDelete}
-                    className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-                >
-                    Cancelar
-                </motion.button>
-
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleConfirmDelete}
-                    disabled={isDeleting}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-                    isDeleting
-                        ? "bg-slate-400 text-slate-200 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700 text-white"
-                    }`}
-                >
-                    {isDeleting ? (
-                    <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Eliminando...
-                    </>
-                    ) : (
-                    <>
-                        <Trash2 className="w-4 h-4" />
-                        Eliminar
-                    </>
-                    )}
-                </motion.button>
-                </div>
-            </motion.div>
-            </div>
-        );
-
-        return ReactDOM.createPortal(
-            modalContent,
-            document.getElementById("modal-root") || document.body
-        );
-        };
-
-// Calcular estadísticas
-    const stats = {
-        total: filteredBuyers.length,
-        activos: filteredBuyers.filter(b => normalizeEstado(b.estado) === 'activo').length,
-        inactivos: filteredBuyers.filter(b => normalizeEstado(b.estado) === 'inactivo').length,
-    };
 
     // --- RENDERIZADO PRINCIPAL ---
     return (
@@ -522,15 +499,19 @@ export function BuyersManagementPage() {
                         </div>
                     </div>
                     
-                    <div className="flex gap-2">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-blue-300"
-                        >
-                            <Filter className="w-4 h-4" />
-                            Filtros
-                        </motion.button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="relative">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                            <select
+                                value={estadoFilter}
+                                onChange={(e) => setEstadoFilter(e.target.value)}
+                                className="pl-10 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="todos">Todos los estados</option>
+                                <option value="activo">Activos</option>
+                                <option value="inactivo">Inactivos</option>
+                            </select>
+                        </div>
                     </div>
                 </motion.div>
 
@@ -567,15 +548,12 @@ export function BuyersManagementPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ) : filteredBuyers.length > 0 ? (
-                                        filteredBuyers.map((c) => {
+                                    ) : compradores.length > 0 ? (
+                                        compradores.map((c) => {
                                             const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
                                             const estado = c.estado || 'Activo';
                                             const estadoNormalized = normalizeEstado(estado);
-                                            const estadoClass =
-                                              estadoNormalized === 'activo'
-                                                ? 'bg-green-100 text-green-700 border-green-200'
-                                                : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                                            const isEditBlocked = hasAssociatedSale(c);
                                             return (
                                             <tr
                                                 key={c.id}
@@ -614,12 +592,17 @@ export function BuyersManagementPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center relative">
-                                                    <div className="flex flex-col items-center justify-center space-y-2">
+                                                    <div className="flex flex-col items-center justify-center space-y-2" data-status-menu>
                                                         <button
                                                             type="button"
-                                                            onClick={() =>
-                                                                setStatusMenuId((prev) => prev === c.id ? null : c.id)
-                                                            }
+                                                            ref={(element) => {
+                                                                if (element) {
+                                                                    statusButtonRefs.current[c.id] = element;
+                                                                } else {
+                                                                    delete statusButtonRefs.current[c.id];
+                                                                }
+                                                            }}
+                                                            onClick={() => handleStatusMenuToggle(c.id)}
                                                             disabled={statusChangingId === c.id}
                                                             className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border transition shadow-sm ${
                                                                 estadoNormalized === "activo"
@@ -633,20 +616,7 @@ export function BuyersManagementPage() {
                                                             <span>{estado}</span>
                                                             <ChevronDown className="w-3 h-3 ml-2" />
                                                         </button>
-                                                        {statusMenuId === c.id && (
-                                                            <div className="absolute left-1/2 -translate-x-1/2 top-12 z-50 bg-white border border-slate-200 rounded-lg shadow-xl text-xs w-36 py-1">
-                                                                {["Activo", "Inactivo"].map((estadoOpcion) => (
-                                                                    <button
-                                                                        key={estadoOpcion}
-                                                                        type="button"
-                                                                        onClick={() => handleToggleEstado(c, estadoOpcion)}
-                                                                        className="w-full text-left px-3 py-2 hover:bg-slate-50"
-                                                                    >
-                                                                        {estadoOpcion}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        )}
+                                                        {renderStatusMenu(c)}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
@@ -664,19 +634,12 @@ export function BuyersManagementPage() {
                                                             whileHover={{ scale: 1.1 }}
                                                             whileTap={{ scale: 0.9 }}
                                                             aria-label="Editar comprador"
-                                                            className="p-2 text-green-600 hover:text-green-800 transition-colors"
+                                                            disabled={isEditBlocked}
+                                                            title={isEditBlocked ? "No puedes editar un comprador con una venta asociada" : "Editar comprador"}
+                                                            className={`p-2 transition-colors ${isEditBlocked ? "text-slate-300 cursor-not-allowed" : "text-green-600 hover:text-green-800"}`}
                                                             onClick={() => handleEditClick(c)}
                                                         >
                                                             <Edit className="w-4 h-4" />
-                                                        </motion.button>
-                                                        <motion.button
-                                                            whileHover={{ scale: 1.1 }}
-                                                            whileTap={{ scale: 0.9 }}
-                                                            aria-label="Eliminar comprador"
-                                                            className="p-2 text-red-600 hover:text-red-800 transition-colors"
-                                                            onClick={() => handleDeleteRequest(c)}
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
                                                         </motion.button>
                                                     </div>
                                                 </td>
@@ -684,10 +647,7 @@ export function BuyersManagementPage() {
                                         )})
                                     ) : (
                                         <tr>
-                                            <td
-                                                colSpan="6"
-                                                className="px-6 py-8 text-center text-slate-500"
-                                            >
+                                            <td colSpan="6" className="px-6 py-8 text-center text-slate-500">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <AlertCircle className="w-8 h-8 text-slate-400" />
                                                     <p>No se encontraron compradores.</p>
@@ -699,13 +659,23 @@ export function BuyersManagementPage() {
                             </table>
                         </div>
                     </div>
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={Math.max(pagination?.paginas_totales || 1, 1)}
+                        hasPrevPage={Boolean(pagination?.has_prev_page)}
+                        hasNextPage={Boolean(pagination?.has_next_page)}
+                        onPageChange={(page) => {
+                            if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
+                            setCurrentPage(page);
+                            fetchBuyers(searchTerm.trim(), page);
+                        }}
+                    />
                 </motion.div>
             </div>
 
             {/* MODALES CON PORTAL - TODOS SE RENDERIZAN EN EL MISMO SITIO */}
             {renderFormModal()}
             {renderViewModal()}
-            {renderDeleteModal()}
         </>
     );
 }

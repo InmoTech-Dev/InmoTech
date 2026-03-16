@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const { VentaAdjunto } = require('../models');
 const cloudinary = require('../config/cloudinary');
 const { uploadSingleAny } = require('./upload.controller');
+const { normalizePagination } = require('../utils/pagination');
 
 class SalesController {
   async createSale(req, res, next) {
@@ -33,6 +34,10 @@ class SalesController {
         filters.estado = req.query.estado;
       }
 
+      if (req.query.tipo_compra) {
+        filters.tipo_compra = req.query.tipo_compra;
+      }
+
       if (req.query.id_persona) {
         filters.id_persona = parseInt(req.query.id_persona);
       }
@@ -42,13 +47,20 @@ class SalesController {
         filters.fecha_fin = req.query.fecha_fin;
       }
 
-      const sales = await saleService.getAllSales(filters);
+      if (req.query.search) {
+        filters.search = req.query.search;
+      }
+
+      filters.pagination = normalizePagination(req.query, { defaultLimit: 5, maxLimit: 5 });
+
+      const result = await saleService.getAllSales(filters);
 
       return res.status(200).json({
         success: true,
         message: 'Ventas obtenidas exitosamente',
-        data: sales,
-        total: sales.length
+        data: result.data,
+        total: result.pagination.total,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

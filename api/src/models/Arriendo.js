@@ -19,12 +19,12 @@ const Arriendo = sequelize.define('Arriendo', {
     field: 'id_inmueble'
   },
   fecha_inicio: {
-    type: DataTypes.DATE,
+    type: DataTypes.DATEONLY,
     allowNull: false,
     field: 'fecha_inicio'
   },
   fecha_finalizacion: {
-    type: DataTypes.DATE,
+    type: DataTypes.DATEONLY,
     allowNull: false,
     field: 'fecha_finalizacion'
   },

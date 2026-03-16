@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { FaImage, FaPhoneAlt, FaShieldAlt, FaTimes } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
+import { API_CONFIG } from "../../../../shared/services/api.config";
 
 /* ---------- UI helpers (mismo estilo compacto) ---------- */
 function Field({ label, value, className = "" }) {
@@ -61,6 +62,57 @@ function formatDateCompact(value) {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("es-CO");
 }
 
+function formatDocument(tipo, numero) {
+  const safeTipo = String(tipo || "").trim();
+  const safeNumero = String(numero || "").trim();
+
+  if (safeTipo && safeNumero) return `${safeTipo} - ${safeNumero}`;
+  if (safeNumero) return safeNumero;
+  if (safeTipo) return safeTipo;
+  return "-";
+}
+
+function extractImageSource(item) {
+  if (!item) return "";
+  if (typeof item === "string") return item.trim();
+  if (typeof item !== "object") return "";
+
+  const candidates = [
+    item.url,
+    item.secure_url,
+    item.src,
+    item.source,
+    item.link,
+    item.path,
+    item.fileUrl,
+    item.ruta_archivo,
+    item.imagen_url,
+    item.imagenUrl,
+    item.image,
+    item.foto,
+    item.foto_url,
+  ];
+
+  const match = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+  return match ? match.trim() : "";
+}
+
+function resolveImageUrl(value) {
+  const src = extractImageSource(value);
+  if (!src) return "";
+  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
+    return src;
+  }
+
+  const normalizedPath = src.startsWith("/") ? src : `/${src}`;
+  if (normalizedPath.startsWith("/uploads/")) {
+    const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api\/v\d+$/i, "");
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  return normalizedPath;
+}
+
 export default function ViewTenantModal({ tenant, onClose }) {
   const fullName = [tenant?.primerNombre, tenant?.segundoNombre, tenant?.primerApellido, tenant?.segundoApellido]
     .filter(Boolean)
@@ -94,6 +146,47 @@ export default function ViewTenantModal({ tenant, onClose }) {
           departamento: tenant?.departamento || "",
         }
       : null);
+
+  const propertyName =
+    rawInmueble?.nombre ||
+    rawInmueble?.titulo ||
+    rawInmueble?.nombre_inmueble ||
+    tenant?.inmueble?.nombre ||
+    tenant?.inmueble?.titulo ||
+    derivedInmueble?.nombre ||
+    tenant?.nombreInmueble ||
+    "Inmueble arrendado";
+
+  const imagenInmueble = useMemo(
+    () => {
+      const imageList = Array.isArray(rawInmueble?.imagenes)
+        ? rawInmueble.imagenes
+        : Array.isArray(derivedInmueble?.imagenes)
+          ? derivedInmueble.imagenes
+          : [];
+
+      const mainImage =
+        imageList.find((img) => Boolean(img?.es_principal)) ||
+        imageList[0] ||
+        rawInmueble?.imagen_principal ||
+        rawInmueble?.imagen_portada ||
+        rawInmueble?.portada ||
+        rawInmueble?.imagen_destacada ||
+        derivedInmueble?.image ||
+        derivedInmueble?.imagen_principal ||
+        derivedInmueble?.imagen_portada ||
+        derivedInmueble?.portada ||
+        tenant?.imagenInmueble ||
+        tenant?.imagen_principal ||
+        tenant?.imagenPortada ||
+        tenant?.foto ||
+        tenant?.foto_url ||
+        "";
+
+      return resolveImageUrl(mainImage);
+    },
+    [derivedInmueble, rawInmueble, tenant?.foto, tenant?.foto_url, tenant?.imagenInmueble, tenant?.imagenPortada, tenant?.imagen_principal]
+  );
 
   const hasLeaseInfo =
     tenant?.fechaInicio ||
@@ -193,7 +286,7 @@ export default function ViewTenantModal({ tenant, onClose }) {
             </div>
 
             {/* Body */}
-            <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
+            <div className="px-4 sm:px-5 py-4 space-y-3">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {/* Información personal (organizada) */}
                 <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -206,7 +299,7 @@ export default function ViewTenantModal({ tenant, onClose }) {
                     <Field label="Nombre" value={fullName || "-"} className="sm:col-span-2" />
                     <Field
                       label="Documento"
-                      value={(tenant?.tipoDocumento ? `${tenant.tipoDocumento} - ` : "") + (tenant?.documento || "-")}
+                      value={formatDocument(tenant?.tipoDocumento, tenant?.documento)}
                     />
                     <Field
                       label="Teléfono"
@@ -311,14 +404,17 @@ export default function ViewTenantModal({ tenant, onClose }) {
                   </div>
 
                   {derivedInmueble ? (
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <div className="w-full sm:w-40 h-28 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-gray-400 shrink-0">
-                        <FaImage size={22} />
+                    <div className="grid grid-cols-1 sm:grid-cols-[144px_minmax(0,1fr)] gap-4">
+                      <div className="h-28 w-full rounded-xl border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center text-gray-400">
+                        {imagenInmueble ? (
+                          <img src={imagenInmueble} alt="Inmueble arrendado" className="w-full h-full object-cover" />
+                        ) : (
+                          <FaImage size={22} />
+                        )}
                       </div>
 
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0">
                         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                          <Field label="Nombre" value={derivedInmueble.nombre || "Inmueble"} className="col-span-2" />
                           <Field
                             label="Registro"
                             value={
@@ -339,6 +435,8 @@ export default function ViewTenantModal({ tenant, onClose }) {
                           />
                         </div>
                       </div>
+
+                      <Field label="Nombre" value={propertyName} className="sm:col-span-2" />
                     </div>
                   ) : (
                     <div className="text-center py-8">

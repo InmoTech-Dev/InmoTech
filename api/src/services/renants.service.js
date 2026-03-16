@@ -1,8 +1,8 @@
-const { Op } = require('sequelize');
-const { Renant, Persona, Arriendo, Inmueble, Lease, Rol, PersonasRol } = require('../models');
+const { Op, Sequelize } = require('sequelize');
+const { Renant, Persona, Arriendo, Inmueble, Lease } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
-const invitacionService = require('./invitacion.service');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 const PERSONA_ATTRS = [
   'id_persona',
@@ -34,6 +34,95 @@ const RENANT_ATTRS = [
 ];
 
 class RenantService {
+  getStatusSortWeight(value) {
+    const normalized = this.normalizeSearchValue(value);
+    const weights = {
+      activo: 0,
+      'al dia': 0,
+      moroso: 1,
+      proceso: 2,
+      inactivo: 3
+    };
+
+    return weights[normalized] ?? 9;
+  }
+
+  normalizeStatusFilter(value) {
+    const normalized = this.normalizeSearchValue(value);
+    const map = {
+      activo: 'Activo',
+      inactivo: 'Inactivo',
+      moroso: 'Moroso',
+      proceso: 'Proceso'
+    };
+
+    return map[normalized] || value;
+  }
+
+  normalizeSearchValue(value) {
+    return String(value ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  buildSearchConditions(rawValue) {
+    const rawSearch = String(rawValue || '').trim();
+    if (!rawSearch) return [];
+
+    const terms = rawSearch.split(/\s+/).filter(Boolean);
+
+    return terms.map((term) => {
+      const search = `%${term}%`;
+
+      return {
+        [Op.or]: [
+          { registro_arrendatario: { [Op.like]: search } },
+          { tipo_arrendatario: { [Op.like]: search } },
+          { ciudad_residencia: { [Op.like]: search } },
+          { direccion_anterior: { [Op.like]: search } },
+          { contacto_emergencia_nombre: { [Op.like]: search } },
+          { contacto_emergencia_telefono: { [Op.like]: search } },
+          { contacto_emergencia_parentesco: { [Op.like]: search } },
+          { observaciones: { [Op.like]: search } },
+          { '$persona.nombre_completo$': { [Op.like]: search } },
+          { '$persona.apellido_completo$': { [Op.like]: search } },
+          { '$persona.numero_documento$': { [Op.like]: search } },
+          { '$persona.correo$': { [Op.like]: search } },
+          { '$persona.telefono$': { [Op.like]: search } }
+        ]
+      };
+    });
+  }
+
+  matchesSearch(renantInstance, rawSearch) {
+    const search = this.normalizeSearchValue(rawSearch);
+    if (!search) return true;
+
+    const persona = renantInstance?.persona || renantInstance?.renant?.persona || {};
+    const renant = renantInstance?.renant || renantInstance || {};
+
+    const fields = [
+      renant.registro_arrendatario,
+      renant.tipo_arrendatario,
+      renant.ciudad_residencia,
+      renant.direccion_anterior,
+      renant.contacto_emergencia_nombre,
+      renant.contacto_emergencia_telefono,
+      renant.contacto_emergencia_parentesco,
+      renant.observaciones,
+      persona.nombre_completo,
+      persona.apellido_completo,
+      `${persona.nombre_completo || ''} ${persona.apellido_completo || ''}`.trim(),
+      persona.numero_documento,
+      persona.correo,
+      persona.telefono
+    ];
+
+    return fields.some((field) => this.normalizeSearchValue(field).includes(search));
+  }
+
   async generateRenantCode(transaction) {
     const total = await Renant.count({ transaction });
     return `ARREN-${String(total + 1).padStart(4, '0')}`;
@@ -290,16 +379,78 @@ class RenantService {
 
   async getAllRenants(filters = {}) {
     const renantWhere = {};
-    if (filters.status) renantWhere.estado = filters.status;
+    const statusFilter = this.normalizeStatusFilter(filters.status || filters.estado);
+    if (statusFilter) renantWhere.estado = statusFilter;
     if (filters.tipo_arrendatario) renantWhere.tipo_arrendatario = filters.tipo_arrendatario;
 
-    const renants = await Renant.findAll({
-      where: Object.keys(renantWhere).length ? renantWhere : undefined,
-      attributes: RENANT_ATTRS,
-      include: [{ association: 'persona', attributes: PERSONA_ATTRS }]
-    });
+    const personaWhere = {};
+    if (filters.tipo_documento) personaWhere.tipo_documento = filters.tipo_documento;
+    if (filters.numero_documento) personaWhere.numero_documento = filters.numero_documento;
+    const rawSearch = String(filters.search || filters.nombre || '').trim();
 
-    return renants.map((r) => this.normalizeRenant(r));
+    const associationFilter = this.normalizeSearchValue(filters.asociacion);
+    const leaseInclude = {
+      association: 'arrendamientosLegacy',
+      attributes: ['id_arrendamiento'],
+      required: associationFilter === 'con-inmueble'
+    };
+
+    const baseWhere = Object.keys(renantWhere).length ? { ...renantWhere } : {};
+
+    const searchConditions = this.buildSearchConditions(rawSearch);
+    if (searchConditions.length) {
+      baseWhere[Op.and] = [...(baseWhere[Op.and] || []), ...searchConditions];
+    }
+
+    if (associationFilter === 'sin-inmueble') {
+      baseWhere['$arrendamientosLegacy.id_arrendamiento$'] = null;
+    }
+
+    const pagination = {
+      enabled: Boolean(filters.pagination?.enabled),
+      page: filters.pagination?.page || 1,
+      limit: filters.pagination?.limit || null,
+      offset: filters.pagination?.offset || 0
+    };
+
+    const baseQuery = {
+      where: Object.keys(baseWhere).length ? baseWhere : undefined,
+      attributes: RENANT_ATTRS,
+      include: [
+        {
+          association: 'persona',
+          attributes: PERSONA_ATTRS,
+          where: Object.keys(personaWhere).length ? personaWhere : undefined,
+          required: true
+        },
+        leaseInclude
+      ],
+      distinct: true,
+      subQuery: false,
+      col: 'id_arrendatario',
+      order: [
+        [Sequelize.literal("CASE WHEN [Renant].[estado] = 'Activo' THEN 0 ELSE 1 END"), 'ASC'],
+        ['fecha_creacion', 'DESC'],
+        ['id_arrendatario', 'DESC']
+      ]
+    };
+
+    if (pagination.enabled) {
+      baseQuery.limit = pagination.limit;
+      baseQuery.offset = pagination.offset;
+    }
+
+    const { count, rows } = await Renant.findAndCountAll(baseQuery);
+
+    return {
+      data: rows.map((r) => this.normalizeRenant(r)),
+      pagination: buildPaginationMeta({
+        total: count,
+        page: pagination.page,
+        limit: pagination.limit,
+        enabled: pagination.enabled
+      })
+    };
   }
 
   async updateRenant(id, updateData) {
@@ -371,33 +522,17 @@ class RenantService {
   }
 
   async searchRenants(criteria = {}) {
-    const personaWhere = {};
-    const renantWhere = {};
-
-    if (criteria.tipo_documento) personaWhere.tipo_documento = criteria.tipo_documento;
-    if (criteria.numero_documento) personaWhere.numero_documento = criteria.numero_documento;
-    if (criteria.nombre) {
-      personaWhere[Op.or] = [
-        { nombre_completo: { [Op.like]: `%${criteria.nombre}%` } },
-        { apellido_completo: { [Op.like]: `%${criteria.nombre}%` } }
-      ];
-    }
-    if (criteria.status) renantWhere.estado = criteria.status;
-    if (criteria.tipo_arrendatario) renantWhere.tipo_arrendatario = criteria.tipo_arrendatario;
-
-    const renants = await Renant.findAll({
-      where: Object.keys(renantWhere).length ? renantWhere : undefined,
-      attributes: RENANT_ATTRS,
-      include: [
-        {
-          association: 'persona',
-          attributes: PERSONA_ATTRS,
-          where: Object.keys(personaWhere).length ? personaWhere : undefined
-        }
-      ]
+    const result = await this.getAllRenants({
+      tipo_documento: criteria.tipo_documento,
+      numero_documento: criteria.numero_documento,
+      nombre: criteria.nombre,
+      status: criteria.status || criteria.estado,
+      estado: criteria.estado || criteria.status,
+      tipo_arrendatario: criteria.tipo_arrendatario,
+      search: criteria.search || criteria.criterio || criteria.nombre
     });
 
-    return renants.map((r) => this.normalizeRenant(r));
+    return result.data;
   }
 }
 

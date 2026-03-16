@@ -1,5 +1,6 @@
 const leaseService = require('../services/leases.service');
 const logger = require('../utils/logger');
+const { normalizePagination } = require('../utils/pagination');
 
 class LeasesController {
   async createLease(req, res, next) {
@@ -19,12 +20,14 @@ class LeasesController {
   async getAllLeases(req, res, next) {
     try {
       const filters = { ...req.query };
-      const leases = await leaseService.getAllLeases(filters);
+      filters.pagination = normalizePagination(req.query, { defaultLimit: 5, maxLimit: 5 });
+      const result = await leaseService.getAllLeases(filters);
       return res.status(200).json({
         success: true,
         message: 'Arrendamientos obtenidos exitosamente',
-        data: leases,
-        total: leases.length
+        data: result.data,
+        total: result.pagination.total,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);
@@ -107,14 +110,34 @@ class LeasesController {
     }
   }
 
+  async adjustRent(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { fecha_reajuste, valor_mensual, comentario } = req.validatedData || req.body;
+      const userId = req.user?.id || req.user?.id_persona || null;
+      const lease = await leaseService.adjustRent(
+        parseInt(id, 10),
+        { fecha_reajuste, valor_mensual, comentario },
+        userId
+      );
+      return res.status(200).json({
+        success: true,
+        message: 'Reajuste de canon aplicado exitosamente',
+        data: lease
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async registerPreNotice(req, res, next) {
     try {
       const { id } = req.params;
-      const { comentario, url_soporte } = req.validatedData || req.body;
+      const { comentario, url_soporte, decision } = req.validatedData || req.body;
       const userId = req.user?.id || req.user?.id_persona || null;
       const lease = await leaseService.registerPreNotice(
         parseInt(id, 10),
-        { comentario, url_soporte },
+        { comentario, url_soporte, decision },
         userId
       );
       return res.status(200).json({

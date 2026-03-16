@@ -1,12 +1,25 @@
-import React, { useMemo, useState } from "react";
+/*  */import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
-import { X, Paperclip, UploadCloud, Wallet, CalendarDays, CheckCircle2, Loader2, ChevronDown } from "lucide-react";
+import {
+  X,
+  Paperclip,
+  UploadCloud,
+  Wallet,
+  CalendarDays,
+  CheckCircle2,
+  Loader2,
+  ChevronDown,
+} from "lucide-react";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 
 const formatCurrency = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return "$0";
-  return n.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+  return n.toLocaleString("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  });
 };
 
 export default function LeaseStatusModal({
@@ -23,17 +36,29 @@ export default function LeaseStatusModal({
 }) {
   if (!statusRent) return null;
 
+  const isFinalizedLease = statusRent.estado === "Finalizado";
+
+  const [activePage, setActivePage] = useState(isFinalizedLease ? "payments" : "tracking");
   const [paymentsTab, setPaymentsTab] = useState("current");
   const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
   const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
 
   const paymentGroups = useMemo(() => {
-    const sortedPayments = [...payments].sort((a, b) => new Date(a.fecha_cobro) - new Date(b.fecha_cobro));
-    const paidPayments = sortedPayments.filter((payment) => payment.comprobante || payment.estado === "Pagado");
-    const unpaidPayments = sortedPayments.filter((payment) => !payment.comprobante && payment.estado !== "Pagado");
+    const sortedPayments = [...payments].sort(
+      (a, b) => new Date(a.fecha_cobro) - new Date(b.fecha_cobro)
+    );
+    const paidPayments = sortedPayments.filter(
+      (payment) => payment.comprobante || payment.estado === "Pagado"
+    );
+    const unpaidPayments = sortedPayments.filter(
+      (payment) => !payment.comprobante && payment.estado !== "Pagado"
+    );
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(today.getDate()).padStart(2, "0")}`;
     const overduePayment =
       unpaidPayments.find((payment) => String(payment.fecha_cobro || "").slice(0, 10) <= todayStr) ||
       null;
@@ -48,6 +73,19 @@ export default function LeaseStatusModal({
       paidPayments,
     };
   }, [payments]);
+
+  const hasPendingPayments = useMemo(
+    () => payments.some((payment) => payment?.estado !== "Pagado" && !payment?.comprobante),
+    [payments]
+  );
+
+  const canFinalizeLease = !hasPendingPayments;
+
+  useEffect(() => {
+    if (isFinalizedLease) {
+      setActivePage("payments");
+    }
+  }, [isFinalizedLease]);
 
   const existingReceipts = useMemo(
     () =>
@@ -108,6 +146,11 @@ export default function LeaseStatusModal({
     };
 
     const hasReceipt = Boolean(payment?.comprobante);
+    const receiptId = payment?.comprobante?.id_comprobante || payment?.id_cobro || payment?.id;
+    const receiptUrl = payment?.comprobante?.url_comprobante || "";
+    const isPdfReceipt =
+      receiptUrl.toLowerCase().includes(".pdf") || receiptUrl.toLowerCase().includes("application/pdf");
+    const imageIndex = imageReceipts.findIndex((item) => item.id === receiptId);
     const [expanded, setExpanded] = useState(false);
     const [file, setFile] = useState(null);
     const [form, setForm] = useState({
@@ -117,7 +160,6 @@ export default function LeaseStatusModal({
       fecha_pago: payment?.comprobante?.fecha_pago || payment?.fecha_cobro || "",
     });
 
-    // Sincroniza el formulario cuando llega un comprobante desde el backend
     React.useEffect(() => {
       if (!hasReceipt) return;
       setForm({
@@ -169,102 +211,111 @@ export default function LeaseStatusModal({
               <span className="flex items-center gap-2 text-xs text-green-700">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Comprobante cargado</span>
-                {payment.comprobante.url_comprobante && (
-                  <a
-                    href={payment.comprobante.url_comprobante}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-700 underline hover:text-blue-800"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Ver
-                  </a>
-                )}
               </span>
             ) : (
               <span className="text-xs text-amber-700">Sin comprobante</span>
             )}
           </div>
-          <ChevronDown className={`w-4 h-4 mt-1 shrink-0 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <ChevronDown
+            className={`w-4 h-4 mt-1 shrink-0 text-slate-500 transition-transform ${
+              expanded ? "rotate-180" : ""
+            }`}
+          />
         </button>
 
         {expanded && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          <div className="flex flex-col">
-            <label className="text-xs font-semibold text-slate-600">Entidad bancaria *</label>
-            <input
-              name="entidad_bancaria"
-              value={form.entidad_bancaria}
-              onChange={handleChange}
-              readOnly={hasReceipt}
-              className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-              placeholder="Ej: Bancolombia"
-            />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-xs font-semibold text-slate-600">Referencia *</label>
-            <input
-              name="referencia_bancaria"
-              value={form.referencia_bancaria}
-              onChange={handleChange}
-              readOnly={hasReceipt}
-              className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-              placeholder="No. de transacción"
-            />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-xs font-semibold text-slate-600">Monto pagado *</label>
-            <input
-              name="monto_pagado"
-              value={form.monto_pagado}
-              onChange={handleChange}
-              readOnly={hasReceipt}
-              className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-              placeholder="Ej: 1500000"
-            />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-xs font-semibold text-slate-600">Fecha de pago *</label>
-            <input
-              type="date"
-              name="fecha_pago"
-              value={form.fecha_pago}
-              onChange={handleChange}
-              readOnly={hasReceipt}
-              className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-            />
-          </div>
-          {!hasReceipt && (
-            <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <Paperclip className="w-4 h-4" /> Comprobante (imagen/pdf) *
-              </label>
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-slate-600">Entidad bancaria *</label>
               <input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="text-xs"
+                name="entidad_bancaria"
+                value={form.entidad_bancaria}
+                onChange={handleChange}
+                readOnly={hasReceipt}
+                className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                placeholder="Ej: Bancolombia"
               />
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={disabled}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {uploadingPaymentId === payment.id_cobro ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Subiendo...
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="w-4 h-4" />
-                    Subir comprobante
-                  </>
-                )}
-              </button>
             </div>
-          )}
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-slate-600">Referencia *</label>
+              <input
+                name="referencia_bancaria"
+                value={form.referencia_bancaria}
+                onChange={handleChange}
+                readOnly={hasReceipt}
+                className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                placeholder="No. documento"
+              />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-slate-600">Monto pagado *</label>
+              <input
+                name="monto_pagado"
+                value={form.monto_pagado}
+                readOnly
+                className="mt-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
+                placeholder="Ej: 1500000"
+              />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs font-semibold text-slate-600">Fecha de pago *</label>
+              <input
+                type="date"
+                name="fecha_pago"
+                value={form.fecha_pago}
+                onChange={handleChange}
+                readOnly={hasReceipt}
+                className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+              />
+            </div>
+            {hasReceipt && receiptUrl && (
+              <div className="sm:col-span-2 flex justify-end pt-1">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                  onClick={() => {
+                    if (isPdfReceipt || imageIndex === -1) {
+                      openPdfViewer(receiptUrl, `Comprobante ${payment.fecha_cobro || payment.id_cobro || ""}`);
+                      return;
+                    }
+                    openImageViewer(imageIndex);
+                  }}
+                >
+                  Ver comprobante
+                </button>
+              </div>
+            )}
+            {!hasReceipt && (
+              <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Paperclip className="w-4 h-4" /> Comprobante (imagen/pdf) *
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={disabled}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploadingPaymentId === payment.id_cobro ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Subiendo...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-4 h-4" />
+                      Subir comprobante
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -282,9 +333,8 @@ export default function LeaseStatusModal({
         className="w-full sm:max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* HEADER STICKY */}
         <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
-          <div className="px-4 sm:px-5 py-3.5 flex items-start justify-between gap-3">
+          <div className="px-4 sm:px-5 py-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
                 Seguimiento de Arriendo
@@ -303,171 +353,186 @@ export default function LeaseStatusModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-        </div>
 
-        {/* BODY SCROLL */}
-        <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
-          {/* RESUMEN */}
-          <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Resumen</h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-              <Field
-                label="Arrendatario"
-                value={`${statusRent.primerNombreArrendatario || ""} ${statusRent.primerApellidoArrendatario || ""}`.trim() || "-"}
-                className="sm:col-span-2"
-              />
-              <Field
-                label="Inmueble"
-                value={`${statusRent.tipoInmueble || "-"}${statusRent.registroInmobiliario ? ` · ${statusRent.registroInmobiliario}` : ""}`}
-                className="sm:col-span-2"
-              />
-              <Field label="Inicio" value={statusRent.fechaInicio || "-"} />
-              <Field label="Fin" value={statusRent.fechaFinal || "-"} />
-            </div>
-          </section>
-
-          {/* FORM ESTADO */}
-          <section className="rounded-2xl border border-gray-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Cambio de estado</h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-gray-500">
-                  Estado del arriendo
-                </label>
-                <select
-                  className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                  value={statusRent.nuevoEstado}
-                  onChange={(e) => onChangeEstado(e.target.value)}
+          <div className="px-4 sm:px-5 pb-2.5">
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              {!isFinalizedLease && (
+                <button
+                  type="button"
+                  onClick={() => setActivePage("tracking")}
+                  className={`px-3 py-2 text-sm rounded-lg transition ${
+                    activePage === "tracking"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
                 >
-                  {estados.map((estado) => (
-                    <option key={estado} value={estado}>
-                      {estado}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-gray-500">
-                  Descripción (opcional)
-                </label>
-                <textarea
-                  className="mt-1 w-full min-h-[100px] rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder:text-gray-400"
-                  placeholder="Ej: Pago recibido, se cambia a 'Al día'"
-                  value={statusRent.comentario}
-                  onChange={(e) => onChangeComentario(e.target.value)}
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* PAGOS Y COMPROBANTES */}
-          <section className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">Cobros y comprobantes</h3>
-              {loadingPayments && (
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Cargando cobros...
-                </div>
+                  Seguimiento
+                </button>
               )}
+              <button
+                type="button"
+                onClick={() => setActivePage("payments")}
+                className={`px-3 py-2 text-sm rounded-lg transition ${
+                  activePage === "payments"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Pagos
+              </button>
             </div>
-
-            {(!payments || payments.length === 0) && !loadingPayments && (
-              <p className="text-sm text-slate-500">No hay cobros generados para este arriendo.</p>
-            )}
-
-            {payments.length > 0 && (
-              <>
-                <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentsTab("current")}
-                    className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "current" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-                  >
-                    Pago del mes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentsTab("history")}
-                    className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "history" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-                  >
-                    Pagos realizados
-                  </button>
-                </div>
-
-                {paymentsTab === "current" && (
-                  <div className="space-y-3">
-                    {paymentGroups.currentPayment.length > 0 ? (
-                      paymentGroups.currentPayment.map((payment) => (
-                        <ReceiptRow key={payment.id_cobro || payment.id} payment={payment} />
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-500">No hay una cuota pendiente para este mes.</p>
-                    )}
-                  </div>
-                )}
-
-                {paymentsTab === "history" && (
-                  <div className="space-y-3">
-                    {paymentGroups.paidPayments.length > 0 ? (
-                      paymentGroups.paidPayments.map((payment) => (
-                        <ReceiptRow key={payment.id_cobro || payment.id} payment={payment} />
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-500">Aún no hay pagos registrados.</p>
-                    )}
-                  </div>
-                )}
-
-                {paymentsTab === "history" && existingReceipts.length > 0 && (
-                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="mb-3 text-sm font-semibold text-slate-900">Comprobantes registrados</p>
-                    <div className="space-y-2">
-                      {existingReceipts.map((receipt) => {
-                        const isPdf =
-                          (receipt.url || "").toLowerCase().includes(".pdf") ||
-                          (receipt.url || "").toLowerCase().includes("application/pdf");
-                        const imageIndex = imageReceipts.findIndex((item) => item.id === receipt.id);
-
-                        return (
-                          <div
-                            key={receipt.id}
-                            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-slate-900">{receipt.name}</p>
-                              <p className="text-xs text-slate-500">
-                                Cobro: {receipt.fechaCobro || "-"} · Pago: {receipt.fechaPago || "-"} · {formatCurrency(receipt.monto)}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-                              onClick={() => {
-                                if (isPdf || imageIndex === -1) {
-                                  openPdfViewer(receipt.url, receipt.name);
-                                  return;
-                                }
-                                openImageViewer(imageIndex);
-                              }}
-                            >
-                              Ver comprobante
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
+          </div>
         </div>
 
-        {/* FOOTER STICKY */}
-        <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-5 py-3 flex justify-end gap-3">
+        <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-3 space-y-3">
+          {activePage === "tracking" && !isFinalizedLease && (
+            <>
+              <section className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Resumen</h3>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-start">
+                  <div className="space-y-1.5">
+                    <Field
+                      label="Arrendatario"
+                      value={`${statusRent.primerNombreArrendatario || ""} ${statusRent.primerApellidoArrendatario || ""}`.trim() || "-"}
+                    />
+                    <Field
+                      label="Inmueble"
+                      value={`${statusRent.tipoInmueble || "-"}${
+                        statusRent.registroInmobiliario ? ` - ${statusRent.registroInmobiliario}` : ""
+                      }`}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-1">
+                    <Field label="Inicio" value={statusRent.fechaInicio || "-"} />
+                    <Field label="Fin" value={statusRent.fechaFinal || "-"} />
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-gray-200 bg-white p-3">
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Cambio de estado</h3>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500">
+                      Estado del arriendo
+                    </label>
+                    <select
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      value={statusRent.nuevoEstado}
+                      onChange={(e) => onChangeEstado(e.target.value)}
+                    >
+                      {estados.map((estado) => (
+                        <option
+                          key={estado}
+                          value={estado}
+                          disabled={estado === "Finalizado" && !canFinalizeLease}
+                        >
+                          {estado}
+                        </option>
+                      ))}
+                    </select>
+                    {!canFinalizeLease && (
+                      <p className="mt-1 text-xs text-red-500">
+                        Solo puedes cambiar a Finalizado cuando todos los pagos esten realizados.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500">
+                      Descripcion (opcional)
+                    </label>
+                    <textarea
+                      rows={3}
+                      className="mt-1 w-full min-h-[72px] rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder:text-gray-400"
+                      placeholder="Ej: Pago recibido, se cambia a 'Al dia'"
+                      value={statusRent.comentario}
+                      onChange={(e) => onChangeComentario(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+          {activePage === "payments" && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-3">
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="text-sm font-semibold text-gray-900">Cobros y comprobantes</h3>
+                {loadingPayments && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Cargando cobros...
+                  </div>
+                )}
+              </div>
+
+              {(!payments || payments.length === 0) && !loadingPayments && (
+                <p className="text-sm text-slate-500">No hay cobros generados para este arriendo.</p>
+              )}
+
+              {payments.length > 0 && (
+                <>
+                  <div className="mb-3 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentsTab("current")}
+                      className={`px-3 py-2 text-sm rounded-lg transition ${
+                        paymentsTab === "current"
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      Pago del mes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentsTab("history")}
+                      className={`px-3 py-2 text-sm rounded-lg transition ${
+                        paymentsTab === "history"
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      Pagos realizados
+                    </button>
+                  </div>
+
+                  {paymentsTab === "current" && (
+                    <div className="space-y-3">
+                      {paymentGroups.currentPayment.length > 0 ? (
+                        paymentGroups.currentPayment.map((payment) => (
+                          <ReceiptRow key={payment.id_cobro || payment.id} payment={payment} />
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          No hay una cuota pendiente para este mes.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {paymentsTab === "history" && (
+                    <div className="space-y-3">
+                      {paymentGroups.paidPayments.length > 0 ? (
+                        paymentGroups.paidPayments.map((payment) => (
+                          <ReceiptRow key={payment.id_cobro || payment.id} payment={payment} />
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-500">Aun no hay pagos registrados.</p>
+                      )}
+                    </div>
+                  )}
+
+                </>
+              )}
+            </section>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-5 py-2.5 flex justify-end gap-3">
           <button
             className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition text-sm"
             onClick={onClose}
@@ -475,13 +540,26 @@ export default function LeaseStatusModal({
           >
             Cancelar
           </button>
-          <button
-            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm transition text-sm"
-            onClick={onSave}
-            type="button"
-          >
-            Guardar estado
-          </button>
+          {!isFinalizedLease && (
+            <button
+              className={`px-5 py-2 rounded-xl text-white font-semibold shadow-sm transition text-sm ${
+                statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease
+                  ? "bg-blue-300 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
+              onClick={onSave}
+              disabled={statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease}
+              title={
+                statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease
+                  ? "Debes completar todos los pagos antes de finalizar el arriendo."
+                  : undefined
+              }
+              aria-disabled={statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease}
+              type="button"
+            >
+              Guardar
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -515,7 +593,7 @@ export default function LeaseStatusModal({
                   className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
                   onClick={() => window.open(pdfViewer.url, "_blank", "noopener")}
                 >
-                  Abrir en nueva pestaña
+                  Abrir en nueva pestana
                 </button>
                 <button
                   className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"

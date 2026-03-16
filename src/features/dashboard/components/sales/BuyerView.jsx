@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
-import { FaImage, FaMapMarkerAlt, FaMoneyBillWave, FaTimes } from "react-icons/fa";
+import { FaImage, FaMapMarkerAlt, FaTimes } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
+import { API_CONFIG } from "../../../../shared/services/api.config";
 
 /* ---------- UI helpers (mismo estilo compacto) ---------- */
 function Field({ label, value, className = "" }) {
@@ -58,6 +59,46 @@ function formatDateCompact(value) {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("es-CO");
 }
 
+function extractImageSource(item) {
+  if (!item) return "";
+  if (typeof item === "string") return item.trim();
+  if (typeof item !== "object") return "";
+
+  const candidates = [
+    item.url,
+    item.src,
+    item.source,
+    item.link,
+    item.path,
+    item.fileUrl,
+    item.ruta_archivo,
+    item.imagen_url,
+    item.imagenUrl,
+    item.image,
+    item.foto,
+    item.foto_url,
+  ];
+
+  const match = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+  return match ? match.trim() : "";
+}
+
+function resolveImageUrl(value) {
+  const src = extractImageSource(value);
+  if (!src) return "";
+  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
+    return src;
+  }
+
+  const normalizedPath = src.startsWith("/") ? src : `/${src}`;
+  if (normalizedPath.startsWith("/uploads/")) {
+    const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api\/v\d+$/i, "");
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  return normalizedPath;
+}
+
 // Busca recursivamente un posible valor de medio de pago con multiples alias
 function findPaymentValue(obj, depth = 0, visited = new Set()) {
   if (!obj || typeof obj !== "object" || depth > 5 || visited.has(obj)) return null;
@@ -94,6 +135,8 @@ function findPaymentValue(obj, depth = 0, visited = new Set()) {
 }
 
 export default function BuyerView({ buyer, onClose }) {
+  const pick = (...values) => values.find((value) => value !== null && value !== undefined && value !== "");
+
   const fullName = [
     buyer?.primerNombre,
     buyer?.segundoNombre,
@@ -105,7 +148,14 @@ export default function BuyerView({ buyer, onClose }) {
     .trim();
 
   const operacion =
-    buyer?.ultimaVenta || buyer?.compra || buyer?.venta || buyer?.sale || buyer?.raw?.venta || null;
+    buyer?.ultimaVenta ||
+    buyer?.ultima_venta ||
+    buyer?.compra ||
+    buyer?.venta ||
+    buyer?.sale ||
+    buyer?.raw?.ultima_venta ||
+    buyer?.raw?.venta ||
+    null;
   const opRaw = operacion?.raw || operacion?.metadata?.raw || {};
   const opSnapshot = operacion?.formSnapshot || operacion?.snapshot || operacion?.form_snapshot || {};
   const rawVenta = buyer?.raw?.venta || buyer?.raw || {};
@@ -115,13 +165,17 @@ export default function BuyerView({ buyer, onClose }) {
   const registroInmobiliario =
     inmueble?.registro || inmueble?.registro_inmobiliario || inmueble?.registroInmobiliario || "-";
 
-  const imagenInmueble =
-    inmueble?.image ||
-    inmueble?.imagen_principal ||
-    inmueble?.imagen_portada ||
-    inmueble?.portada ||
-    (Array.isArray(inmueble?.imagenes) ? inmueble.imagenes[0] : "") ||
-    "";
+  const imagenInmueble = useMemo(
+    () =>
+      resolveImageUrl(
+        inmueble?.image ||
+          inmueble?.imagen_principal ||
+          inmueble?.imagen_portada ||
+          inmueble?.portada ||
+          (Array.isArray(inmueble?.imagenes) ? inmueble.imagenes[0] : "")
+      ),
+    [inmueble]
+  );
 
   const fechaCompra =
     operacion?.fecha_venta || operacion?.fechaCompra || operacion?.fecha || buyer?.fechaCompra || null;
@@ -129,13 +183,63 @@ export default function BuyerView({ buyer, onClose }) {
   const valorCompra =
     operacion?.valor_venta || operacion?.valorCompra || operacion?.valor || buyer?.valorCompra || null;
 
-  const medioPago =
-    findPaymentValue(operacion) ||
-    findPaymentValue(opRaw) ||
-    findPaymentValue(opSnapshot) ||
-    findPaymentValue(rawVenta) ||
-    findPaymentValue(buyer) ||
-    null;
+  const medioPago = pick(
+    operacion?.medioPago,
+    operacion?.medio_pago,
+    operacion?.metodo_pago,
+    operacion?.metodoPago,
+    operacion?.forma_pago,
+    operacion?.formaPago,
+    operacion?.tipo_pago,
+    operacion?.tipoPago,
+    operacion?.tipo_compra,
+    operacion?.tipoCompra,
+    opRaw?.medioPago,
+    opRaw?.medio_pago,
+    opRaw?.metodo_pago,
+    opRaw?.metodoPago,
+    opRaw?.forma_pago,
+    opRaw?.formaPago,
+    opRaw?.tipo_pago,
+    opRaw?.tipoPago,
+    opRaw?.tipo_compra,
+    opRaw?.tipoCompra,
+    opSnapshot?.medioPago,
+    opSnapshot?.medio_pago,
+    opSnapshot?.metodo_pago,
+    opSnapshot?.metodoPago,
+    opSnapshot?.forma_pago,
+    opSnapshot?.formaPago,
+    opSnapshot?.tipo_pago,
+    opSnapshot?.tipoPago,
+    opSnapshot?.tipo_compra,
+    opSnapshot?.tipoCompra,
+    rawVenta?.medioPago,
+    rawVenta?.medio_pago,
+    rawVenta?.metodo_pago,
+    rawVenta?.metodoPago,
+    rawVenta?.forma_pago,
+    rawVenta?.formaPago,
+    rawVenta?.tipo_pago,
+    rawVenta?.tipoPago,
+    rawVenta?.tipo_compra,
+    rawVenta?.tipoCompra,
+    buyer?.medioPago,
+    buyer?.medio_pago,
+    buyer?.metodo_pago,
+    buyer?.metodoPago,
+    buyer?.forma_pago,
+    buyer?.formaPago,
+    buyer?.tipo_pago,
+    buyer?.tipoPago,
+    buyer?.tipo_compra,
+    buyer?.tipoCompra,
+    findPaymentValue(operacion),
+    findPaymentValue(opRaw),
+    findPaymentValue(opSnapshot),
+    findPaymentValue(rawVenta),
+    findPaymentValue(buyer)
+  );
 
   const medioPagoDescripcion =
     operacion?.medioPagoDescripcion ||
@@ -236,13 +340,25 @@ export default function BuyerView({ buyer, onClose }) {
   const medioPagoDisplay = useMemo(() => {
     const base = medioPago ?? "";
     const desc = medioPagoDescripcion ?? "";
-    if (!base && !desc) return "-";
-    if (!base) return desc;
+    const inferredCredit =
+      buyer?.entidadFinanciera ||
+      buyer?.numeroCredito ||
+      buyer?.montoFinanciado ||
+      operacion?.entidad_financiera ||
+      operacion?.numero_credito ||
+      operacion?.monto_financiado;
+    const fallback = inferredCredit ? "Credito" : "";
+
+    if (!base && !desc) return fallback || "-";
+    if (!base) return desc || fallback;
     if (!desc) return base;
-    const lowerBase = base.toString().toLowerCase();
+    const normalizedBase = base.toString().trim().toLowerCase();
+    const normalizedDesc = desc.toString().trim().toLowerCase();
+    if (normalizedBase === normalizedDesc) return base;
+    const lowerBase = normalizedBase;
     if (lowerBase === "mixto") return `${base}: ${desc}`;
     return `${base} - ${desc}`;
-  }, [medioPago, medioPagoDescripcion]);
+  }, [buyer?.entidadFinanciera, buyer?.montoFinanciado, buyer?.numeroCredito, medioPago, medioPagoDescripcion, operacion?.entidad_financiera, operacion?.monto_financiado, operacion?.numero_credito]);
 
   return (
     <AnimatePresence>
@@ -326,10 +442,7 @@ export default function BuyerView({ buyer, onClose }) {
                 {/* Operacion */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                      <FaMoneyBillWave className="text-green-600" />
-                      Operacion
-                    </h3>
+                    <h3 className="text-sm font-semibold text-gray-900">Operacion</h3>
                     <Pill tone={estadoTone(estadoVenta)}>{estadoVenta || "-"}</Pill>
                   </div>
 

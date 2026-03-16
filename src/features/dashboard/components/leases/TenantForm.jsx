@@ -107,7 +107,11 @@ export default function TenantForm({
     const tipoDocumento = (valuesRef.current.tipoDocumento || "").trim();
     const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
 
-    if (!tipoDocumento || !numeroDocumento) return;
+    if (!tipoDocumento || !numeroDocumento) {
+      clearPersonFields();
+      setLookupState({ loading: false, message: "", error: null });
+      return;
+    }
 
     const validationError = validateDocument(tipoDocumento, numeroDocumento);
     if (validationError) {
@@ -193,7 +197,7 @@ export default function TenantForm({
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
     switch (tipoDocumento) {
       case "CC":
-        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return "La cedula de ciudadania debe tener entre 8 y 10 digitos";
+        if (!/^[0-9]{7,10}$/.test(numeroLimpio)) return "La cedula de ciudadania debe tener entre 7 y 10 digitos";
         break;
       case "CE":
         if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return "La cedula de extranjeria debe tener entre 6 y 10 digitos";
@@ -258,6 +262,16 @@ export default function TenantForm({
     
     valuesRef.current[name] = cleanValue;
 
+    if (name === "documento" || name === "tipoDocumento") {
+      const tipoDocumento = name === "tipoDocumento" ? cleanValue : (valuesRef.current.tipoDocumento || "");
+      const numeroDocumento = cleanDocument(name === "documento" ? cleanValue : (valuesRef.current.documento || ""));
+
+      if (!tipoDocumento || !numeroDocumento) {
+        if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+        clearPersonFields();
+      }
+    }
+
     // Limpiar errores al escribir
     if (errors[name]) {
       setErrors(prev => {
@@ -269,7 +283,7 @@ export default function TenantForm({
   };
 
     // Funciones de validacion de formato
-    const isValidName = (value) => /^[a-zA-Z\s]*$/.test(value);
+    const isValidName = (value) => /^[\p{L}\s]*$/u.test(value);
   const isValidNumeric = (value) => /^\d*$/.test(value);
   const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
 
@@ -325,6 +339,13 @@ export default function TenantForm({
 
     // Si blur en doc/tipo sin error -> lookup
     if ((name === "documento" || name === "tipoDocumento") && !errorMessage) {
+      const tipoDocumento = (valuesRef.current.tipoDocumento || "").trim();
+      const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
+      if (!tipoDocumento || !numeroDocumento) {
+        clearPersonFields();
+        setLookupState({ loading: false, message: "", error: null });
+        return;
+      }
       triggerLookup();
     }
   };

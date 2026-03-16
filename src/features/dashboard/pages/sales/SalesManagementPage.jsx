@@ -26,6 +26,7 @@ import { buyersApiService } from "../../../../shared/services/buyersApiService";
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { useToast } from "../../../../shared/hooks/use-toast";
+import { Pagination } from "../../pages/Inmuebles/components/common/pagination";
 
 
 const STATUS_NORMALIZE = (value = "") =>
@@ -315,7 +316,6 @@ const mapEstadoUiToVentaEstado = (estado = "") => {
     finalizada: "Completada",
     debe: "Debe",
     "en espera": "En espera",
-    "en negociacion": "En negociación",
     "en negociación": "En negociación",
     pendiente: "Pendiente",
     activa: "Activa"
@@ -394,6 +394,29 @@ const buildTrackingPayload = (updatedSale = {}, statusCatalog = []) => {
 
   };
 
+};
+
+const getApiErrorMessage = (error, fallbackMessage) => {
+  const validationErrors = error?.data?.errors || error?.response?.data?.errors;
+
+  if (validationErrors && typeof validationErrors === "object") {
+    const messages = Object.values(validationErrors)
+      .flat()
+      .filter(Boolean)
+      .map((value) => String(value).replace(/["]/g, ""))
+      .filter((value, index, array) => array.indexOf(value) === index);
+
+    if (messages.length > 0) {
+      return messages.join(" | ");
+    }
+  }
+
+  return (
+    error?.data?.message ||
+    error?.response?.data?.message ||
+    error?.message ||
+    fallbackMessage
+  );
 };
 
 const mapSeguimientoIdToEstado = {
@@ -784,8 +807,6 @@ const normalizeSaleRecord = (sale = {}, fallback = {}) => {
 
     inmuebleBarrio: fallback.inmuebleBarrio ?? inmueble.barrio ?? "N/D",
 
-    inmuebleEstrato: fallback.inmuebleEstrato ?? inmueble.estrato ?? "N/D",
-
     inmuebleDireccion:
 
       fallback.inmuebleDireccion ??
@@ -991,7 +1012,7 @@ const buildSalePayload = (saleData = {}, buyerInfo, propertyInfo) => {
         ? saleData.medioPagoDescripcion || saleData.descripcionPagoMixto || null
         : null,
 
-    estado: saleData.estado || "Activa",
+    estado: saleData.estado || "En negociación",
 
     // Datos "congelados" del vendedor al momento de la venta
     tipo_doc_vendedor: saleData.vendedorTipoDocumento || saleData.tipo_documento_vendedor || null,
@@ -1109,6 +1130,7 @@ const EstadoBadge = ({ estado }) => {
 
 
 export function SalesManagementPage() {
+  const PAGE_SIZE = 5;
 
   const [ventas, setVentas] = useState(INITIAL_VENTAS);
 
@@ -1125,6 +1147,15 @@ export function SalesManagementPage() {
   const [trackingSale, setTrackingSale] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("todos");
+  const [tipoCompraFilter, setTipoCompraFilter] = useState("todos");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    pagina: 1,
+    limite: PAGE_SIZE,
+    paginas_totales: 1,
+  });
 
   const [showInterestedPeople, setShowInterestedPeople] = useState(false);
 
@@ -1246,6 +1277,41 @@ export function SalesManagementPage() {
     [resolvePropertyFromSale]
   );
 
+  const marcarInmuebleVendidoPorVenta = useCallback(
+    async (saleData = {}) => {
+      try {
+        const property =
+          resolvePropertyFromSale(saleData) ||
+          (saleData.property ? { ...saleData.property, raw: saleData.property } : null);
+
+        let propertyId =
+          property?.id ||
+          property?.raw?.id ||
+          property?.raw?.id_inmueble ||
+          property?.raw?.idInmueble ||
+          null;
+
+        if (!propertyId && saleData.inmuebleRegistro) {
+          const fetched = await inmueblesAPI.getInmuebleByRegistro(saleData.inmuebleRegistro);
+          propertyId = fetched?.id || fetched?.id_inmueble || null;
+        }
+
+        if (!propertyId) return;
+
+        await inmueblesAPI.updateInmueble(propertyId, {
+          estado: false,
+          estado_frontend: 'Vendido',
+          estado_venta: 'Vendido',
+          estadoVenta: 'Vendido',
+          destacado: false,
+        });
+      } catch (error) {
+        console.warn('No se pudo marcar el inmueble como vendido al completar la venta', error?.message);
+      }
+    },
+    [resolvePropertyFromSale]
+  );
+
   const loadProperties = useCallback(async () => {
 
     setLoadingProperties(true);
@@ -1297,7 +1363,7 @@ export function SalesManagementPage() {
 
 
 
-  const fetchVentas = useCallback(async () => {
+  const fetchVentas = useCallback(async (query = "", page = 1) => {
 
     setLoadingVentas(true);
 
@@ -1305,33 +1371,29 @@ export function SalesManagementPage() {
 
     try {
 
-      const response = await ventaApiService.obtenerVentas();
+      const response = await ventaApiService.obtenerVentas({
+        page,
+        limit: PAGE_SIZE,
+        search: query || undefined,
+        estado: estadoFilter !== "todos" ? estadoFilter : undefined,
+        tipo_compra: tipoCompraFilter !== "todos" ? tipoCompraFilter : undefined,
+      });
 
-      const payload = Array.isArray(response?.data)
-
-        ? response.data
-
-        : Array.isArray(response?.data?.data)
-
-          ? response.data.data
-
-          : Array.isArray(response)
-
-            ? response
-
-            : [];
+      const payload = Array.isArray(response?.data) ? response.data : [];
 
 
 
       if (Array.isArray(payload)) {
-
-        const normalized = payload.map((venta) =>
-
-          normalizeSaleRecord(venta)
-
-        );
-
-        setVentas(normalized);
+        setVentas(payload.map((venta) => normalizeSaleRecord(venta)));
+        setPagination(response?.pagination || {
+          total: payload.length,
+          pagina: page,
+          limite: PAGE_SIZE,
+          paginas_totales: 1,
+          has_next_page: false,
+          has_prev_page: page > 1,
+        });
+        setCurrentPage(response?.pagination?.pagina || page);
 
       }
 
@@ -1357,7 +1419,7 @@ export function SalesManagementPage() {
 
     }
 
-  }, []);
+  }, [estadoFilter, tipoCompraFilter]);
 
 
 
@@ -1366,6 +1428,21 @@ export function SalesManagementPage() {
     fetchVentas();
 
   }, [fetchVentas]);
+
+  useEffect(() => {
+    const term = searchTerm.trim();
+    const timeoutId = setTimeout(() => {
+      setCurrentPage(1);
+      fetchVentas(term, 1);
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, fetchVentas]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchVentas(searchTerm.trim(), 1);
+  }, [estadoFilter, tipoCompraFilter, fetchVentas, searchTerm]);
 
 
 
@@ -1596,6 +1673,19 @@ export function SalesManagementPage() {
 
 
     const payload = buildSalePayload(saleData, buyerInfo, matchedProperty);
+    const negotiationStatus =
+      statusCatalog.find(
+        (status) => STATUS_NORMALIZE(status.nombre_estado) === STATUS_NORMALIZE("En negociación")
+      ) ||
+      DEFAULT_STATUS_CATALOG.find(
+        (status) => STATUS_NORMALIZE(status.nombre_estado) === STATUS_NORMALIZE("En negociación")
+      );
+
+    if (negotiationStatus) {
+      payload.id_estado_venta = negotiationStatus.id_estado_venta;
+      payload.estado = "Activa";
+      payload.estadoSeguimiento = negotiationStatus.nombre_estado;
+    }
 
 
 
@@ -1657,9 +1747,9 @@ export function SalesManagementPage() {
 
       valor: formatCurrencyValue(payload.valor_venta || saleData.inmueblePrecio),
 
-      estado: "Pendiente",
+      estado: "En negociación",
 
-      estadoSeguimiento: "Iniciado",
+      estadoSeguimiento: "En negociación",
 
       compradorTipoDocumento: buyerInfo.tipoDocumento,
 
@@ -1706,9 +1796,23 @@ export function SalesManagementPage() {
     try {
 
       const response = await ventaApiService.crearVenta(payload);
+      const createdSale = response?.data ?? response;
+      const createdSaleId =
+        createdSale?.id_venta || createdSale?.id || createdSale?.venta?.id_venta || null;
 
-      const apiSale = response?.data ?? response;
+      if (createdSaleId && negotiationStatus?.id_estado_venta) {
+        await ventaApiService.cambiarEstado(createdSaleId, {
+          id_estado_venta: negotiationStatus.id_estado_venta,
+          id_persona: payload.id_persona,
+          fecha_estado_seguimiento: new Date().toISOString(),
+          descripcion: "Cambio automatico al crear la venta",
+        });
+      }
 
+      const refreshedSale = createdSaleId
+        ? await ventaApiService.obtenerVenta(createdSaleId)
+        : createdSale;
+      const apiSale = refreshedSale?.data ?? refreshedSale ?? createdSale;
       const normalizedSale = normalizeSaleRecord(apiSale, fallbackSale);
 
 
@@ -1748,10 +1852,12 @@ export function SalesManagementPage() {
 
 
       setVentas((prev) => [...prev, normalizedSale]);
+      fetchVentas(searchTerm.trim(), 1);
+      loadProperties();
       appendFichaTecnicaToLocalHistory({
         inmuebleId: payload.id_inmueble,
-        snapshot: buildFichaSnapshotFromSale(normalizedSale, { estado: "Vendido" }),
-        cambios: "Cambio automático de estado a Vendido por registro de venta",
+        snapshot: buildFichaSnapshotFromSale(normalizedSale, { estado: "En proceso de venta" }),
+        cambios: "Cambio automático de estado a En proceso de venta por registro de venta",
       });
 
       const successText = buyerUpdateError
@@ -1772,21 +1878,21 @@ export function SalesManagementPage() {
     } catch (error) {
 
       console.error("Error guardando la venta:", error);
+      const errorMessage = getApiErrorMessage(
+        error,
+        "No se pudo registrar la venta en la API. Revisa los datos e intenta nuevamente."
+      );
 
       setStatusMessage({
 
         type: "error",
 
-        text:
-
-          error?.message ||
-
-          "No se pudo registrar la venta en la API. Revisa los datos e intenta nuevamente.",
+        text: errorMessage,
 
       });
       toast({
         title: "Error al registrar venta",
-        description: error?.message || MESSAGES.sale.create.error,
+        description: errorMessage || MESSAGES.sale.create.error,
         variant: "destructive",
       });
 
@@ -1879,9 +1985,12 @@ export function SalesManagementPage() {
           String(v.id) === String(saleId) ? { ...v, ...mergedForState, raw: apiSale } : v
         )
       );
+      fetchVentas(searchTerm.trim(), currentPage);
+      loadProperties();
 
       if (finalEstado.includes("cancel")) {
         await liberarInmueblePorVenta(mergedForState);
+        loadProperties();
         setStatusMessage({
           type: "success",
           text: "Venta cancelada y cerrada. El inmueble quedó disponible.",
@@ -1889,6 +1998,18 @@ export function SalesManagementPage() {
         toast({
           title: "Venta cancelada",
           description: "Se cerró la venta y el inmueble quedó disponible para nueva venta.",
+          variant: "default",
+        });
+      } else if (finalEstado.includes("complet")) {
+        await marcarInmuebleVendidoPorVenta(mergedForState);
+        loadProperties();
+        setStatusMessage({
+          type: "success",
+          text: "Venta completada. El inmueble quedó marcado como vendido.",
+        });
+        toast({
+          title: "Venta completada",
+          description: "El inmueble quedó marcado como vendido.",
           variant: "default",
         });
       } else {
@@ -1920,31 +2041,6 @@ export function SalesManagementPage() {
 
 
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  const filteredVentas = ventas.filter((v) => {
-    if (!normalizedSearch) return true;
-
-    const registro = v.registro ? v.registro.toLowerCase() : "";
-    const comprador = v.comprador ? v.comprador.toLowerCase() : "";
-    const compradorCorreo = v.compradorCorreo ? v.compradorCorreo.toLowerCase() : "";
-    const compradorDocumento = v.compradorDocumento ? String(v.compradorDocumento).toLowerCase() : "";
-    const tipo = v.tipo ? v.tipo.toLowerCase() : "";
-    const estado = v.estado ? v.estado.toLowerCase() : "";
-    const fecha = v.fecha ? String(v.fecha).toLowerCase() : "";
-    const valor = v.valor ? String(v.valor).toLowerCase() : "";
-
-    return (
-      registro.includes(normalizedSearch) ||
-      comprador.includes(normalizedSearch) ||
-      compradorCorreo.includes(normalizedSearch) ||
-      compradorDocumento.includes(normalizedSearch) ||
-      tipo.includes(normalizedSearch) ||
-      estado.includes(normalizedSearch) ||
-      fecha.includes(normalizedSearch) ||
-      valor.includes(normalizedSearch)
-    );
-  });
 
 
 
@@ -1952,13 +2048,13 @@ export function SalesManagementPage() {
 
   const stats = {
 
-    total: filteredVentas.length,
+    total: pagination.total,
 
-    pagadas: filteredVentas.filter(v => v.estado === 'Pagado').length,
+    pagadas: ventas.filter(v => v.estado === 'Pagado').length,
 
-    pendientes: filteredVentas.filter(v => v.estado === 'Pendiente').length,
+    pendientes: ventas.filter(v => v.estado === 'Pendiente').length,
 
-    totalValor: filteredVentas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
+    totalValor: ventas.reduce((sum, v) => sum + toNumericValue(v.valor), 0)
 
   };
 
@@ -2149,7 +2245,6 @@ export function SalesManagementPage() {
             {savingVenta ? "Guardando..." : "Crear Venta"}
 
           </motion.button>
-
         </motion.div>
 
 
@@ -2234,7 +2329,34 @@ export function SalesManagementPage() {
 
           </div>
 
-          
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+              <select
+                value={estadoFilter}
+                onChange={(e) => setEstadoFilter(e.target.value)}
+                className="pl-10 pr-8 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:border-blue-500"
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="pagado">Pagado</option>
+                <option value="debe">Debe</option>
+                <option value="en espera">En espera</option>
+                <option value="cancelado">Cancelado</option>
+                <option value="en negociacion">En negociacion</option>
+                <option value="completada">Completada</option>
+              </select>
+            </div>
+            <select
+              value={tipoCompraFilter}
+              onChange={(e) => setTipoCompraFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:border-blue-500"
+            >
+              <option value="todos">Todos los tipos</option>
+              <option value="directa">Compra directa</option>
+              <option value="financiada">Financiada</option>
+              <option value="mixta">Mixta</option>
+            </select>
+          </div>
         </motion.div>
 
 
@@ -2307,9 +2429,9 @@ export function SalesManagementPage() {
 
                     </tr>
 
-                  ) : filteredVentas.length > 0 ? (
+                  ) : ventas.length > 0 ? (
 
-                    filteredVentas.map((v) => (
+                    ventas.map((v) => (
 
                       <tr
 
@@ -2430,6 +2552,17 @@ export function SalesManagementPage() {
                 </tbody>
 
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={Math.max(pagination?.paginas_totales || 1, 1)}
+                hasPrevPage={Boolean(pagination?.has_prev_page)}
+                hasNextPage={Boolean(pagination?.has_next_page)}
+                onPageChange={(page) => {
+                  if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
+                  setCurrentPage(page);
+                  fetchVentas(searchTerm.trim(), page);
+                }}
+              />
 
             </div>
 

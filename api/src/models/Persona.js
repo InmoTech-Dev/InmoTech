@@ -44,6 +44,16 @@ const Persona = sequelize.define('Personas', {
     type: DataTypes.STRING(20),
     allowNull: true
   },
+  actividad_economica: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    validate: {
+      isIn: {
+        args: [['Empleado', 'Independiente']],
+        msg: 'Actividad econÃ³mica invÃ¡lida'
+      }
+    }
+  },
   correo_verificado: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

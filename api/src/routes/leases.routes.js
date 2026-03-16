@@ -9,6 +9,7 @@ const {
   updateLeaseSchema,
   updateLeaseStatusSchema,
   extendLeaseSchema,
+  adjustRentSchema,
   registerPreNoticeSchema,
   createPaymentSchema,
   updatePaymentSchema,
@@ -60,6 +61,13 @@ router.patch(
   strictLimiter,
   validate(extendLeaseSchema),
   leasesController.extendLease
+);
+
+router.patch(
+  '/:id/adjust-rent',
+  strictLimiter,
+  validate(adjustRentSchema),
+  leasesController.adjustRent
 );
 
 // PATCH /api/v1/leases/:id/pre-notice - Registrar preaviso del arrendamiento

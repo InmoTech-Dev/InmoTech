@@ -199,6 +199,7 @@ const getOwnerCandidate = (inmueble = {}) => {
 export default function SalesForm({ onClose, onSubmit }) {
     const [step, setStep] = useState(1);
     const [errors, setErrors] = useState({});
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(initial.medioPago);
     const totalSteps = 4;
     const { toast } = useToast();
 
@@ -215,6 +216,11 @@ export default function SalesForm({ onClose, onSubmit }) {
         tipo: "",
         numero: "",
     });
+    const buyerMatchedDocumentRef = useRef({
+        tipo: "",
+        numero: "",
+    });
+    const inmuebleRegistroSnapshotRef = useRef("");
     const [buyerLookupState, setBuyerLookupState] = useState({
         loading: false,
         message: "",
@@ -327,8 +333,8 @@ export default function SalesForm({ onClose, onSubmit }) {
         
         switch (tipoDocumento) {
             case 'CC':
-                if (!/^[0-9]{8,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
+                if (!/^[0-9]{7,10}$/.test(numeroLimpio)) {
+                    return 'La cédula de ciudadanía debe tener entre 7 y 10 dígitos';
                 }
                 break;
             case 'CE':
@@ -467,6 +473,10 @@ export default function SalesForm({ onClose, onSubmit }) {
             
             valuesRef.current[name] = cleanValue;
 
+            if (name === "medioPago") {
+                setSelectedPaymentMethod(cleanValue);
+            }
+
             if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
                 selectedBuyerRef.current = null;
                 manuallyEditedBuyerFieldsRef.current.clear();
@@ -481,20 +491,30 @@ export default function SalesForm({ onClose, onSubmit }) {
                     name === "compradorTipoDocumento" ? cleanValue : (valuesRef.current.compradorTipoDocumento || "");
                 const numeroDocActual =
                     name === COMPRADOR_DOC ? cleanValue : (valuesRef.current.compradorDocumento || "");
+                const normalizedTipoActual = String(tipoDocActual || "").trim().toUpperCase();
+                const normalizedNumeroActual = cleanDocument(numeroDocActual || "");
 
                 buyerDocumentSnapshotRef.current = {
                     tipo: tipoDocActual,
-                    numero: cleanDocument(numeroDocActual || ""),
+                    numero: normalizedNumeroActual,
                 };
 
-                if (shouldTriggerBuyerLookup(tipoDocActual, numeroDocActual)) {
-                    triggerBuyerLookup(120);
-                } else {
-                    setBuyerLookupState((prev) =>
-                        prev.loading || prev.error || prev.message
-                            ? { loading: false, message: "", error: null }
-                            : prev
-                    );
+                if (
+                    buyerMatchedDocumentRef.current.numero &&
+                    (
+                        buyerMatchedDocumentRef.current.tipo !== normalizedTipoActual ||
+                        buyerMatchedDocumentRef.current.numero !== normalizedNumeroActual
+                    )
+                ) {
+                    if (buyerLookupTimeoutRef.current) {
+                        clearTimeout(buyerLookupTimeoutRef.current);
+                    }
+                    resetBuyerSelection({ resetState: false, resetFields: true });
+                } else if (!shouldTriggerBuyerLookup(tipoDocActual, numeroDocActual)) {
+                    if (buyerLookupTimeoutRef.current) {
+                        clearTimeout(buyerLookupTimeoutRef.current);
+                    }
+                    resetBuyerSelection({ resetState: false, resetFields: true });
                 }
             }
         }
@@ -535,6 +555,19 @@ export default function SalesForm({ onClose, onSubmit }) {
                 delete next.medioPagoTransferencia;
                 return next;
             });
+        }
+
+        if (name === "inmuebleRegistro") {
+            valuesRef.current.idInmueble = undefined;
+            const normalizedRegistro = String(cleanValue || "").trim().toLowerCase();
+            if (
+                inmuebleRegistroSnapshotRef.current &&
+                normalizedRegistro !== inmuebleRegistroSnapshotRef.current
+            ) {
+                clearInmuebleAutofill();
+            } else if (!normalizedRegistro) {
+                clearInmuebleAutofill();
+            }
         }
     };
 
@@ -589,6 +622,8 @@ export default function SalesForm({ onClose, onSubmit }) {
     const autofillInmueble = (inmueble, { skipEstado = false } = {}) => {
         if (!inmueble) return;
 
+        inmuebleRegistroSnapshotRef.current = (inmueble.registro || "").trim().toLowerCase();
+
         setFieldValue("inmuebleTipo", inmueble.categoria || inmueble.tipo || "");
         setFieldValue("inmuebleNombre", inmueble.titulo || "");
         setFieldValue("inmuebleRegistro", inmueble.registro || "");
@@ -619,6 +654,27 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         autofillVendedorDesdePropietario(inmueble);
     };
+
+    const clearInmuebleAutofill = useCallback(() => {
+        inmuebleRegistroSnapshotRef.current = "";
+        valuesRef.current.idInmueble = undefined;
+        [
+            "inmuebleTipo",
+            "inmuebleNombre",
+            "inmuebleDireccion",
+            "inmuebleBarrio",
+            "inmuebleCiudad",
+            "inmuebleDepartamento",
+            "inmueblePais",
+            "inmuebleEstado",
+            "inmueblePrecio",
+            "vendedorTipoDocumento",
+            VENDEDOR_DOC,
+            "vendedorNombreCompleto",
+            "vendedorCorreo",
+            "vendedorTelefono",
+        ].forEach((field) => setFieldValue(field, ""));
+    }, []);
 
     const handleInmuebleLookup = useCallback(async (registro = "") => {
         const cleanRegistro = (registro || "").trim();
@@ -678,12 +734,12 @@ export default function SalesForm({ onClose, onSubmit }) {
                 autofillInmueble(inmueble, { skipEstado: true });
                 setInmuebleLookupState({
                     loading: false,
-                    message: "Datos del inmueble completados automáticamente.",
+                    message: "",
                     error: null,
                 });
                 toast({
                     title: "Inmueble encontrado",
-                    description: "Datos del inmueble completados automáticamente.",
+                    description: "Datos autocompletados correctamente.",
                     variant: "default",
                 });
             } else {
@@ -772,8 +828,13 @@ export default function SalesForm({ onClose, onSubmit }) {
             return newErrors;
         });
 
-        if (name === "inmuebleRegistro" && !errorMessage && value.trim().length > 0) {
-            await handleInmuebleLookup(value);
+        if (name === "inmuebleRegistro") {
+            if (!value.trim()) {
+                clearInmuebleAutofill();
+                setInmuebleLookupState({ loading: false, message: "", error: null });
+            } else if (!errorMessage) {
+                await handleInmuebleLookup(value);
+            }
         }
         if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
             const currentTipo = valuesRef.current.compradorTipoDocumento || "";
@@ -782,6 +843,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             const previousSnapshot = { ...buyerDocumentSnapshotRef.current };
 
             if (!docReady) {
+                clearBuyerAutofillIfDocumentIncomplete();
                 buyerDocumentSnapshotRef.current = {
                     tipo: currentTipo,
                     numero: normalizedDocumento,
@@ -844,6 +906,10 @@ export default function SalesForm({ onClose, onSubmit }) {
         ({ resetState = false, resetFields = false } = {}) => {
             selectedBuyerRef.current = null;
             manuallyEditedBuyerFieldsRef.current.clear();
+            buyerMatchedDocumentRef.current = {
+                tipo: "",
+                numero: "",
+            };
             
             if (resetFields) {
                 valuesRef.current.compradorPersonaId = "";
@@ -866,17 +932,41 @@ export default function SalesForm({ onClose, onSubmit }) {
         []
     );
 
+    const clearBuyerAutofillIfDocumentIncomplete = useCallback(() => {
+        const tipoDocumento = (valuesRef.current.compradorTipoDocumento || "").trim();
+        const numeroDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+
+        if (shouldTriggerBuyerLookup(tipoDocumento, numeroDocumento)) {
+            return false;
+        }
+
+        if (buyerLookupTimeoutRef.current) {
+            clearTimeout(buyerLookupTimeoutRef.current);
+        }
+
+        resetBuyerSelection({ resetState: true, resetFields: true });
+        buyerDocumentSnapshotRef.current = {
+            tipo: tipoDocumento,
+            numero: numeroDocumento,
+        };
+        return true;
+    }, [resetBuyerSelection]);
+
     const applyBuyerData = useCallback((buyer) => {
         if (!buyer) return;
         if (!buyerIsActive(buyer)) {
-            const inactiveMsg = "No se puede asociar una venta a un arrendatario en estado inactivo.";
+            const inactiveMsg = "No se puede asociar una venta a un comprador en estado inactivo.";
             setBuyerLookupState({
                 loading: false,
                 message: "",
                 error: inactiveMsg,
             });
+            setErrors((prev) => ({
+                ...prev,
+                compradorDocumento: inactiveMsg,
+            }));
             toast({
-                title: "Arrendatario inactivo",
+                title: "Comprador inactivo",
                 description: inactiveMsg,
                 variant: "destructive",
             });
@@ -885,6 +975,10 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
 
         selectedBuyerRef.current = buyer;
+        buyerMatchedDocumentRef.current = {
+            tipo: String(buyer.tipoDocumento || buyer.raw?.persona?.tipo_documento || "").trim().toUpperCase(),
+            numero: cleanDocument(buyer.documento || buyer.raw?.persona?.numero_documento || ""),
+        };
 
         const buildFullName = () => {
             const parts = [
@@ -946,6 +1040,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                     delete nextErrors[field];
                 }
             });
+            delete nextErrors.compradorDocumento;
             return nextErrors;
         });
     }, []);
@@ -1102,41 +1197,12 @@ export default function SalesForm({ onClose, onSubmit }) {
                 numeroDocumento
             );
 
-            if (!buyer) {
-                buyer = await buyersApiService.findPersonaByDocument(
-                    tipoDocumento,
-                    numeroDocumento
-                );
-            }
-
             if (buyerLookupRequestId.current !== requestId) {
                 return;
             }
 
             if (buyer) {
                 applyBuyerData(buyer);
-
-                if (!buyer.id && !buyer.compradorId) {
-                    if (!valuesRef.current.compradorNombreCompleto?.trim()) {
-                        const composedName = [buyer.primerNombre, buyer.segundoNombre, buyer.primerApellido, buyer.segundoApellido]
-                            .filter(Boolean)
-                            .join(" ")
-                            .trim();
-                        if (composedName) {
-                            valuesRef.current.compradorNombreCompleto = composedName;
-                            displayValuesRef.current.compradorNombreCompleto = composedName;
-                            const nombreEl = elRefs.current.compradorNombreCompleto;
-                            if (nombreEl) {
-                                try { nombreEl.value = composedName; } catch (_err) { /* ignore */ }
-                            }
-                        }
-                    }
-
-                    try {
-                        await createBuyerFromForm();
-                        return;
-                    } catch (_err) {}
-                }
 
                 setBuyerLookupState({
                     loading: false,
@@ -1151,24 +1217,12 @@ export default function SalesForm({ onClose, onSubmit }) {
                 return;
             }
 
-            const nombreCompleto = (valuesRef.current.compradorNombreCompleto || "").trim();
-            if (!nombreCompleto) {
-                resetBuyerSelection();
-                setBuyerLookupState({
-                    loading: false,
-                    message: "",
-                    error: null,
-                });
-                return;
-            }
-
-            try {
-                await createBuyerFromForm();
-            } catch (_err) {
-                if (buyerLookupRequestId.current === requestId) {
-                    setBuyerLookupState((prev) => ({ ...prev, loading: false }));
-                }
-            }
+            resetBuyerSelection({ resetState: false, resetFields: true });
+            setBuyerLookupState({
+                loading: false,
+                message: "",
+                error: null,
+            });
         } catch (error) {
             if (buyerLookupRequestId.current !== requestId) {
                 return;
@@ -1366,14 +1420,14 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
 
         if (!buyerIsActive(buyerRef)) {
-            const inactiveMsg = "No se puede asociar una venta a un arrendatario en estado inactivo.";
+            const inactiveMsg = "No se puede asociar una venta a un comprador en estado inactivo.";
             setErrors((prev) => ({
                 ...prev,
                 compradorDocumento: inactiveMsg,
             }));
             setStep(3);
             toast({
-                title: "Arrendatario inactivo",
+                title: "Comprador inactivo",
                 description: inactiveMsg,
                 variant: "destructive",
             });
@@ -1628,14 +1682,8 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         <div className="md:col-span-3">
                                             <Field name="inmuebleDireccion" as="textarea" placeholder="Ej: Calle 10 # 45-20" />
                                         </div>
-                                        {(inmuebleLookupState.loading || inmuebleLookupState.message || inmuebleLookupState.error) && (
+                                        {inmuebleLookupState.error && (
                                             <div className="md:col-span-3 mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                                {inmuebleLookupState.loading && (
-                                                    <p className="text-blue-700">Buscando inmueble...</p>
-                                                )}
-                                                {!inmuebleLookupState.loading && inmuebleLookupState.message && (
-                                                    <p className="text-green-700">{inmuebleLookupState.message}</p>
-                                                )}
                                                 {!inmuebleLookupState.loading && inmuebleLookupState.error && (
                                                     <p className="text-red-700">{inmuebleLookupState.error}</p>
                                                 )}
@@ -1683,20 +1731,12 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
                                         <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
                                         <Field name="compradorTelefono" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
-                                        {(buyerLookupState.loading || buyerLookupState.message || buyerLookupState.error) && (
-                                            <div className="md:col-span-3 mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                                {buyerLookupState.loading && (
-                                                    <p className="text-blue-700">Buscando comprador...</p>
-                                                )}
-                                                {!buyerLookupState.loading && buyerLookupState.message && (
-                                                    <p className="text-green-700">{buyerLookupState.message}</p>
-                                                )}
-                                                {!buyerLookupState.loading && buyerLookupState.error && (
-                                                    <p className="text-red-700">{buyerLookupState.error}</p>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
+                                    {buyerLookupState.error && (
+                                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                                            <p className="text-red-700">{buyerLookupState.error}</p>
+                                        </div>
+                                    )}
                                 </section>
                             )}
 
@@ -1716,7 +1756,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         />
                                         <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros)" />
                                         
-                                        {(valuesRef.current.medioPago || "").toLowerCase() === "mixto" && (
+                                        {(selectedPaymentMethod || "").toLowerCase() === "mixto" && (
                                             <>
                                                 <Field name="medioPagoEfectivo" placeholder="Valor en efectivo" />
                                                 <Field name="medioPagoTransferencia" placeholder="Valor por transferencia" />

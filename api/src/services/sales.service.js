@@ -2,8 +2,80 @@ const { Op } = require('sequelize');
 const { Sale, Buyer, Inmueble, Persona, SeguimientoVenta, EstadosVenta, VentaAdjunto } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const { buildPaginationMeta } = require('../utils/pagination');
 
 class SaleService {
+  _normalizeFilterValue(value) {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  _normalizeTipoCompra(value) {
+    const normalized = this._normalizeFilterValue(value);
+    const map = {
+      directa: 'Directa',
+      financiada: 'Financiada',
+      mixta: 'Mixta'
+    };
+
+    return map[normalized] || value;
+  }
+
+  _buildEstadoFilterCondition(value) {
+    const normalized = this._normalizeFilterValue(value);
+    if (!normalized || normalized === 'todos') return null;
+
+    const detailMap = {
+      pagado: 'Pagado',
+      debe: 'Debe',
+      'en espera': 'En espera',
+      cancelado: 'Cancelado',
+      'en negociacion': 'En negociación',
+      completada: 'Completada'
+    };
+
+    const generalFallbackMap = {
+      cancelado: 'Cancelada',
+      completada: 'Finalizada'
+    };
+
+    const detailStatus = detailMap[normalized];
+    if (!detailStatus) {
+      return { estado: value };
+    }
+
+    const generalFallback = generalFallbackMap[normalized];
+    if (!generalFallback) {
+      return { estado_seguimiento: detailStatus };
+    }
+
+    return {
+      [Op.or]: [
+        { estado_seguimiento: detailStatus },
+        { estado: generalFallback }
+      ]
+    };
+  }
+
+  _normalizeStatus(value) {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  _isInactiveBuyer(buyer) {
+    if (!buyer) return true;
+
+    const buyerStatus = this._normalizeStatus(buyer.estado);
+    if (buyerStatus === 'inactivo') return true;
+
+    const personaStatus = buyer.persona?.estado;
+    if (personaStatus === false || personaStatus === 0) return true;
+
+    return false;
+  }
+
   _normalizeSaleDate(value) {
     const now = new Date();
     const isDateOnly = (input) => /^\d{4}-\d{2}-\d{2}$/.test(String(input || '').trim());
@@ -129,6 +201,74 @@ class SaleService {
     return 'Activa';
   }
 
+  _buildSaleListQuery(filters = {}) {
+    const whereClause = {};
+    const andConditions = [];
+    const includeOptions = [
+      {
+        association: 'inmueble',
+        attributes: [],
+        required: false
+      },
+      {
+        association: 'comprador',
+        attributes: [],
+        required: false,
+        include: [
+          {
+            association: 'persona',
+            attributes: [],
+            required: false
+          }
+        ]
+      }
+    ];
+
+    const estadoFilter = this._buildEstadoFilterCondition(filters.estado);
+    if (estadoFilter) andConditions.push(estadoFilter);
+    if (filters.id_persona) whereClause.id_comprador = filters.id_persona;
+    if (filters.id_comprador) whereClause.id_comprador = filters.id_comprador;
+    if (filters.tipo_compra) {
+      whereClause.tipo_compra = this._normalizeTipoCompra(filters.tipo_compra);
+    }
+    if (filters.fecha_inicio && filters.fecha_fin) {
+      whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
+    }
+
+    const rawSearch = String(filters.search || '').trim();
+    if (rawSearch) {
+      const search = `%${rawSearch}%`;
+      andConditions.push({
+        [Op.or]: [
+          { medio_pago: { [Op.like]: search } },
+          { estado: { [Op.like]: search } },
+          { estado_seguimiento: { [Op.like]: search } },
+          { nombre_vendedor: { [Op.like]: search } },
+          { correo_vendedor: { [Op.like]: search } },
+          { telefono_vendedor: { [Op.like]: search } },
+          { numero_doc_vendedor: { [Op.like]: search } },
+          { '$inmueble.registro_inmobiliario$': { [Op.like]: search } },
+          { '$inmueble.titulo$': { [Op.like]: search } },
+          { '$inmueble.direccion$': { [Op.like]: search } },
+          { '$inmueble.ciudad$': { [Op.like]: search } },
+          { '$inmueble.departamento$': { [Op.like]: search } },
+          { '$comprador.registro_comprador$': { [Op.like]: search } },
+          { '$comprador.persona.nombre_completo$': { [Op.like]: search } },
+          { '$comprador.persona.apellido_completo$': { [Op.like]: search } },
+          { '$comprador.persona.numero_documento$': { [Op.like]: search } },
+          { '$comprador.persona.correo$': { [Op.like]: search } },
+          { '$comprador.persona.telefono$': { [Op.like]: search } }
+        ]
+      });
+    }
+
+    if (andConditions.length) {
+      whereClause[Op.and] = andConditions;
+    }
+
+    return { whereClause, includeOptions };
+  }
+
   async _getEstadoVentaActivo(idEstadoVenta, transaction) {
     const estadoVenta = await EstadosVenta.findOne({
       where: { id_estado_venta: idEstadoVenta, estado: true },
@@ -149,6 +289,19 @@ class SaleService {
     }
 
     const estadoVenta = await this._getEstadoVentaActivo(trackingData.id_estado_venta, transaction);
+    const estadoVentaNormalizado = this._normalizeFilterValue(estadoVenta.nombre_estado);
+
+    if (estadoVentaNormalizado === 'completada') {
+      const adjuntos = Array.isArray(sale.adjuntos) ? sale.adjuntos : [];
+      const hasComprobante = adjuntos.some((adj) => String(adj.tipo || '').trim().toLowerCase() === 'comprobante');
+      const hasContrato = adjuntos.some((adj) => String(adj.tipo || '').trim().toLowerCase() === 'contrato');
+
+      if (!hasComprobante || !hasContrato) {
+        const error = new Error('Debes cargar contrato y comprobante antes de marcar la venta como Completada.');
+        error.status = 400;
+        throw error;
+      }
+    }
 
     const personaId =
       trackingData.id_persona ||
@@ -187,6 +340,38 @@ class SaleService {
       { transaction }
     );
 
+    if (sale.id_inmueble) {
+      const inmueble = await Inmueble.findByPk(sale.id_inmueble, { transaction });
+      if (inmueble) {
+        if (nuevoEstadoGeneral === 'Finalizada') {
+          await inmueble.update(
+            {
+              estado: false,
+              estado_frontend: 'Vendido',
+              destacado: false
+            },
+            { transaction }
+          );
+        } else if (nuevoEstadoGeneral === 'Cancelada') {
+          await inmueble.update(
+            {
+              estado: true,
+              estado_frontend: 'Disponible'
+            },
+            { transaction }
+          );
+        } else {
+          await inmueble.update(
+            {
+              estado: false,
+              estado_frontend: 'En proceso de venta'
+            },
+            { transaction }
+          );
+        }
+      }
+    }
+
     return { seguimiento, estadoVenta };
   }
 
@@ -200,6 +385,11 @@ class SaleService {
         const compradorId = saleData.id_comprador || saleData.id_persona;
         const comprador = await Buyer.findByPk(compradorId, { transaction: t, include: ['persona'] });
         if (!comprador) throw new Error('Comprador no encontrado');
+        if (this._isInactiveBuyer(comprador)) {
+          const error = new Error('El comprador está inactivo y no puede registrarse en una venta.');
+          error.status = 400;
+          throw error;
+        }
 
         const normalizedSaleDate = this._normalizeSaleDate(saleData.fecha_venta);
 
@@ -223,7 +413,7 @@ class SaleService {
         await inmueble.update(
           {
             estado: false,
-            estado_frontend: 'Vendido',
+            estado_frontend: 'En proceso de venta',
             destacado: false
           },
           { transaction: t }
@@ -308,22 +498,54 @@ class SaleService {
 
   async getAllSales(filters = {}) {
     try {
-      const includeOptions = this._buildSaleIncludeOptions(true);
+      const pagination = {
+        enabled: Boolean(filters.pagination?.enabled),
+        page: filters.pagination?.page || 1,
+        limit: filters.pagination?.limit || null,
+        offset: filters.pagination?.offset || 0
+      };
+      const { whereClause, includeOptions } = this._buildSaleListQuery(filters);
 
-      const whereClause = {};
-      if (filters.estado) whereClause.estado = filters.estado;
-      if (filters.id_persona) whereClause.id_comprador = filters.id_persona;
-      if (filters.id_comprador) whereClause.id_comprador = filters.id_comprador;
-      if (filters.fecha_inicio && filters.fecha_fin) {
-        whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
+      const baseQuery = {
+        where: whereClause,
+        include: includeOptions,
+        distinct: true,
+        col: 'id_venta',
+        order: [
+          ['fecha_venta', 'DESC'],
+          ['id_venta', 'DESC']
+        ],
+        logging: false
+      };
+
+      if (pagination.enabled) {
+        baseQuery.limit = pagination.limit;
+        baseQuery.offset = pagination.offset;
+      }
+
+      const { count, rows } = await Sale.findAndCountAll(baseQuery);
+      const saleIds = rows.map((sale) => sale.id_venta);
+      if (!saleIds.length) {
+        return {
+          data: [],
+          pagination: buildPaginationMeta({
+            total: count,
+            page: pagination.page,
+            limit: pagination.limit,
+            enabled: pagination.enabled
+          })
+        };
       }
 
       let sales;
       try {
         sales = await Sale.findAll({
-          where: whereClause,
-          include: includeOptions,
-          order: [['fecha_venta', 'DESC']],
+          where: { id_venta: { [Op.in]: saleIds } },
+          include: this._buildSaleIncludeOptions(true),
+          order: [
+            ['fecha_venta', 'DESC'],
+            ['id_venta', 'DESC']
+          ],
           logging: false
         });
       } catch (error) {
@@ -332,12 +554,18 @@ class SaleService {
         }
         logger.warn('Tabla VentaAdjuntos no existe. Se continua sin adjuntos en getAllSales.');
         sales = await Sale.findAll({
-          where: whereClause,
+          where: { id_venta: { [Op.in]: saleIds } },
           include: this._buildSaleIncludeOptions(false),
-          order: [['fecha_venta', 'DESC']],
+          order: [
+            ['fecha_venta', 'DESC'],
+            ['id_venta', 'DESC']
+          ],
           logging: false
         });
       }
+
+      const orderMap = new Map(saleIds.map((id, index) => [id, index]));
+      sales.sort((a, b) => orderMap.get(a.id_venta) - orderMap.get(b.id_venta));
 
       const ventaIds = sales.map((s) => s.id_venta);
       let trackingMap = {};
@@ -366,7 +594,7 @@ class SaleService {
         }, {});
       }
 
-      return sales.map((sale) => ({
+      const data = sales.map((sale) => ({
         id_venta: sale.id_venta,
         id_estado_venta: sale.id_estado_venta,
         fecha_venta: sale.fecha_venta,
@@ -440,6 +668,16 @@ class SaleService {
           fecha_creacion: adj.fecha_creacion
         }))
       }));
+
+      return {
+        data,
+        pagination: buildPaginationMeta({
+          total: count,
+          page: pagination.page,
+          limit: pagination.limit,
+          enabled: pagination.enabled
+        })
+      };
     } catch (error) {
       const dbMsg = error.original?.message || error.message || 'Error consultando ventas';
       logger.error(`Error en getAllSales: ${dbMsg}`);
@@ -491,7 +729,7 @@ class SaleService {
 
     await sale.update({ estado: 'Cancelada' });
     if (sale.inmueble) {
-      await sale.inmueble.update({ estado: 'Disponible' });
+      await sale.inmueble.update({ estado: true, estado_frontend: 'Disponible' });
     }
 
     return this.getSaleById(id);
@@ -501,6 +739,9 @@ class SaleService {
     const sale = await this.getSaleById(id);
     if (!sale) throw new Error('Venta no encontrada');
     await sale.update({ estado: 'Finalizada' });
+    if (sale.inmueble) {
+      await sale.inmueble.update({ estado: false, estado_frontend: 'Vendido', destacado: false });
+    }
     return this.getSaleById(id);
   }
 

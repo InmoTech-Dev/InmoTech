@@ -154,7 +154,7 @@ const UserRescheduleModal = ({ isOpen, onClose, appointment, newDate, onConfirm 
     return formatTimeTo12Hour(timeString) || timeString;
   };
 
-  // ✅ Función para calcular hora_fin con duración de una hora
+  // ✅ Función para calcular hora_fin con duración de 30 minutos
   const calcularHoraFin = (horaInicio) => {
     if (!horaInicio) return "";
     const [horaStr, minutosStr] = horaInicio.split(':');

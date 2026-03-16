@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
-import { Search, User, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import React from 'react';
+import { Search, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
-import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
 
-const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, onToggle }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const filteredUsers = users.filter(user =>
-        `${user.nombre_completo} ${user.apellido_completo}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.rol?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
+const UserSidebar = ({
+    users,
+    selectedUser,
+    onSelectUser,
+    loading,
+    isCollapsed,
+    onToggle,
+    searchTerm = '',
+    onSearchChange
+}) => {
     return (
         <div className={cn(
             "flex flex-col h-full bg-transparent border-r border-slate-100/50 transition-all duration-300 relative",
@@ -38,8 +39,8 @@ const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, 
                             <Input
                                 placeholder="Buscar reportes..."
                                 className="pl-9 bg-slate-50 border-slate-100/50 hover:bg-slate-100/80 focus:bg-white h-11 ring-offset-0 focus-visible:ring-2 focus-visible:ring-indigo-500/50 rounded-xl text-sm font-medium transition-all duration-200 placeholder:text-slate-400"
-                                value={searchTerm || ''}
-                                onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+                                value={searchTerm}
+                                onChange={(e) => onSearchChange?.(e.target.value)}
                             />
                         </>
                     )}
@@ -65,9 +66,9 @@ const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, 
                             </div>
                         ))}
                     </div>
-                ) : filteredUsers.length > 0 ? (
+                ) : users.length > 0 ? (
                     <div className="pb-4 px-2">
-                        {filteredUsers.map((user) => {
+                        {users.map((user) => {
                             const isSelected = selectedUser?.id_persona === user.id_persona;
                             const initials = `${user.nombre_completo?.[0] || ''}${user.apellido_completo?.[0] || ''}`.toUpperCase();
 

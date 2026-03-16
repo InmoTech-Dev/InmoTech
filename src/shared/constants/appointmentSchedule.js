@@ -6,8 +6,8 @@ export const WORKING_BLOCKS = [
   { start: "08:00", end: "13:00" },
   { start: "14:00", end: "17:00" },
 ];
-export const APPOINTMENT_INTERVAL_MINUTES = 60;
-export const APPOINTMENT_DURATION_MINUTES = 60;
+export const APPOINTMENT_INTERVAL_MINUTES = 30;
+export const APPOINTMENT_DURATION_MINUTES = 30;
 export const DEFAULT_APPOINTMENT_LEAD_MINUTES = 120;
 
 const pad = (value) => String(value).padStart(2, "0");
@@ -95,8 +95,8 @@ export const buildDailySlots = () =>
   }));
 
 export const getBusinessHoursLines = () => [
-  `${WORKING_DAY_LABEL}: 8:00 am - 1:00 pm`,
-  "2:00 pm - 5:00 pm",
+  `${WORKING_DAY_LABEL}: 8:00 am - 12:30 pm (última cita a las 12:30)`,
+  "2:00 pm - 4:30 pm (última cita a las 4:30)",
 ];
 
 export const getBusinessHoursMessage = () => getBusinessHoursLines().join(" ");

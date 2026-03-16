@@ -257,7 +257,7 @@ const UserEditAppointmentModal = ({
   const validateHora = (hora) => {
     if (!hora) return "La hora es requerida";
     if (!availableHours.includes(hora) && hora !== horaAgendadaOpcion) {
-      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de una hora`;
+      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de 30 minutos`;
     }
     return "";
   };
@@ -323,8 +323,8 @@ const UserEditAppointmentModal = ({
 
     if (editsUsed >= maxAllowedEdits) {
       toast({
-        title: "Limite de ediciones alcanzado",
-        description: "Solo se permite editar una cita " + maxAllowedEdits + " veces como maximo.",
+        title: "Límite de ediciones alcanzado",
+        description: "Solo se permite editar una cita " + maxAllowedEdits + " veces como máximo.",
         variant: "destructive"
       });
       return;

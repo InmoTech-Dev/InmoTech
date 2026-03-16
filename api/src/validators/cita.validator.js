@@ -181,8 +181,8 @@ const crearCitaSchema = Joi.object({
 })
   .custom(validateAppointmentSchedule)
   .messages({
-    'time.invalidStart': 'Las citas solo permiten horas en punto dentro del horario laboral',
-    'time.invalidRange': 'La hora de fin debe ser exactamente una hora despues de la hora de inicio',
+    'time.invalidStart': 'Las citas solo permiten intervalos de 30 minutos dentro del horario laboral',
+    'time.invalidRange': 'La hora de fin debe ser exactamente 30 minutos después de la hora de inicio',
     'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes'
   });
 
@@ -227,8 +227,8 @@ const actualizarCitaSchema = Joi.object({
   .unknown(true)
   .custom(validateAppointmentSchedule)
   .messages({
-    'time.invalidStart': 'Las citas solo permiten horas en punto dentro del horario laboral',
-    'time.invalidRange': 'La hora de fin debe ser exactamente una hora despues de la hora de inicio',
+    'time.invalidStart': 'Las citas solo permiten intervalos de 30 minutos dentro del horario laboral',
+    'time.invalidRange': 'La hora de fin debe ser exactamente 30 minutos después de la hora de inicio',
     'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes'
   });
 
@@ -308,8 +308,8 @@ const reagendarCitaSchema = Joi.object({
 })
   .custom(validateAppointmentSchedule)
   .messages({
-    'time.invalidStart': 'Las citas solo permiten horas en punto dentro del horario laboral',
-    'time.invalidRange': 'La hora de fin debe ser exactamente una hora despues de la hora de inicio',
+    'time.invalidStart': 'Las citas solo permiten intervalos de 30 minutos dentro del horario laboral',
+    'time.invalidRange': 'La hora de fin debe ser exactamente 30 minutos después de la hora de inicio',
     'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes'
   });
 

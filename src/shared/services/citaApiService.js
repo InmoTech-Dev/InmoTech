@@ -20,9 +20,9 @@ import {
 
 const SERVICIO_MAP = {
   "Visita a Propiedad": 1,
-  "AvalÃºos": 2,
-  "GestiÃ³n de Alquileres": 3,
-  "AsesorÃ­a Legal": 4,
+  "Avalúos": 2,
+  "Gestión de Alquileres": 3,
+  "Asesoría Legal": 4,
 };
 
 const ESTADO_TO_ID_MAP = {
@@ -335,8 +335,8 @@ class CitaApiService {
     const camposRequeridos = {
       nombre_completo: "Nombre completo",
       apellido_completo: "Apellido completo",
-      numero_documento: "NÃºmero de documento",
-      telefono: "TelÃ©fono",
+      numero_documento: "Número de documento",
+      telefono: "Teléfono",
       fecha_cita: "Fecha de la cita",
       hora_inicio: "Hora de inicio"
     };
@@ -348,17 +348,17 @@ class CitaApiService {
     }
 
     if (citaData.numero_documento && !/^[0-9]+$/.test(citaData.numero_documento)) {
-      throw new Error("El nÃºmero de documento debe contener solo nÃºmeros");
+      throw new Error("El número de documento debe contener solo números");
     }
 
     if (citaData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(citaData.email)) {
-      throw new Error("El formato del correo electrÃ³nico es invÃ¡lido");
+      throw new Error("El formato del correo electrónico es inválido");
     }
 
     if (citaData.telefono) {
       const telefonoLimpio = citaData.telefono.replace(/\D/g, "");
       if (telefonoLimpio.length < 10) {
-        throw new Error("El telÃ©fono debe tener al menos 10 dÃ­gitos");
+        throw new Error("El teléfono debe tener al menos 10 dígitos");
       }
     }
   }
@@ -399,8 +399,8 @@ class CitaApiService {
 
   mapTipoDocumentoToShort(tipo) {
     const map = {
-      "CÃ©dula de CiudadanÃ­a": "CC",
-      "CÃ©dula de ExtranjerÃ­a": "CE",
+      "Cédula de Ciudadanía": "CC",
+      "Cédula de Extranjería": "CE",
       "NIT": "NIT",
       "Pasaporte": "Pasaporte",
       "Tarjeta de Identidad": "TI",
@@ -816,21 +816,14 @@ class CitaApiService {
     } catch (error) {
       console.error("Error en obtenerHorariosDisponibles:", error);
 
-      // Fallback: retornar horarios predeterminados pero con bloqueo bÃ¡sico si no podemos consultar
-      const defaultHorarios = [];
-      for (let hora = 8; hora <= 17; hora++) {
-        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora < 17) {
-          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-        }
-      }
-      return defaultHorarios;
+      // Fallback: retornar horarios predeterminados pero con bloqueo básico si no podemos consultar
+      return buildDailySlots().map(slot => slot.hora_inicio);
     }
   }
 
   /**
    * Obtener horarios disponibles para reagendamiento (para usuarios normales)
-   * Con lÃ³gica especial para visitas a inmuebles, sin necesidad de permisos de admin
+   * Con lógica especial para visitas a inmuebles, sin necesidad de permisos de admin
    * @param {Object} data - Objeto con fecha_cita, id_servicio
    * @returns {Promise<Array>} Array de horarios disponibles en formato HH:mm
    */
@@ -846,8 +839,8 @@ class CitaApiService {
       const result = response.data.data || response.data;
 
       if (!Array.isArray(result)) {
-        console.error("Formato de respuesta invÃ¡lido para horarios disponibles de usuario:", response.data);
-        throw new Error("Formato de respuesta invÃ¡lido del servidor");
+        console.error("Formato de respuesta inválido para horarios disponibles de usuario:", response.data);
+        throw new Error("Formato de respuesta inválido del servidor");
       }
 
       console.log(`Horarios disponibles para reagendamiento obtenidos: ${result.length}`);
@@ -855,23 +848,7 @@ class CitaApiService {
 
     } catch (error) {
       console.error("Error en obtenerHorariosDisponiblesUsuario:", error);
-
-      const defaultHorarios = [];
-      // Horario fallback centralizado.
-      for (let hora = 8; hora <= 12; hora++) {
-        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora !== 12) {
-          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-        } else {
-          defaultHorarios.push(`12:00`);
-        }
-      }
-      // Franja de tarde fallback centralizada.
-      for (let hora = 14; hora <= 16; hora++) {
-        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-      }
-      return defaultHorarios;
+      return buildDailySlots().map(slot => slot.hora_inicio);
     }
   }
 
@@ -902,20 +879,7 @@ class CitaApiService {
 
     } catch (error) {
       console.error("Error en obtenerHorariosDisponiblesPublico:", error);
-      const defaultHorarios = [];
-      for (let hora = 8; hora <= 12; hora++) {
-        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        if (hora !== 12) {
-          defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-        } else {
-          defaultHorarios.push(`12:00`);
-        }
-      }
-      for (let hora = 14; hora <= 16; hora++) {
-        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:00`);
-        defaultHorarios.push(`${hora.toString().padStart(2, '0')}:30`);
-      }
-      return defaultHorarios;
+      return buildDailySlots().map(slot => slot.hora_inicio);
     }
   }
 
@@ -1062,8 +1026,8 @@ class CitaApiService {
       const data = response.data.data || response.data;
 
       if (!Array.isArray(data)) {
-        console.error("Formato de respuesta invÃ¡lido del servidor para mis citas:", response.data);
-        throw new Error("Formato de respuesta invÃ¡lido del servidor");
+        console.error("Formato de respuesta inválido del servidor para mis citas:", response.data);
+        throw new Error("Formato de respuesta inválido del servidor");
       }
 
       return data.map(cita => this.transformarCitaDesdeAPI(cita));

@@ -444,6 +444,19 @@ const PropertyOwnersManagement = () => {
                           <div className="font-medium truncate" title={owner.nombreCompleto}>{owner.nombreCompleto}</div>
                           <div className="lg:hidden text-xs text-slate-500 truncate" title={owner.registro}>{owner.registro}</div>
                         </td>
+                        <td className="px-3 py-2 align-middle text-[13px] text-slate-700">
+                          <span title={owner.documento || owner.numeroDocumento || 'Sin documento'}>
+                            {owner.documento || owner.numeroDocumento || 'Sin documento'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 align-middle text-[13px] text-slate-700">
+                          <div className="truncate" title={owner.telefono || 'Sin telefono'}>
+                            {owner.telefono || 'Sin telefono'}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate" title={owner.email || 'Sin correo'}>
+                            {owner.email || 'Sin correo'}
+                          </div>
+                        </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1 text-[13px]">
                             <Building2 className="w-3 h-3 text-gray-500" />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Eye, Edit, X, Building2, User } from 'lucide-react';
+import { Eye, Edit, X, Building2, User, Search } from 'lucide-react';
 import OwnerForm from './components/ownerForm';
 import ownersApiService, { normalizeOwnerResponse } from '../../../../shared/services/ownersApiService';
 import { useInmuebles } from '../Inmuebles/hooks/useInmuebles';
@@ -22,7 +22,9 @@ const PropertyOwnersManagement = () => {
     inmuebles: catalogoInmuebles,
     loading: inmueblesLoading,
     error: inmueblesError,
-    crearInmueble
+    crearInmueble,
+    actualizarInmueble,
+    cargarInmuebles
   } = useInmuebles();
 
   const [owners, setOwners] = useState([]);
@@ -205,6 +207,13 @@ const PropertyOwnersManagement = () => {
       const selectedIds = Array.from(
         new Set((selectedInmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
       );
+      const previousIds = Array.from(
+        new Set(
+          (selectedOwner?.inmuebles || [])
+            .map((item) => Number(item?.id))
+            .filter((id) => Number.isFinite(id))
+        )
+      );
 
       if (modalMode === 'create' && selectedIds.length === 0) {
         throw new Error('Debes asignar al menos un inmueble valido para crear el propietario.');
@@ -243,19 +252,19 @@ const PropertyOwnersManagement = () => {
 
         for (const inmuebleId of toAssign) {
           await withDeadlockRetry(() =>
-            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
+            actualizarInmueble(inmuebleId, { propietarioId: ownerId })
           );
         }
 
         for (const inmuebleId of toKeepAssigned) {
           await withDeadlockRetry(() =>
-            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
+            actualizarInmueble(inmuebleId, { propietarioId: ownerId })
           );
         }
 
         for (const inmuebleId of toUnassign) {
           await withDeadlockRetry(() =>
-            inmueblesAPI.updateInmueble(inmuebleId, { desasignar_propietario: true })
+            actualizarInmueble(inmuebleId, { desasignar_propietario: true })
           );
         }
       };

@@ -64,6 +64,16 @@ function formatDocument(tipo, numero) {
   return "-";
 }
 
+function cleanLeaseDescription(value) {
+  if (!value) return "";
+
+  return String(value)
+    .replace(/\s*(Decision|Decisión)\s*:\s*[\s\S]*$/i, "")
+    .replace(/\s*Observaci[oó]n\s*:\s*[\s\S]*$/i, "")
+    .replace(/\s*Soporte\s*:\s*https?:\/\/\S+/i, "")
+    .trim();
+}
+
 function getImageUrl(entry) {
   if (!entry) return "";
   const raw =
@@ -114,16 +124,17 @@ function estadoTone(estado) {
 
 export default function ViewRenant({ renant, onClose }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const descripcionContrato =
+  const descripcionContrato = cleanLeaseDescription(
     renant?.ultimoSeguimientoDescripcion ||
-    renant?.ultimoSeguimientoComentario ||
-    renant?.ultimo_seguimiento_descripcion ||
-    renant?.ultimo_seguimiento_comentario ||
-    renant?.descripcionContrato ||
-    renant?.descripcion_arriendo ||
-    renant?.descripcionInmueble ||
-    renant?.descripcion ||
-    "";
+      renant?.ultimoSeguimientoComentario ||
+      renant?.ultimo_seguimiento_descripcion ||
+      renant?.ultimo_seguimiento_comentario ||
+      renant?.descripcionContrato ||
+      renant?.descripcion_arriendo ||
+      renant?.descripcionInmueble ||
+      renant?.descripcion ||
+      ""
+  );
 
   const persona =
     renant?.arrendatarioRaw ||

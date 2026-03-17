@@ -68,6 +68,15 @@ function formatDateCompact(value) {
   return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString("es-CO");
 }
 
+function hasDisplayValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized !== "" && normalized !== "-" && normalized !== "n/d" && normalized !== "sin dato";
+  }
+  return true;
+}
+
 /* ---------- Component ---------- */
 export default function ViewSaleModal({ sale, onClose }) {
   if (!sale) return null;
@@ -354,6 +363,62 @@ export default function ViewSaleModal({ sale, onClose }) {
     sale.descripcionPagoMixto
   );
 
+  const inmuebleTipoNormalizado = String(sale.inmuebleTipo || snapshot.inmuebleTipo || "")
+    .trim()
+    .toLowerCase();
+
+  const inmueblePrecio = formatMoneyCOP(sale.valor || sale.inmueblePrecio || snapshot.inmueblePrecio);
+  const inmuebleArea = show(sale.inmuebleArea || snapshot.inmuebleArea);
+  const inmuebleHabitaciones = show(sale.inmuebleHabitaciones || snapshot.inmuebleHabitaciones);
+  const inmuebleBanos = show(sale.inmuebleBanos || snapshot.inmuebleBanos);
+  const inmuebleParqueaderos = show(
+    sale.inmuebleParqueaderos ||
+      snapshot.inmuebleParqueaderos ||
+      raw.inmuebleParqueaderos ||
+      raw.parqueaderos ||
+      raw.inmueble_parqueaderos ||
+      raw.garajes ||
+      sale.parqueaderos ||
+      snapshot.parqueaderos
+  );
+
+  const metricasPorTipo = (() => {
+    const esLote = inmuebleTipoNormalizado.includes("lote") || inmuebleTipoNormalizado.includes("terreno");
+    const esComercial =
+      inmuebleTipoNormalizado.includes("oficina") ||
+      inmuebleTipoNormalizado.includes("local") ||
+      inmuebleTipoNormalizado.includes("bodega");
+    const areaLabel = esLote ? "Area del lote" : "Area";
+
+    if (esLote) {
+      return [{ label: areaLabel, value: inmuebleArea }];
+    }
+
+    if (esComercial) {
+      return [
+        { label: areaLabel, value: inmuebleArea },
+        { label: "Baños", value: inmuebleBanos },
+        { label: "Parqueaderos", value: inmuebleParqueaderos },
+      ];
+    }
+
+    return [
+      { label: areaLabel, value: inmuebleArea },
+      { label: "Habitaciones", value: inmuebleHabitaciones },
+      { label: "Baños", value: inmuebleBanos },
+      { label: "Parqueaderos", value: inmuebleParqueaderos },
+    ];
+  })().filter((item) => hasDisplayValue(item.value));
+
+  const inmuebleCamposUbicacion = [
+    { label: "Precio", value: inmueblePrecio },
+    { label: "Dirección", value: show(sale.inmuebleDireccion) },
+    { label: "Barrio", value: show(sale.inmuebleBarrio || snapshot.inmuebleBarrio) },
+    { label: "Ciudad", value: show(sale.inmuebleCiudad || snapshot.inmuebleCiudad) },
+    { label: "Departamento", value: show(sale.inmuebleDepartamento || snapshot.inmuebleDepartamento) },
+    { label: "País", value: show(sale.inmueblePais || snapshot.inmueblePais) },
+  ].filter((item) => hasDisplayValue(item.value));
+
   return (
     <AnimatePresence>
       {sale && (
@@ -476,7 +541,7 @@ export default function ViewSaleModal({ sale, onClose }) {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-2">
+                  <div className="hidden grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-2">
                     <Field label="Nombre" value={show(sale.inmuebleNombre)} className="col-span-2 sm:col-span-3" />
                     <Field label="Habitaciones" value={show(sale.inmuebleHabitaciones || snapshot.inmuebleHabitaciones)} />
                     <Field label="Baños" value={show(sale.inmuebleBanos || snapshot.inmuebleBanos)} />
@@ -487,6 +552,20 @@ export default function ViewSaleModal({ sale, onClose }) {
                     <Field label="Ciudad" value={show(sale.inmuebleCiudad || snapshot.inmuebleCiudad)} />
                     <Field label="Departamento" value={show(sale.inmuebleDepartamento || snapshot.inmuebleDepartamento)} />
                     <Field label="País" value={show(sale.inmueblePais || snapshot.inmueblePais)} />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-2">
+                    <Field label="Nombre" value={show(sale.inmuebleNombre)} className="col-span-2 sm:col-span-3" />
+                    {metricasPorTipo.map((item) => (
+                      <Field key={item.label} label={item.label} value={item.value} />
+                    ))}
+                    {inmuebleCamposUbicacion.map((item) => (
+                      <Field
+                        key={item.label}
+                        label={item.label}
+                        value={item.value}
+                        className={item.label === "Dirección" ? "col-span-2 sm:col-span-3" : ""}
+                      />
+                    ))}
                   </div>
                 </section>
 

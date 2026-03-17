@@ -31,6 +31,17 @@ const BUYER_ATTRS = [
 ];
 
 class BuyerService {
+  buildNonCancelledSaleWhere(extraWhere = {}) {
+    return {
+      ...extraWhere,
+      estado: { [Op.ne]: 'Cancelada' },
+      [Op.or]: [
+        { estado_seguimiento: null },
+        { estado_seguimiento: { [Op.ne]: 'Cancelado' } }
+      ]
+    };
+  }
+
   normalizeFilterValue(value) {
     return String(value ?? '')
       .toLowerCase()
@@ -117,7 +128,9 @@ class BuyerService {
     if (!buyerIds.length) return {};
 
     const sales = await Sale.findAll({
-      where: { id_comprador: { [Op.in]: buyerIds } },
+      where: this.buildNonCancelledSaleWhere({
+        id_comprador: { [Op.in]: buyerIds }
+      }),
       include: [
         {
           association: 'inmueble',
@@ -507,7 +520,10 @@ class BuyerService {
         throw new Error('Comprador no encontrado');
       }
 
-      const salesCount = await Sale.count({ where: { id_comprador: id }, transaction });
+      const salesCount = await Sale.count({
+        where: this.buildNonCancelledSaleWhere({ id_comprador: id }),
+        transaction
+      });
       if (salesCount > 0) {
         const err = new Error(
           'No puedes editar un comprador con ventas asociadas. Anula o elimina la venta antes de editar.'

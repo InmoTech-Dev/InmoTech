@@ -727,7 +727,7 @@ class SaleService {
     const sale = await this.getSaleById(id);
     if (!sale) throw new Error('Venta no encontrada');
 
-    await sale.update({ estado: 'Cancelada' });
+    await sale.update({ estado: 'Cancelada', estado_seguimiento: 'Cancelado', id_estado_venta: null });
     if (sale.inmueble) {
       await sale.inmueble.update({ estado: true, estado_frontend: 'Disponible' });
     }

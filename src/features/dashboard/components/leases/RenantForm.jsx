@@ -40,6 +40,19 @@ const FIXED_CHARGE_DAY = 5;
 const normalizeTextValue = (value = "") =>
     typeof value === "string" ? value.trim().toLowerCase() : "";
 
+const isActiveStatus = (estado = "") => {
+    const normalized = normalizeTextValue(estado);
+    return normalized === "activo" || normalized === "activa" || estado === true;
+};
+
+const getRenantState = (renant = {}) =>
+    renant.estado ?? renant.status ?? renant.raw?.estado ?? renant.persona?.estado;
+
+const renantHasState = (renant = {}) =>
+    getRenantState(renant) !== undefined && getRenantState(renant) !== null && getRenantState(renant) !== "";
+
+const renantIsActive = (renant = {}) => isActiveStatus(getRenantState(renant));
+
 const getPropertySource = (property = {}) =>
     property?.metadata?.raw || property?.raw || property || {};
 
@@ -417,8 +430,18 @@ export default function RentForm({ onClose, onSubmit }) {
         NUMERO_DOC_ARR, NUMERO_DOC_COD,
     ];
 
+    const cleanDocument = (value = "") => value.toString().replace(/[^0-9]/g, "").trim();
+    const cleanDocumentByType = (tipoDocumento = "", value = "") => {
+        const normalizedType = String(tipoDocumento || "").trim().toUpperCase();
+        const rawValue = value.toString().trim();
+        if (normalizedType === "PASAPORTE" || normalizedType === "PAS") {
+            return rawValue.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+        }
+        return cleanDocument(rawValue);
+    };
+
     const shouldTriggerArrLookup = (tipo = "", numero = "") => {
-        const clean = sanitizeNumericString(numero);
+        const clean = cleanDocumentByType(tipo, numero);
         return Boolean((tipo || "").trim()) && clean.length >= MIN_DOC_LOOKUP_LENGTH;
     };
 
@@ -436,7 +459,7 @@ export default function RentForm({ onClose, onSubmit }) {
 
     // FunciÃ³n para validar documentos segÃºn el tipo
     const validateDocument = (tipoDocumento, numeroDocumento) => {
-        const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
+        const numeroLimpio = cleanDocumentByType(tipoDocumento, numeroDocumento);
 
         switch (tipoDocumento) {
             case 'CC': // Cedula de Ciudadania
@@ -641,7 +664,10 @@ export default function RentForm({ onClose, onSubmit }) {
 
         arrendatarioMatchedDocumentRef.current = {
             tipo: String(renant.tipoDocumento || renant.raw?.persona?.tipo_documento || "").trim().toUpperCase(),
-            numero: cleanDocument(renant.documento || renant.raw?.persona?.numero_documento || ""),
+            numero: cleanDocumentByType(
+                renant.tipoDocumento || renant.raw?.persona?.tipo_documento || "",
+                renant.documento || renant.raw?.persona?.numero_documento || ""
+            ),
         };
 
         const replacements = {
@@ -786,11 +812,9 @@ export default function RentForm({ onClose, onSubmit }) {
         }
     }, [autofillInmueble]);
 
-    const cleanDocument = (value = "") => value.toString().replace(/[^0-9]/g, "").trim();
-
     const fetchArrendatarioByDocument = useCallback(async () => {
         const tipoDocumento = (valuesRef.current.tipoDocArrendatario || "").trim().toUpperCase();
-        const numeroDocumento = cleanDocument(valuesRef.current.numeroDocArrendatario);
+        const numeroDocumento = cleanDocumentByType(tipoDocumento, valuesRef.current.numeroDocArrendatario);
 
         if (!tipoDocumento || !numeroDocumento) {
             setArrendatarioLookupState({ loading: false, message: "", error: null });
@@ -826,8 +850,9 @@ export default function RentForm({ onClose, onSubmit }) {
             }
             if (!match) {
                 const results = await renantsApiService.getAll();
-                match = results.find((renant) => {
-                    const storedDoc = cleanDocument(renant.documento);
+                const list = Array.isArray(results) ? results : results?.data || [];
+                match = list.find((renant) => {
+                    const storedDoc = cleanDocumentByType(tipoDocumento, renant.documento);
                     const tipo = (renant.tipoDocumento || "").toString().trim().toUpperCase();
                     return storedDoc === numeroDocumento && tipo === tipoDocumento;
                 });
@@ -979,7 +1004,7 @@ export default function RentForm({ onClose, onSubmit }) {
             const tipo = String(
                 name === "tipoDocArrendatario" ? cleanValue : valuesRef.current.tipoDocArrendatario || ""
             ).trim().toUpperCase();
-            const numero = cleanDocument(
+            const numero = cleanDocumentByType(tipo,
                 name === "numeroDocArrendatario" ? cleanValue : valuesRef.current.numeroDocArrendatario || ""
             );
 
@@ -1561,14 +1586,14 @@ export default function RentForm({ onClose, onSubmit }) {
                 if (error?.message?.toLowerCase().includes(duplicateMsg)) {
                     // Ya existe â†’ lo buscamos y reutilizamos
                     const tipoDocumento = (rawValues.tipoDocArrendatario || "").trim();
-                    const numeroDocumento = cleanDocument(rawValues.numeroDocArrendatario);
+                    const numeroDocumento = cleanDocumentByType(tipoDocumento, rawValues.numeroDocArrendatario);
 
                     const existing = await renantsApiService.getAll({
                         tipo_documento: tipoDocumento,
                         numero_documento: numeroDocumento
                     });
 
-                    const matched = existing?.[0];
+                    const matched = Array.isArray(existing) ? existing[0] : existing?.data?.[0];
                     if (!matched) {
                         throw error; // no pudimos recuperarlo, dejamos que caiga al catch general
                     }

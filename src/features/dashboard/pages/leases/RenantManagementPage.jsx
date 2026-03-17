@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaCalendar } from "react-icons/fa";
@@ -24,6 +24,13 @@ const formatCurrency = (value) => {
   if (!Number.isFinite(numeric)) return "";
   return `${numeric.toLocaleString("es-CO")} $`;
 };
+
+const normalizeFilterText = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
 const normalizeDateString = (raw) => {
   if (!raw) return "";
@@ -332,23 +339,58 @@ export function RenantManagementPage() {
     setIsLoading(true);
     try {
       const response = await arriendoApiService.obtenerArriendos({
-        page,
-        limit: PAGE_SIZE,
-        search: query || undefined,
-        estado: estadoFilter !== "todos" ? estadoFilter : undefined,
-        tipo_inmueble: tipoInmuebleFilter !== "todos" ? tipoInmuebleFilter : undefined,
+        page: 1,
+        limit: 200,
       });
       const list = response?.data || [];
-      setArriendos(list.map(mapApiArriendoToRow));
-      setPagination(response?.pagination || {
-        total: list.length,
-        pagina: page,
-        limite: PAGE_SIZE,
-        paginas_totales: 1,
-        has_next_page: false,
-        has_prev_page: page > 1,
+      const normalizedQuery = String(query || "").trim().toLowerCase();
+      const normalizedList = list.map(mapApiArriendoToRow);
+      const filteredList = normalizedList.filter((item) => {
+        const matchesSearch =
+          !normalizedQuery ||
+          [
+            item.nombreInmueble,
+            item.registroInmobiliario,
+            item.tipoInmueble,
+            item.direccion,
+            item.ciudad,
+            item.departamento,
+            item.barrio,
+            item.numeroDocArrendatario,
+            item.correoArrendatario,
+            item.telefonoArrendatario,
+            item.primerNombreArrendatario,
+            item.segundoNombreArrendatario,
+            item.primerApellidoArrendatario,
+            item.segundoApellidoArrendatario,
+            item.primerNombreCodeudor,
+            item.primerApellidoCodeudor,
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+
+        const matchesEstado =
+          estadoFilter === "todos" ||
+          normalizeFilterText(item.estado) === normalizeFilterText(estadoFilter);
+
+        const matchesTipoInmueble =
+          tipoInmuebleFilter === "todos" ||
+          normalizeFilterText(item.tipoInmueble) === normalizeFilterText(tipoInmuebleFilter);
+
+        return matchesSearch && matchesEstado && matchesTipoInmueble;
       });
-      setCurrentPage(response?.pagination?.pagina || page);
+      const totalPages = Math.max(Math.ceil(filteredList.length / PAGE_SIZE), 1);
+      const resolvedPage = Math.min(Math.max(page, 1), totalPages);
+      setArriendos(filteredList);
+      setPagination({
+        total: filteredList.length,
+        pagina: resolvedPage,
+        limite: PAGE_SIZE,
+        paginas_totales: totalPages,
+        has_next_page: resolvedPage < totalPages,
+        has_prev_page: resolvedPage > 1,
+      });
+      setCurrentPage(resolvedPage);
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage({
@@ -364,6 +406,11 @@ export function RenantManagementPage() {
       setIsLoading(false);
     }
   }, [estadoFilter, setStatusMessage, tipoInmuebleFilter]);
+
+  const paginatedArriendos = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return arriendos.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [arriendos, currentPage]);
 
   useEffect(() => {
     fetchArriendos();
@@ -1714,7 +1761,7 @@ const renderDeleteModal = () => {
                       </td>
                     </tr>
                   ) : arriendos.length > 0 ? (
-                    arriendos.map((r) => (
+                    paginatedArriendos.map((r) => (
                       <tr
                         key={r.id}
                         className="hover:bg-slate-50 transition-colors"
@@ -1813,7 +1860,6 @@ const renderDeleteModal = () => {
               onPageChange={(page) => {
                 if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
                 setCurrentPage(page);
-                fetchArriendos(searchTerm.trim(), page);
               }}
             />
           </div>

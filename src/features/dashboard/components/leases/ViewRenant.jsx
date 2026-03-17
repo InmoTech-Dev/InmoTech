@@ -50,6 +50,66 @@ function formatDate(value) {
   return m ? m[1] : s;
 }
 
+function formatDocument(tipo, numero) {
+  const safeTipo = String(tipo || "").trim();
+  const safeNumero = String(numero || "").trim();
+
+  if (safeTipo && safeNumero) return `${safeTipo} - ${safeNumero}`;
+  if (safeNumero) return safeNumero;
+  if (safeTipo) return safeTipo;
+  return "-";
+}
+
+function cleanLeaseDescription(value) {
+  if (!value) return "";
+
+  return String(value)
+    .replace(/\s*(Decision|Decisión)\s*:\s*[\s\S]*$/i, "")
+    .replace(/\s*Observaci[oó]n\s*:\s*[\s\S]*$/i, "")
+    .replace(/\s*Soporte\s*:\s*https?:\/\/\S+/i, "")
+    .trim();
+}
+
+function getImageUrl(entry) {
+  if (!entry) return "";
+  const raw =
+    typeof entry === "string"
+      ? entry
+      : (
+    entry.ruta_archivo ||
+    entry.url ||
+    entry.secure_url ||
+    entry.src ||
+    entry.imagen_url ||
+    entry.imagenUrl ||
+    entry.foto_url ||
+    entry.foto ||
+    ""
+  );
+
+  const src = String(raw || "").trim();
+  if (!src) return "";
+  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
+    return src;
+  }
+
+  const normalizedPath = src.startsWith("/") ? src : `/${src}`;
+  if (normalizedPath.startsWith("/uploads/")) {
+    const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api\/v\d+$/i, "");
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  return normalizedPath;
+}
+
+function normalizeAmenityName(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function estadoTone(estado) {
   const e = (estado || "").toLowerCase();
   if (["pagado", "activo", "vigente"].some((k) => e.includes(k))) return "green";
@@ -59,19 +119,18 @@ function estadoTone(estado) {
 }
 
 export default function ViewRenant({ renant, onClose }) {
-  const descripcionContrato =
+  const [imageFailed, setImageFailed] = useState(false);
+  const descripcionContrato = cleanLeaseDescription(
     renant?.ultimoSeguimientoDescripcion ||
-    renant?.ultimoSeguimientoComentario ||
-    renant?.ultimo_seguimiento_descripcion ||
-    renant?.ultimo_seguimiento_comentario ||
-    renant?.comentario ||
-    renant?.descripcion ||
-    renant?.descripcionContrato ||
-    renant?.descripcion_arriendo ||
-    renant?.descripcion_garantia ||
-    renant?.observaciones ||
-    renant?.descripcionInmueble ||
-    "";
+      renant?.ultimoSeguimientoComentario ||
+      renant?.ultimo_seguimiento_descripcion ||
+      renant?.ultimo_seguimiento_comentario ||
+      renant?.descripcionContrato ||
+      renant?.descripcion_arriendo ||
+      renant?.descripcionInmueble ||
+      renant?.descripcion ||
+      ""
+  );
 
   const persona =
     renant?.arrendatarioRaw ||

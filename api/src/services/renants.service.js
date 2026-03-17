@@ -35,6 +35,13 @@ const RENANT_ATTRS = [
 ];
 
 class RenantService {
+  buildActiveLeaseWhere(extraWhere = {}) {
+    return {
+      ...extraWhere,
+      estado: { [Op.notIn]: ['Finalizado', 'Cancelado'] }
+    };
+  }
+
   getStatusSortWeight(value) {
     const normalized = this.normalizeSearchValue(value);
     const weights = {
@@ -394,7 +401,8 @@ class RenantService {
     const leaseInclude = {
       association: 'arrendamientosLegacy',
       attributes: ['id_arrendamiento'],
-      required: associationFilter === 'con-inmueble'
+      required: associationFilter === 'con-inmueble',
+      where: this.buildActiveLeaseWhere()
     };
 
     const baseWhere = Object.keys(renantWhere).length ? { ...renantWhere } : {};
@@ -463,6 +471,26 @@ class RenantService {
         transaction
       });
       if (!renant) throw new Error('Arrendatario no encontrado');
+
+      const [legacyArriendos, leaseRows] = await Promise.all([
+        Arriendo.count({
+          where: this.buildActiveLeaseWhere({ id_arrendatario: id }),
+          transaction
+        }),
+        Lease
+          ? Lease.count({
+              where: this.buildActiveLeaseWhere({ id_cliente: id }),
+              transaction
+            })
+          : Promise.resolve(0)
+      ]);
+      if (legacyArriendos + leaseRows > 0) {
+        const err = new Error(
+          'No puedes editar un arrendatario con arriendos asociados. Finaliza o elimina el contrato primero.'
+        );
+        err.status = 409;
+        throw err;
+      }
 
       if (renant.persona) {
         await renant.persona.update(

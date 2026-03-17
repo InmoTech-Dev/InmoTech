@@ -18,8 +18,7 @@ import {
   Eye,
   X,
   Save,
-  AlertCircle,
-  Download
+  AlertCircle
 } from "lucide-react";
 
 const modulesData = [
@@ -62,7 +61,7 @@ const modulesData = [
   {
     name: "Reportes Inmobiliarios",
     key: "reportes",
-    permisos: ["Crear", "Editar", "Eliminar", "Ver", "Descargar"],
+    permisos: ["Crear", "Editar", "Anular", "Ver"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
     iconColor: "text-slate-600",
@@ -74,8 +73,8 @@ const permissionConfig = {
   "Crear": { icon: Plus, color: "text-green-600", bg: "bg-green-50" },
   "Editar": { icon: Edit, color: "text-blue-600", bg: "bg-blue-50" },
   "Eliminar": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
-  "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" },
-  "Descargar": { icon: Download, color: "text-purple-600", bg: "bg-purple-50" }
+  "Anular": { icon: Trash2, color: "text-red-600", bg: "bg-red-50" },
+  "Ver": { icon: Eye, color: "text-gray-600", bg: "bg-gray-50" }
 };
 
 const VIEW_PERMISSION = "Ver";
@@ -484,7 +483,7 @@ export default function CrearRolModal({ isOpen, onClose, onSubmit }) {
                                     </div>
                                     <span className={`text-xs font-medium ${isChecked ? config.color : 'text-gray-500'
                                       }`}>
-                                      {(module.key === 'reportes' && permiso === 'Eliminar') ? 'Anular' : permiso}
+                                      {permiso}
                                     </span>
                                   </label>
                                 );

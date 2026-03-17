@@ -24,6 +24,7 @@ import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDia
 import RescheduleConfirmModal from './RescheduleConfirmModal';
 import { useToast } from '../../../../shared/hooks/use-toast';
 import { useAuth } from '../../../../shared/contexts/AuthContext';
+import { isBusinessDay } from '../../../../shared/constants/appointmentSchedule';
 
 // Componente para zonas de navegación invisibles
 const NavigationZone = ({ id, direction, onNavigate }) => {
@@ -97,6 +98,7 @@ const DayCell = ({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const isPast = cellDate < today;
+  const isBusinessDate = day ? isBusinessDay(cellDate) : false;
 
   return (
     <motion.div
@@ -126,6 +128,7 @@ const DayCell = ({
                 <AppointmentCard
                   key={appointment.id}
                   appointment={appointment}
+                  compact={true}
                   onClick={(e) => {
                     e.stopPropagation();
                     onAppointmentClick(appointment, e);
@@ -147,7 +150,7 @@ const DayCell = ({
             )}
           </div>
 
-          {isActive && !isPast && (
+          {isActive && !isPast && isBusinessDate && (
             <motion.button
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -317,6 +320,40 @@ const AppointmentCalendar = ({
         variant: "destructive"
       });
       return;
+    }
+
+    if (!isBusinessDay(targetDate)) {
+      toast({
+        title: "Fecha inválida",
+        description: "Las citas solo se pueden reagendar de lunes a viernes.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // âœ… VALIDACIÃ“N DE CONFLICTO (Real-time)
+    // Si la cita tiene un agente asignado, verificar si ese agente ya tiene citas en la fecha destino
+    if (appointment.id_agente_asignado) {
+      const citasDelAgenteEnFechaDestino = citas.filter(c =>
+        (c.id_agente_asignado === appointment.id_agente_asignado) &&
+        (c.fecha_cita === targetDate || c.fecha === targetDate) &&
+        (c.id_estado_cita === 2 || c.id_estado_cita === 4) && // Confirmada o Reagendada
+        (c.id_cita !== appointment.id_cita && c.id !== appointment.id)
+      );
+
+      // Si hay conflicto de hora exacta
+      const tieneConflicto = citasDelAgenteEnFechaDestino.some(c =>
+        c.hora_inicio === appointment.hora_inicio
+      );
+
+      if (tieneConflicto) {
+        toast({
+          title: "Conflicto de Horario",
+          description: "El agente ya tiene una cita confirmada en este horario para la fecha seleccionada.",
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     const maxEdits = appointment.ediciones_maximas ?? 2;
@@ -536,7 +573,13 @@ const AppointmentCalendar = ({
                 const isToday = day === new Date().getDate() &&
                   currentDate.getMonth() === new Date().getMonth() &&
                   currentDate.getFullYear() === new Date().getFullYear();
-                const isActive = activeDay === day && (userMode || hasPermission("citas", "crear"));
+                const dateValue = day
+                  ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+                  : null;
+                const isActive =
+                  activeDay === day &&
+                  isBusinessDay(dateValue) &&
+                  (userMode || hasPermission("citas", "crear"));
 
                 return (
                   <DayCell

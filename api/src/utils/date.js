@@ -1,6 +1,12 @@
 /**
  * Utilidades para manejo de fechas y horas compatibles con SQL Server
  */
+const {
+  APPOINTMENT_DURATION_MINUTES,
+  calculateEndTime,
+  isWithinBusinessSchedule,
+  normalizeTime,
+} = require("../constants/appointmentSchedule");
 
 /**
  * Normaliza una fecha al formato YYYY-MM-DD
@@ -25,8 +31,29 @@ const normalizarFechaCita = (fecha) => {
  */
 const normalizarHoraExacta = (hora) => {
   if (!hora) return null;
+  
+  // Si es un objeto Date (Sequelize TIME)
+  if (hora instanceof Date) {
+    const h = String(hora.getHours()).padStart(2, '0');
+    const m = String(hora.getMinutes()).padStart(2, '0');
+    const s = String(hora.getSeconds()).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+
   const t = String(hora).trim();
-  // Formato HH:mm o HH:mm:ss
+  // Formato HH:mm o HH:mm:ss o ISO con T
+  if (t.includes('T')) {
+    try {
+      const d = new Date(t);
+      if (!isNaN(d.getTime())) {
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        const s = String(d.getSeconds()).padStart(2, '0');
+        return `${h}:${m}:${s}`;
+      }
+    } catch (e) {}
+  }
+
   const match = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) return null;
 
@@ -49,7 +76,26 @@ const normalizarHoraTexto = (hora) => {
  */
 const horaEnMinutos = (hora) => {
   if (!hora) return 0;
-  const [h, m] = hora.split(':').map(Number);
+  
+  let h, m;
+  
+  if (typeof hora === 'string') {
+    const parts = hora.split(':');
+    h = Number(parts[0]) || 0;
+    m = Number(parts[1]) || 0;
+  } else if (hora instanceof Date) {
+    // Si es un objeto Date (Sequelize a veces devuelve TIME como Date)
+    h = hora.getHours();
+    m = hora.getMinutes();
+  } else {
+    // Intentar convertir a string y procesar
+    const t = String(hora).trim();
+    const parts = t.split(':');
+    if (parts.length < 2) return 0;
+    h = Number(parts[0]) || 0;
+    m = Number(parts[1]) || 0;
+  }
+  
   return h * 60 + m;
 };
 
@@ -59,8 +105,10 @@ const horaEnMinutos = (hora) => {
 const sumarMinutosHora = (hora, minutos) => {
   if (!hora) return null;
   const total = horaEnMinutos(hora) + minutos;
-  const h = Math.floor(total / 60) % 24;
-  const m = total % 60;
+  // Asegurarnos de que el total no sea negativo (ej: 00:00 - 1 min)
+  const totalPositivo = total < 0 ? (24 * 60) + total : total;
+  const h = Math.floor(totalPositivo / 60) % 24;
+  const m = totalPositivo % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
 };
 
@@ -73,11 +121,22 @@ const resolverRangoHorario = ({ horaInicio, horaFin, duracion = 60 }) => {
 
   let hFin = normalizarHoraExacta(horaFin);
   if (!hFin) {
-    hFin = sumarMinutosHora(hInicio, duracion);
+    const horaFinCalculada =
+      duracion === APPOINTMENT_DURATION_MINUTES
+        ? calculateEndTime(hInicio)
+        : normalizeTime(sumarMinutosHora(hInicio, duracion));
+    hFin = horaFinCalculada ? `${horaFinCalculada}:00` : null;
   }
 
   return { horaInicio: hInicio, horaFin: hFin };
 };
+
+const cumpleHorarioLaboral = ({ fecha, horaInicio, horaFin }) =>
+  isWithinBusinessSchedule({
+    fecha,
+    horaInicio: normalizarHoraTexto(horaInicio),
+    horaFin: normalizarHoraTexto(horaFin),
+  });
 
 module.exports = {
   normalizarFechaCita,
@@ -85,5 +144,6 @@ module.exports = {
   normalizarHoraTexto,
   horaEnMinutos,
   sumarMinutosHora,
-  resolverRangoHorario
+  resolverRangoHorario,
+  cumpleHorarioLaboral,
 };

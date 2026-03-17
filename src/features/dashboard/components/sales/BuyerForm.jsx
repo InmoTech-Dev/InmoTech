@@ -14,7 +14,6 @@ const defaultFormData = {
   segundoApellido: "",
   correo: "",
   telefono: "",
-  estado: "Activo",
   observaciones: ""
 };
 
@@ -87,7 +86,6 @@ export default function BuyerForm({
     setValue("segundoApellido", buyer.segundoApellido || "");
     setValue("correo", buyer.correo || "");
     setValue("telefono", normalizePhone(buyer.telefono));
-    setValue("estado", buyer.estado || "Activo");
   }, []);
 
   const clearAutofillFields = useCallback(() => {
@@ -192,7 +190,7 @@ export default function BuyerForm({
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
     switch (tipoDocumento) {
       case 'CC':
-        if (!/^[0-9]{7,10}$/.test(numeroLimpio)) return 'La cédula de ciudadanía debe tener entre 7 y 10 dígitos';
+        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
         break;
       case 'CE':
         if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
@@ -452,7 +450,6 @@ export default function BuyerForm({
       segundoApellido: "Segundo Apellido",
       correo: "Correo Electrónico",
       telefono: "Teléfono",
-      estado: "Estado",
       observaciones: "Observaciones"
     };
     return labels[name] ?? name;

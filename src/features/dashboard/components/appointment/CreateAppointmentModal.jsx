@@ -13,6 +13,7 @@ import { useAppointments } from '../../../../shared/contexts/AppointmentContext'
 import { useAuth } from '../../../../shared/contexts/AuthContext';
 import { apiClient } from '../../../../shared/services/api.config';
 import citaApiService from '../../../../shared/services/citaApiService';
+import { calculateEndTime, getBusinessHoursMessage } from '../../../../shared/constants/appointmentSchedule';
 
 const SERVICIO_MAP = {
   "Visita a Propiedad": 1,
@@ -214,20 +215,15 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
     if (isPM && horas < 12) horas += 12;
     if (isAM && horas === 12) horas = 0;
 
-    const horaDecimal = horas + (minutos / 60);
+    const horaNormalizada = `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
 
-    // Horario laboral: 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm
-    // El último inicio permitido en la mañana es 12:30 (12.5) y en la tarde 4:30 (16.5)
-    const isMorning = horaDecimal >= 8 && horaDecimal <= 12.5;
-    const isAfternoon = horaDecimal >= 14 && horaDecimal <= 16.5;
-
-    if (!isMorning && !isAfternoon) {
-      return 'Las citas solo se pueden agendar entre las 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm';
+    // Horario laboral: 8:00 am - 1:00 pm y 2:00 pm - 5:00 pm, con citas cada hora.
+    if (!calculateEndTime(horaNormalizada)) {
+      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de una hora`;
     }
 
-    // Verificar que sea en intervalos de 30 minutos
-    if (minutos !== 0 && minutos !== 30) {
-      return 'Las citas solo se pueden agendar en intervalos de 30 minutos (ej: 8:00 am, 8:30 am, 9:00 am)';
+    if (minutos !== 0) {
+      return 'Las citas solo se pueden agendar en horas en punto';
     }
 
     return '';
@@ -470,19 +466,8 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
     return `${String(horas).padStart(2, "0")}:${String(minutos || 0).padStart(2, "0")}`;
   };
 
-  // Función para calcular hora_fin (30 minutos después)
-  const calcularHoraFin = (horaInicio) => {
-    const [horas, minutos] = horaInicio.split(":").map(Number);
-    let horaFin = horas;
-    let minutosFin = minutos + 30; // ✅ Citas de 30 minutos
-
-    if (minutosFin >= 60) {
-      horaFin += 1;
-      minutosFin = 0;
-    }
-
-    return `${String(horaFin).padStart(2, "0")}:${String(minutosFin).padStart(2, "0")}`;
-  };
+  // Función para calcular hora_fin con duración de una hora
+  const calcularHoraFin = (horaInicio) => calculateEndTime(horaInicio);
 
   // ✅ MODIFICADO: Crear la cita directamente sin modal de confirmación
   const handleSubmit = () => {
@@ -796,7 +781,7 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
 
   return ReactDOM.createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-[10100] flex items-center justify-center">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}

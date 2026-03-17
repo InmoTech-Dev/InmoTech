@@ -6,6 +6,9 @@ import { Input } from "@/shared/components/ui/input"
 import { Textarea } from "@/shared/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select"
 import { MapPin, Phone, Mail, Clock, Send } from "lucide-react"
+import { apiClient } from "@/shared/services/api.config"
+import { useToast } from "@/shared/hooks/use-toast"
+import { getBusinessHoursLines } from "@/shared/constants/appointmentSchedule"
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -15,17 +18,97 @@ export default function ContactPage() {
     subject: "",
     message: ""
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState({})
+  const { toast } = useToast()
+  const businessHours = getBusinessHoursLines()
 
+  const validateForm = () => {
+    const newErrors = {}
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      newErrors.email = "Por favor, ingresa un correo electrónico válido."
+    }
+
+    // Phone validation (Colombia: +57 followed by a space and 10 digits)
+    const phoneRegex = /^\+57\s\d{10}$/
+    if (formData.phone && !phoneRegex.test(formData.phone)) {
+      newErrors.phone = "El teléfono debe tener un formato válido (+57 seguido de un espacio y 10 números)."
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    
+    if (name === "phone") {
+      // Remove all non-numeric characters
+      const numbersOnly = value.replace(/\D/g, "")
+      
+      let formattedPhone = ""
+      if (numbersOnly.length > 0) {
+        // If the user already typed 57 as the start, just add + and space
+        if (numbersOnly.startsWith("57")) {
+          formattedPhone = "+57 " + numbersOnly.slice(2, 12)
+        } else {
+          // Otherwise prepend +57 and space to the digits
+          formattedPhone = "+57 " + numbersOnly.slice(0, 10)
+        }
+      }
+      
+      setFormData(prev => ({ ...prev, [name]: formattedPhone }))
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }))
+    }
+
+    // Clear error when user changes the field
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: "" }))
+    }
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log("Formulario enviado:", formData)
-    // Aquí iría la lógica para enviar el formulario
+    
+    if (!validateForm()) return
+
+    setIsSubmitting(true)
+    try {
+      const response = await apiClient.post('/contact', formData)
+
+      if (response.success) {
+        toast({
+          title: "¡Mensaje enviado!",
+          description: "Nos pondremos en contacto contigo pronto.",
+        })
+        setFormData({
+          name: "",
+          email: "",
+          phone: "",
+          subject: "",
+          message: ""
+        })
+      } else {
+        toast({
+          title: "Error al enviar",
+          description: response.message || "Hubo un error al enviar el mensaje.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error al enviar el formulario:", error)
+      toast({
+        title: "Error de conexión",
+        description: error.message || "Asegúrate de que el servidor esté corriendo.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -147,8 +230,10 @@ export default function ContactPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-lg mb-1">Horario de Atención</h3>
-                        <p className="text-gray-600">Lunes - Sábado: 8:00 am - 1:00 pm, 2:00 pm - 5:00 pm</p>
-                        <p className="text-gray-600">Domingos: Cerrado</p>
+                        {businessHours.map((line) => (
+                          <p key={line} className="text-gray-600">{line}</p>
+                        ))}
+                        <p className="text-gray-600">Sábados y domingos: Cerrado</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -200,8 +285,10 @@ export default function ContactPage() {
                       placeholder="tu@email.com"
                       value={formData.email}
                       onChange={handleChange}
+                      className={errors.email ? "border-red-500" : ""}
                       required
                     />
+                    {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
                   </div>
                 </motion.div>
 
@@ -219,10 +306,13 @@ export default function ContactPage() {
                     <Input
                       id="phone"
                       name="phone"
-                      placeholder="Tu número de teléfono"
+                      placeholder="+57 300 123 4567"
                       value={formData.phone}
                       onChange={handleChange}
+                      className={errors.phone ? "border-red-500" : ""}
                     />
+                    {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+                    <p className="text-xs text-gray-500">Ejemplo: 300 123 4567 (el +57 se agregará solo)</p>
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="subject" className="text-sm font-medium">
@@ -235,9 +325,9 @@ export default function ContactPage() {
                       <SelectContent className="bg-white">
                         <SelectItem value="compra">Compra de propiedad</SelectItem>
                         <SelectItem value="venta">Venta de propiedad</SelectItem>
-                        <SelectItem value="alquiler">Alquiler</SelectItem>
-                        <SelectItem value="tasacion">Tasación</SelectItem>
-                        <SelectItem value="inversion">Inversión</SelectItem>
+                        <SelectItem value="Gestión de Alquileres">Gestión de Alquileres</SelectItem>
+                        <SelectItem value="Avalúos Certificados">Avalúos Certificados</SelectItem>
+                        <SelectItem value="Asesoría Legal">Asesoría Legal</SelectItem>
                         <SelectItem value="otro">Otro</SelectItem>
                       </SelectContent>
                     </Select>
@@ -271,8 +361,18 @@ export default function ContactPage() {
                   transition={{ duration: 0.5, delay: 0.6 }}
                   viewport={{ once: true }}
                 >
-                  <Button type="submit" className="w-full bg-[#00457B] hover:bg-[#003b69] text-white">
-                    <Send className="h-4 w-4 mr-2" /> Enviar mensaje
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-[#00457B] hover:bg-[#003b69] text-white"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      "Enviando..."
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" /> Enviar mensaje
+                      </>
+                    )}
                   </Button>
                 </motion.div>
               </form>

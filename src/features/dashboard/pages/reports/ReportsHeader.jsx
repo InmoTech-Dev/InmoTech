@@ -1,8 +1,17 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Button } from '@/shared/components/ui/button'
+import { motion } from 'framer-motion'
 import { Input } from '@/shared/components/ui/input'
-import { DownloadIcon, FileTextIcon, ChevronDownIcon, FileSpreadsheet, PlusIcon, SearchIcon, Filter, Calendar, MapPin, X } from 'lucide-react'
+import {
+  Calendar,
+  ChevronDownIcon,
+  FileSpreadsheet,
+  FileTextIcon,
+  Filter,
+  MapPin,
+  PlusIcon,
+  SearchIcon,
+  X
+} from 'lucide-react'
 import { useAuth } from '@/shared/contexts/AuthContext'
 
 export function ReportsHeader({
@@ -12,69 +21,56 @@ export function ReportsHeader({
   onDownloadPDF,
   onDownloadExcel,
   reports = [],
-  // Nuevos props opcionales (se muestran solo si vienen)
   statusFilter,
   onStatusChange,
-  todayOnly,
-  onToggleToday,
-  showCancelled,
-  onToggleShowCancelled,
   hideFilters = false,
-  // Admin filters
-  adminFilters,
+  adminFilters = { year: '', month: '', city: '' },
   setAdminFilters,
   onSearchAdmin,
   allReports = []
 }) {
   const { hasPermission } = useAuth()
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isDownloadOpen, setIsDownloadOpen] = useState(false)
+  const [isStatusOpen, setIsStatusOpen] = useState(false)
+  const [localAdminFilters, setLocalAdminFilters] = useState(adminFilters || { year: '', month: '', city: '' })
   const dropdownRef = useRef(null)
+  const statusRef = useRef(null)
 
   const canCreate = hasPermission('reportes', 'crear')
   const canDownload = hasPermission('reportes', 'descargar')
+  const statusOptions = ['Todos los estados', 'Pendiente', 'En Proceso', 'Completado', 'Cancelado']
 
-  // Local state for admin filters (uncommitted)
-  const [localAdminFilters, setLocalAdminFilters] = useState(adminFilters)
-
-  // Update local state when parent adminFilters change (e.g. on clear)
   useEffect(() => {
-    setLocalAdminFilters(adminFilters)
+    setLocalAdminFilters(adminFilters || { year: '', month: '', city: '' })
   }, [adminFilters])
-
-  // NUEVO: dropdown de estado
-  const [isStatusOpen, setIsStatusOpen] = useState(false)
-  const statusRef = useRef(null)
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false)
+        setIsDownloadOpen(false)
       }
       if (statusRef.current && !statusRef.current.contains(event.target)) {
         setIsStatusOpen(false)
       }
     }
+
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   const handleDownloadOption = (type) => {
     if (!canDownload) return
-    setIsDropdownOpen(false)
-    if (type === 'pdf') {
-      onDownloadPDF?.(reports)
-    } else if (type === 'excel') {
-      onDownloadExcel?.(reports)
-    }
+    setIsDownloadOpen(false)
+    if (type === 'pdf') onDownloadPDF?.(reports)
+    if (type === 'excel') onDownloadExcel?.(reports)
   }
 
-  // Filter options computed from all reports
   const filterOptions = useMemo(() => {
-    const cities = [...new Set(allReports.map(r => r.ubicacion).filter(Boolean))].sort()
-    const years = [...new Set(allReports.map(r => {
+    const cities = [...new Set(allReports.map((r) => r.ubicacion).filter(Boolean))].sort()
+    const years = [...new Set(allReports.map((r) => {
       const parts = r.fecha?.split('/')
       return parts?.[2]
-    }).filter(Boolean))].sort((a, b) => b - a)
+    }).filter(Boolean))].sort((a, b) => Number(b) - Number(a))
     return { cities, years }
   }, [allReports])
 
@@ -83,22 +79,18 @@ export function ReportsHeader({
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ]
 
-  const hasAdminFilters = adminFilters?.year || adminFilters?.month || adminFilters?.city
-  const isAdmin = hideFilters && adminFilters && setAdminFilters
+  const hasAdminFilters = Boolean(localAdminFilters?.year || localAdminFilters?.month || localAdminFilters?.city)
+  const isAdminView = hideFilters && typeof setAdminFilters === 'function'
 
   return (
     <div className="shrink-0 space-y-3">
-      {/* Row 1: Title + Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        {/* Title */}
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Gestión de Reportes</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Gestion de Reportes</h1>
           <p className="text-xs text-slate-500 mt-0.5">Administra y supervisa todos los reportes inmobiliarios</p>
         </div>
 
-        {/* Actions */}
         <div className="flex w-full sm:w-auto gap-2 flex-wrap items-center">
-          {/* Search Bar (non-admin) */}
           {!hideFilters && (
             <div className="relative w-full sm:w-64">
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -112,31 +104,36 @@ export function ReportsHeader({
             </div>
           )}
 
-          {/* Status Filter (non-admin) */}
           {onStatusChange && !hideFilters && (
             <div className="relative" ref={statusRef}>
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 type="button"
-                onClick={() => setIsStatusOpen(!isStatusOpen)}
+                onClick={() => setIsStatusOpen((prev) => !prev)}
                 className="px-3 py-2 text-sm border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 rounded-lg flex items-center gap-2 transition-colors"
               >
-                Todos los estados
+                {statusFilter || 'Todos los estados'}
                 <ChevronDownIcon className={`h-4 w-4 transition-transform ${isStatusOpen ? 'rotate-180' : ''}`} />
               </motion.button>
+
               {isStatusOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -10 }}
+                  initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="absolute z-50 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden"
                 >
-                  {['Todos los estados', 'Pendiente', 'En Proceso', 'Completado', 'Cancelado'].map(opt => (
+                  {statusOptions.map((opt) => (
                     <button
                       key={opt}
-                      onClick={() => { onStatusChange(opt); setIsStatusOpen(false) }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${statusFilter === opt ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700'
-                        }`}
+                      type="button"
+                      onClick={() => {
+                        onStatusChange(opt)
+                        setIsStatusOpen(false)
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
+                        statusFilter === opt ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700'
+                      }`}
                     >
                       {opt}
                     </button>
@@ -146,74 +143,31 @@ export function ReportsHeader({
             </div>
           )}
 
-          {/* Today Filter (non-admin) */}
-          {onToggleToday && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              onClick={onToggleToday}
-              className={`px-3 py-2 text-sm rounded-lg border transition-all ${todayOnly
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                }`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 0 0 2-2V8H3v11a2 2 0 0 0 2 2z" />
-                </svg>
-                De hoy
-              </span>
-            </motion.button>
-          )}
-
-          {/* Show Cancelled (non-admin) */}
-          {onToggleShowCancelled && !hideFilters && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              onClick={onToggleShowCancelled}
-              className={`px-3 py-2 text-sm rounded-lg border transition-all ${showCancelled
-                ? 'bg-slate-800 text-white border-slate-800'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                }`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z" />
-                </svg>
-                Ver cancelados
-              </span>
-            </motion.button>
-          )}
-
-          {/* Download Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <motion.button
               whileHover={canDownload ? { scale: 1.02 } : {}}
               whileTap={canDownload ? { scale: 0.98 } : {}}
+              type="button"
               disabled={!canDownload}
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className={`border px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm bg-white ${canDownload
-                ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
-                : 'border-slate-300 text-slate-400 cursor-not-allowed opacity-60'
-                }`}
-              title={canDownload ? "Descargar reportes" : "No tienes permiso para descargar"}
+              onClick={() => canDownload && setIsDownloadOpen((prev) => !prev)}
+              className={`px-3 py-2 rounded-lg flex items-center gap-2 text-sm border transition-all ${
+                canDownload
+                  ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60 border-slate-300'
+              }`}
             >
-              <DownloadIcon className="h-4 w-4" />
-              <span>Descargar</span>
-              <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              Descargar
+              <ChevronDownIcon className={`h-4 w-4 transition-transform ${isDownloadOpen ? 'rotate-180' : ''}`} />
             </motion.button>
 
-            {isDropdownOpen && canDownload && (
+            {isDownloadOpen && canDownload && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden"
               >
                 <button
+                  type="button"
                   onClick={() => handleDownloadOption('pdf')}
                   className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-red-50 flex items-center gap-2 transition-colors"
                 >
@@ -224,30 +178,31 @@ export function ReportsHeader({
                   </div>
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleDownloadOption('excel')}
                   className="w-full px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-green-50 flex items-center gap-2 transition-colors"
                 >
                   <FileSpreadsheet className="h-4 w-4 text-green-500" />
                   <div>
                     <div className="font-medium text-slate-900">Excel</div>
-                    <div className="text-xs text-slate-500">Hoja de cálculo</div>
+                    <div className="text-xs text-slate-500">Hoja de calculo</div>
                   </div>
                 </button>
               </motion.div>
             )}
           </div>
 
-          {/* New Report Button */}
           <motion.button
             whileHover={canCreate ? { scale: 1.02 } : {}}
             whileTap={canCreate ? { scale: 0.98 } : {}}
             disabled={!canCreate}
             onClick={() => canCreate && onNewReport?.()}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm transition-all ${canCreate
-              ? 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow'
-              : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
-              }`}
-            title={canCreate ? "Crear nuevo reporte" : "No tienes permiso para crear reportes"}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-sm transition-all ${
+              canCreate
+                ? 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow'
+                : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+            }`}
+            title={canCreate ? 'Crear nuevo reporte' : 'No tienes permiso para crear reportes'}
           >
             <PlusIcon className="h-4 w-4" />
             Nuevo reporte
@@ -255,89 +210,88 @@ export function ReportsHeader({
         </div>
       </div>
 
-      {/* Row 2: Admin Filters (only for admin view) */}
-      {isAdmin && (
+      {isAdminView && (
         <div className="flex items-center gap-3 bg-slate-50/80 border border-slate-100 rounded-xl px-4 py-2.5">
           <div className="flex items-center gap-2 mr-1">
             <Filter className="w-4 h-4 text-indigo-500" />
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Filtrar:</span>
           </div>
 
-          {/* City Filter */}
           <div className="relative group">
-            <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 transition-colors pointer-events-none" />
+            <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <select
               value={localAdminFilters.city || ''}
-              onChange={(e) => setLocalAdminFilters(prev => ({ ...prev, city: e.target.value }))}
-              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all cursor-pointer hover:border-indigo-300 hover:shadow-sm min-w-[160px]"
+              onChange={(e) => setLocalAdminFilters((prev) => ({ ...prev, city: e.target.value }))}
+              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none outline-none transition-all min-w-[160px]"
             >
               <option value="">Todas las ciudades</option>
-              {filterOptions.cities.map(city => (
+              {filterOptions.cities.map((city) => (
                 <option key={city} value={city}>{city}</option>
               ))}
             </select>
             <ChevronDownIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300 pointer-events-none" />
           </div>
 
-          {/* Year Filter */}
           <div className="relative group">
-            <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 transition-colors pointer-events-none" />
+            <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <select
               value={localAdminFilters.year || ''}
-              onChange={(e) => setLocalAdminFilters(prev => ({ ...prev, year: e.target.value }))}
-              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all cursor-pointer hover:border-indigo-300 hover:shadow-sm min-w-[100px]"
+              onChange={(e) => setLocalAdminFilters((prev) => ({ ...prev, year: e.target.value }))}
+              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none outline-none transition-all min-w-[100px]"
             >
-              <option value="">Año</option>
-              {filterOptions.years.map(year => (
+              <option value="">Ano</option>
+              {filterOptions.years.map((year) => (
                 <option key={year} value={year}>{year}</option>
               ))}
             </select>
             <ChevronDownIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300 pointer-events-none" />
           </div>
 
-          {/* Month Filter */}
           <div className="relative group">
-            <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 transition-colors pointer-events-none" />
+            <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <select
               value={localAdminFilters.month || ''}
-              onChange={(e) => setLocalAdminFilters(prev => ({ ...prev, month: e.target.value }))}
-              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all cursor-pointer hover:border-indigo-300 hover:shadow-sm min-w-[130px]"
+              onChange={(e) => setLocalAdminFilters((prev) => ({ ...prev, month: e.target.value }))}
+              className="bg-white border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-xs font-medium text-slate-600 appearance-none outline-none transition-all min-w-[130px]"
             >
               <option value="">Mes</option>
               {months.map((name, idx) => (
-                <option key={idx} value={idx + 1}>{name}</option>
+                <option key={name} value={String(idx + 1)}>{name}</option>
               ))}
             </select>
             <ChevronDownIcon className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300 pointer-events-none" />
           </div>
 
-          {/* Search Button */}
           <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             type="button"
-            onClick={() => onSearchAdmin?.(localAdminFilters)}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:shadow-md transition-all"
+            onClick={() => {
+              setAdminFilters?.(localAdminFilters)
+              onSearchAdmin?.(localAdminFilters)
+            }}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all"
           >
             <SearchIcon className="w-3.5 h-3.5" />
             Buscar
           </motion.button>
 
-          {/* Clear Filters */}
-          <AnimatePresence>
-            {hasAdminFilters && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                onClick={() => setAdminFilters({ year: '', month: '', city: '' })}
-                className="bg-rose-50 hover:bg-rose-100 text-rose-500 p-1.5 rounded-lg border border-rose-100 transition-colors shadow-sm"
-                title="Limpiar filtros"
-              >
-                <X className="w-3.5 h-3.5" />
-              </motion.button>
-            )}
-          </AnimatePresence>
+          {hasAdminFilters && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => {
+                const clean = { year: '', month: '', city: '' }
+                setLocalAdminFilters(clean)
+                setAdminFilters?.(clean)
+                onSearchAdmin?.(clean)
+              }}
+              className="bg-rose-50 hover:bg-rose-100 text-rose-500 p-1.5 rounded-lg border border-rose-100 transition-colors shadow-sm"
+              title="Limpiar filtros"
+            >
+              <X className="w-3.5 h-3.5" />
+            </motion.button>
+          )}
         </div>
       )}
     </div>

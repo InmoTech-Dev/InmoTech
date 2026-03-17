@@ -339,6 +339,18 @@ class SSEService {
     });
   }
 
+  emitAppointmentChanged({ action, appointmentId, affectedUserIds = [], audienceUserIds = [] }) {
+    const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
+    if (recipients.length === 0) return;
+
+    this.sendToUsers(recipients, 'appointment.changed', {
+      action: action || 'updated',
+      appointment_id: this.normalizeUserId(appointmentId),
+      affected_user_ids: this.normalizeUserIds(affectedUserIds),
+      occurred_at: new Date().toISOString(),
+    });
+  }
+
   emitNotificationChanged({ userIds = [], scope = 'citas', unreadCountHint = null }) {
     const recipients = this.normalizeUserIds(userIds);
     if (recipients.length === 0) return;
@@ -361,6 +373,14 @@ class SSEService {
       action: action || 'updated',
       user_id: this.normalizeUserId(userId),
       affected_user_ids: this.normalizeUserIds(affectedUserIds),
+      occurred_at: new Date().toISOString(),
+    });
+  }
+
+  emitRoleChanged({ action, roleId }) {
+    this.broadcastToAll('role.changed', {
+      action: action || 'updated',
+      role_id: this.normalizeUserId(roleId),
       occurred_at: new Date().toISOString(),
     });
   }

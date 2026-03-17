@@ -14,7 +14,9 @@ const AdminReportsView = ({
     loading: reportsLoading,
     filters,
     setFilters,
-    refreshTrigger
+    refreshTrigger,
+    searchTerm,
+    onSearchChange
 }) => {
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -23,6 +25,37 @@ const AdminReportsView = ({
     const [detailedLoading, setDetailedLoading] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const { toast } = useToast();
+
+    const normalizeSearchValue = React.useCallback((value) => {
+        return String(value || '').toLowerCase().trim();
+    }, []);
+
+    const doesReportMatchSearch = React.useCallback((report, rawSearchTerm) => {
+        const normalizedSearch = normalizeSearchValue(rawSearchTerm);
+
+        if (!normalizedSearch) {
+            return true;
+        }
+
+        const searchableValues = [
+            report.id,
+            report.id_reporte,
+            report.referencia,
+            report.nombreInmueble,
+            report.tipoInmueble,
+            report.tipoReporte,
+            report.ubicacion,
+            report.direccionInmueble,
+            report.propietario,
+            report.responsable,
+            report.estado,
+            report.fecha
+        ];
+
+        return searchableValues.some((value) =>
+            normalizeSearchValue(value).includes(normalizedSearch)
+        );
+    }, [normalizeSearchValue]);
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -90,13 +123,18 @@ const AdminReportsView = ({
         });
     }, [allReports, filters]);
 
-    // Filter users list based on global filtered reports
-    const filteredUsers = React.useMemo(() => {
-        if (!filters.year && !filters.month && !filters.city) return users;
+    const matchedReportsGlobal = React.useMemo(() => {
+        return filteredReportsGlobal.filter((report) => doesReportMatchSearch(report, searchTerm));
+    }, [filteredReportsGlobal, searchTerm, doesReportMatchSearch]);
 
-        const activeUserIds = new Set(filteredReportsGlobal.map(r => Number(r.id_persona_reporta)));
+    // Filter users list based on visible reports and dynamic report search
+    const filteredUsers = React.useMemo(() => {
+        const sourceReports = normalizeSearchValue(searchTerm) ? matchedReportsGlobal : filteredReportsGlobal;
+        if (!filters.year && !filters.month && !filters.city && !normalizeSearchValue(searchTerm)) return users;
+
+        const activeUserIds = new Set(sourceReports.map(r => Number(r.id_persona_reporta)));
         return users.filter(user => activeUserIds.has(Number(user.id_persona)));
-    }, [users, filteredReportsGlobal, filters]);
+    }, [users, filteredReportsGlobal, matchedReportsGlobal, filters, searchTerm, normalizeSearchValue]);
 
     // Auto-select first user if selection is lost due to filtering
     useEffect(() => {
@@ -111,8 +149,10 @@ const AdminReportsView = ({
         }
     }, [filteredUsers]);
 
-    // Filter reports for the selected user among the filtered reports
-    const userReports = filteredReportsGlobal.filter(report => {
+    const reportsForUserSelection = normalizeSearchValue(searchTerm) ? matchedReportsGlobal : filteredReportsGlobal;
+
+    // Filter reports for the selected user among the visible reports
+    const userReports = reportsForUserSelection.filter(report => {
         if (!selectedUser) return false;
 
         const reportUserId = Number(report.id_persona_reporta || 0);
@@ -126,6 +166,19 @@ const AdminReportsView = ({
         const responsable = (report.responsable || '').toLowerCase().trim();
         return responsable.includes(userName) || userName.includes(responsable);
     });
+
+    const filteredUserReports = React.useMemo(() => {
+        return userReports;
+    }, [userReports]);
+
+    useEffect(() => {
+        if (!selectedReport) return;
+
+        const stillVisible = filteredUserReports.some((report) => report.id === selectedReport.id);
+        if (!stillVisible) {
+            setSelectedReport(null);
+        }
+    }, [filteredUserReports, selectedReport]);
 
     const formatResponsableName = (r) => {
         if (!r) return '';
@@ -169,6 +222,7 @@ const AdminReportsView = ({
             const enrichedReport = {
                 ...detailedReport,
                 ubicacion: report.ubicacion || detailedReport.inmueble_ciudad || '',
+                direccionInmueble: report.direccionInmueble || detailedReport.inmueble_direccion || detailedReport.inmueble?.direccion || '',
                 tipoInmueble: report.tipoInmueble || detailedReport.inmueble_categoria || '',
                 propietario: report.propietario || detailedReport.propietario_nombre || '',
                 referencia: report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || '',
@@ -235,13 +289,15 @@ const AdminReportsView = ({
                 loading={usersLoading}
                 isCollapsed={isSidebarCollapsed}
                 onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                searchTerm={searchTerm}
+                onSearchChange={onSearchChange}
             />
 
             {/* Column 2: Selection List (Center) */}
             <div className="w-[320px] min-w-[300px] shrink-0 flex flex-col border-l border-slate-50 bg-[#FBFDFF]/10">
                 <ReportSelectionList
                     selectedUser={selectedUser}
-                    reports={userReports}
+                    reports={filteredUserReports}
                     selectedReport={selectedReport}
                     onSelectReport={handleSelectReport}
                     loading={reportsLoading}

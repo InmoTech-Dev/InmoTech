@@ -21,9 +21,7 @@ const {
 
 // Rutas publicas
 router.post('/login', loginLimiter, validate(loginSchema), authController.iniciarSesion);
-router.post('/mobile/login', loginLimiter, validate(loginSchema), authController.iniciarSesionMovil);
 router.post('/refresh', validateAuthOrigin, validate(refreshTokenSchema), authController.refrescarToken);
-router.post('/mobile/refresh', validate(refreshTokenSchema), authController.refrescarTokenMovil);
 router.post('/logout', validateAuthOrigin, authController.cerrarSesion);
 router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), authController.solicitarRecuperacionContrasena);
 router.get('/reset-password', validateQuery(resetPasswordTokenSchema), authController.validarTokenRecuperacion);

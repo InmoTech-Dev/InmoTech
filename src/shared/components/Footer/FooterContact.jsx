@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { MapPin, Phone, Mail, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { getBusinessHoursLines } from '../../constants/appointmentSchedule';
 
 const FooterContact = () => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -23,7 +24,7 @@ const FooterContact = () => {
     {
       icon: Clock,
       title: 'Horarios',
-      content: ['Lunes - Sábado: 8:00 am - 1:00 pm', '2:00 pm - 5:00 pm']
+      content: getBusinessHoursLines()
     }
   ];
 

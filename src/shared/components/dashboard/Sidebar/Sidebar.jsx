@@ -51,7 +51,11 @@ const Sidebar = React.forwardRef(({
 
     const availableModules = getAvailableModules();
     const moduleSet = new Set(availableModules);
-    const roleNames = user.roles || [];
+    
+    // Soporte para roles como string o como objeto
+    const roleNames = (user.roles || []).map(rol => 
+      typeof rol === 'object' ? rol.nombre_rol : rol
+    );
 
     if (roleNames.includes('Super Administrador') || roleNames.includes('Administrador')) {
       return navigationItems;
@@ -61,11 +65,17 @@ const Sidebar = React.forwardRef(({
       return navigationItems.filter(item => item.id === 'dashboard');
     }
 
+    if (roleNames.includes('Arrendatario')) {
+      return navigationItems.filter(item => item.id === 'dashboard');
+    }
+
     return navigationItems.filter(item => {
+      // Siempre mostrar dashboard
       if (item.id === 'dashboard') {
         return true;
       }
 
+      // No mostrar seguridad a usuarios que no sean admin
       if (item.id === 'seguridad') {
         return false;
       }
@@ -73,6 +83,20 @@ const Sidebar = React.forwardRef(({
       return moduleSet.has(item.id);
     });
   }, [user, getAvailableModules]);
+
+  const isOwnerOrTenant = React.useMemo(() => {
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+    return roles.some((role) => {
+      if (typeof role === 'string') {
+        const normalized = role.trim().toLowerCase();
+        return normalized === 'propietario' || normalized === 'arrendatario';
+      }
+      const roleName = role?.nombre_rol || role?.nombre || role?.name;
+      if (typeof roleName !== 'string') return false;
+      const normalizedName = roleName.trim().toLowerCase();
+      return normalizedName === 'propietario' || normalizedName === 'arrendatario';
+    });
+  }, [user]);
 
   useEffect(() => {
     if (navRef.current) {
@@ -137,7 +161,7 @@ const Sidebar = React.forwardRef(({
         </motion.button>
       </div>
 
-      {/* Solo logo cuando está colapsada */}
+      {/* Solo logo cuando estÃ¡ colapsada */}
       <AnimatePresence>
         {isCollapsed && (
           <motion.div
@@ -157,7 +181,7 @@ const Sidebar = React.forwardRef(({
         )}
       </AnimatePresence>
 
-      {/* Navegación */}
+      {/* NavegaciÃ³n */}
       <div ref={navRef} className={`flex-1 py-4 ${expandedItem === 'seguridad' ? 'overflow-y-auto' : 'overflow-y-hidden'} overflow-x-hidden custom-scrollbar`}>
         <nav className="space-y-1">
           {filteredNavigationItems.map((item) => (
@@ -175,38 +199,39 @@ const Sidebar = React.forwardRef(({
         </nav>
       </div>
 
-      {/* Botón "Ir al Sitio" encima del logout */}
-      <div className="p-2 border-t border-slate-700/50 bg-slate-800/30 backdrop-blur-sm">
-        <motion.div
-          whileHover={{
-            scale: 1.02,
-            backgroundColor: 'rgba(59, 130, 246, 0.1)'
-          }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleGoToSiteClick}
-          className={`flex items-center px-4 py-3 mx-2 rounded-xl cursor-pointer text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all duration-300 group border border-transparent hover:border-blue-400/30 ${isCollapsed ? 'ml-1.5' : ''}`}
-        >
-          <div className="flex items-center justify-center w-8 h-8 -ml-0.5">
-            <goToSiteItem.icon size={20} />
-          </div>
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.span
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
-                className="ml-3 font-medium text-sm"
-              >
-                {goToSiteItem.title}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </motion.div>
-      </div>
+      {!isOwnerOrTenant && (
+        <div className="p-2 border-t border-slate-700/50 bg-slate-800/30 backdrop-blur-sm">
+          <motion.div
+            whileHover={{
+              scale: 1.02,
+              backgroundColor: 'rgba(59, 130, 246, 0.1)'
+            }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleGoToSiteClick}
+            className={`flex items-center px-4 py-3 mx-2 rounded-xl cursor-pointer text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all duration-300 group border border-transparent hover:border-blue-400/30 ${isCollapsed ? 'ml-1.5' : ''}`}
+          >
+            <div className="flex items-center justify-center w-8 h-8 -ml-0.5">
+              <goToSiteItem.icon size={20} />
+            </div>
+            <AnimatePresence>
+              {!isCollapsed && (
+                <motion.span
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="ml-3 font-medium text-sm"
+                >
+                  {goToSiteItem.title}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+      )}
 
       {/* Logout Button Fijo */}
-      <div className="p-2 bg-slate-800/30 backdrop-blur-sm">
+      <div className={`p-2 bg-slate-800/30 backdrop-blur-sm ${isOwnerOrTenant ? 'border-t border-slate-700/50' : ''}`}>
         <motion.div
           whileHover={{
             scale: 1.02,

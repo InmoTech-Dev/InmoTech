@@ -1,6 +1,7 @@
 const { Rol, Persona, PersonasRol, Permiso } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
+const sseService = require('./sse.service');
 const { buildPermissionsPayload, normalizePermissionsStructure } = require('../utils/permissions.helper');
 const {
   SUPER_ADMIN_ROLE,
@@ -170,7 +171,6 @@ if (rolInactivo) {
    */
   async asignarRol(personaId, rolId, userId) {
     const result = await sequelize.transaction(async (t) => {
-      try {
         // Solo Super Administrador puede asignar roles
         const usuario = await Persona.findOne({
           where: { id_persona: userId },
@@ -232,11 +232,14 @@ if (rolInactivo) {
 
         logger.info(`Rol ${rol.nombre_rol} asignado a persona ${personaId} por usuario ${userId}`);
         return asignacion;
+    });
 
-      } catch (error) {
-        logger.error('Error asignando rol:', error);
-        throw error;
-      }
+
+    // Emitir evento de cambio de usuario fuera de la transacción para evitar race conditions
+    sseService.emitUserChanged({
+      action: 'role_assigned',
+      userId: personaId,
+      affectedUserIds: [personaId]
     });
 
     return result;
@@ -251,7 +254,6 @@ if (rolInactivo) {
    */
   async removerRol(personaId, rolId, userId) {
     const result = await sequelize.transaction(async (t) => {
-      try {
         // Solo Super Administrador puede remover roles
         const usuario = await Persona.findOne({
           where: { id_persona: userId },
@@ -295,12 +297,14 @@ if (rolInactivo) {
         // Desactivar asignación
         await asignacion.update({ estado: false }, { transaction: t });
         logger.info(`Rol ${rolId} removido de persona ${personaId} por usuario ${userId}`);
-        return true;
 
-      } catch (error) {
-        logger.error('Error removiendo rol:', error);
-        throw error;
-      }
+    });
+
+    // Emitir evento de cambio de usuario fuera de la transacción
+    sseService.emitUserChanged({
+      action: 'role_removed',
+      userId: personaId,
+      affectedUserIds: [personaId]
     });
 
     return result;
@@ -346,7 +350,6 @@ if (rolInactivo) {
    */
   async actualizarRol(rolId, updateData, userId) {
     const result = await sequelize.transaction(async (t) => {
-      try {
         // ✅ CORREGIDO: Verificar permisos con 'Super Administrador'
         const usuario = await Persona.findOne({
           where: { id_persona: userId },
@@ -434,13 +437,22 @@ if (rolInactivo) {
           }
         }
 
-        logger.info(`Rol actualizado: ${rolId} por usuario ${userId}`);
-        return rol;
+        const rolActualizado = await Rol.findOne({
+          where: { id_rol: rolId },
+          include: [{ model: Permiso, as: 'permisos', where: { estado: true }, required: false }],
+          transaction: t
+        });
 
-      } catch (error) {
-        logger.error('Error actualizando rol:', error);
-        throw error;
-      }
+        logger.info(`Rol actualizado: ${rolId} por usuario ${userId}`);
+        return rolActualizado;
+    });
+
+
+    // Emitir evento de cambio de rol (afecta a todos los que tengan este rol)
+    // Se mueve fuera de la transacción para asegurar que el cliente obtenga datos actualizados
+    sseService.emitRoleChanged({
+      action: 'updated',
+      roleId: rolId
     });
 
     return result;
@@ -475,7 +487,6 @@ if (rolInactivo) {
    */
   async eliminarRol(rolId, userId) {
     const result = await sequelize.transaction(async (t) => {
-      try {
         // ✅ CORREGIDO: Verificar permisos con 'Super Administrador' y usar Op.in
         const usuario = await Persona.findOne({
           where: { id_persona: userId },
@@ -519,12 +530,13 @@ if (rolInactivo) {
 
         await rol.update({ estado: false }, { transaction: t });
         logger.info(`Rol eliminado: ${rolId} por usuario ${userId}`);
-        return true;
 
-      } catch (error) {
-        logger.error('Error eliminando rol:', error);
-        throw error;
-      }
+    });
+
+    // Emitir evento de cambio de rol fuera de la transacción
+    sseService.emitRoleChanged({
+      action: 'deleted',
+      roleId: rolId
     });
 
     return result;

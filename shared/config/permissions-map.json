@@ -90,12 +90,6 @@
       "listar",
       "consultar"
     ],
-    "descargar": [
-      "descargar",
-      "download",
-      "export",
-      "exportar"
-    ],
     "asignar": [
       "asignar",
       "assign"

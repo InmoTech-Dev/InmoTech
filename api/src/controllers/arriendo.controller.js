@@ -1,4 +1,4 @@
-const { Arriendo, Inmueble, Persona, Renant, InmuebleImagen } = require('../models');
+﻿const { Arriendo, Inmueble, Persona, Renant } = require('../models');
 
 const arriendoController = {
     
@@ -41,7 +41,7 @@ const arriendoController = {
             const arriendos = await Arriendo.findAll({
                 where,
                 include: [
-                    { model: Inmueble, as: 'Inmueble', include: [{ model: InmuebleImagen, as: 'imagenes', attributes: ['id_imagen', 'ruta_archivo', 'nombre_archivo', 'es_principal', 'orden'], required: false }] },
+                    { model: Inmueble, as: 'Inmueble' },
                     { 
                         model: Renant, 
                         as: 'Arrendatario',
@@ -83,7 +83,7 @@ const arriendoController = {
             if (arriendo.estado !== 'Pendiente' && arriendo.estado !== 'Activo') {
                 return res.status(400).json({
                     success: false,
-                    message: 'El arriendo no est� disponible para reserva'
+                    message: 'El arriendo no está disponible para reserva'
                 });
             }
 
@@ -183,7 +183,7 @@ const arriendoController = {
         }
     },
 
-    // Obtener estadísticas de arriendos
+    // Obtener estadÃ­sticas de arriendos
     async obtenerEstadisticas(req, res) {
         try {
             const totalArriendos = await Arriendo.count();
@@ -211,7 +211,7 @@ const arriendoController = {
         } catch (error) {
             res.status(500).json({
                 success: false,
-                message: 'Error al obtener estadísticas',
+                message: 'Error al obtener estadÃ­sticas',
                 error: error.message
             });
         }

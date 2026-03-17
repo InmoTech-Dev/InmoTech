@@ -7,9 +7,11 @@ import ViewAppointmentModal from '../../../../features/dashboard/components/appo
 import ConfirmationDialog from '../../../components/ui/ConfirmationDialog';
 import { useAppointments } from '../../../contexts/AppointmentContext';
 import { useToast } from '../../../hooks/use-toast';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import SettingsModal from '../Header/SettingsModal';
 import notificacionApiService from '../../../services/notificacionApiService';
+import reportesInmobiliariosService from '../../../../features/dashboard/services/reportesInmobiliarios.service';
+import ViewReportModal from '../../../../features/dashboard/components/reports/ViewReportModal';
 import realtimeBus from '../../../services/realtimeBus';
 
 const UNREAD_FETCH_COOLDOWN_MS = 15000;
@@ -28,8 +30,14 @@ const Header = () => {
   const [isBellFxActive, setIsBellFxActive] = useState(false);
   const [unreadNotificationIds, setUnreadNotificationIds] = useState([]);
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
+  const [previousTotalCount, setPreviousTotalCount] = useState(0);
+  const audioRef = useRef(null);
   const [isMarkingRead, setIsMarkingRead] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [seenReportIds, setSeenReportIds] = useState([]);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const notificationButtonRef = useRef(null);
   const userMenuRef = useRef(null);
   const userMenuButtonRef = useRef(null);
@@ -41,7 +49,67 @@ const Header = () => {
   // Filtrar citas solicitadas pendientes
   const pendingAppointments = Array.isArray(appointments) ? appointments.filter(cita => cita.estado === 'solicitada') : [];
   const notificationScopeKey = user?.id || user?.id_persona || user?.email || user?.correo || 'anon';
-  const canViewNotifications = hasPermission('citas', 'ver');
+  
+  const canViewCitas = hasPermission('citas', 'ver');
+  const canViewReportes = hasPermission('reportes', 'ver');
+  const canViewAnyNotifications = canViewCitas || canViewReportes;
+
+  // Cargar reportes vistos de localStorage
+  useEffect(() => {
+    if (!notificationScopeKey) return;
+    try {
+      const stored = localStorage.getItem(`inmotech_seen_reports_${notificationScopeKey}`);
+      if (stored) {
+        setSeenReportIds(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn('Error cargando reportes vistos:', e);
+    }
+  }, [notificationScopeKey]);
+
+  // Guardar reportes vistos en localStorage
+  useEffect(() => {
+    if (!notificationScopeKey) return;
+    localStorage.setItem(`inmotech_seen_reports_${notificationScopeKey}`, JSON.stringify(seenReportIds));
+  }, [seenReportIds, notificationScopeKey]);
+
+  // Cargar reportes reales
+  const fetchReports = useCallback(async () => {
+    if (!canViewReportes) return;
+    try {
+      const response = await reportesInmobiliariosService.listarReportes();
+      const allReports = response.data || response || [];
+      // Ordenar por fecha desc (considerando varios posibles nombres de campo)
+      const sorted = [...allReports].sort((a, b) => {
+        const dateA = new Date(a.fecha_creacion || a.fecha || a.createdAt || 0);
+        const dateB = new Date(b.fecha_creacion || b.fecha || b.createdAt || 0);
+        return dateB - dateA;
+      });
+      setReports(sorted);
+    } catch (error) {
+      console.error('Error fetching reports for notifications:', error);
+    }
+  }, [canViewReportes]);
+
+  useEffect(() => {
+    if (canViewReportes) {
+      fetchReports();
+    }
+  }, [canViewReportes, fetchReports]);
+
+  const unseenReportsCount = reports.filter(r => !seenReportIds.includes(r.id_reporte || r.id)).length;
+  const totalNotificationsCount = (canViewCitas ? pendingAppointments.length : 0) + (canViewReportes ? unseenReportsCount : 0);
+
+  // Efecto para sonido de notificación
+  useEffect(() => {
+    if (totalNotificationsCount > previousTotalCount) {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('https://cdn.pixabay.com/audio/2022/10/16/audio_2cadc3d64f.mp3');
+      }
+      audioRef.current.play().catch(e => console.warn('Audio play blocked or failed:', e));
+    }
+    setPreviousTotalCount(totalNotificationsCount);
+  }, [totalNotificationsCount, previousTotalCount]);
 
   const triggerBellFx = useCallback(() => {
     if (bellFxTimeoutRef.current) {
@@ -57,7 +125,7 @@ const Header = () => {
   }, []);
 
   const loadUnreadNotifications = useCallback(async ({ triggerAnimation = true, force = false } = {}) => {
-    if (!canViewNotifications) {
+    if (!canViewCitas) {
       setUnreadNotificationIds([]);
       setPreviousUnreadCount(0);
       unreadNotificationIdsRef.current = [];
@@ -103,7 +171,7 @@ const Header = () => {
     } finally {
       unreadFetchInFlightGlobal = null;
     }
-  }, [canViewNotifications, triggerBellFx]);
+  }, [canViewCitas, triggerBellFx]);
 
   const markUnreadAsReadOnOpen = useCallback(async (idsToMark = unreadNotificationIdsRef.current) => {
     if (isMarkingRead) return;
@@ -165,7 +233,7 @@ const Header = () => {
   }, [loadUnreadNotifications]);
 
   useEffect(() => {
-    if (!canViewNotifications) return undefined;
+    if (!canViewCitas) return undefined;
 
     const offNotificationChanged = realtimeBus.on('notification.changed', () => {
       loadUnreadNotifications({ triggerAnimation: true, force: true });
@@ -182,7 +250,7 @@ const Header = () => {
       offFallbackTick();
       offReconcile();
     };
-  }, [canViewNotifications, loadUnreadNotifications]);
+  }, [canViewCitas, loadUnreadNotifications]);
 
   useEffect(() => {
     return () => {
@@ -263,11 +331,26 @@ const Header = () => {
     setIsNotificationOpen(false);
   };
 
+  const handleOpenReport = (report) => {
+    const reportId = report.id_reporte || report.id;
+    if (!seenReportIds.includes(reportId)) {
+      setSeenReportIds(prev => [...prev, reportId]);
+    }
+    setSelectedReport(report);
+    setIsReportModalOpen(true);
+    setIsNotificationOpen(false);
+  };
+
   const handleNotificationToggle = async () => {
     const willOpen = !isNotificationOpen;
     setIsNotificationOpen(willOpen);
 
     if (!willOpen) return;
+
+    // Actualizar reportes al abrir
+    if (canViewReportes) {
+      fetchReports();
+    }
 
     const shouldRefreshBeforeMark = Date.now() - lastUnreadFetchAtGlobal >= UNREAD_FETCH_COOLDOWN_MS;
     const latestUnreadIds = shouldRefreshBeforeMark
@@ -401,70 +484,78 @@ const Header = () => {
 
       <div className="flex items-center space-x-4">
         {/* Notifications */}
-        <div className="relative">
-          <motion.button
-            ref={notificationButtonRef}
-            animate={isBellFxActive
-              ? {
-                  rotate: [0, -12, 10, -8, 6, -4, 2, 0],
-                  scale: [1, 1.07, 1]
-                }
-              : { rotate: 0, scale: 1 }
-            }
-            transition={isBellFxActive
-              ? {
-                  duration: 0.8,
-                  ease: 'easeInOut',
-                  times: [0, 0.12, 0.24, 0.36, 0.5, 0.64, 0.78, 1]
-                }
-              : { duration: 0.2 }
-            }
-            whileHover={{
-              scale: 1.05,
-              backgroundColor: 'rgba(59, 130, 246, 0.05)',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)'
-            }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleNotificationToggle}
-            className="relative p-2.5 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-300 hover:bg-blue-50/50"
-            style={{
-              border: '1px solid transparent',
-              backgroundColor: 'rgba(255, 255, 255, 0.4)'
-            }}
-          >
-            <AnimatePresence>
-              {isBellFxActive && (
+        {canViewAnyNotifications && (
+          <div className="relative">
+            <motion.button
+              ref={notificationButtonRef}
+              animate={isBellFxActive
+                ? {
+                    rotate: [0, -12, 10, -8, 6, -4, 2, 0],
+                    scale: [1, 1.07, 1]
+                  }
+                : { rotate: 0, scale: 1 }
+              }
+              transition={isBellFxActive
+                ? {
+                    duration: 0.8,
+                    ease: 'easeInOut',
+                    times: [0, 0.12, 0.24, 0.36, 0.5, 0.64, 0.78, 1]
+                  }
+                : { duration: 0.2 }
+              }
+              whileHover={{
+                scale: 1.05,
+                backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)'
+              }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleNotificationToggle}
+              className="relative p-2.5 text-gray-600 hover:text-blue-600 rounded-xl transition-all duration-300 hover:bg-blue-50/50"
+              style={{
+                border: '1px solid transparent',
+                backgroundColor: 'rgba(255, 255, 255, 0.4)'
+              }}
+            >
+              <AnimatePresence>
+                {isBellFxActive && (
+                  <motion.span
+                    initial={{ opacity: 0.65, scale: 0.75 }}
+                    animate={{ opacity: 0, scale: 1.7 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.85, ease: 'easeOut' }}
+                    className="pointer-events-none absolute inset-0 rounded-xl border-2 border-blue-300/70"
+                  />
+                )}
+              </AnimatePresence>
+              <MdNotifications size={22} />
+              {totalNotificationsCount > 0 && (
                 <motion.span
-                  initial={{ opacity: 0.65, scale: 0.75 }}
-                  animate={{ opacity: 0, scale: 1.7 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.85, ease: 'easeOut' }}
-                  className="pointer-events-none absolute inset-0 rounded-xl border-2 border-blue-300/70"
-                />
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white shadow-sm pointer-events-none"
+                >
+                  {totalNotificationsCount}
+                </motion.span>
               )}
-            </AnimatePresence>
-            <MdNotifications size={22} />
-            {pendingAppointments.length > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium"
-              >
-                {pendingAppointments.length}
-              </motion.span>
-            )}
-          </motion.button>
+            </motion.button>
 
-          <NotificationDropdown
-            isOpen={isNotificationOpen}
-            onClose={() => setIsNotificationOpen(false)}
-            notifications={pendingAppointments}
-            onAcceptAppointment={handleAcceptAppointmentRequest}
-            onRejectAppointment={handleRejectAppointmentRequest}
-            onViewAppointment={handleViewAppointment}
-            triggerRef={notificationButtonRef}
-          />
-        </div>
+            <NotificationDropdown
+              isOpen={isNotificationOpen}
+              onClose={() => setIsNotificationOpen(false)}
+              notifications={pendingAppointments}
+              reports={reports}
+              seenReportIds={seenReportIds}
+              canViewCitas={canViewCitas}
+              canViewReportes={canViewReportes}
+              onAcceptAppointment={handleAcceptAppointmentRequest}
+              onRejectAppointment={handleRejectAppointmentRequest}
+              onViewAppointment={handleViewAppointment}
+              onOpenReport={handleOpenReport}
+              triggerRef={notificationButtonRef}
+              userRole={getUserRole()}
+            />
+          </div>
+        )}
 
         {/* User Profile */}
         <div className="relative" ref={userMenuRef}>
@@ -529,6 +620,16 @@ const Header = () => {
           setSelectedAppointment(null);
         }}
         cita={selectedAppointment}
+      />
+
+      {/* View Report Modal */}
+      <ViewReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setSelectedReport(null);
+        }}
+        reporte={selectedReport}
       />
 
       {/* Accept Appointment Confirmation Dialog */}

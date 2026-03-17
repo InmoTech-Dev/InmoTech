@@ -442,3 +442,23 @@ class ApiClient {
 
 export const apiClient = new ApiClient();
 export { API_CONFIG };
+
+/**
+ * Utility to extract pagination metadata from API responses.
+ */
+export const extractPagination = (response, params = {}) => {
+  const meta = response?.pagination || response?.meta || response?.data?.pagination || {};
+  const total = meta.total || 0;
+  const safePagina = meta.pagina || meta.currentPage || params.page || 1;
+  const safeLimite = meta.limite || meta.limit || params.limit || 10;
+  const totalPages = meta.paginas_totales || meta.totalPages || Math.ceil(total / safeLimite) || 1;
+
+  return {
+    total,
+    pagina: safePagina,
+    limite: safeLimite,
+    paginas_totales: totalPages,
+    has_next_page: meta.has_next_page ?? (safePagina < totalPages),
+    has_prev_page: meta.has_prev_page ?? (safePagina > 1),
+  };
+};

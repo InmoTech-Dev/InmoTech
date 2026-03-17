@@ -10,16 +10,11 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/webp',
   'image/gif'
 ]);
-const ALLOWED_FILE_MIME_TYPES = new Set([
-  ...ALLOWED_IMAGE_MIME_TYPES,
-  'application/pdf'
-]);
 const DEFAULT_ALLOWED_FOLDERS = [
   'inmotech/inmuebles',
   'inmotech/perfiles',
   'inmotech/reportes',
   'inmotech/comprobantes', // habilitado para recibos de pago de arriendos
-  'inmotech/preavisos',
 ];
 const ALLOWED_UPLOAD_FOLDERS = (
   process.env.UPLOAD_ALLOWED_FOLDERS
@@ -27,37 +22,20 @@ const ALLOWED_UPLOAD_FOLDERS = (
     : DEFAULT_ALLOWED_FOLDERS
 );
 const DEFAULT_UPLOAD_FOLDER = ALLOWED_UPLOAD_FOLDERS[0] || 'inmotech/inmuebles';
-const DEFAULT_CLOUDINARY_TIMEOUT_MS = 120000;
-const CLOUDINARY_UPLOAD_TIMEOUT_MS =
-  Number.parseInt(process.env.CLOUDINARY_UPLOAD_TIMEOUT_MS || '', 10) || DEFAULT_CLOUDINARY_TIMEOUT_MS;
-
-const normalizeFolderPath = (value = '') =>
-  String(value || '')
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/\/{2,}/g, '/')
-    .replace(/^\/+|\/+$/g, '');
 
 const resolveUploadFolder = (folderInput) => {
-  const candidate = normalizeFolderPath(folderInput);
+  const candidate = typeof folderInput === 'string' ? folderInput.trim() : '';
   if (!candidate) return DEFAULT_UPLOAD_FOLDER;
 
-  // Bloquear traversal o caracteres peligrosos.
-  if (
-    candidate.includes('..') ||
-    !/^[a-zA-Z0-9/_-]+$/.test(candidate)
-  ) {
+  // Modificación: Permitir si la carpeta comienza con alguna de la lista permitida
+  // Esto permite estructuras como "inmotech/reportes/123/imagenes"
+  const isAllowed = ALLOWED_UPLOAD_FOLDERS.some(base =>
+    candidate === base || candidate.startsWith(`${base}/`)
+  );
+
+  if (!isAllowed) {
     return null;
   }
-
-  const allowed = ALLOWED_UPLOAD_FOLDERS.map((folder) => normalizeFolderPath(folder)).filter(Boolean);
-  const isExactAllowed = allowed.includes(candidate);
-  const isAllowedSubfolder = allowed.some((folder) => candidate.startsWith(`${folder}/`));
-
-  if (!isExactAllowed && !isAllowedSubfolder) {
-    return null;
-  }
-
   return candidate;
 };
 
@@ -69,22 +47,6 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     if (!file || !ALLOWED_IMAGE_MIME_TYPES.has(file.mimetype)) {
-      const invalidMimeTypeError = new Error('Tipo de archivo no permitido');
-      invalidMimeTypeError.code = 'INVALID_FILE_TYPE';
-      return cb(invalidMimeTypeError);
-    }
-    return cb(null, true);
-  }
-});
-
-// Variante que permite imágenes y PDFs (para comprobantes/contratos)
-const uploadAny = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: UPLOAD_MAX_BYTES
-  },
-  fileFilter: (req, file, cb) => {
-    if (!file || !ALLOWED_FILE_MIME_TYPES.has(file.mimetype)) {
       const invalidMimeTypeError = new Error('Tipo de archivo no permitido');
       invalidMimeTypeError.code = 'INVALID_FILE_TYPE';
       return cb(invalidMimeTypeError);
@@ -122,45 +84,9 @@ const uploadSingle = (req, res, next) => {
   });
 };
 
-// Middleware para una sola imagen o PDF
-const uploadSingleAny = (req, res, next) => {
-  uploadAny.single('file')(req, res, (error) => {
-    if (!error) {
-      return next();
-    }
-
-    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        message: `El archivo supera el limite permitido de ${Math.floor(UPLOAD_MAX_BYTES / (1024 * 1024))}MB`
-      });
-    }
-
-    if (error.code === 'INVALID_FILE_TYPE') {
-      return res.status(400).json({
-        success: false,
-        message: 'Tipo de archivo no permitido'
-      });
-    }
-
-    logger.error('Error en procesamiento de upload:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error procesando archivo'
-    });
-  });
-};
-
 const subirImagen = async (req, res) => {
   try {
-    const hasCloudinaryUrl = Boolean(process.env.CLOUDINARY_URL);
-    const hasCloudinaryCredentials = Boolean(
-      process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-    );
-
-    if (!hasCloudinaryUrl && !hasCloudinaryCredentials) {
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
       logger.error('Subida abortada: Cloudinary no está configurado correctamente');
       return res.status(500).json({ success: false, message: 'Servicio de imágenes no configurado' });
     }
@@ -173,6 +99,8 @@ const subirImagen = async (req, res) => {
       (req.body && req.body.folder) ||
       (req.query && req.query.folder) ||
       DEFAULT_UPLOAD_FOLDER;
+
+    logger.info(`Intento de subida a carpeta: "${requestedFolder}"`);
     const folder = resolveUploadFolder(requestedFolder);
     if (!folder) {
       return res.status(400).json({
@@ -181,14 +109,11 @@ const subirImagen = async (req, res) => {
       });
     }
 
-    const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
-
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder,
-          resource_type: resourceType,
-          timeout: CLOUDINARY_UPLOAD_TIMEOUT_MS,
+          resource_type: 'image',
         },
         (error, result) => {
           if (error) return reject(error);
@@ -200,7 +125,7 @@ const subirImagen = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Archivo subido correctamente',
+      message: 'Imagen subida correctamente',
       data: {
         url: result.secure_url,
         public_id: result.public_id,
@@ -210,23 +135,14 @@ const subirImagen = async (req, res) => {
     });
   } catch (error) {
     logger.error('Error subiendo imagen a Cloudinary:', error);
-    const cloudinaryStatus = Number(error?.http_code || error?.statusCode || 0);
-    const isTimeout =
-      cloudinaryStatus === 499 ||
-      error?.name === 'TimeoutError' ||
-      String(error?.message || '').toLowerCase().includes('timeout');
-
     return res.status(500).json({
       success: false,
-      message: isTimeout
-        ? 'La subida del archivo excedio el tiempo limite. Intenta con un archivo mas liviano.'
-        : 'Error subiendo archivo',
+      message: 'Error subiendo imagen',
     });
   }
 };
 
 module.exports = {
   uploadSingle,
-  uploadSingleAny,
   subirImagen,
 };

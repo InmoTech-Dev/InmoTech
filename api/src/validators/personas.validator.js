@@ -46,11 +46,6 @@ const crearPersonaSchema = Joi.object({
     .optional()
     .default(false),
 
-  rol: Joi.string()
-    .valid('Usuario', 'Propietario', 'Empleado', 'Administrador', 'Super Administrador')
-    .optional()
-    .default('Usuario'),
-
   estado: Joi.boolean()
     .optional()
     .default(true)

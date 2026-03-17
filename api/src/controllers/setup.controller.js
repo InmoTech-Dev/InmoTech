@@ -148,7 +148,8 @@ class SetupController {
       { nombre_rol: 'Administrador', descripcion: 'Gestión administrativa y configuración del sistema', es_rol_administrativo: true },
       { nombre_rol: 'Empleado', descripcion: 'Agentes inmobiliarios y empleados de la empresa', es_rol_administrativo: true },
       { nombre_rol: 'Usuario', descripcion: 'Rol por defecto al registrarse en el sistema', es_rol_administrativo: false },
-      { nombre_rol: 'Propietario', descripcion: 'Usuarios que tienen inmuebles registrados a su nombre', es_rol_administrativo: false }
+      { nombre_rol: 'Propietario', descripcion: 'Usuarios que tienen inmuebles registrados a su nombre', es_rol_administrativo: false },
+      { nombre_rol: 'Arrendatario', descripcion: 'Usuarios con acceso a su portal de facturas y pagos', es_rol_administrativo: false }
     ];
 
     for (const rol of roles) {

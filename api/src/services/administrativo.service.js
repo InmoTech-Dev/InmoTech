@@ -499,9 +499,8 @@ class AdministrativoService {
    */
   async actualizarAdministrativo(id, updateData) {
     const result = await sequelize.transaction(async (t) => {
-      try {
-        const administrativo = await Administrativo.findOne({
-          where: { id_administrativo: id },
+      const administrativo = await Administrativo.findOne({
+        where: { id_administrativo: id },
           include: [
             {
               model: Persona,
@@ -540,6 +539,28 @@ class AdministrativoService {
 
         // Actualizar datos de persona si se proporcionan
         if (personaData) {
+          // Validar duplicidad de correo
+          if (personaData.correo && personaData.correo !== administrativo.persona.correo) {
+            const existingEmail = await Persona.findOne({
+              where: { correo: personaData.correo },
+              transaction: t
+            });
+            if (existingEmail) {
+              throw buildHttpError('El correo electrónico ya está registrado por otro usuario', 400);
+            }
+          }
+
+          // Validar duplicidad de documento
+          if (personaData.numero_documento && personaData.numero_documento !== administrativo.persona.numero_documento) {
+            const existingDoc = await Persona.findOne({
+              where: { numero_documento: personaData.numero_documento },
+              transaction: t
+            });
+            if (existingDoc) {
+              throw buildHttpError('El número de documento ya está registrado por otro usuario', 400);
+            }
+          }
+
           await administrativo.persona.update(personaData, { transaction: t });
         }
 
@@ -579,29 +600,44 @@ class AdministrativoService {
           });
 
           if (rolActual) {
-            if (rolActual.id_rol !== rolIdNormalizado) {
-              await rolActual.update({ id_rol: rolIdNormalizado }, { transaction: t });
-            }
+            // Siempre aseguramos que esté activo al editar, y actualizamos el ID si cambió
+            await rolActual.update(
+              {
+                id_rol: rolIdNormalizado,
+                estado: true,
+                fecha_asignacion: new Date()
+              },
+              { transaction: t }
+            );
           } else {
             await PersonasRol.create(
               {
                 id_persona: personaId,
                 id_rol: rolIdNormalizado,
+                estado: true,
+                fecha_asignacion: new Date()
               },
               { transaction: t }
             );
           }
         }
 
-        logger.info(`Administrativo actualizado: ID ${id}`);
-
-        return administrativo;
-
-      } catch (error) {
-        logger.error('Error actualizando administrativo:', error);
-        throw error;
-      }
     });
+    
+    // ✅ OPTIMIZACIÓN: Emitir evento SSE fuera de la transacción para evitar bloqueos y race conditions
+    // El timeout ocurría porque obtenerAdministrativosActivosIds() hace consultas pesadas dentro del lock
+    try {
+      const personaId = result.persona.id_persona;
+      const audienceIds = await require('./realtimeAudience.service').obtenerAdministrativosActivosIds();
+      sseService.emitUserChanged({
+        action: 'updated',
+        userId: personaId,
+        affectedUserIds: [personaId],
+        audienceUserIds: audienceIds
+      });
+    } catch (sseError) {
+      logger.error('Error enviando notificación SSE en actualizarAdministrativo:', sseError);
+    }
 
     return result;
   }
@@ -669,16 +705,17 @@ class AdministrativoService {
 
         personaId = administrativo.persona.id_persona;
 
-        if (shouldDisableAccount) {
-          sseService.notifyUserDisabled(personaId);
-          logger.info(`SSE: Notificacion enviada - Usuario deshabilitado ${personaId}`);
-        }
-
         logger.info(`Estado laboral actualizado para administrativo ID ${id}: ${estadoLaboral}`);
         return administrativo;
       });
 
       if (personaId) {
+        // Enviar notificación de desconexión inmediata si la cuenta fue deshabilitada
+        if (estadoLaboral === 'Retirado' || estadoLaboral === 'Inactivo') {
+          sseService.notifyUserDisabled(personaId);
+          logger.info(`SSE: Notificacion de desconexión enviada para usuario ID ${personaId}`);
+        }
+
         const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
         sseService.emitUserChanged({
           action: estadoLaboral === 'Retirado' || estadoLaboral === 'Inactivo' ? 'disabled' : 'enabled',
@@ -748,11 +785,6 @@ class AdministrativoService {
           estado: false
         }, { transaction: t });
 
-        targetPersonaId = administrativo.persona.id_persona;
-
-        sseService.notifyUserDisabled(targetPersonaId);
-        logger.info(`SSE: Notificacion enviada - Usuario deshabilitado ${targetPersonaId}`);
-
         logger.info(`Administrativo eliminado: ID ${id}`);
       } catch (error) {
         logger.error('Error eliminando administrativo:', error);
@@ -761,6 +793,10 @@ class AdministrativoService {
     });
 
     if (targetPersonaId) {
+      // Notificar desconexión inmediata fuera de la transacción
+      sseService.notifyUserDisabled(targetPersonaId);
+      logger.info(`SSE: Notificacion de desconexión enviada para usuario eliminado ID ${targetPersonaId}`);
+
       const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
       sseService.emitUserChanged({
         action: 'disabled',
@@ -896,7 +932,37 @@ class AdministrativoService {
     } catch (error) {
       logger.error('Error obteniendo siguiente número de empleado:', error);
       // En caso de error, usar un valor por defecto único basado en timestamp
-      return Math.floor(Date.now() / 1000) % 1000 + 1;
+    }
+  }
+  /**
+   * Obtiene los correos electrónicos de los Súper Administradores y Administradores activos
+   * @returns {Promise<string[]>} Lista de correos
+   */
+  async obtenerEmailsAdministradores() {
+    try {
+      const { SUPER_ADMIN_ROLE, ADMINISTRATOR_ROLE } = require('../constants/roles.constants');
+
+      const administradores = await Persona.findAll({
+        attributes: ['correo'],
+        where: { estado: true },
+        include: [
+          {
+            model: Rol,
+            as: 'roles',
+            where: {
+              nombre_rol: [SUPER_ADMIN_ROLE, ADMINISTRATOR_ROLE],
+              estado: true
+            },
+            required: true,
+            through: { where: { estado: true } }
+          }
+        ]
+      });
+
+      return administradores.map(admin => admin.correo).filter(Boolean);
+    } catch (error) {
+      logger.error('Error obteniendo emails de administradores:', error);
+      throw error;
     }
   }
 }

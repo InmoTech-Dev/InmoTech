@@ -1,4 +1,15 @@
-const { Persona, Acceso, PersonasRol, Rol, PropiedadInmueble } = require('../models');
+const {
+  Persona,
+  Acceso,
+  PersonasRol,
+  Rol,
+  PropiedadInmueble,
+  Renant,
+  Lease,
+  Payment,
+  Receipt,
+  Inmueble
+} = require('../models');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const bcryptUtils = require('../utils/bcrypt');
@@ -161,46 +172,37 @@ class PersonaService {
         throw new Error('Persona no encontrada');
       }
 
-      // Traer inmuebles asociados como propietario.
+      // Si tiene rol Propietario, traer sus inmuebles actuales
       let inmuebles = [];
       try {
-        const [meta] = await sequelize.query(`
-          SELECT COL_LENGTH('dbo.Propiedad_inmueble', 'es_propietario_actual') AS has_es_propietario_actual
-        `);
-
-        const hasCurrentOwnerColumn = Boolean(meta?.[0]?.has_es_propietario_actual);
-        const whereOwnerClause = hasCurrentOwnerColumn
-          ? `(pi.es_propietario_actual = 1 OR pi.estado = 'Activo')`
-          : `pi.estado = 'Activo'`;
-
-        const rows = await sequelize.query(
-          `
-          SELECT
-            pi.id_inmueble,
-            i.titulo,
-            i.registro_inmobiliario,
-            i.direccion,
-            i.ciudad,
-            i.departamento,
-            i.pais,
-            i.operacion,
-            i.categoria,
-            i.precio_venta,
-            i.precio_arriendo,
-            i.estado,
-            i.estado_frontend
-          FROM Propiedad_inmueble pi
-          INNER JOIN Inmuebles i ON pi.id_inmueble = i.id_inmueble
-          WHERE ${whereOwnerClause}
-            AND pi.id_persona = :id
-          `,
-          {
-            replacements: { id: personaId },
-            type: sequelize.QueryTypes.SELECT
-          }
-        );
-
-        inmuebles = Array.isArray(rows) ? rows : [];
+        const esPropietario = (persona.roles || []).some((r) => r.nombre_rol === 'Propietario');
+        if (esPropietario) {
+          const [rows] = await sequelize.query(
+            `
+            SELECT
+              pi.id_inmueble,
+              i.titulo,
+              i.registro_inmobiliario,
+              i.direccion,
+              i.ciudad,
+              i.departamento,
+              i.pais,
+              i.operacion,
+              i.precio_venta,
+              i.precio_arriendo,
+              i.estado
+            FROM Propiedad_inmueble pi
+            INNER JOIN Inmuebles i ON pi.id_inmueble = i.id_inmueble
+            WHERE pi.es_propietario_actual = 1
+              AND pi.id_persona = :id
+            `,
+            {
+              replacements: { id: personaId },
+              type: sequelize.QueryTypes.SELECT
+            }
+          );
+          inmuebles = rows || [];
+        }
       } catch (propError) {
         logger.warn(`No se pudieron cargar inmuebles para persona ${personaId}: ${propError.message}`);
       }
@@ -223,6 +225,199 @@ class PersonaService {
       };
     } catch (error) {
       logger.error('Error obteniendo perfil:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene facturas/cobros del arrendatario autenticado
+   */
+  async obtenerResumenArrendatario(personaId) {
+    try {
+      const persona = await Persona.findOne({
+        where: { id_persona: personaId, estado: true },
+        attributes: [
+          'id_persona',
+          'tipo_documento',
+          'numero_documento',
+          'nombre_completo',
+          'apellido_completo',
+          'correo',
+          'telefono'
+        ]
+      });
+
+      if (!persona) {
+        throw new Error('Persona no encontrada');
+      }
+
+      const arrendatario = await Renant.findOne({
+        where: { id_persona: personaId },
+        attributes: ['id_arrendatario', 'registro_arrendatario', 'tipo_arrendatario', 'estado']
+      });
+
+      if (!arrendatario) {
+        return {
+          arrendatario: null,
+          resumen: {
+            total_facturas: 0,
+            facturas_pagadas: 0,
+            facturas_pendientes: 0,
+            facturas_vencidas: 0,
+            total_valor: 0,
+            total_pagado: 0,
+            total_pendiente: 0
+          },
+          facturas: []
+        };
+      }
+
+      const leases = await Lease.findAll({
+        where: { id_cliente: arrendatario.id_arrendatario },
+        attributes: ['id_arrendamiento', 'fecha_inicio', 'fecha_finalizacion', 'valor_mensual', 'estado'],
+        include: [
+          {
+            model: Inmueble,
+            as: 'inmueble',
+            attributes: [
+              'id_inmueble',
+              'titulo',
+              'registro_inmobiliario',
+              'direccion',
+              'ciudad',
+              'categoria'
+            ]
+          },
+          {
+            model: Payment,
+            as: 'cobros',
+            attributes: [
+              'id_cobro',
+              'fecha_cobro',
+              'fecha_limite',
+              'valor_pago',
+              'estado',
+              'fecha_pago',
+              'fecha_creacion'
+            ],
+            include: [
+              {
+                model: Receipt,
+                as: 'comprobante',
+                attributes: [
+                  'id_comprobante',
+                  'url_comprobante',
+                  'entidad_bancaria',
+                  'referencia_bancaria',
+                  'monto_pagado',
+                  'estado',
+                  'fecha_pago',
+                  'fecha_creacion',
+                  'observaciones'
+                ]
+              }
+            ],
+            required: false
+          }
+        ],
+        order: [
+          [{ model: Payment, as: 'cobros' }, 'fecha_cobro', 'DESC']
+        ]
+      });
+
+      const facturas = [];
+
+      leases.forEach((lease) => {
+        const inmueble = lease.inmueble || {};
+        const cobros = Array.isArray(lease.cobros) ? lease.cobros : [];
+        cobros.forEach((cobro) => {
+          const valorPago = Number(cobro.valor_pago) || 0;
+          const valorComprobante = Number(cobro?.comprobante?.monto_pagado) || null;
+
+          facturas.push({
+            id_cobro: cobro.id_cobro,
+            id_arrendamiento: lease.id_arrendamiento,
+            estado: cobro.estado,
+            fecha_cobro: cobro.fecha_cobro,
+            fecha_limite: cobro.fecha_limite,
+            fecha_pago: cobro.fecha_pago,
+            valor_pago: valorPago,
+            inmueble: {
+              id_inmueble: inmueble.id_inmueble || null,
+              titulo: inmueble.titulo || null,
+              registro_inmobiliario: inmueble.registro_inmobiliario || null,
+              direccion: inmueble.direccion || null,
+              ciudad: inmueble.ciudad || null,
+              categoria: inmueble.categoria || null
+            },
+            arrendamiento: {
+              id_arrendamiento: lease.id_arrendamiento,
+              fecha_inicio: lease.fecha_inicio,
+              fecha_finalizacion: lease.fecha_finalizacion,
+              valor_mensual: Number(lease.valor_mensual) || valorPago,
+              estado: lease.estado
+            },
+            comprobante: cobro.comprobante ? {
+              id_comprobante: cobro.comprobante.id_comprobante,
+              url_comprobante: cobro.comprobante.url_comprobante,
+              entidad_bancaria: cobro.comprobante.entidad_bancaria,
+              referencia_bancaria: cobro.comprobante.referencia_bancaria,
+              monto_pagado: valorComprobante,
+              estado: cobro.comprobante.estado,
+              fecha_pago: cobro.comprobante.fecha_pago,
+              fecha_creacion: cobro.comprobante.fecha_creacion,
+              observaciones: cobro.comprobante.observaciones
+            } : null
+          });
+        });
+      });
+
+      const resumen = facturas.reduce((acc, factura) => {
+        const valor = Number(factura.valor_pago) || 0;
+        acc.total_facturas += 1;
+        acc.total_valor += valor;
+
+        if (factura.estado === 'Pagado') {
+          acc.facturas_pagadas += 1;
+          acc.total_pagado += valor;
+        } else if (factura.estado === 'Vencido') {
+          acc.facturas_vencidas += 1;
+          acc.total_pendiente += valor;
+        } else if (factura.estado === 'Pendiente') {
+          acc.facturas_pendientes += 1;
+          acc.total_pendiente += valor;
+        }
+
+        return acc;
+      }, {
+        total_facturas: 0,
+        facturas_pagadas: 0,
+        facturas_pendientes: 0,
+        facturas_vencidas: 0,
+        total_valor: 0,
+        total_pagado: 0,
+        total_pendiente: 0
+      });
+
+      return {
+        arrendatario: {
+          id_arrendatario: arrendatario.id_arrendatario,
+          id_persona: persona.id_persona,
+          registro_arrendatario: arrendatario.registro_arrendatario,
+          tipo_arrendatario: arrendatario.tipo_arrendatario,
+          estado: arrendatario.estado,
+          nombre_completo: persona.nombre_completo,
+          apellido_completo: persona.apellido_completo,
+          correo: persona.correo,
+          telefono: persona.telefono,
+          tipo_documento: persona.tipo_documento,
+          numero_documento: persona.numero_documento
+        },
+        resumen,
+        facturas
+      };
+    } catch (error) {
+      logger.error('Error obteniendo resumen arrendatario:', error);
       throw error;
     }
   }
@@ -353,15 +548,27 @@ class PersonaService {
    */
   async listarPersonas(filtros = {}, opciones = {}) {
     try {
+      const parseBooleanFilter = (value) => {
+        if (value === undefined || value === null || value === '') return undefined;
+        if (typeof value === 'boolean') return value;
+        const normalized = String(value).trim().toLowerCase();
+        if (['true', '1', 'si', 'activo'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'inactivo'].includes(normalized)) return false;
+        return undefined;
+      };
+
       const {
         tipo_documento,
         numero_documento,
         nombre,
+        busqueda,
+        search,
         correo,
         tiene_cuenta,
         estado
       } = filtros;
       const rolFiltro = filtros.rol || filtros.rol_nombre || null;
+      const cantidadFiltro = String(filtros.cantidad_inmuebles || filtros.cantidad || '').trim();
 
       const {
         pagina = 1,
@@ -373,11 +580,13 @@ class PersonaService {
       const offset = (pagina - 1) * limite;
       const whereClausePersona = {};
 
-      if (estado !== undefined) whereClausePersona.estado = estado;
+      const estadoFiltro = parseBooleanFilter(estado);
+      if (estadoFiltro !== undefined) whereClausePersona.estado = estadoFiltro;
       if (tipo_documento) whereClausePersona.tipo_documento = tipo_documento;
       if (numero_documento) whereClausePersona.numero_documento = { [sequelize.Op.like]: `%${numero_documento}%` };
       if (correo) whereClausePersona.correo = { [sequelize.Op.like]: `%${correo}%` };
-      if (tiene_cuenta !== undefined) whereClausePersona.tiene_cuenta = tiene_cuenta;
+      const tieneCuentaFiltro = parseBooleanFilter(tiene_cuenta);
+      if (tieneCuentaFiltro !== undefined) whereClausePersona.tiene_cuenta = tieneCuentaFiltro;
 
       if (nombre) {
         whereClausePersona[sequelize.Op.or] = [
@@ -415,6 +624,27 @@ class PersonaService {
 
       const validPersons = allPersonsResult.filter(p => p != null);
 
+      const normalize = (value = '') =>
+        String(value || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+
+      const rawSearch = String(busqueda || search || '').trim();
+      const searchTerms = rawSearch
+        .split(/\s+/)
+        .map((term) => normalize(term))
+        .filter(Boolean);
+
+      const matchesCantidadFilter = (cantidad) => {
+        if (!cantidadFiltro || cantidadFiltro === 'Todas las cantidades') return true;
+        if (cantidadFiltro === '1') return cantidad === 1;
+        if (cantidadFiltro === '2-3') return cantidad >= 2 && cantidad <= 3;
+        if (cantidadFiltro === '4+') return cantidad >= 4;
+        return true;
+      };
+
       const personasFiltradas = validPersons.filter(persona => {
         const roles = persona.roles || [];
         const propiedades = Array.isArray(persona.propiedades) ? persona.propiedades : [];
@@ -422,11 +652,38 @@ class PersonaService {
         if (rolFiltro === 'Propietario') {
           const esPorRol = roles.some(rol => rol.nombre_rol === 'Propietario');
           const esPorPropiedad = propiedades.length > 0;
-          return esPorRol || esPorPropiedad;
+          if (!esPorRol && !esPorPropiedad) return false;
         }
 
         if (rolFiltro === 'Usuario') {
-          return roles.some(rol => rol.nombre_rol === 'Usuario');
+          const esUsuario = roles.some(rol => rol.nombre_rol === 'Usuario');
+          if (!esUsuario) return false;
+        }
+
+        if (rolFiltro === 'Propietario' && !matchesCantidadFilter(propiedades.length)) {
+          return false;
+        }
+
+        if (searchTerms.length) {
+          const dynamicRegistro = `prop-${new Date().getFullYear()}-${String(persona.id_persona || 0).padStart(3, '0')}`;
+          const searchableValues = [
+            persona.nombre_completo,
+            persona.apellido_completo,
+            `${persona.nombre_completo || ''} ${persona.apellido_completo || ''}`.trim(),
+            persona.numero_documento,
+            persona.tipo_documento,
+            persona.correo,
+            persona.telefono,
+            dynamicRegistro
+          ]
+            .map((value) => normalize(value))
+            .filter(Boolean);
+
+          const matchesSearch = searchTerms.every((term) =>
+            searchableValues.some((value) => value.includes(term))
+          );
+
+          if (!matchesSearch) return false;
         }
 
         return true;
@@ -513,9 +770,8 @@ class PersonaService {
       };
     } catch (error) {
       logger.error('Error listando personas:', error);
-
-      const paginaSafe = filtros?.pagina || 1;
-      const limiteSafe = filtros?.limite || 20;
+      const paginaSafe = opciones?.pagina || 1;
+      const limiteSafe = opciones?.limite || 20;
 
       return {
         personas: [],

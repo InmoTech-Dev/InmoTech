@@ -217,9 +217,8 @@ export default function LeaseStatusModal({
             )}
           </div>
           <ChevronDown
-            className={`w-4 h-4 mt-1 shrink-0 text-slate-500 transition-transform ${
-              expanded ? "rotate-180" : ""
-            }`}
+            className={`w-4 h-4 mt-1 shrink-0 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""
+              }`}
           />
         </button>
 
@@ -360,11 +359,10 @@ export default function LeaseStatusModal({
                 <button
                   type="button"
                   onClick={() => setActivePage("tracking")}
-                  className={`px-3 py-2 text-sm rounded-lg transition ${
-                    activePage === "tracking"
+                  className={`px-3 py-2 text-sm rounded-lg transition ${activePage === "tracking"
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-600 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   Seguimiento
                 </button>
@@ -372,11 +370,10 @@ export default function LeaseStatusModal({
               <button
                 type="button"
                 onClick={() => setActivePage("payments")}
-                className={`px-3 py-2 text-sm rounded-lg transition ${
-                  activePage === "payments"
+                className={`px-3 py-2 text-sm rounded-lg transition ${activePage === "payments"
                     ? "bg-white text-slate-900 shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
-                }`}
+                  }`}
               >
                 Pagos
               </button>
@@ -398,9 +395,8 @@ export default function LeaseStatusModal({
                     />
                     <Field
                       label="Inmueble"
-                      value={`${statusRent.tipoInmueble || "-"}${
-                        statusRent.registroInmobiliario ? ` - ${statusRent.registroInmobiliario}` : ""
-                      }`}
+                      value={`${statusRent.tipoInmueble || "-"}${statusRent.registroInmobiliario ? ` - ${statusRent.registroInmobiliario}` : ""
+                        }`}
                     />
                   </div>
 
@@ -479,22 +475,20 @@ export default function LeaseStatusModal({
                     <button
                       type="button"
                       onClick={() => setPaymentsTab("current")}
-                      className={`px-3 py-2 text-sm rounded-lg transition ${
-                        paymentsTab === "current"
+                      className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "current"
                           ? "bg-white text-slate-900 shadow-sm"
                           : "text-slate-600 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       Pago del mes
                     </button>
                     <button
                       type="button"
                       onClick={() => setPaymentsTab("history")}
-                      className={`px-3 py-2 text-sm rounded-lg transition ${
-                        paymentsTab === "history"
+                      className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "history"
                           ? "bg-white text-slate-900 shadow-sm"
                           : "text-slate-600 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       Pagos realizados
                     </button>
@@ -542,11 +536,10 @@ export default function LeaseStatusModal({
           </button>
           {!isFinalizedLease && (
             <button
-              className={`px-5 py-2 rounded-xl text-white font-semibold shadow-sm transition text-sm ${
-                statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease
+              className={`px-5 py-2 rounded-xl text-white font-semibold shadow-sm transition text-sm ${statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease
                   ? "bg-blue-300 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
-              }`}
+                }`}
               onClick={onSave}
               disabled={statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease}
               title={

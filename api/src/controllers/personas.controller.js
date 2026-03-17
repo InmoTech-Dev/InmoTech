@@ -114,6 +114,25 @@ class PersonasController {
   }
 
   /**
+   * Obtener resumen de facturas del arrendatario autenticado
+   */
+  async obtenerResumenArrendatario(req, res, next) {
+    try {
+      const personaId = req.user.id;
+      const resumen = await personasService.obtenerResumenArrendatario(personaId);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Resumen de facturas obtenido exitosamente',
+        data: resumen
+      });
+    } catch (error) {
+      logger.error('Error obteniendo resumen de facturas de arrendatario:', error);
+      next(error);
+    }
+  }
+
+  /**
    * Actualizar perfil de la persona autenticada
    */
   async actualizarPerfil(req, res, next) {

@@ -7,20 +7,13 @@ if (!CLOUDINARY_CLOUD_NAME && !CLOUDINARY_URL) {
   logger.error('Cloudinary no configurado: falta CLOUDINARY_CLOUD_NAME o CLOUDINARY_URL');
 }
 
-if (CLOUDINARY_URL) {
-  cloudinary.config(CLOUDINARY_URL);
-  cloudinary.config({
-    secure: true,
-    disable_promise: true
-  });
-} else {
-  cloudinary.config({
-    cloud_name: CLOUDINARY_CLOUD_NAME,
-    api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET,
-    secure: true,
-    disable_promise: true
-  });
-}
+cloudinary.config({
+  cloud_name: CLOUDINARY_CLOUD_NAME,
+  api_key: CLOUDINARY_API_KEY,
+  api_secret: CLOUDINARY_API_SECRET,
+  secure: true,
+  // CLOUDINARY_URL se usa como fallback si está definida
+  ...(CLOUDINARY_URL ? { cloudinary_url: CLOUDINARY_URL } : {})
+});
 
 module.exports = cloudinary;

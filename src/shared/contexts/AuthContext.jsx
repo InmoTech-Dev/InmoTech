@@ -1,16 +1,17 @@
 /**
  * React context for global authentication state
+ * Optimized for real-time role and permission updates
  */
 
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import authService from '../services/authService';
 import { apiClient } from '../services/api.config';
+import sseService from '../services/sseService';
 import { canonicalizePermissions, normalizeModuleKey, normalizePermissionKey } from '../utils/permissions';
 
 const AuthContext = createContext(undefined);
 
 const USER_KEY = 'inmotech_user';
-const PUBLIC_BOOTSTRAP_DISABLED_PATHS = new Set(['/reset-password']);
 const ALL_MODULES = [
   'dashboard',
   'citas',
@@ -32,12 +33,6 @@ const parseUserJson = (rawValue) => {
   } catch (error) {
     return null;
   }
-};
-
-const shouldSkipAuthBootstrap = () => {
-  if (typeof window === 'undefined') return false;
-  const currentPath = window.location?.pathname || '';
-  return PUBLIC_BOOTSTRAP_DISABLED_PATHS.has(currentPath);
 };
 
 const extractPermissionsByModule = (user) => {
@@ -69,9 +64,10 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAuthenticated(false);
     setError(null);
+    sseService.disconnect();
   }, []);
 
-  const saveUserToStorage = useCallback((userData, rememberMe = false) => {
+  const saveUserToStorage = useCallback((userData, rememberMe = true) => {
     try {
       const userDataString = JSON.stringify(userData);
       localStorage.removeItem(USER_KEY);
@@ -88,11 +84,6 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const loadAuthFromStorage = useCallback(async () => {
-    if (shouldSkipAuthBootstrap()) {
-      setInitializing(false);
-      return;
-    }
-
     try {
       const localStored = localStorage.getItem(USER_KEY);
       const sessionStored = sessionStorage.getItem(USER_KEY);
@@ -117,6 +108,9 @@ export const AuthProvider = ({ children }) => {
       saveUserToStorage(profileUser, rememberMe);
       setUser(profileUser);
       setIsAuthenticated(true);
+      
+      // Conectar SSE después de tener el usuario
+      sseService.connect();
     } catch (err) {
       console.error('Error loading auth session:', err);
       clearAuthData();
@@ -125,7 +119,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [clearAuthData, saveUserToStorage]);
 
-  const login = async (email, password, rememberMe = false) => {
+  const login = async (email, password, rememberMe = true) => {
     try {
       setLoading(true);
       setError(null);
@@ -148,6 +142,10 @@ export const AuthProvider = ({ children }) => {
       saveUserToStorage(userData, rememberMe);
       setUser(userData);
       setIsAuthenticated(true);
+      
+      // Conectar SSE después del login
+      sseService.connect();
+      
       return userData;
     } catch (err) {
       setError(err.message || 'Error al iniciar sesion');
@@ -173,6 +171,25 @@ export const AuthProvider = ({ children }) => {
     }
   }, [clearAuthData]);
 
+  const reloadProfile = useCallback(async () => {
+    try {
+      const profileResp = await authService.getProfile();
+      const refreshedUser = profileResp?.data?.user || profileResp?.data || profileResp?.user;
+
+      if (refreshedUser) {
+        const rememberMe = Boolean(localStorage.getItem(USER_KEY));
+        console.log('🔄 Perfil recargado en tiempo real:', refreshedUser.roles);
+        saveUserToStorage(refreshedUser, rememberMe);
+        setUser(refreshedUser);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error reloading profile:', err);
+      return false;
+    }
+  }, [saveUserToStorage]);
+
   const refreshToken = async () => {
     try {
       const response = await authService.refreshToken();
@@ -180,15 +197,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Error al refrescar sesion');
       }
 
-      const profileResp = await authService.getProfile();
-      const refreshedUser = profileResp?.data?.user || profileResp?.data || profileResp?.user;
-
-      if (refreshedUser) {
-        const rememberMe = Boolean(localStorage.getItem(USER_KEY));
-        saveUserToStorage(refreshedUser, rememberMe);
-        setUser(refreshedUser);
-      }
-
+      await reloadProfile();
       setIsAuthenticated(true);
       return true;
     } catch (err) {
@@ -237,7 +246,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const requestPasswordReset = useCallback(async (email) => {
+  const requestPasswordReset = async (email) => {
     try {
       setError(null);
       const response = await authService.forgotPassword(email);
@@ -254,9 +263,9 @@ export const AuthProvider = ({ children }) => {
       custom.status = err.status;
       throw custom;
     }
-  }, []);
+  };
 
-  const resetPasswordWithToken = useCallback(async (token, newPassword) => {
+  const resetPasswordWithToken = async (token, newPassword) => {
     try {
       setError(null);
       const response = await authService.resetPassword(token, newPassword);
@@ -268,25 +277,20 @@ export const AuthProvider = ({ children }) => {
       setError(err.message || 'Error restableciendo contrasena');
       throw err;
     }
-  }, []);
-
-  const validateResetToken = useCallback(async (token) => {
-    try {
-      setError(null);
-      return await authService.validateResetToken(token);
-    } catch (err) {
-      setError(err.message || 'Error validando enlace de recuperacion');
-      throw err;
-    }
-  }, []);
+  };
 
   const hasRole = useCallback((roles) => {
     if (!user || !user.roles) return false;
-    const userRoles = user.roles;
+    
+    // Soporte para roles como string o como objeto {nombre_rol: '...'}
+    const userRoleNames = (user.roles || []).map(rol => 
+      typeof rol === 'object' ? rol.nombre_rol : rol
+    );
+
     if (Array.isArray(roles)) {
-      return roles.some((role) => userRoles.includes(role));
+      return roles.some((role) => userRoleNames.includes(role));
     }
-    return userRoles.includes(roles);
+    return userRoleNames.includes(roles);
   }, [user]);
 
   const hasAccess = useCallback((allowedRoles) => {
@@ -296,10 +300,15 @@ export const AuthProvider = ({ children }) => {
   const permissionsByModule = useMemo(() => extractPermissionsByModule(user), [user]);
 
   const getAvailableModules = useCallback(() => {
+    if (!user) return ['dashboard'];
+    
     const modules = new Set();
-    const roles = user?.roles || [];
-    const isSuperAdmin = roles.includes('Super Administrador');
-    const isAdmin = roles.includes('Administrador');
+    const userRoleNames = (user.roles || []).map(rol => 
+      typeof rol === 'object' ? rol.nombre_rol : rol
+    );
+
+    const isSuperAdmin = userRoleNames.includes('Super Administrador');
+    const isAdmin = userRoleNames.includes('Administrador');
 
     if (isSuperAdmin || isAdmin) {
       ALL_MODULES.forEach((mod) => modules.add(mod));
@@ -312,6 +321,9 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
+    // Siempre dashboard
+    modules.add('dashboard');
+
     return Array.from(modules);
   }, [user, permissionsByModule]);
 
@@ -320,8 +332,11 @@ export const AuthProvider = ({ children }) => {
     const permKey = normalizePermissionKey(action) || normalizeKey(action) || 'ver';
     if (!mod) return false;
 
-    const roles = user?.roles || [];
-    if (roles.includes('Super Administrador') || roles.includes('Administrador')) {
+    const userRoleNames = (user.roles || []).map(rol => 
+      typeof rol === 'object' ? rol.nombre_rol : rol
+    );
+
+    if (userRoleNames.includes('Super Administrador') || userRoleNames.includes('Administrador')) {
       return true;
     }
 
@@ -334,6 +349,52 @@ export const AuthProvider = ({ children }) => {
 
     return false;
   }, [user, permissionsByModule, getAvailableModules]);
+
+  // SSE Event Listeners for Real-time updates
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const handleUserChanged = (data) => {
+      // Si el cambio afecta a este usuario específicamente
+      if (data.user_id === user.id_persona || (data.affected_user_ids && data.affected_user_ids.includes(user.id_persona))) {
+        console.log('📢 SSE: Cambio detectado en el usuario actual, recargando perfil...');
+        reloadProfile();
+      }
+    };
+
+    const handleRoleChanged = (data) => {
+      // Los cambios en roles afectan globalmente a los permisos, recargar para asegurar sincronía
+      console.log('📢 SSE: Cambio detectado en definiciones de roles, recargando perfil...');
+      reloadProfile();
+    };
+
+    const handleForcedLogout = (data) => {
+      console.warn('🚨 SSE: Sesión revocada forzosamente por el sistema:', data.reason);
+      // Limpiar datos y redirigir (clearAuthData ya hace sseService.disconnect)
+      clearAuthData();
+      
+      // Mostrar alerta al usuario
+      import('../../shared/hooks/use-toast').then(({ toast }) => {
+        toast({
+          title: "Sesión Finalizada",
+          description: data.message || "Tu sesión ha sido cerrada por un administrador o por cambios en tus permisos.",
+          variant: "destructive"
+        });
+      });
+    };
+
+    const unsubUser = sseService.on('user.changed', handleUserChanged);
+    const unsubRole = sseService.on('role.changed', handleRoleChanged);
+    const unsubLogout = sseService.on('session.force_logout', handleForcedLogout);
+    const unsubDisabled = sseService.on('user_disabled', handleForcedLogout);
+
+    return () => {
+      unsubUser();
+      unsubRole();
+      unsubLogout();
+      unsubDisabled();
+    };
+  }, [isAuthenticated, user, reloadProfile, clearAuthData]);
 
   useEffect(() => {
     loadAuthFromStorage();
@@ -353,12 +414,11 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     refreshToken,
+    reloadProfile,
     updateProfile,
     changePassword,
     requestPasswordReset,
-    forgotPassword: requestPasswordReset,
     resetPassword: resetPasswordWithToken,
-    validateResetToken,
     hasRole,
     hasAccess,
     hasPermission,

@@ -13,23 +13,25 @@ const normalizeTimeInput = (timeString) => {
     return null;
   }
 
-  // Manejar formatos ISO (ej. 1970-01-01T13:00:00.000Z)
-  if (trimmed.includes('T')) {
+  // Manejar formatos ISO o strings de fecha genéricos (ej. Thu Jan 01 1970...)
+  if (trimmed.includes('T') || trimmed.includes('GMT') || /^[A-Z][a-z]{2}\s[A-Z][a-z]{2}/.test(trimmed)) {
     const date = new Date(trimmed);
     if (Number.isNaN(date.getTime())) {
       return null;
     }
 
-    const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
-    const colombiaMinutes = (utcMinutes - COLOMBIA_OFFSET_MINUTES + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+    // Usar la hora local del objeto Date si no tiene 'Z' (asumimos que ya viene en hora local o es representativo)
+    // Si tiene 'T' y 'Z', es UTC puro. Si es un toString() de JS, tiene la zona horaria.
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
 
     return {
-      hours24: Math.floor(colombiaMinutes / 60),
-      minutes: colombiaMinutes % 60
+      hours24: hours,
+      minutes: minutes
     };
   }
 
-  // Manejar formato con am/pm (ej. 08:30 pm)
+  // Manejar formato con am/pm (ej. 08:00 pm)
   const ampmMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i);
   if (ampmMatch) {
     let hours = parseInt(ampmMatch[1], 10);
@@ -101,3 +103,4 @@ export const formatTimeTo24Hour = (timeString) => {
 
   return `${pad(normalized.hours24)}:${pad(normalized.minutes)}`;
 };
+

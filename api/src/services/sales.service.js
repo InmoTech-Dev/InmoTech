@@ -397,7 +397,7 @@ class SaleService {
           {
             id_comprador: compradorId,
             id_inmueble: saleData.id_inmueble,
-            fecha_venta: normalizedSaleDate,
+            fecha_venta: saleData.fecha_venta,
             valor_venta: saleData.valor_venta,
             medio_pago: saleData.medio_pago,
             tipo_doc_vendedor: saleData.tipo_doc_vendedor || saleData.vendedorTipoDocumento || saleData.tipo_documento_vendedor || null,
@@ -430,22 +430,65 @@ class SaleService {
   }
 
   async getSaleById(id, transaction = null) {
-    let sale;
-    try {
-      sale = await Sale.findByPk(id, {
-        include: this._buildSaleIncludeOptions(true),
-        transaction
-      });
-    } catch (error) {
-      if (!this._isMissingVentaAdjuntosTable(error)) {
-        throw error;
-      }
-      logger.warn('Tabla VentaAdjuntos no existe. Se continua sin adjuntos en getSaleById.');
-      sale = await Sale.findByPk(id, {
-        include: this._buildSaleIncludeOptions(false),
-        transaction
-      });
-    }
+    const sale = await Sale.findByPk(id, {
+      include: [
+        {
+          association: 'inmueble',
+          attributes: [
+            'id_inmueble',
+            'registro_inmobiliario',
+            'direccion',
+            'ciudad',
+            'departamento',
+            'categoria',
+            'titulo',
+            'barrio',
+            'pais',
+            'precio_venta',
+            'precio_arriendo',
+            'area_construida'
+          ],
+          include: [
+            {
+              association: 'comodidades',
+              attributes: ['id_comodidad', 'nombre'],
+              through: { attributes: ['cantidad', 'seleccionada'] }
+            }
+          ]
+        },
+        {
+          association: 'comprador',
+          attributes: ['id_comprador', 'registro_comprador'],
+          include: [
+            {
+              association: 'persona',
+              attributes: [
+                'id_persona',
+                'nombre_completo',
+                'apellido_completo',
+                'correo',
+                'telefono',
+                'tipo_documento',
+                'numero_documento'
+              ]
+            }
+          ]
+        },
+        {
+          association: 'adjuntos',
+          attributes: [
+            'id_adjunto',
+            'tipo',
+            'nombre_archivo',
+            'url',
+            'mime_type',
+            'tamano_bytes',
+            'fecha_creacion'
+          ]
+        }
+      ],
+      transaction
+    });
 
     if (!sale) throw new Error('Venta no encontrada');
 
@@ -498,74 +541,93 @@ class SaleService {
 
   async getAllSales(filters = {}) {
     try {
+      const includeOptions = [
+        {
+          association: 'inmueble',
+          attributes: [
+            'id_inmueble',
+            'registro_inmobiliario',
+            'direccion',
+            'ciudad',
+            'departamento',
+            'categoria',
+            'titulo',
+            'barrio',
+            'pais',
+            'precio_venta',
+            'precio_arriendo',
+            'area_construida'
+          ],
+          include: [
+            {
+              association: 'comodidades',
+              attributes: ['id_comodidad', 'nombre'],
+              through: { attributes: ['cantidad', 'seleccionada'] }
+            }
+          ]
+        },
+        {
+          association: 'comprador',
+          attributes: ['id_comprador', 'registro_comprador'],
+          include: [
+            {
+              association: 'persona',
+              attributes: [
+                'id_persona',
+                'nombre_completo',
+                'apellido_completo',
+                'correo',
+                'telefono',
+                'tipo_documento',
+                'numero_documento'
+              ]
+            }
+          ]
+        },
+        {
+          association: 'adjuntos',
+          attributes: [
+            'id_adjunto',
+            'tipo',
+            'nombre_archivo',
+            'url',
+            'mime_type',
+            'tamano_bytes',
+            'fecha_creacion'
+          ]
+        }
+      ];
+
+      const whereClause = {};
+      if (filters.estado) whereClause.estado = filters.estado;
+      if (filters.id_persona) whereClause.id_comprador = filters.id_persona;
+      if (filters.id_comprador) whereClause.id_comprador = filters.id_comprador;
+      if (filters.fecha_inicio && filters.fecha_fin) {
+        whereClause.fecha_venta = { [Op.between]: [filters.fecha_inicio, filters.fecha_fin] };
+      }
+
       const pagination = {
         enabled: Boolean(filters.pagination?.enabled),
         page: filters.pagination?.page || 1,
         limit: filters.pagination?.limit || null,
         offset: filters.pagination?.offset || 0
       };
-      const { whereClause, includeOptions } = this._buildSaleListQuery(filters);
 
-      const baseQuery = {
+      const queryOptions = {
         where: whereClause,
         include: includeOptions,
+        order: [['fecha_venta', 'DESC']],
+        logging: false,
         distinct: true,
-        col: 'id_venta',
-        order: [
-          ['fecha_venta', 'DESC'],
-          ['id_venta', 'DESC']
-        ],
-        logging: false
+        col: 'id_venta'
       };
 
       if (pagination.enabled) {
-        baseQuery.limit = pagination.limit;
-        baseQuery.offset = pagination.offset;
+        queryOptions.limit = pagination.limit;
+        queryOptions.offset = pagination.offset;
       }
 
-      const { count, rows } = await Sale.findAndCountAll(baseQuery);
-      const saleIds = rows.map((sale) => sale.id_venta);
-      if (!saleIds.length) {
-        return {
-          data: [],
-          pagination: buildPaginationMeta({
-            total: count,
-            page: pagination.page,
-            limit: pagination.limit,
-            enabled: pagination.enabled
-          })
-        };
-      }
-
-      let sales;
-      try {
-        sales = await Sale.findAll({
-          where: { id_venta: { [Op.in]: saleIds } },
-          include: this._buildSaleIncludeOptions(true),
-          order: [
-            ['fecha_venta', 'DESC'],
-            ['id_venta', 'DESC']
-          ],
-          logging: false
-        });
-      } catch (error) {
-        if (!this._isMissingVentaAdjuntosTable(error)) {
-          throw error;
-        }
-        logger.warn('Tabla VentaAdjuntos no existe. Se continua sin adjuntos en getAllSales.');
-        sales = await Sale.findAll({
-          where: { id_venta: { [Op.in]: saleIds } },
-          include: this._buildSaleIncludeOptions(false),
-          order: [
-            ['fecha_venta', 'DESC'],
-            ['id_venta', 'DESC']
-          ],
-          logging: false
-        });
-      }
-
-      const orderMap = new Map(saleIds.map((id, index) => [id, index]));
-      sales.sort((a, b) => orderMap.get(a.id_venta) - orderMap.get(b.id_venta));
+      const { count, rows: sales } = await Sale.findAndCountAll(queryOptions);
 
       const ventaIds = sales.map((s) => s.id_venta);
       let trackingMap = {};
@@ -594,83 +656,77 @@ class SaleService {
         }, {});
       }
 
-      const data = sales.map((sale) => ({
-        id_venta: sale.id_venta,
-        id_estado_venta: sale.id_estado_venta,
-        fecha_venta: sale.fecha_venta,
-        valor_venta: sale.valor_venta,
-        medio_pago: sale.medio_pago,
-        // Datos del vendedor congelados al momento de la venta
-        tipo_doc_vendedor: sale.tipo_doc_vendedor,
-        numero_doc_vendedor: sale.numero_doc_vendedor,
-        nombre_vendedor: sale.nombre_vendedor,
-        correo_vendedor: sale.correo_vendedor,
-        telefono_vendedor: sale.telefono_vendedor,
-        vendedor: {
-          tipo_documento: sale.tipo_doc_vendedor,
-          numero_documento: sale.numero_doc_vendedor,
-          nombre_completo: sale.nombre_vendedor,
-          correo: sale.correo_vendedor,
-          telefono: sale.telefono_vendedor
-        },
-        // Mostrar en el frontend el estado detallado si existe; de lo contrario, el general
-        estado:
-          sale.estado_seguimiento ||
-          trackingMap[sale.id_venta]?.estado?.nombre_estado ||
-          sale.estado,
-        estado_seguimiento:
-          sale.estado_seguimiento ||
-          trackingMap[sale.id_venta]?.estado?.nombre_estado ||
-          sale.estado,
-        id_estado_seguimiento:
-          sale.id_estado_venta ||
-          trackingMap[sale.id_venta]?.id_estado_venta ||
-          null,
-        descripcion_seguimiento: trackingMap[sale.id_venta]?.descripcion || null,
-        fecha_creacion: sale.fecha_creacion,
-        inmueble: sale.inmueble
-          ? {
-              id_inmueble: sale.inmueble.id_inmueble,
-              registro_inmobiliario: sale.inmueble.registro_inmobiliario,
-              direccion: sale.inmueble.direccion,
-              ciudad: sale.inmueble.ciudad,
-              departamento: sale.inmueble.departamento,
-              categoria: sale.inmueble.categoria,
-              titulo: sale.inmueble.titulo,
-              barrio: sale.inmueble.barrio,
-              pais: sale.inmueble.pais,
-              precio_venta: sale.inmueble.precio_venta,
-              precio_arriendo: sale.inmueble.precio_arriendo,
-              area_construida: sale.inmueble.area_construida,
-              comodidades: sale.inmueble.comodidades
-            }
-          : null,
-        comprador: sale.comprador
-          ? {
-              id_comprador: sale.comprador.id_comprador,
-              registro_comprador: sale.comprador.registro_comprador,
-              id_persona: sale.comprador.persona?.id_persona,
-              tipo_documento: sale.comprador.persona?.tipo_documento,
-              numero_documento: sale.comprador.persona?.numero_documento,
-              nombre_completo: sale.comprador.persona?.nombre_completo,
-              apellido_completo: sale.comprador.persona?.apellido_completo,
-              correo: sale.comprador.persona?.correo,
-              telefono: sale.comprador.persona?.telefono
-            }
-          : null,
-        adjuntos: (sale.adjuntos || []).map((adj) => ({
-          id_adjunto: adj.id_adjunto,
-          tipo: adj.tipo,
-          nombre_archivo: adj.nombre_archivo,
-          url: adj.url,
-          mime_type: adj.mime_type,
-          tamano_bytes: adj.tamano_bytes,
-          fecha_creacion: adj.fecha_creacion
-        }))
-      }));
-
       return {
-        data,
+        data: sales.map((sale) => {
+          const latestTracking = trackingMap[sale.id_venta];
+          return {
+            id_venta: sale.id_venta,
+            id_estado_venta: sale.id_estado_venta,
+            fecha_venta: sale.fecha_venta,
+            valor_venta: sale.valor_venta,
+            medio_pago: sale.medio_pago,
+            vendedor: {
+              tipo_documento: sale.tipo_doc_vendedor,
+              numero_documento: sale.numero_doc_vendedor,
+              nombre_completo: sale.nombre_vendedor,
+              correo: sale.correo_vendedor,
+              telefono: sale.telefono_vendedor
+            },
+            estado:
+              sale.estado_seguimiento ||
+              latestTracking?.estado?.nombre_estado ||
+              sale.estado,
+            estado_seguimiento:
+              sale.estado_seguimiento ||
+              latestTracking?.estado?.nombre_estado ||
+              sale.estado,
+            id_estado_seguimiento:
+              sale.id_estado_venta ||
+              latestTracking?.id_estado_venta ||
+              null,
+            descripcion_seguimiento: latestTracking?.descripcion || null,
+            fecha_creacion: sale.fecha_creacion,
+            inmueble: sale.inmueble
+              ? {
+                id_inmueble: sale.inmueble.id_inmueble,
+                registro_inmobiliario: sale.inmueble.registro_inmobiliario,
+                direccion: sale.inmueble.direccion,
+                ciudad: sale.inmueble.ciudad,
+                departamento: sale.inmueble.departamento,
+                categoria: sale.inmueble.categoria,
+                titulo: sale.inmueble.titulo,
+                barrio: sale.inmueble.barrio,
+                pais: sale.inmueble.pais,
+                precio_venta: sale.inmueble.precio_venta,
+                precio_arriendo: sale.inmueble.precio_arriendo,
+                area_construida: sale.inmueble.area_construida,
+                comodidades: sale.inmueble.comodidades
+              }
+              : null,
+            comprador: sale.comprador
+              ? {
+                id_comprador: sale.comprador.id_comprador,
+                registro_comprador: sale.comprador.registro_comprador,
+                id_persona: sale.comprador.persona?.id_persona,
+                tipo_documento: sale.comprador.persona?.tipo_documento,
+                numero_documento: sale.comprador.persona?.numero_documento,
+                nombre_completo: sale.comprador.persona?.nombre_completo,
+                apellido_completo: sale.comprador.persona?.apellido_completo,
+                correo: sale.comprador.persona?.correo,
+                telefono: sale.comprador.persona?.telefono
+              }
+              : null,
+            adjuntos: (sale.adjuntos || []).map((adj) => ({
+              id_adjunto: adj.id_adjunto,
+              tipo: adj.tipo,
+              nombre_archivo: adj.nombre_archivo,
+              url: adj.url,
+              mime_type: adj.mime_type,
+              tamano_bytes: adj.tamano_bytes,
+              fecha_creacion: adj.fecha_creacion
+            }))
+          };
+        }),
         pagination: buildPaginationMeta({
           total: count,
           page: pagination.page,
@@ -714,9 +770,6 @@ class SaleService {
 
     if (payload.estado) {
       payload.estado = this._mapEstadoToDb(payload.estado, sale.estado);
-    }
-    if (payload.fecha_venta) {
-      payload.fecha_venta = this._normalizeSaleDate(payload.fecha_venta);
     }
 
     await sale.update(payload);

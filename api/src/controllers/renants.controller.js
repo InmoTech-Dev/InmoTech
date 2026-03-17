@@ -36,7 +36,6 @@ class RenantsController {
         success: true,
         message: 'Arrendatarios obtenidos exitosamente',
         data: result.data,
-        total: result.pagination.total,
         pagination: result.pagination
       });
     } catch (error) {

@@ -17,15 +17,10 @@ export async function uploadToCloudinary(file, options = {}) {
     formData.append('folder', options.folder);
   }
 
-  const csrfMatch = document.cookie.match(new RegExp(`(?:^|; )${API_CONFIG.CSRF_COOKIE_NAME}=([^;]*)`));
-  const csrfToken = csrfMatch ? decodeURIComponent(csrfMatch[1]) : null;
-  const headers = csrfToken ? { [API_CONFIG.CSRF_HEADER_NAME]: csrfToken } : {};
-
   const response = await fetch(`${API_CONFIG.BASE_URL}/files/upload`, {
     method: 'POST',
     body: formData,
     credentials: 'include',
-    headers,
   });
 
   if (!response.ok) {
@@ -39,7 +34,6 @@ export async function uploadToCloudinary(file, options = {}) {
 
   return {
     url: data?.url || data?.secure_url || '',
-    secure_url: data?.secure_url || data?.url || '',
     public_id: data?.public_id || '',
     format: data?.format || '',
     bytes: data?.bytes || 0,

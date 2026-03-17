@@ -1,8 +1,9 @@
 const { Op, Sequelize } = require('sequelize');
-const { Renant, Persona, Arriendo, Inmueble, Lease } = require('../models');
+const { Renant, Persona, Arriendo, Inmueble, Lease, Rol, PersonasRol } = require('../models');
 const { sequelize } = require('../config/database');
 const logger = require('../utils/logger');
 const { buildPaginationMeta } = require('../utils/pagination');
+const invitacionService = require('./invitacion.service');
 
 const PERSONA_ATTRS = [
   'id_persona',
@@ -165,10 +166,10 @@ class RenantService {
       estado: renant?.estado || (persona.estado ? 'Activo' : 'Inactivo'),
       contacto_emergencia: renant
         ? {
-            nombre: renant.contacto_emergencia_nombre,
-            telefono: renant.contacto_emergencia_telefono,
-            parentesco: renant.contacto_emergencia_parentesco
-          }
+          nombre: renant.contacto_emergencia_nombre,
+          telefono: renant.contacto_emergencia_telefono,
+          parentesco: renant.contacto_emergencia_parentesco
+        }
         : null,
       observaciones: renant?.observaciones || null,
       persona: {
@@ -214,7 +215,47 @@ class RenantService {
       );
     }
 
-    return persona;
+    return { persona, created };
+  }
+
+  async ensureTenantRoleAssigned(personaId, transaction) {
+    let tenantRole = await Rol.findOne({
+      where: { nombre_rol: 'Arrendatario' },
+      transaction
+    });
+
+    if (!tenantRole) {
+      tenantRole = await Rol.create(
+        {
+          nombre_rol: 'Arrendatario',
+          descripcion: 'Usuario arrendatario con acceso a su portal de facturas',
+          es_rol_administrativo: false,
+          estado: true
+        },
+        { transaction }
+      );
+    }
+
+    const existingLink = await PersonasRol.findOne({
+      where: { id_persona: personaId, id_rol: tenantRole.id_rol },
+      transaction
+    });
+
+    if (existingLink) {
+      if (existingLink.estado === false) {
+        await existingLink.update({ estado: true }, { transaction });
+      }
+      return;
+    }
+
+    await PersonasRol.create(
+      {
+        id_persona: personaId,
+        id_rol: tenantRole.id_rol,
+        estado: true
+      },
+      { transaction }
+    );
   }
 
   buildRenantPayload(data, existing) {
@@ -240,7 +281,9 @@ class RenantService {
   async createRenant(renantData) {
     const transaction = await sequelize.transaction();
     try {
-      const persona = await this.upsertPersona(renantData, transaction);
+      const { persona, created } = await this.upsertPersona(renantData, transaction);
+
+      await this.ensureTenantRoleAssigned(persona.id_persona, transaction);
 
       const existing = await Renant.findOne({
         where: { id_persona: persona.id_persona },
@@ -292,20 +335,43 @@ class RenantService {
 
         // Marcar el inmueble como arrendado
         await inmueble.update(
-          {
-            estado: false,
-            estado_frontend: 'Arrendado',
-            destacado: false
-          },
+          { estado: 'Arrendado' },
           { transaction }
         );
       }
 
+      const shouldSendActivationInvite =
+        (created || persona.tiene_cuenta === false) &&
+        typeof persona.correo === 'string' &&
+        persona.correo.trim().length > 0;
+
       await transaction.commit();
       const refreshed = await this.getRenantById(renant.id_arrendatario);
+
+      // No bloquear la respuesta de creacion por el flujo de invitacion/email.
+      if (shouldSendActivationInvite) {
+        void invitacionService
+          .crearInvitacion({
+            id_persona: persona.id_persona,
+            creado_por: null,
+            tipo: 'user_invite',
+            rol_asignado: 'Arrendatario',
+            es_administrativo: false,
+            deferEmail: true
+          })
+          .catch((inviteError) => {
+            logger.warn('No se pudo programar invitacion de activacion al arrendatario', {
+              id_persona: persona.id_persona,
+              error: inviteError.message
+            });
+          });
+      }
+
       return refreshed;
     } catch (error) {
-      await transaction.rollback();
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       logger.error('Error creando arrendatario', { error: error.message });
       throw error;
     }

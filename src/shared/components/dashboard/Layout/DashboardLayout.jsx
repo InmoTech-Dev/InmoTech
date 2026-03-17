@@ -6,9 +6,8 @@ import { useSidebar } from '../../../hooks/useSidebar';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../hooks/use-toast';
-import { cn } from '@/shared/utils/cn';
 
-const DashboardLayout = ({ children, fullWidth = false }) => {
+const DashboardLayout = ({ children }) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const { toast } = useToast();
@@ -94,19 +93,16 @@ const DashboardLayout = ({ children, fullWidth = false }) => {
       <motion.div
         variants={contentVariants}
         animate={isCollapsed ? 'collapsed' : 'expanded'}
-        className="relative z-10"
+        className="relative z-10 min-w-0"
       >
         <Header />
 
-        <main className={cn(fullWidth ? "p-0" : "p-4 md:p-6")}>
+        <main className="min-w-0 p-4 md:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className={cn(
-              "bg-white/60 backdrop-blur-sm min-h-[calc(100vh-6rem)] md:min-h-[calc(100vh-8rem)]",
-              !fullWidth && "border border-slate-200/60 rounded-2xl shadow-xl shadow-slate-200/20 p-4 md:p-8"
-            )}
+            className="min-w-0 bg-white/60 backdrop-blur-sm border border-slate-200/60 rounded-2xl shadow-xl shadow-slate-200/20 p-4 md:p-8 min-h-[calc(100vh-6rem)] md:min-h-[calc(100vh-8rem)]"
           >
             {children}
           </motion.div>

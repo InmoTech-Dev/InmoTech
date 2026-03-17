@@ -1,25 +1,29 @@
 const saleService = require('../services/sales.service');
+const { normalizePagination } = require('../utils/pagination');
 const logger = require('../utils/logger');
 const { VentaAdjunto } = require('../models');
 const cloudinary = require('../config/cloudinary');
-const { uploadSingleAny } = require('./upload.controller');
-const { normalizePagination } = require('../utils/pagination');
+const multer = require('multer');
+
+// Reutilizamos storage en memoria
+const upload = multer({ storage: multer.memoryStorage() });
+const uploadSingle = upload.single('file');
 
 class SalesController {
   async createSale(req, res, next) {
     try {
       const data = req.validatedData || req.body;
       const newSale = await saleService.createSale(data);
-      return res.status(201).json({ 
-        success: true, 
+      return res.status(201).json({
+        success: true,
         message: 'Venta creada exitosamente',
-        data: newSale 
+        data: newSale
       });
     } catch (error) {
       if (error.message.includes('no encontrado')) {
-        return res.status(400).json({ 
-          success: false, 
-          message: error.message 
+        return res.status(400).json({
+          success: false,
+          message: error.message
         });
       }
       next(error);
@@ -59,7 +63,6 @@ class SalesController {
         success: true,
         message: 'Ventas obtenidas exitosamente',
         data: result.data,
-        total: result.pagination.total,
         pagination: result.pagination
       });
     } catch (error) {
@@ -214,7 +217,7 @@ class SalesController {
 
   // Adjuntar comprobante/contrato a una venta
   attachMiddleware() {
-    return uploadSingleAny;
+    return uploadSingle;
   }
 
   async addAttachment(req, res, next) {

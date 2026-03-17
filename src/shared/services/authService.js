@@ -188,29 +188,6 @@ class AuthService {
   }
 
   /**
-   * Validate reset password token
-   * @param {string} token
-   * @returns {Promise<Object>}
-   */
-  async validateResetToken(token) {
-    try {
-      console.log('[AUTH] Validating reset token...');
-
-      const response = await apiClient.request('/auth/reset-password', {
-        method: 'GET',
-        params: { token },
-        skipAuth: true
-      });
-
-      console.log('[AUTH] Reset token is valid');
-      return response;
-    } catch (error) {
-      console.error('[AUTH] Validate reset token error:', error.message);
-      throw error;
-    }
-  }
-
-  /**
    * Check email availability
    * @param {string} email
    * @returns {Promise<boolean>}

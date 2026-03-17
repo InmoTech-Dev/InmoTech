@@ -19,47 +19,8 @@ router.get('/buscar',
 
 const { authenticateToken, authorizePermissions } = auth;
 
-const allowSelfOwnerListingByQuery = (req, res, next) => {
-  const requestedOwnerId = Number.parseInt(req.query?.propietario_id, 10);
-  const authenticatedUserId = Number.parseInt(req.user?.id, 10);
-
-  if (
-    Number.isInteger(requestedOwnerId) &&
-    requestedOwnerId > 0 &&
-    Number.isInteger(authenticatedUserId) &&
-    requestedOwnerId === authenticatedUserId
-  ) {
-    req.skipPermissions = true;
-  }
-
-  next();
-};
-
-const allowSelfOwnerListingByParam = (req, res, next) => {
-  const requestedOwnerId = Number.parseInt(req.params?.id, 10);
-  const authenticatedUserId = Number.parseInt(req.user?.id, 10);
-
-  if (
-    Number.isInteger(requestedOwnerId) &&
-    requestedOwnerId > 0 &&
-    Number.isInteger(authenticatedUserId) &&
-    requestedOwnerId === authenticatedUserId
-  ) {
-    req.skipPermissions = true;
-  }
-
-  next();
-};
-
 // After public routes, apply authentication to the rest
 router.use(authenticateToken);
-
-// Listar inmuebles por propietario (self para movil o con permiso 'ver')
-router.get('/propietario/:id',
-  allowSelfOwnerListingByParam,
-  authorizePermissions('inmuebles', 'ver'),
-  inmueblesController.listarInmueblesPorPropietario
-);
 
 // Obtener inmueble por ID (requires 'ver' permission)
 router.get('/:id',
@@ -75,7 +36,6 @@ router.get('/:id/disponibilidad',
 
 // Listar inmuebles con filtros (requires 'ver' permission)
 router.get('/',
-  allowSelfOwnerListingByQuery,
   authorizePermissions('inmuebles', 'ver'),
   inmueblesController.listarInmuebles
 );

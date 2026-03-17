@@ -30,8 +30,8 @@ class InmueblesController {
     try {
       const filtros = req.query;
       const opciones = {
-        pagina: parseInt(req.query.pagina) || 1,
-        limite: parseInt(req.query.limite) || 20,
+        pagina: parseInt(req.query.pagina ?? req.query.page) || 1,
+        limite: parseInt(req.query.limite ?? req.query.limit) || 20,
         ordenarPor: req.query.ordenar_por || 'id_inmueble',
         orden: req.query.orden || 'DESC'
       };
@@ -67,8 +67,8 @@ class InmueblesController {
         propietario_id: propietarioId
       };
       const opciones = {
-        pagina: parseInt(req.query.pagina) || 1,
-        limite: parseInt(req.query.limite) || 20,
+        pagina: parseInt(req.query.pagina ?? req.query.page) || 1,
+        limite: parseInt(req.query.limite ?? req.query.limit) || 20,
         ordenarPor: req.query.ordenar_por || 'id_inmueble',
         orden: req.query.orden || 'DESC'
       };
@@ -178,28 +178,22 @@ class InmueblesController {
    */
   async buscarInmuebles(req, res, next) {
     try {
-      const query = req.validatedQuery || req.query;
       const {
         ciudad,
         precio_min,
         precio_max,
         area_min,
         categoria,
-        destacado,
         pagina = 1,
         limite = 20
-      } = query;
+      } = req.query;
 
       const filtros = {
         ciudad,
         precio_min: precio_min ? parseFloat(precio_min) : undefined,
         precio_max: precio_max ? parseFloat(precio_max) : undefined,
         area_min: area_min ? parseFloat(area_min) : undefined,
-        categoria,
-        destacado,
-        estado: true,
-        // En catálogo público nunca mostrar inmuebles finalizados.
-        excluir_estados_frontend: ['Vendido', 'Arrendado']
+        categoria
       };
 
       const opciones = {

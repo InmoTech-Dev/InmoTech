@@ -30,6 +30,23 @@ const cleanText = (value, fallback = '') => {
   return trimmed.length > 0 ? trimmed : fallback;
 };
 
+const hasOwn = (object, key) =>
+  Object.prototype.hasOwnProperty.call(object || {}, key);
+
+const getProvidedValue = (object, keys = []) => {
+  if (!object || typeof object !== 'object' || !Array.isArray(keys)) {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    if (hasOwn(object, key) && object[key] !== undefined) {
+      return object[key];
+    }
+  }
+
+  return undefined;
+};
+
 const normalizeEstadoValue = (value) => {
   if (value === undefined || value === null) {
     return undefined;
@@ -213,9 +230,6 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       inmueble.imagen_destacada
     ]);
   }
-  const destacadoRaw =
-    inmueble.destacado ?? inmueble.es_destacado ?? inmueble.destacada ?? inmueble.featured ?? false;
-  const destacado = normalizeEstadoValue(destacadoRaw);
 
   let operacion = inmueble.operacion || 'Sin definir';
   if (operacion === 'Sin definir') {
@@ -257,8 +271,6 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       toNumber(inmueble.area_construida ?? inmueble.areaConstruida ?? inmueble.area) ?? null,
     area_privada: toNumber(inmueble.area_privada ?? inmueble.areaPrivada) ?? null,
     estado_frontend: estadoTexto,
-    destacado: destacado ?? false,
-    featured: destacado ?? false,
     metadata: {
       raw: inmueble
     }
@@ -271,17 +283,6 @@ const normalizePagination = (pagination = {}, fallbackPage = 1, fallbackLimit = 
   paginas_totales: pagination.paginas_totales ?? pagination.totalPages ?? 1,
   total: pagination.total ?? pagination.count ?? 0
 });
-
-const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
-
-const getProvidedValue = (payload, keys = []) => {
-  for (const key of keys) {
-    if (hasOwn(payload, key)) {
-      return payload[key];
-    }
-  }
-  return undefined;
-};
 
 const mapInmuebleToApi = (payload = {}) => {
   const operacion = getProvidedValue(payload, ['operacion']) ?? payload.operacion;
@@ -351,13 +352,6 @@ const mapInmuebleToApi = (payload = {}) => {
   if (hasOwn(payload, 'propietarioId') && payload.propietarioId !== null) {
     body.propietario_id = payload.propietarioId;
   }
-  if (hasOwn(payload, 'propietario_id') && payload.propietario_id !== null) {
-    body.propietario_id = payload.propietario_id;
-  }
-
-  if (payload.desasignar_propietario === true) {
-    body.desasignar_propietario = true;
-  }
 
   if (payload.propietario) {
     body.propietario = payload.propietario;
@@ -374,16 +368,53 @@ const mapInmuebleToApi = (payload = {}) => {
 
 const extractPayload = (response) => response?.data?.data || response?.data || response;
 
+const buildInmueblesQueryFilters = (filters = {}) => {
+  const query = {};
+
+  if (!filters || typeof filters !== 'object') {
+    return query;
+  }
+
+  const searchValue = (filters.busqueda || filters.search || '').toString().trim();
+  if (searchValue) {
+    query.busqueda = searchValue;
+  }
+
+  const estadoFrontend = (filters.estado_frontend || filters.estado || '').toString().trim();
+  if (estadoFrontend && estadoFrontend.toLowerCase() !== 'todos') {
+    query.estado_frontend = estadoFrontend;
+  }
+
+  const operacion = (filters.operacion || '').toString().trim();
+  if (operacion && operacion.toLowerCase() !== 'todas') {
+    query.operacion = operacion;
+  }
+
+  const categoria = (filters.categoria || filters.tipo || '').toString().trim();
+  if (categoria && categoria.toLowerCase() !== 'todos') {
+    query.categoria = categoria;
+  }
+
+  if (filters.propietario_id) query.propietario_id = filters.propietario_id;
+  if (filters.ciudad) query.ciudad = filters.ciudad;
+  if (filters.destacado !== undefined) query.destacado = filters.destacado;
+  if (filters.ordenar_por) query.ordenar_por = filters.ordenar_por;
+  if (filters.orden) query.orden = filters.orden;
+
+  return query;
+};
+
 export const inmueblesAPI = {
   async getInmuebles(page = 1, limit = DEFAULT_LIMIT, filters = {}) {
     try {
+      const queryFilters = buildInmueblesQueryFilters(filters);
       const response = await apiClient.get('/inmuebles', {
-        page,
-        limit,
-        ...filters
+        pagina: page,
+        limite: limit,
+        ...queryFilters
       });
 
-      const payload = extractPayload(response) || {};
+      const payload = response?.data || response || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : [];
@@ -401,16 +432,6 @@ export const inmueblesAPI = {
   // Versión pública (landing) - usa /inmuebles/buscar sin auth
   async getPublicInmuebles(page = 1, limit = DEFAULT_LIMIT, filters = {}) {
     try {
-      const isAvailableForPublicCatalog = (item = {}) => {
-        if (item.estado_bool === false) return false;
-        const status = String(item.estado_frontend || item.estado || '')
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .trim();
-        return status !== 'vendido' && status !== 'arrendado';
-      };
-
       const response = await apiClient.get('/inmuebles/buscar', {
         pagina: page,
         limite: limit,
@@ -418,11 +439,9 @@ export const inmueblesAPI = {
         _t: Date.now()
       });
 
-      const payload = extractPayload(response) || {};
+      const payload = response?.data || response || {};
       const items = Array.isArray(payload.inmuebles)
-        ? payload.inmuebles
-            .map(mapInmuebleFromApi)
-            .filter(isAvailableForPublicCatalog)
+        ? payload.inmuebles.map(mapInmuebleFromApi)
         : [];
 
       return {
@@ -460,7 +479,7 @@ export const inmueblesAPI = {
         },
       });
 
-      const payload = extractPayload(response) || {};
+      const payload = response?.data || response || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : Array.isArray(payload.data)

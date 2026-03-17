@@ -104,8 +104,14 @@ export function ImageViewer({
                     <img
                         src={currentImage.url}
                         alt={currentImage.name || `Imagen ${currentIndex + 1}`}
-                        className="max-w-[95vw] max-h-[88vh] object-contain rounded-2xl shadow-2xl select-none"
+                        className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl select-none"
                     />
+
+                    {/* Zoom Tip */}
+                    <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-2 text-white/40 text-[10px] uppercase tracking-[0.2em] font-bold">
+                        <ZoomIn className="w-3 h-3" />
+                        Vista Previa de Alta Calidad
+                    </div>
                 </motion.div>
 
                 {/* Navigation - Next */}

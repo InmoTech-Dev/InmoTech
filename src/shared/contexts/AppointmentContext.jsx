@@ -15,7 +15,7 @@ import React, {
   useRef,
 } from "react";
 import citaApiService, { actualizarEstadoCita } from '../services/citaApiService';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import realtimeBus from '../services/realtimeBus';
 
 const AppointmentContext = createContext(undefined);
@@ -205,6 +205,8 @@ export const AppointmentProvider = ({ children }) => {
               ...app,
               estado: nuevoEstado,
               id_estado_cita: idEstadoCita,
+              id_agente_asignado: Number(idEstadoCita) === 1 ? null : app.id_agente_asignado,
+              agente: Number(idEstadoCita) === 1 ? null : app.agente,
               fecha_actualizacion: citaActualizada.fecha_actualizacion
             };
           }

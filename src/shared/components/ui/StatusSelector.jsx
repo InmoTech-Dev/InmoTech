@@ -16,7 +16,8 @@ const StatusSelector = ({
   onChange,
   disabled = false,
   loading = false,
-  className
+  className,
+  size = 'default'
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isChanging, setIsChanging] = useState(false);
@@ -82,8 +83,9 @@ const StatusSelector = ({
     }
   };
 
-  const currentStatus = statusConfig[value] || statusConfig.programada;
+  const currentStatus = statusConfig[value] || statusConfig[3];
   const StatusIcon = currentStatus.icon;
+  const isCompact = size === 'compact';
 
   // Calcular posición óptima del dropdown
   const calculateDropdownPosition = useCallback(() => {
@@ -225,7 +227,10 @@ const StatusSelector = ({
         whileHover={!disabled && !loading ? { scale: 1.02 } : {}}
         whileTap={!disabled && !loading ? { scale: 0.98 } : {}}
         className={cn(
-          "relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 min-w-[110px] justify-between",
+          "relative flex w-full items-center justify-between gap-1.5 border font-medium transition-all duration-200",
+          isCompact
+            ? "min-w-0 rounded-md px-2 py-1.5 text-[11px]"
+            : "min-w-[110px] rounded-md px-2.5 py-1.5 text-xs",
           currentStatus.bgColor,
           currentStatus.borderColor,
           currentStatus.color,
@@ -242,10 +247,10 @@ const StatusSelector = ({
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="flex items-center gap-2"
+              className="flex min-w-0 items-center gap-2"
             >
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Cambiando...</span>
+              <span className="truncate">Cambiando...</span>
             </motion.div>
           ) : (
             <motion.div
@@ -253,7 +258,7 @@ const StatusSelector = ({
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="flex items-center gap-2"
+              className="flex min-w-0 items-center gap-2"
             >
               {/* Status Icon with Animation */}
               <motion.div

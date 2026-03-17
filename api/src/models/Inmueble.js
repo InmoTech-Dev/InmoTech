@@ -10,8 +10,7 @@ const Inmueble = sequelize.define('Inmuebles', {
   },
   registro_inmobiliario: {
     type: DataTypes.STRING(50),
-    allowNull: false,
-    unique: true
+    allowNull: false
   },
   titulo: {
     type: DataTypes.STRING(200),
@@ -75,11 +74,6 @@ const Inmueble = sequelize.define('Inmuebles', {
     type: DataTypes.STRING(50),
     allowNull: false,
     defaultValue: 'Disponible'
-  },
-  destacado: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false
   },
   fecha_registro: {
     type: DataTypes.DATE,

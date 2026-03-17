@@ -172,19 +172,19 @@ class BuyerService {
 
     const imagenes = Array.isArray(inmueble.imagenes)
       ? [...inmueble.imagenes]
-          .sort((a, b) => {
-            if (Boolean(b?.es_principal) !== Boolean(a?.es_principal)) {
-              return Number(Boolean(b?.es_principal)) - Number(Boolean(a?.es_principal));
-            }
-            return (a?.orden ?? Number.MAX_SAFE_INTEGER) - (b?.orden ?? Number.MAX_SAFE_INTEGER);
-          })
-          .map((img) => ({
-            id_imagen: img.id_imagen,
-            ruta_archivo: img.ruta_archivo,
-            nombre_archivo: img.nombre_archivo,
-            es_principal: Boolean(img.es_principal),
-            orden: img.orden
-          }))
+        .sort((a, b) => {
+          if (Boolean(b?.es_principal) !== Boolean(a?.es_principal)) {
+            return Number(Boolean(b?.es_principal)) - Number(Boolean(a?.es_principal));
+          }
+          return (a?.orden ?? Number.MAX_SAFE_INTEGER) - (b?.orden ?? Number.MAX_SAFE_INTEGER);
+        })
+        .map((img) => ({
+          id_imagen: img.id_imagen,
+          ruta_archivo: img.ruta_archivo,
+          nombre_archivo: img.nombre_archivo,
+          es_principal: Boolean(img.es_principal),
+          orden: img.orden
+        }))
       : [];
 
     const imagenPrincipal = imagenes.find((img) => img.es_principal)?.ruta_archivo || imagenes[0]?.ruta_archivo || null;
@@ -363,12 +363,12 @@ class BuyerService {
       ...normalized,
       ultima_venta: sale
         ? {
-            id_venta: sale.id_venta,
-            fecha_venta: sale.fecha_venta,
-            valor_venta: sale.valor_venta,
-            estado: sale.estado,
-            medio_pago: sale.medio_pago
-          }
+          id_venta: sale.id_venta,
+          fecha_venta: sale.fecha_venta,
+          valor_venta: sale.valor_venta,
+          estado: sale.estado,
+          medio_pago: sale.medio_pago
+        }
         : null,
       inmueble: this.mapInmuebleSummary(sale?.inmueble)
     };
@@ -484,12 +484,12 @@ class BuyerService {
           ...base,
           ultima_venta: sale
             ? {
-                id_venta: sale.id_venta,
-                fecha_venta: sale.fecha_venta,
-                valor_venta: sale.valor_venta,
-                estado: sale.estado,
-                medio_pago: sale.medio_pago
-              }
+              id_venta: sale.id_venta,
+              fecha_venta: sale.fecha_venta,
+              valor_venta: sale.valor_venta,
+              estado: sale.estado,
+              medio_pago: sale.medio_pago
+            }
             : null,
           inmueble: this.mapInmuebleSummary(sale?.inmueble)
         };

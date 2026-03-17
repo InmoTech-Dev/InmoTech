@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { User, LogOut, LayoutDashboard, Calendar, Building2 } from 'lucide-react';
+import { User, LogOut, LayoutDashboard } from 'lucide-react';
 import { routes } from '@/routes';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -18,7 +18,7 @@ const MobileMenu = ({ isOpen, onClose }) => {
     { to: routes.about, label: 'Nosotros' },
     { to: routes.properties, label: 'Inmuebles' },
     { to: routes.services, label: 'Servicios' },
-    { to: routes.contact, label: 'Contactanos' }
+    { to: routes.contact, label: 'contáctanos' }
   ];
 
   const handleLogout = async () => {
@@ -56,15 +56,6 @@ const MobileMenu = ({ isOpen, onClose }) => {
       availableModules.includes('administrativos');
 
     return hasAdministrativeAccess;
-  };
-
-  const isOwnerUser = () => {
-    if (!user) return false;
-    const roles = Array.isArray(user.roles) ? user.roles : [];
-    return roles.some((role) => {
-      const roleName = typeof role === 'object' ? role.nombre_rol : role;
-      return String(roleName || '').toLowerCase().includes('propietario');
-    });
   };
 
   return (
@@ -118,28 +109,6 @@ const MobileMenu = ({ isOpen, onClose }) => {
                   >
                     <LayoutDashboard className="h-5 w-5" />
                     <span className="font-medium">Dashboard</span>
-                  </Link>
-                )}
-
-                {!hasDashboardAccess() && (
-                  <Link
-                    to={routes.userAppointments}
-                    className="flex items-center space-x-3 w-full px-4 py-3 bg-white/10 border border-white/20 text-white rounded-lg hover:bg-white/20 transition-all duration-300 backdrop-blur-sm"
-                    onClick={onClose}
-                  >
-                    <Calendar className="h-5 w-5" />
-                    <span className="font-medium">Mis Citas</span>
-                  </Link>
-                )}
-
-                {!hasDashboardAccess() && isOwnerUser() && (
-                  <Link
-                    to={routes.userProperties}
-                    className="flex items-center space-x-3 w-full px-4 py-3 bg-white/10 border border-white/20 text-white rounded-lg hover:bg-white/20 transition-all duration-300 backdrop-blur-sm"
-                    onClick={onClose}
-                  >
-                    <Building2 className="h-5 w-5" />
-                    <span className="font-medium">Mis Inmuebles</span>
                   </Link>
                 )}
 

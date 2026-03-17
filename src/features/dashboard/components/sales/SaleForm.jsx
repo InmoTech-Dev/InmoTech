@@ -267,11 +267,11 @@ export default function SalesForm({ onClose, onSubmit }) {
             "inmuebleBarrio", "inmuebleDireccion"
         ],
         2: [
-            "vendedorTipoDocumento", VENDEDOR_DOC, "vendedorNombreCompleto", 
+            "vendedorTipoDocumento", VENDEDOR_DOC, "vendedorNombreCompleto",
             "vendedorCorreo", "vendedorTelefono",
         ],
         3: [
-            "compradorTipoDocumento", COMPRADOR_DOC, "compradorNombreCompleto", 
+            "compradorTipoDocumento", COMPRADOR_DOC, "compradorNombreCompleto",
             "compradorCorreo", "compradorTelefono",
         ],
         4: [
@@ -293,29 +293,29 @@ export default function SalesForm({ onClose, onSubmit }) {
     const getLabel = (name) => {
         const labels = {
             // Vendedor
-            vendedorTipoDocumento: "Tipo de Documento Vendedor", 
+            vendedorTipoDocumento: "Tipo de Documento Vendedor",
             vendedorDocumento: "Número de Documento Vendedor",
-            vendedorNombreCompleto: "Nombre Completo Vendedor", 
+            vendedorNombreCompleto: "Nombre Completo Vendedor",
             vendedorCorreo: "Correo Electrónico Vendedor",
             vendedorTelefono: "Teléfono Vendedor",
 
             // Comprador
-            compradorTipoDocumento: "Tipo de Documento Comprador", 
+            compradorTipoDocumento: "Tipo de Documento Comprador",
             compradorDocumento: "Número de Documento Comprador",
-            compradorNombreCompleto: "Nombre Completo Comprador", 
+            compradorNombreCompleto: "Nombre Completo Comprador",
             compradorCorreo: "Correo Electrónico Comprador",
             compradorTelefono: "Teléfono Comprador",
 
             // Inmueble
-            inmuebleTipo: "Tipo de Inmueble", 
+            inmuebleTipo: "Tipo de Inmueble",
             inmuebleRegistro: "Registro Inmobiliario",
-            inmuebleNombre: "Nombre del Inmueble", 
-            inmueblePais: "País", 
+            inmuebleNombre: "Nombre del Inmueble",
+            inmueblePais: "País",
             inmuebleDepartamento: "Departamento",
-            inmuebleCiudad: "Ciudad", 
+            inmuebleCiudad: "Ciudad",
             inmuebleBarrio: "Barrio",
             inmuebleDireccion: "Dirección",
-            inmueblePrecio: "Precio del Inmueble", 
+            inmueblePrecio: "Precio del Inmueble",
 
             // Venta
             fechaVenta: "Fecha de Venta",
@@ -330,7 +330,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     // === VALIDACIONES MEJORADAS PARA DOCUMENTOS ===
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
-        
+
         switch (tipoDocumento) {
             case 'CC':
                 if (!/^[0-9]{7,10}$/.test(numeroLimpio)) {
@@ -379,8 +379,8 @@ export default function SalesForm({ onClose, onSubmit }) {
         if (!value) return "";
         const cleanValue = value.replace(/[^0-9]/g, '');
         if (cleanValue === "") return "";
-        
-        const formatter = new Intl.NumberFormat('es-CO', { 
+
+        const formatter = new Intl.NumberFormat('es-CO', {
             style: 'decimal',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
@@ -392,11 +392,11 @@ export default function SalesForm({ onClose, onSubmit }) {
     const setElRef = (name) => (el) => {
         if (!el) return;
         elRefs.current[name] = el;
-        
+
         if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
             valuesRef.current[name] = initial[name] ?? "";
         }
-        
+
         if (currencyFields.includes(name) && valuesRef.current[name]) {
             displayValuesRef.current[name] = formatNumberWithThousandsSeparator(valuesRef.current[name].toString());
         } else {
@@ -458,7 +458,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             if (currencyFields.includes(name)) {
                 cleanValue = value.replace(/[^0-9]/g, '');
                 const formattedValue = formatNumberWithThousandsSeparator(cleanValue);
-                
+
                 displayValuesRef.current[name] = formattedValue;
                 e.target.value = formattedValue;
             } else if (isDocFieldChange || isPhoneFieldChange) {
@@ -470,7 +470,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             } else {
                 displayValuesRef.current[name] = value;
             }
-            
+
             valuesRef.current[name] = cleanValue;
 
             if (name === "medioPago") {
@@ -776,47 +776,47 @@ export default function SalesForm({ onClose, onSubmit }) {
     // Manejador de blur para validación MEJORADO
     const handleInputBlur = async (e) => {
         const { name } = e.target;
-        const value = valuesRef.current[name] || ""; 
-        
+        const value = valuesRef.current[name] || "";
+
         let errorMessage = null;
         const isRequired = requiredFields.includes(name);
 
         setErrors(prev => {
             const newErrors = { ...prev };
 
-            if (isRequired && !value.trim()) { 
-                 errorMessage = "Este campo es obligatorio.";
+            if (isRequired && !value.trim()) {
+                errorMessage = "Este campo es obligatorio.";
             }
 
             if (!errorMessage && value.trim()) {
                 if (nameFields.includes(name) && !isValidName(value)) {
                     errorMessage = `Solo se permiten letras.`;
-                } 
+                }
                 else if (docFields.includes(name)) {
                     let tipoDocumento = "";
-                    
+
                     if (name === VENDEDOR_DOC) {
                         tipoDocumento = valuesRef.current.vendedorTipoDocumento || "CC";
                     } else if (name === COMPRADOR_DOC) {
                         tipoDocumento = valuesRef.current.compradorTipoDocumento || "CC";
                     }
-                    
+
                     if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
                         errorMessage = `Solo se permiten letras, números, espacios, puntos y guiones`;
                     } else {
                         errorMessage = validateDocument(tipoDocumento, value);
                     }
-                } 
+                }
                 else if (phoneFields.includes(name)) {
                     if (!isValidNumeric(value)) {
                         errorMessage = `Solo se permiten números.`;
                     } else if (value.length < 10) {
                         errorMessage = `El teléfono debe tener al menos 10 dígitos`;
                     }
-                } 
+                }
                 else if (emailFields.includes(name) && !isValidEmail(value)) {
                     errorMessage = `El correo electrónico debe ser válido.`;
-                } 
+                }
             }
 
             if (errorMessage) {
@@ -910,7 +910,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 tipo: "",
                 numero: "",
             };
-            
+
             if (resetFields) {
                 valuesRef.current.compradorPersonaId = "";
                 valuesRef.current.compradorNombreCompleto = "";
@@ -920,7 +920,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 displayValuesRef.current.compradorCorreo = "";
                 displayValuesRef.current.compradorTelefono = "";
             }
-            
+
             if (resetState) {
                 setBuyerLookupState({
                     loading: false,
@@ -1259,7 +1259,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         let currentErrors = { ...errors };
         let hasError = false;
         let firstErrorField = null;
-        
+
         const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
 
         for (const fieldName of fieldsToCheck) {
@@ -1273,43 +1273,43 @@ export default function SalesForm({ onClose, onSubmit }) {
             const isRequired =
                 requiredFields.includes(fieldName) ||
                 (isMixto && (isCashSplit || isTransferSplit));
-            
-            if (isRequired && !value.toString().trim()) { 
+
+            if (isRequired && !value.toString().trim()) {
                 error = "Este campo es obligatorio.";
-            } 
-            
+            }
+
             if (isRequired && (strictNumericFields.includes(fieldName) || isCashSplit || isTransferSplit)) {
-                 if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
-                     error = "Este campo es obligatorio y debe ser mayor a 0";
-                 }
+                if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
+                    error = "Este campo es obligatorio y debe ser mayor a 0";
+                }
             }
 
             if (!error && value.toString().trim()) {
                 if (nameFields.includes(fieldName) && !isValidName(value)) {
                     error = `Solo se permiten letras, espacios y acentos.`;
-                } 
+                }
                 else if (docFields.includes(fieldName)) {
                     let tipoDocumento = "";
-                    
+
                     if (fieldName === VENDEDOR_DOC) {
                         tipoDocumento = valuesRef.current.vendedorTipoDocumento || "CC";
                     } else if (fieldName === COMPRADOR_DOC) {
                         tipoDocumento = valuesRef.current.compradorTipoDocumento || "CC";
                     }
-                    
+
                     error = validateDocument(tipoDocumento, value);
-                } 
+                }
                 else if (phoneFields.includes(fieldName)) {
                     if (!isValidNumeric(value)) {
                         error = `Solo se permiten dígitos.`;
                     } else if (value.length < 10) {
                         error = `El teléfono debe tener al menos 10 dígitos`;
                     }
-                } 
+                }
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
                     error = `Debe ser un correo electrónico válido.`;
                 }
-                else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) { 
+                else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) {
                     error = `Solo se permiten números enteros.`;
                 }
                 else if (isMixto && (isCashSplit || isTransferSplit)) {
@@ -1318,7 +1318,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                     }
                 }
             }
-            
+
             if (error) {
                 currentErrors[fieldName] = error;
                 hasError = true;
@@ -1329,14 +1329,14 @@ export default function SalesForm({ onClose, onSubmit }) {
                 delete currentErrors[fieldName];
             }
         }
-        
+
         return { currentErrors, hasError, firstErrorField };
     };
 
     // Navegación entre pasos
     const handleNextStep = () => {
         let fieldsToValidate = stepFields[step];
-        
+
         const { currentErrors, hasError, firstErrorField } = runValidation(fieldsToValidate);
 
         setErrors(currentErrors);
@@ -1363,7 +1363,7 @@ export default function SalesForm({ onClose, onSubmit }) {
     // Envío del formulario
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         const allFieldsToValidate = Object.values(stepFields).flat();
         const { currentErrors, hasError, firstErrorField } = runValidation(allFieldsToValidate);
 
@@ -1374,15 +1374,15 @@ export default function SalesForm({ onClose, onSubmit }) {
             if (stepFields[2].includes(firstErrorField)) targetStep = 2;
             else if (stepFields[3].includes(firstErrorField)) targetStep = 3;
             else if (stepFields[4].includes(firstErrorField)) targetStep = 4;
-            
+
             setStep(targetStep);
-            
+
             if (errorFocusTimeout.current) clearTimeout(errorFocusTimeout.current);
             errorFocusTimeout.current = setTimeout(() => {
                 const el = elRefs.current[firstErrorField];
                 if (el) el.focus();
             }, 50);
-            
+
             return;
         }
 
@@ -1452,7 +1452,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             const formattedTransferencia = formatNumberWithThousandsSeparator(transferencia.toString());
             payload.medioPagoDescripcion = `Efectivo: $ ${formattedEfectivo} | Transferencia: $ ${formattedTransferencia}`;
         }
-        
+
         if (onSubmit) onSubmit(payload);
         onClose?.();
     };
@@ -1478,7 +1478,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
-        
+
         let inputType = type;
         if (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
             if (type !== 'date' && type !== 'email') {
@@ -1601,14 +1601,14 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     return (
         <AnimatePresence>
-            <motion.div 
+            <motion.div
                 className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-3"
                 onClick={onClose}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
             >
-                <motion.div 
+                <motion.div
                     role="dialog"
                     aria-modal="true"
                     className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 w-full max-w-4xl relative flex flex-col"
@@ -1632,9 +1632,9 @@ export default function SalesForm({ onClose, onSubmit }) {
                                 </div>
                                 <p className="text-xs sm:text-sm text-gray-600 mt-2">
                                     <span className="font-semibold text-gray-900">Paso {step} de {totalSteps}</span>:{" "}
-                                    {step === 1 ? "Datos del Inmueble" : 
-                                     step === 2 ? "Datos del Vendedor (Propietario)" : 
-                                     step === 3 ? "Datos del Comprador" : "Precio y Medio de Pago"}
+                                    {step === 1 ? "Datos del Inmueble" :
+                                        step === 2 ? "Datos del Vendedor (Propietario)" :
+                                            step === 3 ? "Datos del Comprador" : "Precio y Medio de Pago"}
                                     {" "} (Campos obligatorios marcados con *)
                                 </p>
                             </div>
@@ -1654,7 +1654,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
                     <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
                         <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
-                            
+
                             {/* PASO 1: Datos del Inmueble */}
                             {step === 1 && (
                                 <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
@@ -1755,7 +1755,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                             options={PAYMENT_OPTIONS}
                                         />
                                         <Field name="inmueblePrecio" placeholder="Ej: 150000000 (Solo números enteros)" />
-                                        
+
                                         {(selectedPaymentMethod || "").toLowerCase() === "mixto" && (
                                             <>
                                                 <Field name="medioPagoEfectivo" placeholder="Valor en efectivo" />
@@ -1788,11 +1788,11 @@ export default function SalesForm({ onClose, onSubmit }) {
 
                         <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
                             {step > 1 ? (
-                                <motion.button 
-                                    type="button" 
+                                <motion.button
+                                    type="button"
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    onClick={prevStep} 
+                                    onClick={prevStep}
                                     className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm"
                                 >
                                     Anterior
@@ -1812,7 +1812,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                             )}
 
                             {step === totalSteps && (
-                                <motion.button 
+                                <motion.button
                                     type="submit"
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
@@ -1828,4 +1828,3 @@ export default function SalesForm({ onClose, onSubmit }) {
         </AnimatePresence>
     );
 }
-

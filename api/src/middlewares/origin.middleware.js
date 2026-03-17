@@ -2,7 +2,7 @@ const logger = require('../utils/logger');
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean)
-  : ['http://localhost:5173', 'http://localhost:3000', 'capacitor://localhost', 'ionic://localhost'];
+  : ['http://localhost:5173', 'http://localhost:3000'];
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 

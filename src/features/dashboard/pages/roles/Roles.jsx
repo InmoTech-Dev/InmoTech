@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from 'framer-motion';
-import { Eye, Edit, Trash2, Plus, Shield, ShieldCheck, Loader2, XCircle } from 'lucide-react';
+import { Eye, Edit, Trash2, Plus, Shield, ShieldCheck, Loader2, XCircle, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import CrearRolModal from "./CrearRolModal";
 import EditarRolModal from "./EditarRolModal";
 import VerRolModal from "./VerRolModal";
@@ -40,6 +40,7 @@ const RolesContent = () => {
 
   // Estado para el filtro
   const [filtroEstado, setFiltroEstado] = useState('todos'); // 'todos', 'activo', 'inactivo'
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editarModalOpen, setEditarModalOpen] = useState(false);
@@ -49,6 +50,10 @@ const RolesContent = () => {
   const [rolSeleccionado, setRolSeleccionado] = useState(null);
   const [isDeletingRol, setIsDeletingRol] = useState(false);
   const [isChangingRolStatus, setIsChangingRolStatus] = useState(false);
+  
+  // Estado para la paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
 
 
 
@@ -102,10 +107,26 @@ const RolesContent = () => {
     } else if (filtroEstado === 'inactivo') {
       filtrados = roles.filter((rol) => !rol.estado);
     }
-    // Si filtroEstado === 'todos', no filtrar
+
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (normalizedSearch) {
+      filtrados = filtrados.filter((rol) =>
+        String(rol?.nombre || '').toLowerCase().includes(normalizedSearch) ||
+        String(rol?.id || '').toLowerCase().includes(normalizedSearch)
+      );
+    }
 
     setRolesFiltrados(filtrados);
-  }, [roles, filtroEstado]);
+    setCurrentPage(1);
+  }, [roles, filtroEstado, searchTerm]);
+
+  // Lógica de paginación
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentRoles = rolesFiltrados.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(rolesFiltrados.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   useEffect(() => {
     if (authLoading) {
@@ -391,7 +412,7 @@ const RolesContent = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {rolesFiltrados.map((rol) => (
+                {currentRoles.map((rol) => (
                   <motion.tr key={rol.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`hover:bg-slate-50 transition-colors ${isProtectedRol(rol) ? "bg-blue-50 hover:bg-blue-100" : ""}`}>
                     <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-slate-900">{rol.id}</div></td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -454,7 +475,7 @@ const RolesContent = () => {
 
         {/* Mobile Cards */}
         <div className="md:hidden p-6">
-          {rolesFiltrados.map((rol) => (
+          {currentRoles.map((rol) => (
             <motion.div key={rol.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`bg-white rounded-lg border border-slate-200 p-4 mb-4 ${isProtectedRol(rol) ? "bg-blue-50 border-blue-200" : ""}`}>
               <div className="flex justify-between items-start mb-3">
                 <div>
@@ -503,7 +524,71 @@ const RolesContent = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* Paginador */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 bg-white border-t border-slate-200 flex items-center justify-between">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => paginate(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-slate-700">
+                  Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a <span className="font-medium">{Math.min(indexOfLastItem, rolesFiltrados.length)}</span> de{' '}
+                  <span className="font-medium">{rolesFiltrados.length}</span> resultados
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => paginate(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <span className="sr-only">Anterior</span>
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  {[...Array(totalPages)].map((_, i) => (
+                    <button
+                      key={i + 1}
+                      onClick={() => paginate(i + 1)}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                        currentPage === i + 1
+                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                          : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <span className="sr-only">Siguiente</span>
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </>
+
     );
   };
 
@@ -526,6 +611,16 @@ const RolesContent = () => {
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
         <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
           <h2 className="text-xl font-semibold text-slate-800">Roles</h2>
+          <div className="relative w-full lg:w-80">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nombre o ID del rol"
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-700 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2 w-full lg:w-auto">
             {canManageRoles && <AdminHolderCard className="w-full md:w-auto" />}
             {canManageRoles && (
@@ -542,8 +637,7 @@ const RolesContent = () => {
           </div>
         </div>
 
-        {/* Filtro por estado */}
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
           <span className="text-sm font-medium text-slate-600">Filtrar por estado:</span>
           <div className="flex gap-1">
             <button

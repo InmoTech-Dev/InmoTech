@@ -8,20 +8,19 @@ import { uploadToCloudinary } from '../../../../../../shared/services/cloudinary
 
 const PROPERTY_TYPES = ['Casa', 'Apartamento', 'Local', 'Oficina', 'Bodega', 'Lote', 'Finca', 'Otro'];
 const OPERATION_OPTIONS = ['Venta', 'Arriendo', 'Venta y Arriendo'];
-const MIN_AMENITIES_REQUIRED_TYPES = new Set(['Casa', 'Apartamento']);
-const DEFAULT_AMENITIES = ['Habitaciones', 'Banos', 'Parqueaderos', 'Balcon', 'Cuarto util', 'Cocina'];
 
 const AMENITIES_BY_TYPE = {
-  Casa: DEFAULT_AMENITIES,
-  Apartamento: DEFAULT_AMENITIES,
-  Local: ['Banos', 'Zona de carga', 'Deposito'],
-  Oficina: ['Banos', 'Salas de reunion', 'Parqueaderos', 'Recepcion'],
-  Bodega: ['Area de carga', 'Oficinas internas'],
-  Lote: ['Area verde', 'Servicios publicos'],
-  Finca: ['Habitaciones', 'Banos', 'Piscina', 'Casa mayordomo'],
-  Otro: DEFAULT_AMENITIES
+  Casa: ['Habitaciones', 'Baños', 'Parqueaderos', 'Jardín', 'Patio cubierto'],
+  Apartamento: ['Habitaciones', 'Baños', 'Parqueaderos', 'Balcón', 'Depósito', 'Coworking'],
+  Local: ['Baños', 'Zona de carga', 'Depósito'],
+  Oficina: ['Baños', 'Salas de reunión', 'Parqueaderos', 'Recepción'],
+  Bodega: ['Área de carga', 'Oficinas internas'],
+  Lote: ['Área verde', 'Servicios públicos'],
+  Finca: ['Habitaciones', 'Baños', 'Piscina', 'Casa mayordomo'],
+  Otro: ['Habitaciones', 'Baños']
 };
 
+const MIN_AMENITIES_REQUIRED_TYPES = new Set(['Casa', 'Apartamento']);
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
@@ -42,6 +41,13 @@ const mapImageSources = (sources = []) =>
       remote: true,
       name: `Imagen ${index + 1}`
     }));
+
+const getSelectedAmenitiesSignature = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .filter((item) => item?.seleccionada)
+    .map((item) => `${String(item.nombre || '').trim().toLowerCase()}:${Number(item.cantidad) || 0}`)
+    .sort()
+    .join('|');
 
 const INITIAL_FORM = {
   registro: '',
@@ -83,18 +89,6 @@ const buildAmenitiesForType = (type, current = []) => {
   return [...mapped, ...customs];
 };
 
-const getSelectedAmenitiesSignature = (items = []) => {
-  const normalized = items
-    .filter((item) => item?.seleccionada)
-    .map((item) => ({
-      nombre: String(item?.nombre || '').trim().toLowerCase(),
-      cantidad: Number(item?.cantidad) > 0 ? Number(item.cantidad) : 1
-    }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-  return JSON.stringify(normalized);
-};
-
 const formatOwnerSummary = (owner) => {
   if (!owner) return null;
   return {
@@ -105,6 +99,15 @@ const formatOwnerSummary = (owner) => {
     documento: owner.documento || `${owner.tipoDocumento || owner.tipo_documento || 'CC'} ${owner.numeroDocumento || owner.numero_documento || ''}`
   };
 };
+
+const normalizeStatusLabel = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const isSoldStatus = (value) => normalizeStatusLabel(value) === 'vendido';
 
 export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }) => {
   const [form, setForm] = useState(INITIAL_FORM);
@@ -120,6 +123,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
   const [saving, setSaving] = useState(false);
   const [checkingRegistro, setCheckingRegistro] = useState(false);
   const [registroDisponible, setRegistroDisponible] = useState(true);
+  const [registroErrorMessage, setRegistroErrorMessage] = useState('Este registro ya existe');
+  const [blockedOwnerIdsByRegistro, setBlockedOwnerIdsByRegistro] = useState([]);
   const [descripcionCambioComodidades, setDescripcionCambioComodidades] = useState('');
   const lastFocusedRef = useRef(null);
   const lastFocusInfo = useRef({ name: null, selectionStart: null, selectionEnd: null });
@@ -167,6 +172,14 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
   const selectedOwner = useMemo(
     () => owners.find((owner) => String(owner.id) === String(selectedOwnerId)),
     [owners, selectedOwnerId]
+  );
+  const blockedOwnersSet = useMemo(
+    () => new Set(blockedOwnerIdsByRegistro.map((id) => String(id))),
+    [blockedOwnerIdsByRegistro]
+  );
+  const ownersForSelection = useMemo(
+    () => owners.filter((owner) => !blockedOwnersSet.has(String(owner.id))),
+    [owners, blockedOwnersSet]
   );
   const amenitiesChangedInEdit = useMemo(() => {
     if (!inmuebleEditar) return false;
@@ -228,9 +241,10 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       setAmenities(buildAmenitiesForType(INITIAL_FORM.tipo));
       setImagenes([]);
       setSelectedOwnerId('');
+      setBlockedOwnerIdsByRegistro([]);
+      setRegistroErrorMessage('Este registro ya existe');
       setOwnerModalOpen(false);
       setCustomAmenity({ nombre: '', cantidad: 1 });
-      setDescripcionCambioComodidades('');
       setErrors({});
       setActiveStep(0);
       return;
@@ -265,12 +279,13 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (inmuebleEditar.propietario?.id) {
         setSelectedOwnerId(inmuebleEditar.propietario.id);
       }
-      setDescripcionCambioComodidades('');
     } else {
       setForm(INITIAL_FORM);
       setAmenities(buildAmenitiesForType(INITIAL_FORM.tipo));
       setImagenes([]);
       setSelectedOwnerId('');
+      setBlockedOwnerIdsByRegistro([]);
+      setRegistroErrorMessage('Este registro ya existe');
       setDescripcionCambioComodidades('');
     }
     setActiveStep(0);
@@ -281,22 +296,17 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === 'tipo') {
       setAmenities((prev) => buildAmenitiesForType(value, prev));
-      setErrors((prev) => {
-        const updated = { ...prev };
-        delete updated.comodidades;
-        return updated;
-      });
     }
   };
 
   useEffect(() => {
     if (!form.registro.trim()) {
       setRegistroDisponible(true);
+      setRegistroErrorMessage('Este registro ya existe');
+      setBlockedOwnerIdsByRegistro([]);
       setErrors((prev) => {
         const updated = { ...prev };
-        if (updated.registro === 'Este registro ya existe') {
-          delete updated.registro;
-        }
+        delete updated.registro;
         return updated;
       });
       return;
@@ -316,7 +326,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           registro_inmobiliario: registroValue,
           busqueda: registroValue
         });
-        const exists = items.some((item) => {
+        const duplicatedItems = items.filter((item) => {
           const itemId = item.id_inmueble || item.id || item.inmuebleId;
           const sameRecord =
             (item.registro || '').toLowerCase() === registroValue.toLowerCase() ||
@@ -329,14 +339,52 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
 
           return sameRecord;
         });
-        setRegistroDisponible(!exists);
+
+        if (!duplicatedItems.length) {
+          setRegistroDisponible(true);
+          setRegistroErrorMessage('Este registro ya existe');
+          setBlockedOwnerIdsByRegistro([]);
+          setErrors((prev) => {
+            const updated = { ...prev };
+            delete updated.registro;
+            return updated;
+          });
+          return;
+        }
+
+        const hasNonSoldDuplicate = duplicatedItems.some(
+          (item) => !isSoldStatus(item.estado_frontend || item.estado)
+        );
+
+        if (hasNonSoldDuplicate) {
+          setRegistroDisponible(false);
+          setRegistroErrorMessage('Este registro ya existe en un inmueble no vendido');
+          setBlockedOwnerIdsByRegistro([]);
+          setErrors((prev) => ({
+            ...prev,
+            registro: 'Este registro ya existe en un inmueble no vendido'
+          }));
+          return;
+        }
+
+        const blockedIds = Array.from(
+          new Set(
+            duplicatedItems.flatMap((item) => {
+              const directOwnerId = item.propietario?.id;
+              const ownerIds = Array.isArray(item.ownerIds) ? item.ownerIds : [];
+
+              return [directOwnerId, ...ownerIds]
+                .map((rawId) => Number.parseInt(rawId, 10))
+                .filter((id) => Number.isInteger(id) && id > 0);
+            })
+          )
+        );
+
+        setRegistroDisponible(true);
+        setBlockedOwnerIdsByRegistro(blockedIds);
         setErrors((prev) => {
           const updated = { ...prev };
-          if (exists) {
-            updated.registro = 'Este registro ya existe';
-          } else if (updated.registro === 'Este registro ya existe') {
-            delete updated.registro;
-          }
+          delete updated.registro;
           return updated;
         });
       } catch (error) {
@@ -349,17 +397,32 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     return () => clearTimeout(timeoutId);
   }, [form.registro]);
 
+  useEffect(() => {
+    if (!selectedOwnerId || !blockedOwnersSet.has(String(selectedOwnerId))) {
+      setErrors((prev) => {
+        if (prev.propietario !== 'No se puede asignar este registro al mismo propietario del inmueble vendido') {
+          return prev;
+        }
+        const updated = { ...prev };
+        delete updated.propietario;
+        return updated;
+      });
+      return;
+    }
+
+    setSelectedOwnerId('');
+    setErrors((prev) => ({
+      ...prev,
+      propietario: 'No se puede asignar este registro al mismo propietario del inmueble vendido'
+    }));
+  }, [selectedOwnerId, blockedOwnersSet]);
+
   const handleAmenityToggle = (amenityId) => {
     setAmenities((prev) =>
       prev.map((amenity) =>
         amenity.id === amenityId ? { ...amenity, seleccionada: !amenity.seleccionada } : amenity
       )
     );
-    setErrors((prev) => {
-      const updated = { ...prev };
-      delete updated.comodidades;
-      return updated;
-    });
   };
 
   const handleAmenityQuantity = (amenityId, quantity) => {
@@ -368,11 +431,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         amenity.id === amenityId ? { ...amenity, cantidad: Number(quantity) || 0 } : amenity
       )
     );
-    setErrors((prev) => {
-      const updated = { ...prev };
-      delete updated.comodidades;
-      return updated;
-    });
   };
 
   const handleAddCustomAmenity = () => {
@@ -388,11 +446,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       }
     ]);
     setCustomAmenity({ nombre: '', cantidad: 1 });
-    setErrors((prev) => {
-      const updated = { ...prev };
-      delete updated.comodidades;
-      return updated;
-    });
   };
 
   const handleImageUpload = async (event) => {
@@ -454,7 +507,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
 
     if (stepIndex === 0) {
       if (!form.registro.trim()) validationErrors.registro = 'El registro es obligatorio';
-      if (!registroDisponible) validationErrors.registro = 'Este registro ya existe';
+      if (!registroDisponible) validationErrors.registro = registroErrorMessage;
       if (!form.titulo.trim()) validationErrors.titulo = 'El título es obligatorio';
       if (!form.descripcion.trim()) validationErrors.descripcion = 'La descripción es obligatoria';
       if (form.operacion === 'Venta' && !form.precioVenta) validationErrors.precioVenta = 'Ingresa el precio de venta';
@@ -481,6 +534,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     } else if (stepIndex === 3) {
       if (!selectedOwnerId) {
         validationErrors.propietario = 'Selecciona un propietario';
+      } else if (blockedOwnersSet.has(String(selectedOwnerId))) {
+        validationErrors.propietario = 'No se puede asignar este registro al mismo propietario del inmueble vendido';
       }
     }
 
@@ -494,7 +549,15 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     try {
       setSaving(true);
       if (!registroDisponible) {
-        setErrors((prev) => ({ ...prev, registro: 'Este registro ya existe' }));
+        setErrors((prev) => ({ ...prev, registro: registroErrorMessage }));
+        setSaving(false);
+        return;
+      }
+      if (selectedOwnerId && blockedOwnersSet.has(String(selectedOwnerId))) {
+        setErrors((prev) => ({
+          ...prev,
+          propietario: 'No se puede asignar este registro al mismo propietario del inmueble vendido'
+        }));
         setSaving(false);
         return;
       }
@@ -552,9 +615,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         comodidades: selectedAmenities,
         imagenes: uploadedImages,
         propietario: ownerSummary || null,
-        propietarioId: ownerSummary?.id,
-        descripcion_cambio_comodidades:
-          inmuebleEditar && amenitiesChangedInEdit ? descripcionCambioComodidades.trim() : ''
+        propietarioId: ownerSummary?.id
       };
 
       await onSave(payload, Boolean(inmuebleEditar));
@@ -614,7 +675,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           {!registroDisponible && (
             <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
               <AlertCircle className="h-4 w-4" />
-              <span>El registro ya existe. Usa uno diferente.</span>
+              <span>{registroErrorMessage}</span>
             </div>
           )}
           {checkingRegistro && (
@@ -798,31 +859,28 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           {amenities.map((amenity) => (
             <label
               key={amenity.id}
-            className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all ${amenity.seleccionada ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50'}`}
-          >
-            <div className="flex items-center gap-2">
+              className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all ${amenity.seleccionada ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50'}`}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={amenity.seleccionada}
+                  onChange={() => handleAmenityToggle(amenity.id)}
+                  className="text-blue-600 focus:ring-blue-500"
+                />
+                {amenity.nombre}
+              </div>
               <input
-                type="checkbox"
-                checked={amenity.seleccionada}
-                onChange={() => handleAmenityToggle(amenity.id)}
-                className="text-blue-600 focus:ring-blue-500"
+                type="number"
+                min="0"
+                value={amenity.cantidad}
+                disabled={!amenity.seleccionada}
+                onChange={(event) => handleAmenityQuantity(amenity.id, event.target.value)}
+                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100"
               />
-              {amenity.nombre}
-            </div>
-            <input
-              type="number"
-              min="0"
-              value={amenity.cantidad}
-              disabled={!amenity.seleccionada}
-              onChange={(event) => handleAmenityQuantity(amenity.id, event.target.value)}
-              className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100"
-            />
-          </label>
+            </label>
           ))}
         </div>
-        {errors.comodidades && (
-          <p className="text-xs text-red-500">{errors.comodidades}</p>
-        )}
 
         <div className="rounded-2xl border border-dashed border-slate-300 p-4 bg-slate-50">
           <p className="text-sm font-semibold text-slate-700 mb-3">Característica personalizada</p>
@@ -849,33 +907,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             </button>
           </div>
         </div>
-
-        {inmuebleEditar && amenitiesChangedInEdit && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <label className="text-sm text-slate-700 flex justify-between font-semibold">
-              Descripcion del cambio en comodidades
-              {errors.descripcionCambioComodidades && (
-                <span className="text-xs text-red-500">{errors.descripcionCambioComodidades}</span>
-              )}
-            </label>
-            <textarea
-              value={descripcionCambioComodidades}
-              onChange={(event) => {
-                setDescripcionCambioComodidades(event.target.value);
-                if (errors.descripcionCambioComodidades) {
-                  setErrors((prev) => {
-                    const updated = { ...prev };
-                    delete updated.descripcionCambioComodidades;
-                    return updated;
-                  });
-                }
-              }}
-              rows={3}
-              placeholder="Ej: Se agregó 1 baño social y se retiró 1 parqueadero."
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-        )}
       </SectionCard>
 
       <SectionCard title="Galería del inmueble" subtitle="Paso 3">
@@ -950,7 +981,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           >
             <option value="">Seleccione</option>
             {ownersLoading && <option value="">Cargando propietarios...</option>}
-            {owners.map((owner) => (
+            {ownersForSelection.map((owner) => (
               <option key={owner.id} value={owner.id}>
                 {owner.nombreCompleto} · {owner.documento}
               </option>
@@ -965,6 +996,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             Nuevo propietario
           </button>
         </div>
+        {blockedOwnerIdsByRegistro.length > 0 && (
+          <p className="mt-2 text-xs text-amber-600">
+            Para este registro no se listan propietarios asociados al inmueble vendido.
+          </p>
+        )}
       </SectionCard>
 
       <SectionCard title="Resumen final" subtitle="Paso 4">
@@ -985,11 +1021,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             <p>{selectedOwner?.telefono || 'Sin teléfono'}</p>
           </div>
           <div>
-          <p className="text-xs text-slate-400 mb-1">Características seleccionadas</p>
+            <p className="text-xs text-slate-400 mb-1">Características seleccionadas</p>
             <p>{amenities.filter((item) => item.seleccionada).length}</p>
           </div>
         </div>
-        
+
 
       </SectionCard>
 

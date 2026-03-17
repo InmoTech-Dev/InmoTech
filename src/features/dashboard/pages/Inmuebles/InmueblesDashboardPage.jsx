@@ -166,6 +166,7 @@ const InmuebleDashboardPage = () => {
 
       const currentValue = inmueble.destacado ?? inmueble.featured ?? false;
       await actualizarInmueble(inmueble.id, { destacado: !currentValue });
+      await refreshCurrentList();
     } catch (err) {
       const message = err?.message || 'Error actualizando destacado del inmueble.';
       toast({
@@ -250,6 +251,7 @@ const InmuebleDashboardPage = () => {
         onEdit={handleEditar}
         onDocument={handleVerFichas}
         onStatusChange={handleEstadoChange}
+        onToggleFeatured={handleToggleFeatured}
       />
 
       {totalPages > 1 && (
@@ -296,3 +298,4 @@ const InmuebleDashboardPage = () => {
 };
 
 export default InmuebleDashboardPage;
+

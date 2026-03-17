@@ -201,6 +201,8 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
   const propietariosRaw = Array.isArray(inmueble.propietarios) ? inmueble.propietarios : [];
   const propietarios = propietariosRaw.map(formatOwnerFromApiWithDocs);
   const ownerIds = propietarios.map((owner) => owner.id).filter(Boolean);
+  const destacadoSource = getProvidedValue(inmueble, ['destacado', 'featured', 'es_destacado']);
+  const destacadoBool = normalizeEstadoValue(destacadoSource) ?? false;
 
   const precioVenta = toNumber(inmueble.precio_venta ?? inmueble.precioVenta);
   const precioArriendo = toNumber(inmueble.precio_arriendo ?? inmueble.precioArriendo);
@@ -271,6 +273,8 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       toNumber(inmueble.area_construida ?? inmueble.areaConstruida ?? inmueble.area) ?? null,
     area_privada: toNumber(inmueble.area_privada ?? inmueble.areaPrivada) ?? null,
     estado_frontend: estadoTexto,
+    destacado: destacadoBool,
+    featured: destacadoBool,
     metadata: {
       raw: inmueble
     }

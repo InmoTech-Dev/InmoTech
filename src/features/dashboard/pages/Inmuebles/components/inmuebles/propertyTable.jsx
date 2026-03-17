@@ -46,9 +46,9 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Imagen</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">ID</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Registro</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Dirección</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Direccion</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Operación</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Operacion</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
             </tr>
@@ -60,7 +60,7 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                   <div className="flex flex-col items-center gap-3">
                     <Building2 className="w-10 h-10 text-slate-300" />
                     <p className="text-slate-600 font-medium">No se encontraron inmuebles</p>
-                    <p className="text-xs text-slate-400">Intenta ajustar los filtros de búsqueda</p>
+                    <p className="text-xs text-slate-400">Intenta ajustar los filtros de busqueda</p>
                   </div>
                 </td>
               </tr>
@@ -78,6 +78,7 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                   ? estadoActual
                   : 'Disponible';
                 const featuredDisabled = isFinalStatusForFeatured(estadoActual);
+                const isFeatured = Boolean(property.destacado ?? property.featured ?? property.es_destacado);
 
                 return (
                   <tr key={property.id} className="hover:bg-slate-50 transition-colors">
@@ -130,6 +131,9 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                         onView={() => onView(property)}
                         onEdit={() => onEdit(property)}
                         onDocument={() => onDocument(property)}
+                        onToggleFeatured={() => onToggleFeatured?.(property)}
+                        isFeatured={isFeatured}
+                        featuredDisabled={featuredDisabled}
                       />
                     </td>
                   </tr>
@@ -142,7 +146,3 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
     </div>
   );
 };
-
-
-
-

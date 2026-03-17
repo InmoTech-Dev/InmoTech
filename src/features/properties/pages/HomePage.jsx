@@ -1,5 +1,5 @@
 import "react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/shared/components/ui/button";
 import {
@@ -33,6 +33,7 @@ import {
   Search,
   Mail,
 } from "lucide-react";
+import { inmueblesAPI } from "@/shared/services/propertyApidervice";
 
 export default function HomePage() {
   const [isVisible, setIsVisible] = useState(false);
@@ -40,11 +41,119 @@ export default function HomePage() {
   const [servicesVisible, setServicesVisible] = useState(false);
   const [featuredVisible, setFeaturedVisible] = useState(false);
   const [whyChooseUsVisible, setWhyChooseUsVisible] = useState(false);
+  const [featuredProperties, setFeaturedProperties] = useState([]);
+  const [featuredLoading, setFeaturedLoading] = useState(true);
   const statsRef = useRef(null);
   const categoriesRef = useRef(null);
   const servicesRef = useRef(null);
   const featuredRef = useRef(null);
   const whyChooseUsRef = useRef(null);
+
+  const landingFeaturedProperties = useMemo(() => {
+    const formatPrice = (property) => {
+      const price = property.precio_venta ?? property.precio_arriendo ?? property.precio;
+      const numericPrice = Number(price);
+
+      if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+        return "Consultar";
+      }
+
+      const formatted = numericPrice.toLocaleString("es-CO", {
+        style: "currency",
+        currency: "COP",
+        maximumFractionDigits: 0,
+      });
+
+      return property.precio_arriendo && !property.precio_venta ? `${formatted}/mes` : formatted;
+    };
+
+    const normalizeOperation = (operacion = "") => {
+      const operation = String(operacion || "").toLowerCase();
+
+      if (operation.includes("venta") && operation.includes("arriendo")) {
+        return "Venta y Arriendo";
+      }
+
+      if (operation.includes("venta")) {
+        return "Venta";
+      }
+
+      if (operation.includes("arriendo") || operation.includes("alquiler")) {
+        return "Alquiler";
+      }
+
+      return "Disponible";
+    };
+
+    const findAmenityAmount = (property, targets = []) => {
+      const normalize = (text = "") =>
+        String(text)
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim();
+
+      const targetSet = targets.map(normalize);
+      const match = property.comodidades?.find?.((item) =>
+        targetSet.includes(normalize(item.nombre || "")),
+      );
+
+      return match?.cantidad ?? "N/D";
+    };
+
+    return featuredProperties.slice(0, 6).map((property) => ({
+      id: property.id,
+      title: property.titulo || "Inmueble",
+      price: formatPrice(property),
+      location:
+        [property.ciudad, property.departamento].filter(Boolean).join(", ") ||
+        "Ubicacion no disponible",
+      area: property.area_construida ? `${property.area_construida} m2` : "N/D",
+      bedrooms: findAmenityAmount(property, ["habitaciones", "cuartos", "dormitorios"]),
+      bathrooms: findAmenityAmount(property, ["banos", "baños", "bano", "baño"]),
+      image:
+        (Array.isArray(property.imagenes) && property.imagenes[0]) ||
+        property.image ||
+        "/images/hero-inmuebles.jpg",
+      status: normalizeOperation(property.operacion),
+      featured: Boolean(property.destacado ?? property.featured),
+    }));
+  }, [featuredProperties]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadFeaturedProperties = async () => {
+      try {
+        setFeaturedLoading(true);
+        const { items } = await inmueblesAPI.getPublicInmuebles(1, 12, {
+          destacado: true,
+          _t: Date.now(),
+        });
+
+        if (!mounted) return;
+
+        setFeaturedProperties(
+          (items || []).filter((property) => Boolean(property.destacado ?? property.featured)),
+        );
+      } catch (error) {
+        console.error("Error cargando inmuebles destacados:", error);
+        if (mounted) {
+          setFeaturedProperties([]);
+        }
+      } finally {
+        if (mounted) {
+          setFeaturedLoading(false);
+        }
+      }
+    };
+
+    loadFeaturedProperties();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -425,9 +534,16 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {properties.map((property, index) => (
+            {featuredLoading ? (
+              <p className="text-gray-500">Cargando inmuebles destacados...</p>
+            ) : landingFeaturedProperties.length === 0 ? (
+              <p className="text-gray-500">
+                No hay inmuebles destacados disponibles en este momento.
+              </p>
+            ) : (
+              landingFeaturedProperties.map((property, index) => (
               <Card
-                key={index}
+                key={property.id ?? index}
                 className="overflow-hidden border-none shadow-xl hover:shadow-2xl transition-all duration-300 group rounded-xl"
               >
                 <div className="relative h-72 overflow-hidden">
@@ -493,7 +609,8 @@ export default function HomePage() {
                   </Button>
                 </CardFooter>
               </Card>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </section>

@@ -64,6 +64,14 @@ export default function PurchaseTrackingModal({
   const [descripcion, setDescripcion] = useState(
     cleanDescription(venta.descripcionSeguimiento || venta.descripcion_seguimiento || "")
   );
+  useEffect(() => {
+    const normalizedDescription = normalize(
+      venta.descripcionSeguimiento || venta.descripcion_seguimiento || ""
+    );
+    if (normalizedDescription === "cambio automatico al crear la venta") {
+      setDescripcion("");
+    }
+  }, [venta]);
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState({ comprobante: null, contrato: null });
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);

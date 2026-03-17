@@ -183,9 +183,17 @@ const splitDocTypeAndNumber = (rawNumber = "", rawType = "") => {
 
 // Limpia el número de documento a solo dígitos (para validación y búsquedas)
 const cleanDocument = (value = "") => value.toString().replace(/[^0-9]/g, "").trim();
+const cleanDocumentByType = (tipoDocumento = "", value = "") => {
+    const normalizedType = String(tipoDocumento || "").trim().toUpperCase();
+    const rawValue = value.toString().trim();
+    if (normalizedType === "PASAPORTE" || normalizedType === "PAS") {
+        return rawValue.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    }
+    return cleanDocument(rawValue);
+};
 const MIN_BUYER_DOC_LENGTH = 6;
 const shouldTriggerBuyerLookup = (tipoDocumento = "", numeroDocumento = "") => {
-    const cleaned = cleanDocument(numeroDocumento);
+    const cleaned = cleanDocumentByType(tipoDocumento, numeroDocumento);
     return Boolean(tipoDocumento) && cleaned.length >= MIN_BUYER_DOC_LENGTH;
 };
 
@@ -329,7 +337,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     // === VALIDACIONES MEJORADAS PARA DOCUMENTOS ===
     const validateDocument = (tipoDocumento, numeroDocumento) => {
-        const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
+        const numeroLimpio = cleanDocumentByType(tipoDocumento, numeroDocumento);
 
         switch (tipoDocumento) {
             case 'CC':
@@ -445,6 +453,12 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
     };
 
+    const getDocumentTypeForField = (fieldName) => {
+        if (fieldName === VENDEDOR_DOC) return valuesRef.current.vendedorTipoDocumento || "";
+        if (fieldName === COMPRADOR_DOC) return valuesRef.current.compradorTipoDocumento || "";
+        return "";
+    };
+
     // Manejador de cambios en inputs MEJORADO
     const handleInputChange = (e) => {
         let { name, type, value, checked } = e.target;
@@ -462,7 +476,9 @@ export default function SalesForm({ onClose, onSubmit }) {
                 displayValuesRef.current[name] = formattedValue;
                 e.target.value = formattedValue;
             } else if (isDocFieldChange || isPhoneFieldChange) {
-                cleanValue = sanitizeNumericString(value);
+                cleanValue = isDocFieldChange
+                    ? cleanDocumentByType(getDocumentTypeForField(name), value)
+                    : sanitizeNumericString(value);
                 displayValuesRef.current[name] = cleanValue;
                 if (e.target.value !== cleanValue) {
                     e.target.value = cleanValue;
@@ -492,7 +508,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 const numeroDocActual =
                     name === COMPRADOR_DOC ? cleanValue : (valuesRef.current.compradorDocumento || "");
                 const normalizedTipoActual = String(tipoDocActual || "").trim().toUpperCase();
-                const normalizedNumeroActual = cleanDocument(numeroDocActual || "");
+                const normalizedNumeroActual = cleanDocumentByType(tipoDocActual, numeroDocActual || "");
 
                 buyerDocumentSnapshotRef.current = {
                     tipo: tipoDocActual,
@@ -838,7 +854,7 @@ export default function SalesForm({ onClose, onSubmit }) {
         }
         if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
             const currentTipo = valuesRef.current.compradorTipoDocumento || "";
-            const normalizedDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+            const normalizedDocumento = cleanDocumentByType(currentTipo, valuesRef.current.compradorDocumento || "");
             const docReady = shouldTriggerBuyerLookup(currentTipo, normalizedDocumento);
             const previousSnapshot = { ...buyerDocumentSnapshotRef.current };
 
@@ -869,7 +885,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         if (name === "compradorNombreCompleto") {
             const currentTipo = valuesRef.current.compradorTipoDocumento || "";
-            const normalizedDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+            const normalizedDocumento = cleanDocumentByType(currentTipo, valuesRef.current.compradorDocumento || "");
             if (shouldTriggerBuyerLookup(currentTipo, normalizedDocumento) && !selectedBuyerRef.current) {
                 triggerBuyerLookup(0);
             }
@@ -934,7 +950,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const clearBuyerAutofillIfDocumentIncomplete = useCallback(() => {
         const tipoDocumento = (valuesRef.current.compradorTipoDocumento || "").trim();
-        const numeroDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+        const numeroDocumento = cleanDocumentByType(tipoDocumento, valuesRef.current.compradorDocumento || "");
 
         if (shouldTriggerBuyerLookup(tipoDocumento, numeroDocumento)) {
             return false;
@@ -977,7 +993,10 @@ export default function SalesForm({ onClose, onSubmit }) {
         selectedBuyerRef.current = buyer;
         buyerMatchedDocumentRef.current = {
             tipo: String(buyer.tipoDocumento || buyer.raw?.persona?.tipo_documento || "").trim().toUpperCase(),
-            numero: cleanDocument(buyer.documento || buyer.raw?.persona?.numero_documento || ""),
+            numero: cleanDocumentByType(
+                buyer.tipoDocumento || buyer.raw?.persona?.tipo_documento || "",
+                buyer.documento || buyer.raw?.persona?.numero_documento || ""
+            ),
         };
 
         const buildFullName = () => {
@@ -1098,7 +1117,10 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const createBuyerFromForm = useCallback(async () => {
         const tipoDocumento = normalizeValueForStorage("compradorTipoDocumento", valuesRef.current.compradorTipoDocumento || "");
-        const documento = cleanDocument(normalizeValueForStorage(COMPRADOR_DOC, valuesRef.current.compradorDocumento || ""));
+        const documento = cleanDocumentByType(
+            tipoDocumento,
+            normalizeValueForStorage(COMPRADOR_DOC, valuesRef.current.compradorDocumento || "")
+        );
         const nombreCompleto = (valuesRef.current.compradorNombreCompleto || "").trim();
 
         if (!tipoDocumento || !documento || !nombreCompleto) {
@@ -1157,7 +1179,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
     const fetchBuyerByDocument = useCallback(async () => {
         const tipoDocumento = (valuesRef.current.compradorTipoDocumento || "").trim();
-        const numeroDocumento = cleanDocument(valuesRef.current.compradorDocumento || "");
+        const numeroDocumento = cleanDocumentByType(tipoDocumento, valuesRef.current.compradorDocumento || "");
         valuesRef.current.compradorDocumento = numeroDocumento;
         displayValuesRef.current.compradorDocumento = numeroDocumento;
 
@@ -1475,12 +1497,14 @@ export default function SalesForm({ onClose, onSubmit }) {
         const isStrictNumeric = strictNumericFields.includes(name);
         const isNameField = nameFields.includes(name);
         const isCurrencyField = currencyFields.includes(name);
+        const documentType = isDocField ? getDocumentTypeForField(name) : "";
+        const isPassportDocument = documentType === "PASAPORTE" || documentType === "PAS";
 
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
 
         let inputType = type;
-        if (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
+        if ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
             if (type !== 'date' && type !== 'email') {
                 inputType = "tel";
             }
@@ -1489,8 +1513,8 @@ export default function SalesForm({ onClose, onSubmit }) {
             inputType = "email";
         }
 
-        const inputMode = (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "numeric" : undefined;
-        const pattern = (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "[0-9]*" : undefined;
+        const inputMode = ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "numeric" : undefined;
+        const pattern = ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "[0-9]*" : undefined;
 
         let fieldPlaceholder = placeholder;
         if (isDocField) {

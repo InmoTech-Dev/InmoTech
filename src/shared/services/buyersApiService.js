@@ -162,7 +162,7 @@ export const buyersApiService = {
     try {
       const params = {
         tipo_documento: normalizeTipo(tipoDocumento),
-        numero_documento: normalizeDoc(numeroDocumento),
+        numero_documento: normalizeDocByType(tipoDocumento, numeroDocumento),
       };
       const response = await apiClient.get('/sales/buyers', { params });
       const list = extractList(response);
@@ -171,12 +171,13 @@ export const buyersApiService = {
         return personaMatch || null;
       }
 
-      const targetDoc = normalizeDoc(numeroDocumento);
+      const targetDoc = normalizeDocByType(tipoDocumento, numeroDocumento);
       const targetTipo = normalizeTipo(tipoDocumento);
 
       const exactMatch = list.find((item) => {
         const doc =
-          normalizeDoc(
+          normalizeDocByType(
+            item?.tipo_documento || item?.tipoDocumento || item?.persona?.tipo_documento,
             item?.numero_documento ||
             item?.documento ||
             item?.persona?.numero_documento

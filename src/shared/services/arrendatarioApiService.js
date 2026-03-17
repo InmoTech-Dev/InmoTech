@@ -203,11 +203,14 @@ const mapTipoToBackend = (value = '') => {
 };
 
 const pickExactMatch = (list = [], tipoDocumento, numeroDocumento) => {
-  const targetDoc = normalizeDoc(numeroDocumento);
+  const targetDoc = normalizeDocByType(tipoDocumento, numeroDocumento);
   const targetTipo = mapTipoToBackend(tipoDocumento);
 
   return list.find((item) => {
-    const docItem = normalizeDoc(
+    const docItem = normalizeDocByType(
+      item?.tipo_documento ||
+      item?.tipoDocumento ||
+      item?.persona?.tipo_documento,
       item?.numero_documento ||
       item?.documento ||
       item?.persona?.numero_documento

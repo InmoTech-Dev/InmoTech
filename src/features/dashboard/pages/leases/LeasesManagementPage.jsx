@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaPhone, FaEnvelope } from "react-icons/fa";
@@ -440,11 +440,7 @@ export function LeasesManagementPage() {
         const requestId = ++fetchRequestIdRef.current;
         try {
             setIsLoading(true);
-            const tenantParams = { page, limit: PAGE_SIZE };
-            if (query) {
-              tenantParams.search = query;
-            }
-            if (estadoFilter !== "todos") tenantParams.estado = estadoFilter;
+            const tenantParams = { page: 1, limit: 200 };
             const tenantsResult = await renantsApiService.getAll(tenantParams);
             const apiTenants = tenantsResult?.data || [];
             const baseTenants = apiTenants;
@@ -581,19 +577,65 @@ export function LeasesManagementPage() {
               };
             }
 
-            setArrendatarios(sortTenantsByStatus(tenants));
-            setPagination(tenantsResult?.pagination || {
-              total: tenants.length,
-              pagina: page,
-              limite: PAGE_SIZE,
-              paginas_totales: 1,
-              has_next_page: false,
-              has_prev_page: page > 1,
+            const normalizedQuery = String(query || "").trim().toLowerCase();
+            const filteredTenants = tenants.filter((tenant) => {
+              const fullName = [
+                tenant.primerNombre,
+                tenant.segundoNombre,
+                tenant.primerApellido,
+                tenant.segundoApellido,
+              ]
+                .filter(Boolean)
+                .join(" ");
+
+              const matchesSearch =
+                !normalizedQuery ||
+                [
+                  fullName,
+                  tenant.nombreCompleto,
+                  tenant.documento,
+                  tenant.correo,
+                  tenant.telefono,
+                  tenant.registroInmobiliario,
+                  tenant.nombreInmueble,
+                  tenant.direccion,
+                  tenant.ciudad,
+                  tenant.departamento,
+                ]
+                  .filter(Boolean)
+                  .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+
+              const matchesEstado =
+                estadoFilter === "todos" ||
+                normalizeEstado(tenant.estado) === normalizeEstado(estadoFilter);
+
+              return matchesSearch && matchesEstado;
             });
-            setCurrentPage(tenantsResult?.pagination?.pagina || page);
+
+            const sortedTenants = sortTenantsByStatus(filteredTenants);
+            const totalPages = Math.max(Math.ceil(sortedTenants.length / PAGE_SIZE), 1);
+            const resolvedPage = Math.min(Math.max(page, 1), totalPages);
+
+            setArrendatarios(sortedTenants);
+            setPagination({
+              total: sortedTenants.length,
+              pagina: resolvedPage,
+              limite: PAGE_SIZE,
+              paginas_totales: totalPages,
+              has_next_page: resolvedPage < totalPages,
+              has_prev_page: resolvedPage > 1,
+            });
+            setCurrentPage(resolvedPage);
             return {
-              tenants,
-              pagination: tenantsResult?.pagination || null,
+              tenants: sortedTenants,
+              pagination: {
+                total: sortedTenants.length,
+                pagina: resolvedPage,
+                limite: PAGE_SIZE,
+                paginas_totales: totalPages,
+                has_next_page: resolvedPage < totalPages,
+                has_prev_page: resolvedPage > 1,
+              },
             };
     } catch (error) {
       if (requestId !== fetchRequestIdRef.current) {
@@ -614,6 +656,11 @@ export function LeasesManagementPage() {
       setIsLoading(false);
     }
   };
+
+  const paginatedArrendatarios = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return arrendatarios.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [arrendatarios, currentPage]);
 
   useEffect(() => {
     fetchTenants();
@@ -969,7 +1016,7 @@ const renderDeleteModal = () => {
                       </td>
                     </tr>
                   ) : (
-                    arrendatarios.map((tenant) => {
+                    paginatedArrendatarios.map((tenant) => {
                       const estadoNormalized = normalizeEstado(tenant.estado);
                       const estadoLabel = tenant.estado || "Pendiente";
                       const isEditBlocked = hasAssociatedLease(tenant);
@@ -1121,27 +1168,12 @@ const renderDeleteModal = () => {
           </div>
           <Pagination
             currentPage={currentPage}
-            totalPages={
-              (Boolean(pagination?.has_next_page) ||
-                ((pagination?.paginas_totales || 1) <= currentPage && arrendatarios.length === PAGE_SIZE))
-                ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                : Math.max(pagination?.paginas_totales || 1, currentPage)
-            }
-            hasPrevPage={currentPage > 1}
-            hasNextPage={
-              Boolean(pagination?.has_next_page) ||
-              ((pagination?.paginas_totales || 1) <= currentPage && arrendatarios.length === PAGE_SIZE)
-            }
+            totalPages={Math.max(pagination?.paginas_totales || 1, 1)}
+            hasPrevPage={Boolean(pagination?.has_prev_page)}
+            hasNextPage={Boolean(pagination?.has_next_page)}
             onPageChange={(page) => {
-              const hasNextPage =
-                Boolean(pagination?.has_next_page) ||
-                ((pagination?.paginas_totales || 1) <= currentPage && arrendatarios.length === PAGE_SIZE);
-              const totalPages = hasNextPage
-                ? Math.max(pagination?.paginas_totales || 1, currentPage + 1)
-                : Math.max(pagination?.paginas_totales || 1, currentPage);
-              if (page === currentPage || page < 1 || (page > totalPages && !hasNextPage)) return;
+              if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
               setCurrentPage(page);
-              fetchTenants(searchTerm.trim(), page);
             }}
           />
         </motion.div>

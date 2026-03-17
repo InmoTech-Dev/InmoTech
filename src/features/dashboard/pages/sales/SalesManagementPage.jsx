@@ -1372,28 +1372,62 @@ export function SalesManagementPage() {
     try {
 
       const response = await ventaApiService.obtenerVentas({
-        page,
-        limit: PAGE_SIZE,
-        search: query || undefined,
-        estado: estadoFilter !== "todos" ? estadoFilter : undefined,
-        tipo_compra: tipoCompraFilter !== "todos" ? tipoCompraFilter : undefined,
+        page: 1,
+        limit: 200,
       });
 
       const payload = Array.isArray(response?.data) ? response.data : [];
+      const normalizedSales = payload.map((venta) => normalizeSaleRecord(venta));
+      const normalizedQuery = String(query || "").trim().toLowerCase();
+      const filteredSales = normalizedSales.filter((venta) => {
+        const matchesSearch =
+          !normalizedQuery ||
+          [
+            venta.registro,
+            venta.tipo,
+            venta.comprador,
+            venta.compradorNombreCompleto,
+            venta.compradorDocumento,
+            venta.compradorCorreo,
+            venta.inmuebleNombre,
+            venta.inmuebleDireccion,
+            venta.inmuebleCiudad,
+            venta.vendedorNombreCompleto,
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+
+        const matchesEstado =
+          estadoFilter === "todos" ||
+          STATUS_NORMALIZE(venta.estado) === STATUS_NORMALIZE(estadoFilter) ||
+          STATUS_NORMALIZE(venta.estadoSeguimiento) === STATUS_NORMALIZE(estadoFilter);
+
+        const purchaseType =
+          venta.raw?.tipo_compra ||
+          venta.tipoCompra ||
+          mapPaymentToPurchaseType(venta.medioPago || "");
+        const matchesTipoCompra =
+          tipoCompraFilter === "todos" ||
+          STATUS_NORMALIZE(purchaseType) === STATUS_NORMALIZE(tipoCompraFilter);
+
+        return matchesSearch && matchesEstado && matchesTipoCompra;
+      });
+      const totalPages = Math.max(Math.ceil(filteredSales.length / PAGE_SIZE), 1);
+      const resolvedPage = Math.min(Math.max(page, 1), totalPages);
 
 
 
       if (Array.isArray(payload)) {
-        setVentas(payload.map((venta) => normalizeSaleRecord(venta)));
-        setPagination(response?.pagination || {
-          total: payload.length,
-          pagina: page,
+        setVentas(filteredSales);
+        setPagination({
+          total: filteredSales.length,
+          pagina: resolvedPage,
           limite: PAGE_SIZE,
-          paginas_totales: 1,
-          has_next_page: false,
-          has_prev_page: page > 1,
+          paginas_totales: totalPages,
+          has_next_page: resolvedPage < totalPages,
+          has_prev_page: resolvedPage > 1,
         });
-        setCurrentPage(response?.pagination?.pagina || page);
+        setCurrentPage(resolvedPage);
 
       }
 
@@ -1420,6 +1454,11 @@ export function SalesManagementPage() {
     }
 
   }, [estadoFilter, tipoCompraFilter]);
+
+  const paginatedVentas = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return ventas.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [ventas, currentPage]);
 
 
 
@@ -2431,7 +2470,7 @@ export function SalesManagementPage() {
 
                   ) : ventas.length > 0 ? (
 
-                    ventas.map((v) => (
+                    paginatedVentas.map((v) => (
 
                       <tr
 
@@ -2560,7 +2599,6 @@ export function SalesManagementPage() {
                 onPageChange={(page) => {
                   if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
                   setCurrentPage(page);
-                  fetchVentas(searchTerm.trim(), page);
                 }}
               />
 

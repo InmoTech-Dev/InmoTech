@@ -511,11 +511,10 @@ class CitaService {
             where: {
               id_inmueble: cita.id_inmueble,
               fecha_cita: normalizarFechaCita(cita.fecha_cita),
-              hora_inicio: normalizarHoraExacta(cita.hora_inicio),
+              hora_inicio: horaInicioComparable,
               id_estado_cita: 1, // Solicitada
-              id_cita: { [Op.ne]: idCita }
+              id_cita: { [Op.ne]: id }
             },
-            transaction: t
           }
         );
       }
@@ -1451,7 +1450,7 @@ class CitaService {
         const citaFinal = await this.obtenerCitaPorId(idCita, t);
 
         // Bloqueo Inteligente: Si el nuevo estado es 'Reagendada' (4), cancelar otras solicitudes en el mismo slot
-        if (dataUpdate.id_estado_cita === 4 && citaFinal.id_inmueble && citaFinal.id_servicio === 1) {
+        if (estadoFinal === 4 && citaFinal.id_inmueble && citaFinal.id_servicio === 1) {
           await Cita.update(
             {
               id_estado_cita: 6, // Cancelada

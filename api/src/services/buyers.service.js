@@ -507,8 +507,48 @@ class BuyerService {
         throw new Error('Comprador no encontrado');
       }
 
-      const salesCount = await Sale.count({ where: { id_comprador: id }, transaction });
-      if (salesCount > 0) {
+      const activeSalesCount = await Sale.count({
+        where: {
+          id_comprador: id,
+          [Op.and]: [
+            {
+              [Op.or]: [
+                { id_estado_venta: null },
+                { id_estado_venta: { [Op.ne]: 4 } }
+              ]
+            },
+            {
+              [Op.or]: [
+                { estado: { [Op.is]: null } },
+                { estado: { [Op.notIn]: ['Cancelado', 'Cancelada', 'cancelado', 'cancelada'] } }
+              ]
+            },
+            {
+              [Op.or]: [
+                { estado_seguimiento: { [Op.is]: null } },
+                { estado_seguimiento: { [Op.notIn]: ['Cancelado', 'Cancelada', 'cancelado', 'cancelada'] } }
+              ]
+            }
+          ]
+        },
+        transaction
+      });
+
+      const normalized = (value) => String(value ?? '').trim();
+      const incomingBuyerPayload = this.buildBuyerPayload(updateData, persona.buyer);
+      const isStatusOnlyChange =
+        normalized(updateData.nombre_completo) === normalized(persona.nombre_completo) &&
+        normalized(updateData.apellido_completo) === normalized(persona.apellido_completo) &&
+        normalized(updateData.correo) === normalized(persona.correo) &&
+        normalized(updateData.telefono) === normalized(persona.telefono) &&
+        normalized(incomingBuyerPayload.registro_comprador) === normalized(persona.buyer.registro_comprador) &&
+        normalized(incomingBuyerPayload.fecha_registro_comprador) === normalized(persona.buyer.fecha_registro_comprador) &&
+        normalized(incomingBuyerPayload.tipo_comprador) === normalized(persona.buyer.tipo_comprador) &&
+        normalized(incomingBuyerPayload.ciudad_residencia) === normalized(persona.buyer.ciudad_residencia) &&
+        normalized(incomingBuyerPayload.direccion_anterior) === normalized(persona.buyer.direccion_anterior) &&
+        normalized(incomingBuyerPayload.observaciones) === normalized(persona.buyer.observaciones);
+
+      if (activeSalesCount > 0 && !isStatusOnlyChange) {
         const err = new Error(
           'No puedes editar un comprador con ventas asociadas. Anula o elimina la venta antes de editar.'
         );
@@ -526,7 +566,7 @@ class BuyerService {
         { transaction }
       );
 
-      const buyerPayload = this.buildBuyerPayload(updateData, persona.buyer);
+      const buyerPayload = incomingBuyerPayload;
       await persona.buyer.update(buyerPayload, { transaction });
 
       await transaction.commit();

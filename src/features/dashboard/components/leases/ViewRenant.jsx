@@ -1,6 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { FaTimes, FaImage } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
+import { API_CONFIG } from "../../../../shared/services/api.config";
 
 function Field({ label, value, className = "" }) {
   const v = value ?? "";

@@ -23,7 +23,7 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
         segundoApellido: buyer.segundoApellido || "",
         correo: buyer.correo || buyer.persona?.correo || "",
         telefono: buyer.telefono || buyer.persona?.telefono || "",
-        estado: buyer.estado || buyer.compra?.estado || "Activo",
+        estado: buyer.estado || buyer.estado_comprador || "Activo",
         fechaCompra: buyer.fechaCompra || buyer.compra?.fecha_compra || "",
         valorCompra: buyer.valorCompra || buyer.compra?.valor_compra || "",
         tipoCompra: buyer.tipoCompra || buyer.compra?.tipo_compra || "",
@@ -70,17 +70,6 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
     return info;
 };
 
-const hasAssociatedSale = (buyer = {}) =>
-    Boolean(
-        buyer.compra ||
-        buyer.ultimaVenta ||
-        buyer.ultima_venta ||
-        buyer.fechaCompra ||
-        buyer.valorCompra ||
-        buyer.inmueble ||
-        (Array.isArray(buyer.inmueblesComprados) && buyer.inmueblesComprados.length > 0)
-    );
-
 const filterRealBuyers = (list = []) => {
     if (!Array.isArray(list)) return [];
     return list.filter((buyer) => {
@@ -98,6 +87,57 @@ const filterRealBuyers = (list = []) => {
 };
 
 const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
+
+const getBuyerSaleRecord = (buyer = {}) =>
+    buyer.compra ||
+    buyer.ultimaVenta ||
+    buyer.ultima_venta ||
+    buyer.raw?.compra ||
+    buyer.raw?.ultimaVenta ||
+    buyer.raw?.ultima_venta ||
+    null;
+
+const getBuyerSaleStatus = (buyer = {}) => {
+    const sale = getBuyerSaleRecord(buyer);
+    return (
+        sale?.estado_venta ||
+        sale?.estadoVenta ||
+        sale?.estado ||
+        sale?.estadoSeguimiento ||
+        sale?.estado_seguimiento ||
+        buyer.estado_venta ||
+        buyer.raw?.estado_venta ||
+        null
+    );
+};
+
+const isCancelledSale = (buyer = {}) =>
+    getBuyerSaleStatus(buyer)?.toString().trim().toLowerCase().includes("cancel") || false;
+
+const getBuyerAssociationState = (buyer = {}) => {
+    const sale = getBuyerSaleRecord(buyer);
+    const cancelled = isCancelledSale(buyer);
+    const inmuebleActivo = cancelled
+        ? null
+        : (
+            buyer.inmueble ||
+            sale?.inmueble ||
+            buyer.raw?.inmueble ||
+            null
+        );
+    const hasHistory =
+        Boolean(sale || buyer.fechaCompra || buyer.valorCompra) ||
+        (Array.isArray(buyer.inmueblesComprados) && buyer.inmueblesComprados.length > 0);
+
+    return {
+        cancelled,
+        sale,
+        inmuebleActivo,
+        hasAssociatedSale: !cancelled && Boolean(hasHistory || inmuebleActivo),
+    };
+};
+
+const getBuyerDisplayEstado = (buyer = {}) => buyer.estado || "Activo";
 
 export function BuyersManagementPage() {
     const PAGE_SIZE = 5;
@@ -220,7 +260,7 @@ export function BuyersManagementPage() {
     };
     
     const handleEditClick = (buyer) => {
-        if (hasAssociatedSale(buyer)) {
+        if (getBuyerAssociationState(buyer).hasAssociatedSale) {
             toast({
                 title: "Edición bloqueada",
                 description: "No puedes editar un comprador con una venta asociada.",
@@ -329,6 +369,18 @@ export function BuyersManagementPage() {
 
         const currentEstado = normalizeEstado(buyer.estado || "Activo");
         const nextEstado = estadoOpcion || (currentEstado === "activo" ? "Inactivo" : "Activo");
+        const { hasAssociatedSale } = getBuyerAssociationState(buyer);
+
+        if (normalizeEstado(nextEstado) === "inactivo" && hasAssociatedSale) {
+            toast({
+                title: "Cambio de estado bloqueado",
+                description: "No puedes inactivar un comprador con una venta o inmueble activo asociado.",
+                variant: "destructive",
+            });
+            setStatusMenuId(null);
+            setStatusMenuPosition(null);
+            return;
+        }
 
         try {
             setStatusChangingId(targetId);
@@ -551,9 +603,9 @@ export function BuyersManagementPage() {
                                     ) : compradores.length > 0 ? (
                                         compradores.map((c) => {
                                             const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
-                                            const estado = c.estado || 'Activo';
+                                            const { inmuebleActivo, hasAssociatedSale: isEditBlocked } = getBuyerAssociationState(c);
+                                            const estado = getBuyerDisplayEstado(c);
                                             const estadoNormalized = normalizeEstado(estado);
-                                            const isEditBlocked = hasAssociatedSale(c);
                                             return (
                                             <tr
                                                 key={c.id}
@@ -576,10 +628,10 @@ export function BuyersManagementPage() {
                                                     <div className="flex flex-col items-center gap-1">
                                                         <Home className="w-4 h-4 text-slate-400" />
                                                         <span className="text-xs text-slate-500">
-                                                            {c.inmueble
-                                                                ? (c.inmueble.titulo ||
-                                                                    c.inmueble.registro_inmobiliario ||
-                                                                    c.inmueble.direccion ||
+                                                            {inmuebleActivo
+                                                                ? (inmuebleActivo.titulo ||
+                                                                    inmuebleActivo.registro_inmobiliario ||
+                                                                    inmuebleActivo.direccion ||
                                                                     'Inmueble asignado')
                                                                 : 'Sin inmuebles asignados'}
                                                         </span>

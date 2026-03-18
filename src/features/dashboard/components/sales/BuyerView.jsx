@@ -110,6 +110,18 @@ export default function BuyerView({ buyer, onClose }) {
     buyer?.medio_pago_descripcion ||
     null;
 
+  const medioPagoDescripcion =
+    operacion?.medio_pago_descripcion ||
+    operacion?.medioPagoDescripcion ||
+    operacion?.descripcion_pago ||
+    rawVenta?.medio_pago_descripcion ||
+    rawVenta?.medioPagoDescripcion ||
+    rawVenta?.descripcion_pago ||
+    buyer?.medioPagoDescripcion ||
+    buyer?.medio_pago_descripcion ||
+    buyer?.descripcion_pago ||
+    null;
+
   const estadoVenta =
     operacion?.estado || operacion?.estado_venta || buyer?.estado_venta || buyer?.estado || null;
 
@@ -235,7 +247,7 @@ export default function BuyerView({ buyer, onClose }) {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                         <Field label="Fecha" value={formatDateCompact(fechaCompra)} />
                         <Field label="Valor" value={formatMoneyCOP(valorCompra)} />
-                        <Field label="Medio de pago" value={medioPago || "-"} className="col-span-2" />
+                        <Field label="Medio de pago" value={medioPagoDisplay} className="col-span-2" />
                       </div>
 
                       {(operacion?.observaciones || buyer?.observaciones) && (

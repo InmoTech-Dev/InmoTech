@@ -35,13 +35,6 @@ const RENANT_ATTRS = [
 ];
 
 class RenantService {
-  buildActiveLeaseWhere(extraWhere = {}) {
-    return {
-      ...extraWhere,
-      estado: { [Op.notIn]: ['Finalizado', 'Cancelado'] }
-    };
-  }
-
   getStatusSortWeight(value) {
     const normalized = this.normalizeSearchValue(value);
     const weights = {
@@ -166,10 +159,10 @@ class RenantService {
       estado: renant?.estado || (persona.estado ? 'Activo' : 'Inactivo'),
       contacto_emergencia: renant
         ? {
-          nombre: renant.contacto_emergencia_nombre,
-          telefono: renant.contacto_emergencia_telefono,
-          parentesco: renant.contacto_emergencia_parentesco
-        }
+            nombre: renant.contacto_emergencia_nombre,
+            telefono: renant.contacto_emergencia_telefono,
+            parentesco: renant.contacto_emergencia_parentesco
+          }
         : null,
       observaciones: renant?.observaciones || null,
       persona: {
@@ -335,7 +328,11 @@ class RenantService {
 
         // Marcar el inmueble como arrendado
         await inmueble.update(
-          { estado: 'Arrendado' },
+          {
+            estado: false,
+            estado_frontend: 'Arrendado',
+            destacado: false
+          },
           { transaction }
         );
       }
@@ -401,8 +398,7 @@ class RenantService {
     const leaseInclude = {
       association: 'arrendamientosLegacy',
       attributes: ['id_arrendamiento'],
-      required: associationFilter === 'con-inmueble',
-      where: this.buildActiveLeaseWhere()
+      required: associationFilter === 'con-inmueble'
     };
 
     const baseWhere = Object.keys(renantWhere).length ? { ...renantWhere } : {};
@@ -473,16 +469,8 @@ class RenantService {
       if (!renant) throw new Error('Arrendatario no encontrado');
 
       const [legacyArriendos, leaseRows] = await Promise.all([
-        Arriendo.count({
-          where: this.buildActiveLeaseWhere({ id_arrendatario: id }),
-          transaction
-        }),
-        Lease
-          ? Lease.count({
-              where: this.buildActiveLeaseWhere({ id_cliente: id }),
-              transaction
-            })
-          : Promise.resolve(0)
+        Arriendo.count({ where: { id_arrendatario: id }, transaction }),
+        Lease ? Lease.count({ where: { id_cliente: id }, transaction }) : Promise.resolve(0)
       ]);
       if (legacyArriendos + leaseRows > 0) {
         const err = new Error(

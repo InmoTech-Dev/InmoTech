@@ -10,39 +10,43 @@ const toBoolean = (value, defaultValue = false) => {
   return defaultValue;
 };
 
-const getVentaAdjuntosTableInfo = async () => {
-  const [rows] = await sequelize.query(`
-    SELECT TABLE_SCHEMA AS table_schema, TABLE_NAME AS table_name
-    FROM INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_NAME = 'VentaAdjuntos'
-  `);
-
-  return Array.isArray(rows) ? rows[0] || null : null;
-};
-
 const runVentaAdjuntosBackfill = async () => {
   const enabled = toBoolean(process.env.VENTA_ADJUNTOS_BACKFILL_ON_START, true);
   if (!enabled) {
     logger.info('[VENTA_ADJUNTOS_BACKFILL] disabled by VENTA_ADJUNTOS_BACKFILL_ON_START=false');
-    return { exists: false, skipped: true };
+    return { checked: false, changed: false, skipped: true };
   }
 
-  const tableInfo = await getVentaAdjuntosTableInfo();
-  if (!tableInfo) {
-    logger.warn('[VENTA_ADJUNTOS_BACKFILL] table VentaAdjuntos not found; skipping startup backfill');
-    return { exists: false, skipped: true };
+  const [result] = await sequelize.query(`
+    SELECT OBJECT_ID('dbo.VentaAdjuntos', 'U') AS table_id
+  `);
+
+  const exists = !!result?.[0]?.table_id;
+  if (exists) {
+    logger.info('[VENTA_ADJUNTOS_BACKFILL] table VentaAdjuntos already exists');
+    return { checked: true, changed: false, skipped: false };
   }
 
-  logger.info(
-    `[VENTA_ADJUNTOS_BACKFILL] table detected at ${tableInfo.table_schema}.${tableInfo.table_name}`
-  );
+  await sequelize.query(`
+    CREATE TABLE VentaAdjuntos (
+      id_adjunto INT IDENTITY(1,1) PRIMARY KEY,
+      id_venta INT NOT NULL,
+      tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('comprobante','contrato')),
+      nombre_archivo VARCHAR(255) NOT NULL,
+      url VARCHAR(500) NOT NULL,
+      mime_type VARCHAR(100) NULL,
+      tamano_bytes BIGINT NULL,
+      fecha_creacion DATETIME2(3) NOT NULL DEFAULT GETDATE(),
+      CONSTRAINT FK_VentaAdjuntos_Venta FOREIGN KEY (id_venta) REFERENCES Ventas(id_venta) ON DELETE CASCADE
+    );
+  `);
 
-  return {
-    exists: true,
-    schema: tableInfo.table_schema,
-    table: tableInfo.table_name,
-    skipped: false
-  };
+  await sequelize.query(`
+    CREATE NONCLUSTERED INDEX IX_VentaAdjuntos_Venta ON VentaAdjuntos(id_venta, tipo);
+  `);
+
+  logger.info('[VENTA_ADJUNTOS_BACKFILL] table VentaAdjuntos created');
+  return { checked: true, changed: true, skipped: false };
 };
 
 module.exports = {

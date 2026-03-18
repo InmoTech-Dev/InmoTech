@@ -1,9 +1,4 @@
 const Joi = require('joi');
-const {
-  calculateEndTime,
-  isBusinessDay,
-  isValidAppointmentStart,
-} = require('../constants/appointmentSchedule');
 
 // Función custom para validar que la fecha no sea anterior a HOY
 const isTodayOrFuture = (value, helpers) => {
@@ -15,47 +10,6 @@ const isTodayOrFuture = (value, helpers) => {
 
   if (citaDate < today) {
     return helpers.error('date.min');
-  }
-
-  return value;
-};
-
-const isBusinessDate = (value, helpers) => {
-  if (!isBusinessDay(value)) {
-    return helpers.error('date.businessDay');
-  }
-
-  return value;
-};
-
-const isValidStartTime = (value, helpers) => {
-  if (!isValidAppointmentStart(value)) {
-    return helpers.error('time.invalidStart');
-  }
-
-  return value;
-};
-
-const validateAppointmentSchedule = (value, helpers) => {
-  const fecha = value.fecha_cita;
-  const horaInicio = value.hora_inicio;
-  const horaFin = value.hora_fin;
-
-  if (!fecha || !horaInicio || !horaFin) {
-    return value;
-  }
-
-  if (!isBusinessDay(fecha)) {
-    return helpers.error('date.businessDay');
-  }
-
-  if (!isValidAppointmentStart(horaInicio)) {
-    return helpers.error('time.invalidStart', { value: horaInicio });
-  }
-
-  const expectedEnd = calculateEndTime(horaInicio);
-  if (!expectedEnd || horaFin !== expectedEnd) {
-    return helpers.error('time.invalidRange', { expectedEnd });
   }
 
   return value;
@@ -150,18 +104,15 @@ const crearCitaSchema = Joi.object({
   fecha_cita: Joi.string()
     .pattern(/^\d{4}-\d{2}-\d{2}$/)
     .custom(isTodayOrFuture)
-    .custom(isBusinessDate)
     .required()
     .messages({
       'string.pattern.base': 'El formato de fecha debe ser YYYY-MM-DD',
       'date.min': 'La fecha de la cita no puede ser anterior a hoy',
-      'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes',
       'any.required': 'La fecha de la cita es obligatoria'
     }),
 
   hora_inicio: Joi.string()
     .pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .custom(isValidStartTime)
     .required(),
 
   hora_fin: Joi.string()
@@ -178,13 +129,7 @@ const crearCitaSchema = Joi.object({
     .valid(1, 2, 3, 4, 5, 6)
     .optional()
     .default(1)
-})
-  .custom(validateAppointmentSchedule)
-  .messages({
-    'time.invalidStart': 'Las citas solo permiten intervalos de 30 minutos dentro del horario laboral',
-    'time.invalidRange': 'La hora de fin debe ser exactamente 30 minutos después de la hora de inicio',
-    'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes'
-  });
+});
 
 const actualizarCitaSchema = Joi.object({
   id_estado_cita: Joi.number()
@@ -195,12 +140,10 @@ const actualizarCitaSchema = Joi.object({
   fecha_cita: Joi.string()
     .pattern(/^\d{4}-\d{2}-\d{2}$/)
     .custom(isTodayOrFuture)
-    .custom(isBusinessDate)
     .optional(),
 
   hora_inicio: Joi.string()
     .pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .custom(isValidStartTime)
     .optional(),
 
   hora_fin: Joi.string()
@@ -224,13 +167,7 @@ const actualizarCitaSchema = Joi.object({
     .optional()
 })
   .min(1)
-  .unknown(true)
-  .custom(validateAppointmentSchedule)
-  .messages({
-    'time.invalidStart': 'Las citas solo permiten intervalos de 30 minutos dentro del horario laboral',
-    'time.invalidRange': 'La hora de fin debe ser exactamente 30 minutos después de la hora de inicio',
-    'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes'
-  });
+  .unknown(true);
 
 const confirmarCitaSchema = Joi.object({
   id_agente_asignado: Joi.number()
@@ -263,17 +200,14 @@ const reagendarCitaSchema = Joi.object({
 
       return value;
     })
-    .custom(isBusinessDate)
     .required()
     .messages({
       'date.min': 'La fecha de la cita no puede ser anterior a hoy',
-      'string.pattern.base': 'El formato de fecha debe ser YYYY-MM-DD',
-      'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes'
+      'string.pattern.base': 'El formato de fecha debe ser YYYY-MM-DD'
     }),
 
   hora_inicio: Joi.string()
     .pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .custom(isValidStartTime)
     .required(),
 
   hora_fin: Joi.string()
@@ -305,13 +239,7 @@ const reagendarCitaSchema = Joi.object({
     .max(1000)
     .allow('', null)
     .optional()
-})
-  .custom(validateAppointmentSchedule)
-  .messages({
-    'time.invalidStart': 'Las citas solo permiten intervalos de 30 minutos dentro del horario laboral',
-    'time.invalidRange': 'La hora de fin debe ser exactamente 30 minutos después de la hora de inicio',
-    'date.businessDay': 'Las citas solo se pueden agendar de lunes a viernes'
-  });
+});
 
 const buscarPersonaSchema = Joi.object({
   tipo_documento: Joi.string()

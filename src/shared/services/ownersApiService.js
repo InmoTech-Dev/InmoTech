@@ -25,6 +25,12 @@ const normalizePagination = (pagination = {}, fallbackPage = 1, fallbackLimit = 
 
 const extractData = (response) => response?.data?.data || response?.data || response;
 
+const buildConflictError = (message) => {
+  const error = new Error(message);
+  error.status = 409;
+  return error;
+};
+
 export const normalizeOwnerResponse = (record = {}) => {
   const nombres = cleanText(record.nombre_completo ?? record.nombres, cleanText(record.primer_nombre, ''));
   const apellidos = cleanText(record.apellido_completo ?? record.apellidos, cleanText(record.primer_apellido, ''));
@@ -189,8 +195,27 @@ class OwnersApiService {
   }
 
   async createOwner(data) {
-    const response = await apiClient.post('/personas', mapCreatePayload(data));
-    return normalizeOwnerResponse(extractData(response));
+    const payload = mapCreatePayload(data);
+
+    try {
+      const response = await apiClient.post('/personas', payload);
+      return normalizeOwnerResponse(extractData(response));
+    } catch (error) {
+      if (error?.status === 409) {
+        if (error?.message) {
+          throw buildConflictError(error.message);
+        }
+        const rawMessage = (error?.message || '').toLowerCase();
+        if (rawMessage.includes('correo')) {
+          throw buildConflictError('Ya existe una persona registrada con ese correo electrónico.');
+        }
+        if (rawMessage.includes('documento')) {
+          throw buildConflictError('Ya existe una persona registrada con ese tipo y número de documento.');
+        }
+        throw buildConflictError('El propietario ya existe. Verifica correo y documento.');
+      }
+      throw error;
+    }
   }
 
   async updateOwner(id, data) {

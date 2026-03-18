@@ -12,9 +12,8 @@ const normalizeCatalogItem = (item = {}) => {
   ].filter(Boolean);
 
   return {
-    ...normalized, // Ensure imagen, imagenes, titulo, etc. are at the top level
     id: normalized.id,
-    registro: normalized.registro || normalized.registro_inmobiliario,
+    registro: normalized.registro,
     label: labelParts.join(' '),
     raw: normalized,
   };

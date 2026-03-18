@@ -75,6 +75,11 @@ const Inmueble = sequelize.define('Inmuebles', {
     allowNull: false,
     defaultValue: 'Disponible'
   },
+  destacado: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
   fecha_registro: {
     type: DataTypes.DATE,
     allowNull: false,

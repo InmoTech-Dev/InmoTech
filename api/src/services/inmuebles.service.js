@@ -11,10 +11,9 @@ const {
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
-const {
-  buildDailySlots,
-  isBusinessDay,
-} = require('../constants/appointmentSchedule');
+
+const MAX_DESTACADOS = 6;
+const CATEGORIES_WITH_REQUIRED_AMENITIES = new Set(['casa', 'apartamento']);
 
 const VALID_ORDER_COLUMNS = [
   'id_inmueble',
@@ -24,44 +23,6 @@ const VALID_ORDER_COLUMNS = [
   'precio_venta',
   'precio_arriendo'
 ];
-
-const MAX_DESTACADOS = 6;
-const CATEGORIES_WITH_REQUIRED_AMENITIES = new Set(['casa', 'apartamento']);
-
-const parseBooleanFilter = (value) => {
-  if (value === undefined || value === null || value === '') return undefined;
-  if (typeof value === 'boolean') return value;
-
-  const normalized = String(value).trim().toLowerCase();
-  if (['true', '1', 'si', 'activo', 'disponible'].includes(normalized)) return true;
-  if (['false', '0', 'no', 'inactivo', 'no disponible'].includes(normalized)) return false;
-
-  return undefined;
-};
-
-const normalizeCategory = (value) =>
-  String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-const validateRequiredAmenitiesForCategory = ({ categoria, comodidades }) => {
-  const normalizedCategory = normalizeCategory(categoria);
-  if (!CATEGORIES_WITH_REQUIRED_AMENITIES.has(normalizedCategory)) {
-    return;
-  }
-
-  const selectedAmenities = normalizeAmenityPayload(comodidades).filter(
-    (amenidad) => amenidad?.seleccionada !== false
-  );
-
-  if (selectedAmenities.length < 2) {
-    const error = new Error('Casa y Apartamento requieren minimo 2 comodidades seleccionadas.');
-    error.status = 400;
-    throw error;
-  }
-};
 
 const buildEstadoCondition = (valor, column = 'Inmuebles.estado') => {
   if (valor === undefined || valor === null) {
@@ -128,6 +89,44 @@ const normalizeAmenityPayload = (comodidades = []) =>
         })
         .filter((item) => item && item.nombre.length > 0)
     : [];
+
+const normalizeCategory = (value = '') =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const countSelectedAmenities = (comodidades = []) =>
+  normalizeAmenityPayload(comodidades).filter((item) => item.seleccionada !== false).length;
+
+const validateRequiredAmenitiesForCategory = ({ categoria, comodidades }) => {
+  const normalizedCategory = normalizeCategory(categoria);
+  if (!CATEGORIES_WITH_REQUIRED_AMENITIES.has(normalizedCategory)) return;
+
+  const selectedCount = countSelectedAmenities(comodidades);
+  if (selectedCount < 2) {
+    const error = new Error('Casa y Apartamento requieren minimo 2 comodidades seleccionadas.');
+    error.status = 400;
+    throw error;
+  }
+};
+
+const parseBooleanFilter = (valor) => {
+  if (valor === undefined || valor === null || valor === '') {
+    return undefined;
+  }
+
+  if (typeof valor === 'boolean') {
+    return valor;
+  }
+
+  const normalized = String(valor).trim().toLowerCase();
+  if (['true', '1', 'si', 'sí'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no'].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+};
 
 const mapComodidadesFromInstance = (comodidades = []) =>
   comodidades.map((comodidad) => ({
@@ -590,6 +589,21 @@ class InmueblesService {
         whereClause[Op.and].push(estadoCondition);
       }
 
+      const estadoFrontendCondition = buildEstadoFrontendCondition(estado_frontend, 'Inmuebles.estado_frontend');
+      if (estadoFrontendCondition) {
+        whereClause[Op.and] = whereClause[Op.and] || [];
+        whereClause[Op.and].push(estadoFrontendCondition);
+      }
+
+      const estadoFrontendExclusionCondition = buildEstadoFrontendExclusionCondition(
+        excluir_estados_frontend,
+        'Inmuebles.estado_frontend'
+      );
+      if (estadoFrontendExclusionCondition) {
+        whereClause[Op.and] = whereClause[Op.and] || [];
+        whereClause[Op.and].push(estadoFrontendExclusionCondition);
+      }
+
       const categoriaFiltro = categoria || tipo;
 
       if (ciudad) whereClause.ciudad = { [Op.like]: `%${ciudad}%` };
@@ -652,8 +666,11 @@ class InmueblesService {
           {
             model: PropiedadInmueble,
             as: 'propietarios',
-            required: false,
-            where: { es_propietario_actual: true },
+            required: hasPropietarioFilter,
+            where: {
+              es_propietario_actual: true,
+              ...(hasPropietarioFilter ? { id_persona: propietarioIdFilter } : {})
+            },
             attributes: [
               'id_propiedad_inmueble',
               'fecha_inicio',
@@ -786,14 +803,6 @@ class InmueblesService {
    */
   async obtenerDisponibilidad(inmuebleId, fecha) {
     try {
-      if (!isBusinessDay(fecha)) {
-        return {
-          inmueble: null,
-          fecha,
-          horarios_disponibles: []
-        };
-      }
-
       // Verificar que el inmueble existe
       const inmueble = await this.obtenerPorId(inmuebleId);
 
@@ -814,22 +823,35 @@ class InmueblesService {
         ]
       });
 
-      const horariosDisponibles = buildDailySlots()
-        .map((slot) => ({
-          hora_inicio: `${slot.hora_inicio}:00`,
-          hora_fin: `${slot.hora_fin}:00`,
-        }))
-        .filter((slot) => {
-          const conflicto = citasDelDia.some((cita) => (
-            slot.hora_inicio < cita.hora_fin && slot.hora_fin > cita.hora_inicio
-          ));
+      // Horarios de trabajo (ejemplo: 8:00 - 18:00)
+      const horaInicio = 8;
+      const horaFin = 18;
+      const intervalo = 30; // minutos
 
-          return !conflicto;
-        })
-        .map((slot) => ({
-          ...slot,
-          disponible: true
-        }));
+      const horariosDisponibles = [];
+      let horaActual = horaInicio;
+
+      while (horaActual < horaFin) {
+        const horaInicioSlot = `${horaActual.toString().padStart(2, '0')}:00:00`;
+        const horaFinSlot = `${(horaActual + intervalo / 60).toString().padStart(2, '0')}:00:00`;
+
+        // Verificar si hay conflicto con citas existentes
+        const conflicto = citasDelDia.some(cita => {
+          const citaInicio = cita.hora_inicio;
+          const citaFin = cita.hora_fin;
+          return (horaInicioSlot < citaFin && horaFinSlot > citaInicio);
+        });
+
+        if (!conflicto) {
+          horariosDisponibles.push({
+            hora_inicio: horaInicioSlot,
+            hora_fin: horaFinSlot,
+            disponible: true
+          });
+        }
+
+        horaActual += intervalo / 60;
+      }
 
       return {
         inmueble: {
@@ -853,27 +875,33 @@ class InmueblesService {
    * @returns {Promise<Object>} Inmueble actualizado
    */
   async actualizarInmueble(inmuebleId, updateData) {
-    const result = await sequelize.transaction(async (t) => {
-      try {
-        const {
-          comodidades,
-          propietario,
-          propietario_id,
-          propietarioId,
-          imagenes,
-          ...payload
-        } = updateData;
-        const ownerId = resolveOwnerIdFromPayload({
-          propietario,
-          propietario_id,
-          propietarioId
-        });
-        const hasComodidadesInPayload = Object.prototype.hasOwnProperty.call(updateData, 'comodidades');
+    const maxAttempts = 3;
+    let attempt = 0;
 
-        const inmueble = await Inmueble.findOne({
-          where: { id_inmueble: inmuebleId },
-          transaction: t
-        });
+    while (attempt < maxAttempts) {
+      try {
+        const result = await sequelize.transaction(async (t) => {
+          const {
+            comodidades,
+            propietario,
+            propietario_id,
+            propietarioId,
+            desasignar_propietario,
+            imagenes,
+            ...payload
+          } = updateData;
+          const ownerId = resolveOwnerIdFromPayload({
+            propietario,
+            propietario_id,
+            propietarioId
+          });
+          const hasComodidadesInPayload = Object.prototype.hasOwnProperty.call(updateData, 'comodidades');
+          const hasImagenesInPayload = Object.prototype.hasOwnProperty.call(updateData, 'imagenes');
+
+          const inmueble = await Inmueble.findOne({
+            where: { id_inmueble: inmuebleId },
+            transaction: t
+          });
 
           if (!inmueble) {
             throw new Error('Inmueble no encontrado');
@@ -974,21 +1002,37 @@ class InmueblesService {
             });
           }
 
-        await inmueble.update(payload, { transaction: t });
-        await syncPropietario(inmuebleId, ownerId, t);
-        await syncComodidades(inmuebleId, comodidades, t);
-        await syncImagenes(inmuebleId, imagenes, t);
+          await inmueble.update(payload, { transaction: t });
+          if (ownerId) {
+            await syncPropietario(inmuebleId, ownerId, t);
+          } else if (desasignar_propietario === true) {
+            await clearPropietarioActual(inmuebleId, t);
+          }
+          if (hasComodidadesInPayload && Array.isArray(comodidades)) {
+            await syncComodidades(inmuebleId, comodidades, t);
+          }
+          if (hasImagenesInPayload && Array.isArray(imagenes)) {
+            await syncImagenes(inmuebleId, imagenes, t);
+          }
 
-        logger.info(`Inmueble actualizado: ${inmuebleId}`);
+          logger.info(`Inmueble actualizado: ${inmuebleId}`);
+          return await this.obtenerPorId(inmuebleId, t);
+        });
 
-        return await this.obtenerPorId(inmuebleId, t);
+        return result;
       } catch (error) {
-        logger.error('Error actualizando inmueble:', error);
-        throw error;
-      }
-    });
+        attempt += 1;
+        const rawMessage = String(error?.message || '').toLowerCase();
+        const isDeadlock = rawMessage.includes('deadlock');
 
-    return result;
+        if (!isDeadlock || attempt >= maxAttempts) {
+          logger.error('Error actualizando inmueble:', error);
+          throw error;
+        }
+
+        logger.warn(`Deadlock al actualizar inmueble ${inmuebleId}. Reintento ${attempt}/${maxAttempts}`);
+      }
+    }
   }
 
   /**

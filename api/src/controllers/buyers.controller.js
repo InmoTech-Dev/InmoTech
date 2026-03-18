@@ -1,16 +1,16 @@
 const buyerService = require('../services/buyers.service');
-const { normalizePagination } = require('../utils/pagination');
 const logger = require('../utils/logger');
+const { normalizePagination } = require('../utils/pagination');
 
 class BuyersController {
   async createBuyer(req, res, next) {
     try {
       const data = req.body;
       const newBuyer = await buyerService.createBuyer(data);
-      return res.status(201).json({
-        success: true,
+      return res.status(201).json({ 
+        success: true, 
         message: 'Comprador creado exitosamente',
-        data: newBuyer
+        data: newBuyer 
       });
     } catch (error) {
       const status =
@@ -34,6 +34,7 @@ class BuyersController {
         estado: req.query.estado,
         asociacion: req.query.asociacion,
         tipo_compra: req.query.tipo_compra,
+        tipo_comprador: req.query.tipo_comprador,
         id_inmueble: req.query.id_inmueble ? parseInt(req.query.id_inmueble, 10) : undefined,
         tipo_documento: req.query.tipo_documento,
         numero_documento: req.query.numero_documento,
@@ -53,6 +54,7 @@ class BuyersController {
         success: true,
         message: 'Compradores obtenidos exitosamente',
         data: result.data,
+        total: result.pagination.total,
         pagination: result.pagination
       });
     } catch (error) {

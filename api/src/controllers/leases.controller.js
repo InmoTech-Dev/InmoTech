@@ -1,6 +1,6 @@
 const leaseService = require('../services/leases.service');
-const { normalizePagination } = require('../utils/pagination');
 const logger = require('../utils/logger');
+const { normalizePagination } = require('../utils/pagination');
 
 class LeasesController {
   async createLease(req, res, next) {
@@ -26,6 +26,7 @@ class LeasesController {
         success: true,
         message: 'Arrendamientos obtenidos exitosamente',
         data: result.data,
+        total: result.pagination.total,
         pagination: result.pagination
       });
     } catch (error) {

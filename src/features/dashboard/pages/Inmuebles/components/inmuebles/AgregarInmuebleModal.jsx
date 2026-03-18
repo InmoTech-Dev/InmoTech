@@ -8,19 +8,36 @@ import { uploadToCloudinary } from '../../../../../../shared/services/cloudinary
 
 const PROPERTY_TYPES = ['Casa', 'Apartamento', 'Local', 'Oficina', 'Bodega', 'Lote', 'Finca', 'Otro'];
 const OPERATION_OPTIONS = ['Venta', 'Arriendo', 'Venta y Arriendo'];
+const MIN_AMENITIES_REQUIRED_TYPES = new Set(['Casa', 'Apartamento']);
+const LOTE_AMENITY_NAME = 'Servicios publicos';
+const DEFAULT_AMENITIES = ['Habitaciones', 'Baños', 'Parqueaderos', 'Balcon', 'Cuarto util', 'Cocina'];
 
 const AMENITIES_BY_TYPE = {
-  Casa: ['Habitaciones', 'Baños', 'Parqueaderos', 'Jardín', 'Patio cubierto'],
-  Apartamento: ['Habitaciones', 'Baños', 'Parqueaderos', 'Balcón', 'Depósito', 'Coworking'],
-  Local: ['Baños', 'Zona de carga', 'Depósito'],
-  Oficina: ['Baños', 'Salas de reunión', 'Parqueaderos', 'Recepción'],
-  Bodega: ['Área de carga', 'Oficinas internas'],
-  Lote: ['Área verde', 'Servicios públicos'],
+  Casa: DEFAULT_AMENITIES,
+  Apartamento: DEFAULT_AMENITIES,
+  Local: ['Baños', 'Zona de carga', 'Deposito'],
+  Oficina: ['Baños', 'Salas de reunion', 'Parqueaderos', 'Recepcion'],
+  Bodega: ['Area de carga', 'Oficinas internas'],
+  Lote: [LOTE_AMENITY_NAME],
   Finca: ['Habitaciones', 'Baños', 'Piscina', 'Casa mayordomo'],
-  Otro: ['Habitaciones', 'Baños']
+  Otro: DEFAULT_AMENITIES
 };
 
-const MIN_AMENITIES_REQUIRED_TYPES = new Set(['Casa', 'Apartamento']);
+const normalizeTextKey = (value = '') =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const normalizeAmenityLabel = (value = '') => {
+  const trimmed = String(value || '').trim();
+  const key = normalizeTextKey(trimmed);
+  if (key === 'banos') return 'Baños';
+  if (key === 'bano') return 'Baño';
+  return trimmed;
+};
+
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
@@ -41,13 +58,6 @@ const mapImageSources = (sources = []) =>
       remote: true,
       name: `Imagen ${index + 1}`
     }));
-
-const getSelectedAmenitiesSignature = (items = []) =>
-  (Array.isArray(items) ? items : [])
-    .filter((item) => item?.seleccionada)
-    .map((item) => `${String(item.nombre || '').trim().toLowerCase()}:${Number(item.cantidad) || 0}`)
-    .sort()
-    .join('|');
 
 const INITIAL_FORM = {
   registro: '',
@@ -76,17 +86,34 @@ const STEPS = [
 const buildAmenitiesForType = (type, current = []) => {
   const base = AMENITIES_BY_TYPE[type] || AMENITIES_BY_TYPE.Otro;
   const mapped = base.map((nombre, index) => {
-    const existing = current.find((item) => item.nombre === nombre);
-    return existing || {
+    const existing = current.find((item) => normalizeTextKey(item?.nombre) === normalizeTextKey(nombre));
+    return existing ? {
+      ...existing,
+      nombre: normalizeAmenityLabel(existing.nombre || nombre)
+    } : {
       id: `base-${type}-${index}`,
-      nombre,
+      nombre: normalizeAmenityLabel(nombre),
       cantidad: 1,
       seleccionada: false,
       custom: false
     };
   });
-  const customs = current.filter((item) => item.custom && !mapped.some((baseItem) => baseItem.nombre === item.nombre));
+  const customs = current
+    .filter((item) => item.custom && !mapped.some((baseItem) => normalizeTextKey(baseItem.nombre) === normalizeTextKey(item.nombre)))
+    .map((item) => ({ ...item, nombre: normalizeAmenityLabel(item.nombre) }));
   return [...mapped, ...customs];
+};
+
+const getSelectedAmenitiesSignature = (items = []) => {
+  const normalized = items
+    .filter((item) => item?.seleccionada)
+    .map((item) => ({
+      nombre: normalizeTextKey(item?.nombre),
+      cantidad: Number(item?.cantidad) > 0 ? Number(item.cantidad) : 1
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  return JSON.stringify(normalized);
 };
 
 const formatOwnerSummary = (owner) => {
@@ -108,6 +135,47 @@ const normalizeStatusLabel = (value) =>
     .trim();
 
 const isSoldStatus = (value) => normalizeStatusLabel(value) === 'vendido';
+
+const onlyDigits = (value = '') => String(value || '').replace(/\D/g, '');
+
+const formatThousandsWithDots = (value = '') => {
+  const digits = onlyDigits(value);
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+const parseCurrencyValue = (value = '') => {
+  const digits = onlyDigits(value);
+  return digits ? Number(digits) : null;
+};
+
+const extractApiErrorMessage = (error) => {
+  const fieldErrors = error?.data?.errors;
+  if (fieldErrors && typeof fieldErrors === 'object') {
+    const firstFieldMessage = Object.values(fieldErrors).find(
+      (message) => typeof message === 'string' && message.trim().length > 0
+    );
+    if (firstFieldMessage) return firstFieldMessage;
+  }
+
+  if (typeof error?.message === 'string' && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return 'No se pudo guardar el inmueble';
+};
+
+const SectionCard = ({ title, subtitle, children }) => (
+  <div className="rounded-2xl border border-white bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.05)] space-y-3">
+    {(title || subtitle) && (
+      <div>
+        {subtitle && <p className="text-xs font-semibold tracking-[0.2em] uppercase text-blue-500">{subtitle}</p>}
+        {title && <h3 className="text-base font-semibold text-slate-900">{title}</h3>}
+      </div>
+    )}
+    {children}
+  </div>
+);
 
 export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }) => {
   const [form, setForm] = useState(INITIAL_FORM);
@@ -181,6 +249,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     () => owners.filter((owner) => !blockedOwnersSet.has(String(owner.id))),
     [owners, blockedOwnersSet]
   );
+  const isLoteType = form.tipo === 'Lote';
+  const operationOptions = isLoteType ? ['Venta'] : OPERATION_OPTIONS;
   const amenitiesChangedInEdit = useMemo(() => {
     if (!inmuebleEditar) return false;
     const currentSignature = getSelectedAmenitiesSignature(amenities);
@@ -245,6 +315,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       setRegistroErrorMessage('Este registro ya existe');
       setOwnerModalOpen(false);
       setCustomAmenity({ nombre: '', cantidad: 1 });
+      setDescripcionCambioComodidades('');
       setErrors({});
       setActiveStep(0);
       return;
@@ -268,8 +339,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         pais: inmuebleEditar.pais || 'Colombia',
         tipo: inmuebleEditar.tipo || inmuebleEditar.categoria || 'Apartamento',
         operacion: inferredOperation,
-        precioVenta: inmuebleEditar.precio_venta || '',
-        precioArriendo: inmuebleEditar.precio_arriendo || '',
+        precioVenta: formatThousandsWithDots(inmuebleEditar.precio_venta || ''),
+        precioArriendo: formatThousandsWithDots(inmuebleEditar.precio_arriendo || ''),
         areaConstruida: inmuebleEditar.area_construida || '',
         descripcion: inmuebleEditar.descripcion || '',
         estado: inmuebleEditar.estado_bool ?? true
@@ -279,6 +350,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       if (inmuebleEditar.propietario?.id) {
         setSelectedOwnerId(inmuebleEditar.propietario.id);
       }
+      setDescripcionCambioComodidades('');
     } else {
       setForm(INITIAL_FORM);
       setAmenities(buildAmenitiesForType(INITIAL_FORM.tipo));
@@ -291,11 +363,56 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     setActiveStep(0);
   }, [inmuebleEditar, isOpen]);
 
+  useEffect(() => {
+    if (!isLoteType) return;
+
+    setForm((prev) => {
+      if (prev.operacion === 'Venta' && !prev.precioArriendo) return prev;
+      return {
+        ...prev,
+        operacion: 'Venta',
+        precioArriendo: ''
+      };
+    });
+
+    setAmenities((prev) => {
+      const existing = prev.find((item) => normalizeTextKey(item?.nombre) === normalizeTextKey(LOTE_AMENITY_NAME));
+      const normalizedAmenity = {
+        id: existing?.id || 'base-Lote-0',
+        nombre: LOTE_AMENITY_NAME,
+        cantidad: 1,
+        seleccionada: true,
+        custom: false
+      };
+
+      if (
+        prev.length === 1 &&
+        normalizeTextKey(prev[0]?.nombre) === normalizeTextKey(LOTE_AMENITY_NAME) &&
+        prev[0]?.seleccionada === true &&
+        Number(prev[0]?.cantidad) === 1 &&
+        prev[0]?.custom === false
+      ) {
+        return prev;
+      }
+
+      return [normalizedAmenity];
+    });
+  }, [isLoteType]);
+
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === 'precioVenta' || name === 'precioArriendo') {
+      setForm((prev) => ({ ...prev, [name]: formatThousandsWithDots(value) }));
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
     if (name === 'tipo') {
       setAmenities((prev) => buildAmenitiesForType(value, prev));
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated.comodidades;
+        return updated;
+      });
     }
   };
 
@@ -423,6 +540,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         amenity.id === amenityId ? { ...amenity, seleccionada: !amenity.seleccionada } : amenity
       )
     );
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated.comodidades;
+      return updated;
+    });
   };
 
   const handleAmenityQuantity = (amenityId, quantity) => {
@@ -431,21 +553,32 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         amenity.id === amenityId ? { ...amenity, cantidad: Number(quantity) || 0 } : amenity
       )
     );
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated.comodidades;
+      return updated;
+    });
   };
 
   const handleAddCustomAmenity = () => {
+    if (isLoteType) return;
     if (!customAmenity.nombre.trim()) return;
     setAmenities((prev) => [
       ...prev,
       {
         id: `custom-${Date.now()}`,
-        nombre: customAmenity.nombre.trim(),
+        nombre: normalizeAmenityLabel(customAmenity.nombre),
         cantidad: Number(customAmenity.cantidad) || 1,
         seleccionada: true,
         custom: true
       }
     ]);
     setCustomAmenity({ nombre: '', cantidad: 1 });
+    setErrors((prev) => {
+      const updated = { ...prev };
+      delete updated.comodidades;
+      return updated;
+    });
   };
 
   const handleImageUpload = async (event) => {
@@ -607,15 +740,17 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
         tipo: form.tipo,
         categoria: form.tipo,
         operacion: form.operacion,
-        precio_venta: form.precioVenta ? Number(form.precioVenta) : null,
-        precio_arriendo: form.precioArriendo ? Number(form.precioArriendo) : null,
+        precio_venta: parseCurrencyValue(form.precioVenta),
+        precio_arriendo: parseCurrencyValue(form.precioArriendo),
         area_construida: form.areaConstruida ? Number(form.areaConstruida) : null,
         descripcion: form.descripcion,
         estado: form.estado,
         comodidades: selectedAmenities,
         imagenes: uploadedImages,
         propietario: ownerSummary || null,
-        propietarioId: ownerSummary?.id
+        propietarioId: ownerSummary?.id,
+        descripcion_cambio_comodidades:
+          inmuebleEditar && amenitiesChangedInEdit ? descripcionCambioComodidades.trim() : ''
       };
 
       await onSave(payload, Boolean(inmuebleEditar));
@@ -624,7 +759,7 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
       console.error('Error al guardar inmueble:', error);
       setErrors((prev) => ({
         ...prev,
-        submit: error.message || 'No se pudo guardar el inmueble'
+        submit: extractApiErrorMessage(error)
       }));
     } finally {
       setSaving(false);
@@ -644,18 +779,6 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     if (activeStep === 0) return;
     setActiveStep((prev) => prev - 1);
   };
-
-  const SectionCard = ({ title, subtitle, children }) => (
-    <div className="rounded-2xl border border-white bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.05)] space-y-3">
-      {(title || subtitle) && (
-        <div>
-          {subtitle && <p className="text-xs font-semibold tracking-[0.2em] uppercase text-blue-500">{subtitle}</p>}
-          {title && <h3 className="text-base font-semibold text-slate-900">{title}</h3>}
-        </div>
-      )}
-      {children}
-    </div>
-  );
 
   const renderGeneralStep = () => (
     <div className="space-y-4">
@@ -717,9 +840,10 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             name="operacion"
             value={form.operacion}
             onChange={handleFieldChange}
+            disabled={isLoteType}
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           >
-            {OPERATION_OPTIONS.map((option) => (
+            {operationOptions.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
@@ -732,8 +856,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             </label>
             <input
               name="precioVenta"
-              type="number"
-              min="0"
+              type="text"
+              inputMode="numeric"
               value={form.precioVenta}
               onChange={handleFieldChange}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -748,8 +872,8 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             </label>
             <input
               name="precioArriendo"
-              type="number"
-              min="0"
+              type="text"
+              inputMode="numeric"
               value={form.precioArriendo}
               onChange={handleFieldChange}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -859,17 +983,19 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
           {amenities.map((amenity) => (
             <label
               key={amenity.id}
-              className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all ${amenity.seleccionada ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50'}`}
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={amenity.seleccionada}
-                  onChange={() => handleAmenityToggle(amenity.id)}
-                  className="text-blue-600 focus:ring-blue-500"
-                />
-                {amenity.nombre}
-              </div>
+            className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all ${amenity.seleccionada ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50'}`}
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={amenity.seleccionada}
+                onChange={() => handleAmenityToggle(amenity.id)}
+                disabled={isLoteType}
+                className="text-blue-600 focus:ring-blue-500"
+              />
+              {amenity.nombre}
+            </div>
+            {!isLoteType && (
               <input
                 type="number"
                 min="0"
@@ -878,35 +1004,71 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
                 onChange={(event) => handleAmenityQuantity(amenity.id, event.target.value)}
                 className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100"
               />
-            </label>
+            )}
+          </label>
           ))}
         </div>
+        {errors.comodidades && (
+          <p className="text-xs text-red-500">{errors.comodidades}</p>
+        )}
 
-        <div className="rounded-2xl border border-dashed border-slate-300 p-4 bg-slate-50">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Característica personalizada</p>
-          <div className="flex flex-wrap gap-3">
-            <input
-              value={customAmenity.nombre}
-              onChange={(event) => setCustomAmenity((prev) => ({ ...prev, nombre: event.target.value }))}
-              placeholder="Ej: Zona BBQ"
-              className="flex-1 min-w-[180px] rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-            <input
-              type="number"
-              min="1"
-              value={customAmenity.cantidad}
-              onChange={(event) => setCustomAmenity((prev) => ({ ...prev, cantidad: event.target.value }))}
-              className="w-24 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={handleAddCustomAmenity}
-              className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
-            >
-              <Plus className="w-4 h-4" /> Agregar
-            </button>
+        {!isLoteType && (
+          <div className="rounded-2xl border border-dashed border-slate-300 p-4 bg-slate-50">
+            <p className="text-sm font-semibold text-slate-700 mb-3">Caracteristica personalizada</p>
+            <div className="flex flex-wrap gap-3">
+              <input
+                name="customAmenityNombre"
+                value={customAmenity.nombre}
+                onChange={(event) => setCustomAmenity((prev) => ({ ...prev, nombre: event.target.value }))}
+                placeholder="Ej: Zona BBQ"
+                className="flex-1 min-w-[180px] rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              />
+              <input
+                name="customAmenityCantidad"
+                type="number"
+                min="1"
+                value={customAmenity.cantidad}
+                onChange={(event) => setCustomAmenity((prev) => ({ ...prev, cantidad: event.target.value }))}
+                className="w-24 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomAmenity}
+                className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+              >
+                <Plus className="w-4 h-4" /> Agregar
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {inmuebleEditar && amenitiesChangedInEdit && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <label className="text-sm text-slate-700 flex justify-between font-semibold">
+              Descripcion del cambio en comodidades
+              {errors.descripcionCambioComodidades && (
+                <span className="text-xs text-red-500">{errors.descripcionCambioComodidades}</span>
+              )}
+            </label>
+            <textarea
+              name="descripcionCambioComodidades"
+              value={descripcionCambioComodidades}
+              onChange={(event) => {
+                setDescripcionCambioComodidades(event.target.value);
+                if (errors.descripcionCambioComodidades) {
+                  setErrors((prev) => {
+                    const updated = { ...prev };
+                    delete updated.descripcionCambioComodidades;
+                    return updated;
+                  });
+                }
+              }}
+              rows={3}
+              placeholder="Ej: Se agregó 1 baño social y se retiró 1 parqueadero."
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard title="Galería del inmueble" subtitle="Paso 3">
@@ -1021,11 +1183,11 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
             <p>{selectedOwner?.telefono || 'Sin teléfono'}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-400 mb-1">Características seleccionadas</p>
+          <p className="text-xs text-slate-400 mb-1">Características seleccionadas</p>
             <p>{amenities.filter((item) => item.seleccionada).length}</p>
           </div>
         </div>
-
+        
 
       </SectionCard>
 
@@ -1109,4 +1271,5 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     </>
   );
 };
+
 

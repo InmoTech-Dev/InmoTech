@@ -357,9 +357,9 @@ class LeaseService {
       }
 
       const restoreComment =
-        resolvedState === 'Al día'
+        resolvedState === 'Al dÃ­a'
           ? 'Todos los cobros pagados'
-          : 'Estado restaurado automáticamente tras saldar cobros pendientes';
+          : 'Estado restaurado automÃ¡ticamente tras saldar cobros pendientes';
 
       if (
         latestTracking?.estado === 'Debe' &&
@@ -1670,3 +1670,4 @@ class LeaseService {
 }
 
 module.exports = new LeaseService();
+

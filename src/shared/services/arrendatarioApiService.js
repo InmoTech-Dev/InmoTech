@@ -1,4 +1,4 @@
-import { apiClient, extractPagination } from './api.config';
+import { apiClient } from './api.config';
 
 const extractList = (response) => {
   const data = response?.data?.data ?? response?.data ?? response;
@@ -7,6 +7,63 @@ const extractList = (response) => {
   if (Array.isArray(data?.items)) return data.items;
   if (Array.isArray(data?.results)) return data.results;
   return [];
+};
+
+const extractPagination = (response, fallback = {}) => {
+  const payload = response?.data ?? response ?? {};
+  const pagination = payload?.pagination || payload?.paginacion || {};
+  const page = fallback.page ?? 1;
+  const limit = fallback.limit ?? 5;
+  const total =
+    pagination.total ??
+    pagination.total_items ??
+    pagination.totalItems ??
+    pagination.count ??
+    payload?.total ??
+    payload?.total_items ??
+    payload?.totalItems ??
+    payload?.count ??
+    0;
+  const resolvedLimit = pagination.limite ?? pagination.limit ?? pagination.per_page ?? pagination.perPage ?? limit;
+  const totalPagesRaw =
+    pagination.paginas_totales ??
+    pagination.total_paginas ??
+    pagination.totalPages ??
+    pagination.pages ??
+    payload?.paginas_totales ??
+    payload?.total_paginas ??
+    payload?.totalPages ??
+    payload?.pages;
+  const resolvedTotalPages =
+    totalPagesRaw ?? (total > 0 ? Math.ceil(total / Math.max(resolvedLimit || limit, 1)) : 1);
+
+  return {
+    total,
+    pagina:
+      pagination.pagina ??
+      pagination.page ??
+      pagination.current_page ??
+      pagination.currentPage ??
+      payload?.pagina ??
+      payload?.page ??
+      payload?.current_page ??
+      payload?.currentPage ??
+      page,
+    limite: resolvedLimit,
+    paginas_totales: resolvedTotalPages,
+    has_next_page:
+      pagination.has_next_page ??
+      pagination.hasNextPage ??
+      payload?.has_next_page ??
+      payload?.hasNextPage ??
+      false,
+    has_prev_page:
+      pagination.has_prev_page ??
+      pagination.hasPrevPage ??
+      payload?.has_prev_page ??
+      payload?.hasPrevPage ??
+      false,
+  };
 };
 
 const splitNames = (fullName = '') => {
@@ -18,6 +75,63 @@ const splitNames = (fullName = '') => {
     rest: parts.slice(1).join(' ') || second || '',
     last,
     secondLast,
+  };
+};
+
+const mapImageEntry = (image = {}) => ({
+  id_imagen: image.id_imagen || image.id || null,
+  ruta_archivo: image.ruta_archivo || image.url || image.src || '',
+  nombre_archivo: image.nombre_archivo || image.nombre || '',
+  es_principal: Boolean(image.es_principal),
+  orden: image.orden ?? null,
+});
+
+const resolveInmuebleTitle = (inmueble = {}) =>
+  inmueble.titulo ||
+  inmueble.nombre ||
+  inmueble.nombre_comercial ||
+  inmueble.nombre_inmueble ||
+  inmueble.registro_inmobiliario ||
+  inmueble.registro ||
+  inmueble.direccion ||
+  null;
+
+const resolveInmuebleImage = (inmueble = {}) => {
+  const imagenes = Array.isArray(inmueble.imagenes) ? inmueble.imagenes : [];
+  const principal = imagenes.find((img) => Boolean(img?.es_principal)) || imagenes[0] || null;
+  return (
+    inmueble.imagen_principal ||
+    inmueble.image ||
+    inmueble.imagen_portada ||
+    inmueble.portada ||
+    inmueble.secure_url ||
+    principal?.ruta_archivo ||
+    principal?.url ||
+    principal?.src ||
+    ''
+  );
+};
+
+const mapInmuebleSummary = (inmueble = {}) => {
+  if (!inmueble || typeof inmueble !== 'object') return null;
+  const titulo = resolveInmuebleTitle(inmueble);
+  const registro = inmueble.registro_inmobiliario || inmueble.registro || '';
+  const id = inmueble.id_inmueble || inmueble.id || null;
+  if (!titulo && !registro && !id) return null;
+
+  return {
+    ...inmueble,
+    id,
+    nombre: titulo || 'Inmueble',
+    titulo: inmueble.titulo || titulo || '',
+    direccion: inmueble.direccion || '',
+    registro,
+    categoria: inmueble.categoria || inmueble.tipo || '',
+    ciudad: inmueble.ciudad,
+    departamento: inmueble.departamento,
+    estado: inmueble.estado || 'Activo',
+    imagen_principal: resolveInmuebleImage(inmueble),
+    imagenes: Array.isArray(inmueble.imagenes) ? inmueble.imagenes.map(mapImageEntry) : [],
   };
 };
 
@@ -53,29 +167,42 @@ const mapRenantFromApi = (record = {}) => {
 
   const arriendos = record.arriendosComoArrendatario || record.arriendos || [];
   const primaryLease = Array.isArray(arriendos) && arriendos.length > 0 ? arriendos[0] : null;
+  const directInmueble =
+    record.Inmueble ||
+    record.inmueble ||
+    record.propiedad ||
+    record.Propiedad ||
+    renant.Inmueble ||
+    renant.inmueble ||
+    renant.propiedad ||
+    renant.Propiedad ||
+    null;
 
   const inmueblesArrendados = arriendos
-    .map((arriendo) => {
-      const inmueble = arriendo.Inmueble || arriendo.inmueble;
-      if (!inmueble) return null;
-      return {
-        id: inmueble.id_inmueble || inmueble.id,
-        nombre:
-          inmueble.nombre ||
-          inmueble.titulo ||
-          inmueble.registro_inmobiliario ||
-          'Inmueble',
-        direccion: inmueble.direccion || '',
-        registro: inmueble.registro_inmobiliario || inmueble.registro || '',
-        categoria: inmueble.categoria || inmueble.tipo || '',
-        ciudad: inmueble.ciudad,
-        departamento: inmueble.departamento,
-        estado: inmueble.estado || 'Activo',
-      };
-    })
+    .map((arriendo) => mapInmuebleSummary(arriendo.Inmueble || arriendo.inmueble || arriendo.propiedad || arriendo.Propiedad))
     .filter(Boolean);
 
-  const inmueblePrincipal = primaryLease?.Inmueble || primaryLease?.inmueble || inmueblesArrendados[0] || null;
+  const directInmuebleSummary = mapInmuebleSummary(directInmueble);
+  if (
+    directInmuebleSummary &&
+    !inmueblesArrendados.some(
+      (item) =>
+        (item.id && directInmuebleSummary.id && item.id === directInmuebleSummary.id) ||
+        (item.registro && directInmuebleSummary.registro && item.registro === directInmuebleSummary.registro)
+    )
+  ) {
+    inmueblesArrendados.unshift(directInmuebleSummary);
+  }
+
+  const inmueblePrincipal =
+    primaryLease?.Inmueble ||
+    primaryLease?.inmueble ||
+    primaryLease?.propiedad ||
+    primaryLease?.Propiedad ||
+    directInmueble ||
+    inmueblesArrendados[0] ||
+    null;
+  const inmuebleResolved = mapInmuebleSummary(inmueblePrincipal) || directInmuebleSummary || inmueblesArrendados[0] || null;
 
   return {
     id: renant.id_arrendatario || renant.id || persona.id_persona,
@@ -136,13 +263,13 @@ const mapRenantFromApi = (record = {}) => {
     valorGarantia: record.valorGarantia || null,
     descripcionGarantia: record.descripcionGarantia || null,
     estadoContrato: record.estado || primaryLease?.estado || null,
-    inmueble: inmueblePrincipal,
-    registroInmobiliario: inmueblePrincipal?.registro || inmueblePrincipal?.registro_inmobiliario || null,
-    tipoInmueble: inmueblePrincipal?.categoria || inmueblePrincipal?.tipo || null,
-    nombreInmueble: inmueblePrincipal?.nombre || inmueblePrincipal?.titulo || inmueblePrincipal?.registro_inmobiliario || null,
-    direccion: inmueblePrincipal?.direccion || null,
-    ciudad: inmueblePrincipal?.ciudad || null,
-    departamento: inmueblePrincipal?.departamento || null,
+    inmueble: inmuebleResolved,
+    registroInmobiliario: inmuebleResolved?.registro || inmuebleResolved?.registro_inmobiliario || null,
+    tipoInmueble: inmuebleResolved?.categoria || inmuebleResolved?.tipo || null,
+    nombreInmueble: resolveInmuebleTitle(inmuebleResolved || {}) || null,
+    direccion: inmuebleResolved?.direccion || null,
+    ciudad: inmuebleResolved?.ciudad || null,
+    departamento: inmuebleResolved?.departamento || null,
     inmueblesArrendados,
     // Codeudor detalle
     codeudorNombre: codeudorNombreCompleto || null,
@@ -203,14 +330,11 @@ const mapTipoToBackend = (value = '') => {
 };
 
 const pickExactMatch = (list = [], tipoDocumento, numeroDocumento) => {
-  const targetDoc = normalizeDocByType(tipoDocumento, numeroDocumento);
+  const targetDoc = normalizeDoc(numeroDocumento);
   const targetTipo = mapTipoToBackend(tipoDocumento);
 
   return list.find((item) => {
-    const docItem = normalizeDocByType(
-      item?.tipo_documento ||
-      item?.tipoDocumento ||
-      item?.persona?.tipo_documento,
+    const docItem = normalizeDoc(
       item?.numero_documento ||
       item?.documento ||
       item?.persona?.numero_documento
@@ -326,7 +450,7 @@ export const renantsApiService = {
       const list = tryParseList(resp);
       const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
       if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
-    } catch (_err) { }
+    } catch (_err) {}
 
     // 5) /personas/documento/{numero}
     try {
@@ -334,7 +458,7 @@ export const renantsApiService = {
       const list = tryParseList(resp);
       const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
       if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
-    } catch (_err) { }
+    } catch (_err) {}
 
     // 6) /personas/numero/{numero}
     try {
@@ -342,7 +466,7 @@ export const renantsApiService = {
       const list = tryParseList(resp);
       const persona = pickExactMatch(list, tipoDocumento, numeroDocumento);
       if (persona) return mapRenantFromApi({ persona, renant: persona, raw: persona });
-    } catch (_err) { }
+    } catch (_err) {}
 
     // 7) POST /personas/buscar
     try {

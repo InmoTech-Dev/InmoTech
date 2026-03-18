@@ -30,23 +30,6 @@ const cleanText = (value, fallback = '') => {
   return trimmed.length > 0 ? trimmed : fallback;
 };
 
-const hasOwn = (object, key) =>
-  Object.prototype.hasOwnProperty.call(object || {}, key);
-
-const getProvidedValue = (object, keys = []) => {
-  if (!object || typeof object !== 'object' || !Array.isArray(keys)) {
-    return undefined;
-  }
-
-  for (const key of keys) {
-    if (hasOwn(object, key) && object[key] !== undefined) {
-      return object[key];
-    }
-  }
-
-  return undefined;
-};
-
 const normalizeEstadoValue = (value) => {
   if (value === undefined || value === null) {
     return undefined;
@@ -87,7 +70,11 @@ const normalizeAmenity = (amenity, index = 0) => {
     nombre,
     cantidad: toNumber(amenity.cantidad) ?? 1,
     seleccionada: amenity.seleccionada ?? true,
-    custom: amenity.custom ?? false
+    custom:
+      amenity.custom ??
+      amenity.es_personalizada ??
+      amenity.esPersonalizada ??
+      false
   };
 };
 
@@ -201,8 +188,6 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
   const propietariosRaw = Array.isArray(inmueble.propietarios) ? inmueble.propietarios : [];
   const propietarios = propietariosRaw.map(formatOwnerFromApiWithDocs);
   const ownerIds = propietarios.map((owner) => owner.id).filter(Boolean);
-  const destacadoSource = getProvidedValue(inmueble, ['destacado', 'featured', 'es_destacado']);
-  const destacadoBool = normalizeEstadoValue(destacadoSource) ?? false;
 
   const precioVenta = toNumber(inmueble.precio_venta ?? inmueble.precioVenta);
   const precioArriendo = toNumber(inmueble.precio_arriendo ?? inmueble.precioArriendo);
@@ -232,6 +217,9 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       inmueble.imagen_destacada
     ]);
   }
+  const destacadoRaw =
+    inmueble.destacado ?? inmueble.es_destacado ?? inmueble.destacada ?? inmueble.featured ?? false;
+  const destacado = normalizeEstadoValue(destacadoRaw);
 
   let operacion = inmueble.operacion || 'Sin definir';
   if (operacion === 'Sin definir') {
@@ -273,8 +261,8 @@ export const mapInmuebleFromApi = (inmueble = {}) => {
       toNumber(inmueble.area_construida ?? inmueble.areaConstruida ?? inmueble.area) ?? null,
     area_privada: toNumber(inmueble.area_privada ?? inmueble.areaPrivada) ?? null,
     estado_frontend: estadoTexto,
-    destacado: destacadoBool,
-    featured: destacadoBool,
+    destacado: destacado ?? false,
+    featured: destacado ?? false,
     metadata: {
       raw: inmueble
     }
@@ -287,6 +275,17 @@ const normalizePagination = (pagination = {}, fallbackPage = 1, fallbackLimit = 
   paginas_totales: pagination.paginas_totales ?? pagination.totalPages ?? 1,
   total: pagination.total ?? pagination.count ?? 0
 });
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const getProvidedValue = (payload, keys = []) => {
+  for (const key of keys) {
+    if (hasOwn(payload, key)) {
+      return payload[key];
+    }
+  }
+  return undefined;
+};
 
 const mapInmuebleToApi = (payload = {}) => {
   const operacion = getProvidedValue(payload, ['operacion']) ?? payload.operacion;
@@ -356,6 +355,13 @@ const mapInmuebleToApi = (payload = {}) => {
   if (hasOwn(payload, 'propietarioId') && payload.propietarioId !== null) {
     body.propietario_id = payload.propietarioId;
   }
+  if (hasOwn(payload, 'propietario_id') && payload.propietario_id !== null) {
+    body.propietario_id = payload.propietario_id;
+  }
+
+  if (payload.desasignar_propietario === true) {
+    body.desasignar_propietario = true;
+  }
 
   if (payload.propietario) {
     body.propietario = payload.propietario;
@@ -418,7 +424,7 @@ export const inmueblesAPI = {
         ...queryFilters
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : [];
@@ -436,6 +442,16 @@ export const inmueblesAPI = {
   // Versión pública (landing) - usa /inmuebles/buscar sin auth
   async getPublicInmuebles(page = 1, limit = DEFAULT_LIMIT, filters = {}) {
     try {
+      const isAvailableForPublicCatalog = (item = {}) => {
+        if (item.estado_bool === false) return false;
+        const status = String(item.estado_frontend || item.estado || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        return status !== 'vendido' && status !== 'arrendado';
+      };
+
       const response = await apiClient.get('/inmuebles/buscar', {
         pagina: page,
         limite: limit,
@@ -443,9 +459,11 @@ export const inmueblesAPI = {
         _t: Date.now()
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
-        ? payload.inmuebles.map(mapInmuebleFromApi)
+        ? payload.inmuebles
+            .map(mapInmuebleFromApi)
+            .filter(isAvailableForPublicCatalog)
         : [];
 
       return {
@@ -483,7 +501,7 @@ export const inmueblesAPI = {
         },
       });
 
-      const payload = response?.data || response || {};
+      const payload = extractPayload(response) || {};
       const items = Array.isArray(payload.inmuebles)
         ? payload.inmuebles.map(mapInmuebleFromApi)
         : Array.isArray(payload.data)

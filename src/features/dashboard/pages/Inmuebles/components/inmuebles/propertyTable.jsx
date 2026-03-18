@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Building2 } from 'lucide-react';
 import { ActionButtons } from './actionButton';
 import { getEstadoColor, getEstadoDotColor } from '../../utils/helpers';
@@ -39,18 +39,18 @@ const isSoldStatus = (estado = '') => {
 export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatusChange, onToggleFeatured }) => {
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="w-full">
+        <table className="table-fixed w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Imagen</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">ID</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Registro</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Direccion</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Operacion</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Acciones</th>
+              <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[96px]">Imagen</th>
+              <th className="hidden xl:table-cell px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[70px]">ID</th>
+              <th className="hidden lg:table-cell px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[150px]">Registro</th>
+              <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Direccion</th>
+              <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[130px]">Tipo</th>
+              <th className="hidden 2xl:table-cell px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[150px]">Operacion</th>
+              <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[138px]">Estado</th>
+              <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[178px]">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -78,11 +78,10 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                   ? estadoActual
                   : 'Disponible';
                 const featuredDisabled = isFinalStatusForFeatured(estadoActual);
-                const isFeatured = Boolean(property.destacado ?? property.featured ?? property.es_destacado);
 
                 return (
                   <tr key={property.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-3 lg:px-4 py-3.5 align-middle whitespace-nowrap">
                       {coverImage ? (
                         <img
                           src={coverImage}
@@ -95,17 +94,26 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-900">#{property.id}</td>
-                    <td className="px-6 py-4 text-sm text-slate-900 font-mono">{property.registro}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700 truncate max-w-[220px]">{property.direccion}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700">
-                      <span className="inline-flex items-center gap-1">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                        {property.tipo}
+                    <td className="hidden xl:table-cell px-3 lg:px-4 py-3.5 align-middle text-sm font-semibold text-slate-900">
+                      #{property.id}
+                    </td>
+                    <td className="hidden lg:table-cell px-3 lg:px-4 py-3.5 align-middle text-sm text-slate-900 font-mono truncate" title={property.registro}>
+                      {property.registro}
+                    </td>
+                    <td className="px-3 lg:px-4 py-3.5 align-middle text-sm text-slate-700" title={property.direccion}>
+                      <div className="truncate">{property.direccion}</div>
+                      <div className="lg:hidden text-xs text-slate-400 font-mono truncate">{property.registro}</div>
+                    </td>
+                    <td className="px-3 lg:px-4 py-3.5 align-middle text-sm text-slate-700">
+                      <span className="inline-flex items-center gap-1 max-w-full">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{property.tipo}</span>
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{property.operacion}</td>
-                    <td className="px-6 py-4">
+                    <td className="hidden 2xl:table-cell px-3 lg:px-4 py-3.5 align-middle text-sm text-slate-600 truncate" title={property.operacion}>
+                      {property.operacion}
+                    </td>
+                    <td className="px-3 lg:px-4 py-3.5 align-middle">
                       {onStatusChange ? (
                         <select
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 ${getEstadoColor(property.estado)} border-none h-7 w-full max-w-[132px] ${soldStatusLocked ? 'cursor-not-allowed opacity-85' : ''}`}
@@ -126,14 +134,15 @@ export const PropertyTable = ({ properties, onView, onEdit, onDocument, onStatus
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 lg:px-4 py-3.5 align-middle">
                       <ActionButtons
                         onView={() => onView(property)}
                         onEdit={() => onEdit(property)}
                         onDocument={() => onDocument(property)}
-                        onToggleFeatured={() => onToggleFeatured?.(property)}
-                        isFeatured={isFeatured}
-                        featuredDisabled={featuredDisabled}
+                        onToggleFeatured={onToggleFeatured ? () => onToggleFeatured(property) : undefined}
+                        isFeatured={property.destacado || property.featured}
+                        isFeaturedDisabled={featuredDisabled}
+                        isEditDisabled={soldStatusLocked}
                       />
                     </td>
                   </tr>

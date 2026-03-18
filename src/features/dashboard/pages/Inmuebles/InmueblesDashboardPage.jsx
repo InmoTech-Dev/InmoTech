@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Plus } from 'lucide-react';
 
 import { SearchBar } from '../Inmuebles/components/common/searchBar';
@@ -71,7 +71,6 @@ const InmuebleDashboardPage = () => {
 
   const {
     inmuebles,
-    pagination,
     loading,
     error,
     cargarInmuebles,
@@ -80,16 +79,10 @@ const InmuebleDashboardPage = () => {
   } = useInmuebles();
 
   const itemsPerPage = 5;
-
-  const getCurrentQueryFilters = () => ({
-    busqueda: searchTerm.trim() || undefined,
-    estado_frontend: filters.estado !== 'Todos' ? filters.estado : undefined,
-    operacion: filters.operacion !== 'Todas' ? filters.operacion : undefined,
-    categoria: filters.tipo !== 'Todos' ? filters.tipo : undefined
-  });
+  const fetchLimit = 200;
 
   const refreshCurrentList = async () => {
-    await cargarInmuebles(currentPage, itemsPerPage, getCurrentQueryFilters());
+    await cargarInmuebles(1, fetchLimit, {});
   };
 
   const handleSaveInmueble = async (inmuebleData, esEdicion) => {
@@ -107,7 +100,14 @@ const InmuebleDashboardPage = () => {
       }
       await refreshCurrentList();
     } catch (error) {
+      const message = error?.message || 'No se pudo guardar el inmueble.';
+      toast({
+        title: 'Error al guardar inmueble',
+        description: message,
+        variant: 'destructive'
+      });
       console.error('Error al guardar inmueble:', error);
+      throw error;
     }
   };
 
@@ -117,6 +117,14 @@ const InmuebleDashboardPage = () => {
   };
 
   const handleEditar = (inmueble) => {
+    if (isSoldStatus(inmueble?.estado)) {
+      toast({
+        title: 'Edicion bloqueada',
+        description: 'El inmueble esta en estado Vendido y no se puede editar.',
+        variant: 'destructive'
+      });
+      return;
+    }
     setInmuebleEditar(inmueble);
     setIsModalOpen(true);
   };
@@ -184,16 +192,48 @@ const InmuebleDashboardPage = () => {
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      cargarInmuebles(currentPage, itemsPerPage, getCurrentQueryFilters());
+      cargarInmuebles(1, fetchLimit, {});
     }, 250);
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, filters, currentPage, cargarInmuebles]);
+  }, [cargarInmuebles]);
 
-  const totalResults = pagination?.total ?? 0;
-  const totalPages = Math.max(pagination?.totalPages || 1, 1);
+  const normalizeText = (value = '') =>
+    String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
+  const filteredInmuebles = useMemo(() => {
+    const search = normalizeText(searchTerm);
+    const estadoFilter = normalizeText(filters.estado);
+    const operacionFilter = normalizeText(filters.operacion);
+    const tipoFilter = normalizeText(filters.tipo);
+
+    return (inmuebles || []).filter((item) => {
+      const estadoItem = normalizeText(item.estado || item.estado_frontend);
+      const operacionItem = normalizeText(item.operacion);
+      const tipoItem = normalizeText(item.tipo || item.categoria);
+      const hayCoincidenciaBusqueda =
+        !search ||
+        [item.direccion, item.registro, item.tipo, item.categoria, item.titulo]
+          .map((value) => normalizeText(value))
+          .some((value) => value.includes(search));
+
+      const coincideEstado = estadoFilter === 'todos' || estadoItem === estadoFilter;
+      const coincideOperacion = operacionFilter === 'todas' || operacionItem === operacionFilter;
+      const coincideTipo = tipoFilter === 'todos' || tipoItem === tipoFilter;
+
+      return hayCoincidenciaBusqueda && coincideEstado && coincideOperacion && coincideTipo;
+    });
+  }, [inmuebles, searchTerm, filters]);
+
+  const totalResults = filteredInmuebles.length;
+  const totalPages = Math.max(Math.ceil(totalResults / itemsPerPage), 1);
   const startIndex = totalResults > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
   const endIndex = Math.min(currentPage * itemsPerPage, totalResults);
+  const visibleInmuebles = filteredInmuebles.slice(startIndex > 0 ? startIndex - 1 : 0, endIndex);
 
   if (loading) {
     return <div className="flex justify-center items-center h-64">Cargando inmuebles...</div>;
@@ -246,7 +286,7 @@ const InmuebleDashboardPage = () => {
       </div>
 
       <PropertyTable
-        properties={inmuebles}
+        properties={visibleInmuebles}
         onView={handleVerDetalle}
         onEdit={handleEditar}
         onDocument={handleVerFichas}
@@ -298,4 +338,3 @@ const InmuebleDashboardPage = () => {
 };
 
 export default InmuebleDashboardPage;
-

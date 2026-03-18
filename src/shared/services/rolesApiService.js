@@ -12,8 +12,7 @@ class RolesApiService {
   async obtenerRoles() {
     try {
       const response = await apiClient.get("/roles");
-      const roles = Array.isArray(response) ? response : (response.data || response);
-
+      const roles = Array.isArray(response.data) ? response.data : response.data.data;
 
       if (!roles || !Array.isArray(roles)) {
         throw new Error("Formato de respuesta inválido del servidor");
@@ -41,8 +40,7 @@ class RolesApiService {
       };
 
       const response = await apiClient.post("/roles", payload);
-      const rolCreado = response.data || response;
-
+      const rolCreado = response.data.data || response.data;
       return this.transformarRolDesdeAPI(rolCreado);
     } catch (error) {
       console.error("Error al crear rol:", error);
@@ -65,8 +63,7 @@ class RolesApiService {
         : { nombre_rol: rolData.nombre_rol, estado: rolData.estado, permisos: rolData.permisos };
 
       const response = await apiClient.patch(`/roles/${id}`, payload);
-      const rolActualizado = response.data || response;
-
+      const rolActualizado = response.data.data || response.data;
 
       if (!rolActualizado || (!rolActualizado.id_rol && !rolActualizado.id)) {
         throw new Error("El servidor no retornó datos válidos del rol actualizado");
@@ -104,8 +101,7 @@ class RolesApiService {
       if (!id) throw new Error("ID de rol es requerido");
 
       const response = await apiClient.get(`/roles/${id}`);
-      const rol = response.data || response;
-
+      const rol = response.data.data || response.data;
       return this.transformarRolDesdeAPI(rol);
     } catch (error) {
       console.error("Error al obtener rol:", error);
@@ -119,8 +115,7 @@ class RolesApiService {
   async asignarRol(idRol, idPersona) {
     try {
       const response = await apiClient.post(`/${idRol}/asignar/${idPersona}`);
-      const asignacion = response.data || response;
-
+      const asignacion = response.data.data || response.data;
       return asignacion;
     } catch (error) {
       console.error("Error al asignar rol:", error);
@@ -147,8 +142,7 @@ class RolesApiService {
   async listarRolesDePersona(idPersona) {
     try {
       const response = await apiClient.get(`/roles/persona/${idPersona}`);
-      const roles = response.data || response;
-
+      const roles = response.data.data || response.data;
       return Array.isArray(roles) ? roles.map(rol => this.transformarRolDesdeAPI(rol)) : [];
     } catch (error) {
       console.error("Error al listar roles de persona:", error);
@@ -162,8 +156,7 @@ class RolesApiService {
   async listarPersonasPorRol(idRol) {
     try {
       const response = await apiClient.get(`/${idRol}/personas`);
-      const personas = response.data || response;
-
+      const personas = response.data.data || response.data;
       return Array.isArray(personas) ? personas : [];
     } catch (error) {
       console.error("Error al listar personas por rol:", error);

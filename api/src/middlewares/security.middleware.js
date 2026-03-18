@@ -36,14 +36,14 @@ const generalLimiter = createJsonLimiter({
 });
 
 const strictLimiter = createJsonLimiter({
-  windowMs: toPositiveInt(process.env.RATE_LIMIT_STRICT_WINDOW_MS, 15 * 60 * 1000),
-  max: toPositiveInt(process.env.RATE_LIMIT_STRICT_MAX_REQUESTS, 100), // Subido de 30 a 100
+  windowMs: 15 * 60 * 1000,
+  max: 30,
   message: 'Limite de solicitudes excedido para esta operacion',
 });
 
 const createLimiter = createJsonLimiter({
-  windowMs: toPositiveInt(process.env.RATE_LIMIT_CREATE_WINDOW_MS, 60 * 60 * 1000),
-  max: toPositiveInt(process.env.RATE_LIMIT_CREATE_MAX_REQUESTS, 50), // Subido de 20 a 50
+  windowMs: 60 * 60 * 1000,
+  max: 20,
   message: 'Has alcanzado el limite de citas que puedes crear por hora',
 });
 
@@ -56,14 +56,14 @@ const renantsLimiter = createJsonLimiter({
 
 // Limita intentos de login y operaciones sensibles de invitaciones
 const loginLimiter = createJsonLimiter({
-  windowMs: toPositiveInt(process.env.RATE_LIMIT_LOGIN_WINDOW_MS, 15 * 60 * 1000),
-  max: toPositiveInt(process.env.RATE_LIMIT_LOGIN_MAX_REQUESTS, 20), // Subido de 10 a 20
+  windowMs: 15 * 60 * 1000,
+  max: 10,
   message: 'Demasiados intentos. Intenta de nuevo en unos minutos.',
 });
 
 const invitationLimiter = createJsonLimiter({
-  windowMs: toPositiveInt(process.env.RATE_LIMIT_INVITATION_WINDOW_MS, 60 * 60 * 1000),
-  max: toPositiveInt(process.env.RATE_LIMIT_INVITATION_MAX_REQUESTS, 30), // Subido de 15 a 30
+  windowMs: 60 * 60 * 1000,
+  max: 15,
   message: 'Demasiadas solicitudes. Intenta nuevamente mas tarde.',
 });
 

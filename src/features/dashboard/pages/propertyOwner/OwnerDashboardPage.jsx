@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Eye, Edit, X, Building2, User, Search } from 'lucide-react';
+import { Eye, Edit, X, Building2, User, Search, SlidersHorizontal } from 'lucide-react';
 import OwnerForm from './components/ownerForm';
 import ownersApiService, { normalizeOwnerResponse } from '../../../../shared/services/ownersApiService';
 import { useInmuebles } from '../Inmuebles/hooks/useInmuebles';
+import { inmueblesAPI } from '../../../../shared/services/propertyApidervice';
 
 const formatCurrency = (value) => {
   const number = Number(value);
@@ -23,7 +24,6 @@ const PropertyOwnersManagement = () => {
     loading: inmueblesLoading,
     error: inmueblesError,
     crearInmueble,
-    actualizarInmueble,
     cargarInmuebles
   } = useInmuebles();
 
@@ -202,17 +202,16 @@ const PropertyOwnersManagement = () => {
     if (ownerSubmitting) {
       return;
     }
+
+    if (modalMode === 'create' && (!Array.isArray(selectedInmuebles) || selectedInmuebles.length === 0)) {
+      showAlert('error', 'Debes asignar al menos un inmueble para crear el propietario.');
+      return;
+    }
+
     setOwnerSubmitting(true);
     try {
       const selectedIds = Array.from(
         new Set((selectedInmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
-      );
-      const previousIds = Array.from(
-        new Set(
-          (selectedOwner?.inmuebles || [])
-            .map((item) => Number(item?.id))
-            .filter((id) => Number.isFinite(id))
-        )
       );
 
       if (modalMode === 'create' && selectedIds.length === 0) {
@@ -252,19 +251,19 @@ const PropertyOwnersManagement = () => {
 
         for (const inmuebleId of toAssign) {
           await withDeadlockRetry(() =>
-            actualizarInmueble(inmuebleId, { propietarioId: ownerId })
+            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
           );
         }
 
         for (const inmuebleId of toKeepAssigned) {
           await withDeadlockRetry(() =>
-            actualizarInmueble(inmuebleId, { propietarioId: ownerId })
+            inmueblesAPI.updateInmueble(inmuebleId, { propietarioId: ownerId })
           );
         }
 
         for (const inmuebleId of toUnassign) {
           await withDeadlockRetry(() =>
-            actualizarInmueble(inmuebleId, { desasignar_propietario: true })
+            inmueblesAPI.updateInmueble(inmuebleId, { desasignar_propietario: true })
           );
         }
       };
@@ -275,6 +274,9 @@ const PropertyOwnersManagement = () => {
         await syncOwnerAssignments(normalized.id, []);
         showAlert('success', `Propietario "${normalized.nombreCompleto}" creado exitosamente`);
       } else if (modalMode === 'edit' && selectedOwner) {
+        const previousIds = Array.from(
+          new Set((selectedOwner?.inmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
+        );
         const updated = await ownersApiService.updateOwner(selectedOwner.id, formData);
         const normalized = normalizeOwnerResponse(updated);
         await syncOwnerAssignments(normalized.id, previousIds);
@@ -362,43 +364,54 @@ const PropertyOwnersManagement = () => {
                 placeholder="Buscar propietario por nombre, documento o registro..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 pl-9 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-10 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-all"
               />
-              <User className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label="Limpiar busqueda"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-gray-600 flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-                />
-              </svg>
-              Filtros:
-            </span>
-            <select
-              value={filterEstado}
-              onChange={(e) => setFilterEstado(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option>Todos los estados</option>
-              <option>Activo</option>
-              <option>Inactivo</option>
-            </select>
-            <select
-              value={filterCantidad}
-              onChange={(e) => setFilterCantidad(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option>Todas las cantidades</option>
-              <option value="1">1 inmueble</option>
-              <option value="2-3">2-3 inmuebles</option>
-              <option value="4+">4+ inmuebles</option>
-            </select>
+            <div className="flex gap-2 flex-wrap items-center w-full sm:w-auto">
+              <div className="w-[180px]">
+                <select
+                  value={filterEstado}
+                  onChange={(e) => setFilterEstado(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700"
+                >
+                  <option>Todos los estados</option>
+                  <option>Activo</option>
+                  <option>Inactivo</option>
+                </select>
+              </div>
+              <div className="w-[180px]">
+                <select
+                  value={filterCantidad}
+                  onChange={(e) => setFilterCantidad(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700"
+                >
+                  <option>Todas las cantidades</option>
+                  <option value="1">1 inmueble</option>
+                  <option value="2-3">2-3 inmuebles</option>
+                  <option value="4+">4+ inmuebles</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                disabled={!hasActiveFilters}
+                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Limpiar filtros
+              </button>
+            </div>
           </div>
         </div>
 
@@ -425,17 +438,17 @@ const PropertyOwnersManagement = () => {
                 <table className="table-fixed w-full text-sm">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">ID</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Registro</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Nombre</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Documento</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Contacto</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Inmuebles</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Estado</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Acciones</th>
+                      <th className="hidden xl:table-cell px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[70px]">ID</th>
+                      <th className="hidden lg:table-cell px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[145px]">Registro</th>
+                      <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nombre</th>
+                      <th className="hidden xl:table-cell px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[170px]">Documento</th>
+                      <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[220px]">Contacto</th>
+                      <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[110px]">Inmuebles</th>
+                      <th className="hidden md:table-cell px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[110px]">Estado</th>
+                      <th className="px-3 lg:px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-[110px]">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-slate-200">
                     {currentOwners.map((owner, index) => (
                       <tr key={owner.id} className="hover:bg-slate-50 transition-colors">
                         <td className="hidden xl:table-cell px-3 lg:px-4 py-3.5 align-middle text-[13px] text-slate-900">#{startIndex + index}</td>
@@ -444,26 +457,18 @@ const PropertyOwnersManagement = () => {
                           <div className="font-medium truncate" title={owner.nombreCompleto}>{owner.nombreCompleto}</div>
                           <div className="lg:hidden text-xs text-slate-500 truncate" title={owner.registro}>{owner.registro}</div>
                         </td>
-                        <td className="px-3 py-2 align-middle text-[13px] text-slate-700">
-                          <span title={owner.documento || owner.numeroDocumento || 'Sin documento'}>
-                            {owner.documento || owner.numeroDocumento || 'Sin documento'}
-                          </span>
+                        <td className="hidden xl:table-cell px-3 lg:px-4 py-3.5 align-middle text-[13px] text-slate-600 truncate" title={owner.documento}>{owner.documento}</td>
+                        <td className="px-3 lg:px-4 py-3.5 align-middle text-[13px] text-slate-600">
+                          <div className="text-xs truncate" title={owner.email || 'Sin correo'}>{owner.email || 'Sin correo'}</div>
+                          <div className="text-xs text-slate-500 truncate" title={owner.telefono || 'Sin telefono'}>{owner.telefono || 'Sin telefono'}</div>
                         </td>
-                        <td className="px-3 py-2 align-middle text-[13px] text-slate-700">
-                          <div className="truncate" title={owner.telefono || 'Sin telefono'}>
-                            {owner.telefono || 'Sin telefono'}
-                          </div>
-                          <div className="text-xs text-slate-500 truncate" title={owner.email || 'Sin correo'}>
-                            {owner.email || 'Sin correo'}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 lg:px-4 py-3.5 align-middle">
                           <div className="flex items-center gap-1 text-[13px]">
-                            <Building2 className="w-3 h-3 text-gray-500" />
-                            <span className="font-semibold text-gray-900">{owner.cantidadInmuebles}</span>
+                            <Building2 className="w-3 h-3 text-slate-500" />
+                            <span className="font-semibold text-slate-900">{owner.cantidadInmuebles}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="hidden md:table-cell px-3 lg:px-4 py-3.5 align-middle">
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
                               owner.estado === 'Activo'
@@ -474,21 +479,21 @@ const PropertyOwnersManagement = () => {
                             {owner.estado}
                           </span>
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 lg:px-4 py-3.5 align-middle">
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => openModal('view', owner)}
-                              className="p-1 hover:bg-gray-100 rounded transition-colors"
+                              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
                               title="Ver detalles"
                             >
-                              <Eye className="w-4 h-4 text-gray-600" />
+                              <Eye className="w-4 h-4 text-slate-600" />
                             </button>
                             <button
                               onClick={() => openModal('edit', owner)}
-                              className="p-1 hover:bg-gray-100 rounded transition-colors"
+                              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
                               title="Editar"
                             >
-                              <Edit className="w-4 h-4 text-gray-600" />
+                              <Edit className="w-4 h-4 text-slate-600" />
                             </button>
                           </div>
                         </td>
@@ -499,11 +504,11 @@ const PropertyOwnersManagement = () => {
               </div>
 
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-1 p-3 border-t border-gray-200">
+                <div className="flex items-center justify-center gap-1 p-3 border-t border-slate-200 bg-slate-50">
                   <button
                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="px-2 py-1 text-sm rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    className="px-2 py-1 text-sm rounded border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
                   >
                     «
                   </button>
@@ -514,7 +519,7 @@ const PropertyOwnersManagement = () => {
                       className={`px-2 py-1 text-sm rounded ${
                         currentPage === i + 1
                           ? 'bg-blue-600 text-white'
-                          : 'border border-gray-300 hover:bg-gray-50'
+                          : 'border border-slate-300 hover:bg-white'
                       }`}
                     >
                       {i + 1}
@@ -523,7 +528,7 @@ const PropertyOwnersManagement = () => {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="px-2 py-1 text-sm rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    className="px-2 py-1 text-sm rounded border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
                   >
                     »
                   </button>

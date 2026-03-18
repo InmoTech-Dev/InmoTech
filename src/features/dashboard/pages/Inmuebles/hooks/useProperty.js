@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { inmueblesAPI } from '../../../../../shared/services/propertyApidervice';
 
 const DEFAULT_PAGE = 1;
@@ -79,6 +79,12 @@ const captureSnapshot = (data = {}) => ({
 });
 
 const mergeInmuebleData = (apiData = {}, clientData = {}, previous = {}) => {
+  const clientHasComodidades = hasOwn(clientData, 'comodidades');
+  const apiHasComodidades = Array.isArray(apiData.comodidades) && apiData.comodidades.length > 0;
+  const comodidades = clientHasComodidades
+    ? (clientData.comodidades || [])
+    : (apiHasComodidades ? apiData.comodidades : (previous.comodidades || []));
+
   const clientHasImagenes = hasOwn(clientData, 'imagenes');
   const apiHasImagenes = Array.isArray(apiData.imagenes) && apiData.imagenes.length > 0;
   const imagenes = clientHasImagenes
@@ -100,7 +106,7 @@ const mergeInmuebleData = (apiData = {}, clientData = {}, previous = {}) => {
     pais: clientData.pais ?? apiData.pais ?? previous.pais,
     precio_venta: clientData.precio_venta ?? apiData.precio_venta ?? previous.precio_venta,
     precio_arriendo: clientData.precio_arriendo ?? apiData.precio_arriendo ?? previous.precio_arriendo,
-    comodidades: clientData.comodidades ?? apiData.comodidades ?? previous.comodidades ?? [],
+    comodidades,
     imagenes,
     image: imagenes[0] || previous.image || apiData.image || '',
     fichasTecnicas: clientData.fichasTecnicas ?? apiData.fichasTecnicas ?? previous.fichasTecnicas ?? [],
@@ -113,38 +119,116 @@ const mergeInmuebleData = (apiData = {}, clientData = {}, previous = {}) => {
   };
 };
 
-const buildFichaTecnica = (previous = {}, next = {}, motivo = 'Actualización general') => {
+const buildFichaTecnica = (previous = {}, next = {}, motivo = 'Actualización general', changedFields = null) => {
   const cambios = [];
+  const previousFicha = previous?.fichasTecnicas?.[0] || null;
+  const baseForDiff = previousFicha?.snapshot || previous;
+  const version = (previousFicha?.version || 0) + 1;
+  const formatText = (value) => String(value ?? '').trim() || '—';
+  const formatMoney = (value) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) return 'sin valor';
+    return `$${numericValue.toLocaleString('es-CO')}`;
+  };
+  const normalizeFieldValue = (field, value) => {
+    if (value === null || value === undefined) return '';
+
+    if (['precio_venta', 'precio_arriendo', 'area_construida'].includes(field)) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : '';
+    }
+
+    if (typeof value === 'string') return value.trim();
+    return value;
+  };
+
+  const buildAmenitiesMap = (source = {}) =>
+    (source?.comodidades || []).reduce((acc, item) => {
+      if (!item?.seleccionada || !item?.nombre) return acc;
+      const key = String(item.nombre).trim().toLowerCase();
+      const qty = Number(item.cantidad) > 0 ? Number(item.cantidad) : 1;
+      acc[key] = { nombre: item.nombre, cantidad: qty };
+      return acc;
+    }, {});
+
+  const amenityChanges = (prevSource = {}, nextSource = {}) => {
+    const prevMap = buildAmenitiesMap(prevSource);
+    const nextMap = buildAmenitiesMap(nextSource);
+    const keys = new Set([...Object.keys(prevMap), ...Object.keys(nextMap)]);
+    const diffs = [];
+
+    keys.forEach((key) => {
+      const prevQty = prevMap[key]?.cantidad || 0;
+      const nextQty = nextMap[key]?.cantidad || 0;
+      const diff = nextQty - prevQty;
+      if (diff === 0) return;
+      const displayName = nextMap[key]?.nombre || prevMap[key]?.nombre || key;
+      const sign = diff > 0 ? `+${diff}` : String(diff);
+      diffs.push(`${displayName}${sign}`);
+    });
+
+    return diffs;
+  };
+
+  const galleryLabel = (source = {}) => {
+    const count = Array.isArray(source?.imagenes) ? source.imagenes.length : 0;
+    return `${count} imagen(es)`;
+  };
+  const ownerLabel = (source = {}) => {
+    const owner = source?.propietario || {};
+    const name =
+      owner.nombreCompleto ||
+      [owner.nombres, owner.apellidos].filter(Boolean).join(' ').trim() ||
+      owner.nombre ||
+      owner.nombre_completo;
+    return formatText(name);
+  };
 
   Object.entries(FIELD_LABELS).forEach(([field, label]) => {
-    const prevValue = previous?.[field] ?? '';
-    const nextValue = next?.[field] ?? '';
+    if (changedFields && !changedFields.has(field)) return;
+
+    const prevValue = normalizeFieldValue(field, baseForDiff?.[field]);
+    const nextValue = normalizeFieldValue(field, next?.[field]);
     if (prevValue !== nextValue) {
-      cambios.push(`${label}: ${prevValue || '—'} → ${nextValue || '—'}`);
+      if (field === 'precio_arriendo') {
+        cambios.push(`Canon de arriendo actualizado: de ${formatMoney(prevValue)} a ${formatMoney(nextValue)}`);
+        return;
+      }
+      cambios.push(`${label}: ${formatText(prevValue)} → ${formatText(nextValue)}`);
     }
   });
 
   const serialize = (value) => JSON.stringify(value || []);
 
-  if (serialize(previous.comodidades) !== serialize(next.comodidades)) {
-    cambios.push('Comodidades actualizadas');
+  if ((!changedFields || changedFields.has('comodidades')) && serialize(baseForDiff.comodidades) !== serialize(next.comodidades)) {
+    const diffs = amenityChanges(baseForDiff, next);
+    const amenityChangeDescription = String(next?.descripcion_cambio_comodidades ?? '').trim();
+    if (diffs.length) {
+      cambios.push(...diffs);
+    } else {
+      cambios.push('Caracteristicas actualizadas');
+    }
+    if (amenityChangeDescription) {
+      cambios.push(`Descripcion del cambio en comodidades: ${amenityChangeDescription}`);
+    }
   }
 
-  if (serialize(previous.imagenes) !== serialize(next.imagenes)) {
-    cambios.push('Galería actualizada');
+  if ((!changedFields || changedFields.has('imagenes')) && serialize(baseForDiff.imagenes) !== serialize(next.imagenes)) {
+    cambios.push(`Galeria: ${galleryLabel(baseForDiff)} → ${galleryLabel(next)}`);
   }
 
-  if (JSON.stringify(previous.propietario || null) !== JSON.stringify(next.propietario || null)) {
-    cambios.push('Propietario actualizado');
+  if (
+    (!changedFields || changedFields.has('propietario') || changedFields.has('propietarioId') || changedFields.has('propietario_id')) &&
+    JSON.stringify(baseForDiff.propietario || null) !== JSON.stringify(next.propietario || null)
+  ) {
+    cambios.push(`Propietario: ${ownerLabel(baseForDiff)} → ${ownerLabel(next)}`);
   }
-
-  const version = (previous?.fichasTecnicas?.[0]?.version || 0) + 1;
 
   return {
     id: `ficha-${Date.now()}`,
     version,
     fecha: new Date().toLocaleDateString('es-CO'),
-    cambios: cambios.length ? cambios.join(' | ') : motivo,
+    cambios: version === 1 ? '' : (cambios.length ? cambios.join(' | ') : motivo),
     snapshot: captureSnapshot(next)
   };
 };
@@ -167,13 +251,39 @@ export const useProperty = () => {
       const history = getLocalHistory();
       const enrichedItems = items.map((item) => {
         const localHistory = history[item.id];
-        if (Array.isArray(localHistory) && localHistory.length) {
-          return {
-            ...item,
-            fichasTecnicas: [...localHistory.map((f) => ({ ...f })), ...(item.fichasTecnicas || [])]
+        const remoteFichas = Array.isArray(item.fichasTecnicas) ? item.fichasTecnicas : [];
+        const mergedHistory = Array.isArray(localHistory) && localHistory.length
+          ? [...localHistory.map((f) => ({ ...f })), ...remoteFichas]
+          : [...remoteFichas];
+
+        let enrichedItem = {
+          ...item,
+          fichasTecnicas: mergedHistory
+        };
+
+        const latestFicha = mergedHistory[0];
+        const previousEstado = latestFicha?.snapshot?.estado;
+        const currentEstado = enrichedItem?.estado;
+        const stateChanged = previousEstado && normalizeEstado(previousEstado) !== normalizeEstado(currentEstado);
+        const becameFinalState = stateChanged && isFinalInmuebleState(currentEstado);
+
+        if (becameFinalState) {
+          const nuevaFicha = buildFichaTecnica(
+            { ...enrichedItem, fichasTecnicas: mergedHistory },
+            enrichedItem,
+            `Cambio automatico de estado a ${currentEstado}`
+          );
+          enrichedItem = {
+            ...enrichedItem,
+            fichasTecnicas: [nuevaFicha, ...mergedHistory]
           };
+          saveLocalHistory(enrichedItem.id, enrichedItem.fichasTecnicas);
         }
-        return item;
+
+        if (Array.isArray(localHistory) && localHistory.length) {
+          return enrichedItem;
+        }
+        return enrichedItem;
       });
       setInmuebles(enrichedItems);
       setPagination({
@@ -223,9 +333,29 @@ export const useProperty = () => {
         snapshot: ficha.snapshot ? JSON.parse(JSON.stringify(ficha.snapshot)) : undefined
       }));
 
-      const inmuebleActualizado = await inmueblesAPI.updateInmueble(id, inmuebleData);
-      const enriched = mergeInmuebleData(inmuebleActualizado, inmuebleData, { ...previo, fichasTecnicas: prevFichasClon });
-      const nuevaFicha = buildFichaTecnica(previo, enriched);
+      const { descripcion_cambio_comodidades, ...apiPayload } = inmuebleData || {};
+      const changedFields = new Set(Object.keys(apiPayload || {}));
+
+      if (changedFields.has('precioVenta')) {
+        changedFields.add('precio_venta');
+      }
+      if (changedFields.has('precioArriendo')) {
+        changedFields.add('precio_arriendo');
+      }
+      if (changedFields.has('areaConstruida')) {
+        changedFields.add('area_construida');
+      }
+      if (changedFields.has('tipo')) {
+        changedFields.add('categoria');
+      }
+      const inmuebleActualizado = await inmueblesAPI.updateInmueble(id, apiPayload);
+      const enriched = mergeInmuebleData(inmuebleActualizado, apiPayload, { ...previo, fichasTecnicas: prevFichasClon });
+      const nuevaFicha = buildFichaTecnica(
+        previo,
+        { ...enriched, descripcion_cambio_comodidades },
+        descripcion_cambio_comodidades || 'Actualización general',
+        changedFields
+      );
       enriched.fichasTecnicas = [nuevaFicha, ...prevFichasClon];
 
       setInmuebles((prev) =>
@@ -263,3 +393,5 @@ export const useProperty = () => {
     eliminarInmueble
   };
 };
+
+

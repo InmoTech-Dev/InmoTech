@@ -46,21 +46,26 @@ const isAdministrator = (user) => {
  */
 
 const authenticateToken = async (req, res, next) => {
-  logger.info('[AUTH] Verifying cookie-based authentication', {
+  const authHeader = req.get('authorization');
+  const tokenFromHeader = jwtUtils.extractTokenFromHeader(authHeader);
+
+  logger.info('[AUTH] Verifying authentication (cookie or bearer)', {
     method: req.method,
     url: req.url,
-    hasAccessToken: !!req.cookies.accessToken,
-    hasRefreshToken: !!req.cookies.refreshToken
+    hasAccessTokenCookie: !!req.cookies.accessToken,
+    hasRefreshTokenCookie: !!req.cookies.refreshToken,
+    hasBearerToken: !!tokenFromHeader
   });
 
   try {
-    const accessToken = req.cookies.accessToken;
+    const accessToken = req.cookies.accessToken || tokenFromHeader;
 
     if (!accessToken) {
-      logger.warn('[AUTH] Missing accessToken cookie', {
+      logger.warn('[AUTH] Missing access token (cookie/bearer)', {
         method: req.method,
         url: req.url,
-        hasRefreshToken: !!req.cookies.refreshToken
+        hasRefreshToken: !!req.cookies.refreshToken,
+        hasBearerToken: !!tokenFromHeader
       });
       return res.status(401).json({
         success: false,
@@ -455,7 +460,9 @@ const optionalAuth = (req, res, next) => {
 
     // Verificar si hay cookies de autenticaciÃ³n
 
-    const accessToken = req.cookies.accessToken;
+    const authHeader = req.get('authorization');
+    const bearerToken = jwtUtils.extractTokenFromHeader(authHeader);
+    const accessToken = req.cookies.accessToken || bearerToken;
 
 
 

@@ -42,6 +42,22 @@ const normalizeInmueble = (item = {}) => ({
         correo: item.arrendatario.correo || null,
         telefono: item.arrendatario.telefono || null
       }
+    : null,
+  venta: item.venta
+    ? {
+        id: item.venta.id_venta,
+        estado: item.venta.estado || 'Sin estado',
+        fechaVenta: item.venta.fecha_venta,
+        valorVenta: toNumber(item.venta.valor_venta)
+      }
+    : null,
+  comprador: item.comprador
+    ? {
+        id: item.comprador.id_comprador,
+        nombre: item.comprador.nombre_completo || 'Sin nombre',
+        correo: item.comprador.correo || null,
+        telefono: item.comprador.telefono || null
+      }
     : null
 });
 
@@ -70,7 +86,10 @@ class OwnerPortalApiService {
         inmuebles_arriendo:
           toNumber(resumenApi.inmuebles_arriendo) ||
           inmuebles.filter((item) => incluirOperacion(item.operacion, 'arriendo')).length,
-        canon_total_esperado: toNumber(resumenApi.canon_total_esperado) || canonCalculado
+        canon_total_esperado: toNumber(resumenApi.canon_total_esperado) || canonCalculado,
+        arriendos_activos:
+          toNumber(resumenApi.arriendos_activos) ||
+          inmuebles.filter((item) => normalizeText(item?.arriendo?.estado) === 'activo').length
       },
       inmuebles
     };

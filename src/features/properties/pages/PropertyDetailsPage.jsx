@@ -1,14 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
 import PropertyVisitModal from "../components/PropertyVisitModal";
-import { useToast } from "@/shared/hooks/use-toast";
 import { useAppointments } from "@/shared/contexts/AppointmentContext";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
 import { Badge } from "@/shared/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/shared/components/ui/carousel";
-import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar";
 import {
   Building2,
   Calendar,
@@ -21,14 +19,8 @@ import {
   Info,
   Landmark,
   MapPin,
-  MessageSquare,
-  Phone,
   Share2,
   ShowerHead,
-  Star,
-  Trees,
-  Tv,
-  Wifi,
 } from "lucide-react";
 import { inmueblesAPI } from "@/shared/services/propertyApidervice";
 
@@ -102,6 +94,7 @@ export default function PropertyDetailPage() {
         .toLowerCase();
 
     const amenities = Array.isArray(property.comodidades) ? property.comodidades : [];
+    const selectedAmenities = amenities.filter((item) => item && (item.seleccionada ?? true));
     const findAmenity = (name) => {
       const target = normalize(name);
       const item = amenities.find((c) => normalize(c.nombre) === target);
@@ -119,8 +112,38 @@ export default function PropertyDetailPage() {
     const formatPrice = (value) => {
       const n = Number(value);
       if (!Number.isFinite(n)) return "Consultar";
-      return n.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+      const formatted = new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        currencyDisplay: "code",
+        maximumFractionDigits: 0,
+      }).format(n);
+      return formatted.replace(/COP\s*\$/i, "COP ").trim();
     };
+
+    const resolveAmenityIcon = (name = "") => {
+      const target = normalize(name);
+      if (["habitaciones", "cuartos", "dormitorios", "alcobas"].some((item) => target.includes(item))) return Building2;
+      if (["banos", "bano", "baños", "baño"].some((item) => target.includes(item))) return ShowerHead;
+      if (["parqueaderos", "parqueadero", "garaje", "garajes"].some((item) => target.includes(item))) return Car;
+      return Home;
+    };
+
+    const summaryAmenities = [
+      {
+        label: "Area",
+        value: property.area_construida ? `${property.area_construida} m2` : "N/D m2",
+        Icon: Home,
+      },
+      ...selectedAmenities.map((item) => ({
+        label: item.nombre || "Comodidad",
+        value:
+          Number.isFinite(Number(item.cantidad)) && Number(item.cantidad) > 0
+            ? String(Number(item.cantidad))
+            : "Si",
+        Icon: resolveAmenityIcon(item.nombre || ""),
+      })),
+    ].slice(0, 4);
 
     return {
       id: property.id,
@@ -139,7 +162,8 @@ export default function PropertyDetailPage() {
       operation: property.operacion || "Sin definir",
       status: property.estado_bool === false ? "No disponible" : "Disponible",
       description: property.descripcion || "Sin descripcion",
-      amenities,
+      amenities: selectedAmenities,
+      summaryAmenities,
       images,
       mainImage,
       owner: property.propietario,
@@ -225,7 +249,7 @@ export default function PropertyDetailPage() {
                     <Share2 className="h-5 w-5 text-gray-700" />
                   </Button>
                 </div>
-                <Badge className="absolute top-4 left-4 bg-[#00457B]">{viewModel.operation}</Badge>
+                <Badge className="absolute top-4 left-4 bg-[#00457B] text-white">{viewModel.operation}</Badge>
               </div>
 
               <Carousel className="w-full">
@@ -272,27 +296,24 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl">
-                <div className="flex flex-col items-center text-center p-3">
-                  <Home className="h-6 w-6 text-[#00457B] mb-2" />
-                  <span className="text-sm text-gray-500">Area</span>
-                  <span className="font-bold">{viewModel.area}</span>
-                </div>
-                <div className="flex flex-col items-center text-center p-3">
-                  <Building2 className="h-6 w-6 text-[#00457B] mb-2" />
-                  <span className="text-sm text-gray-500">Habitaciones</span>
-                  <span className="font-bold">{viewModel.bedrooms}</span>
-                </div>
-                <div className="flex flex-col items-center text-center p-3">
-                  <ShowerHead className="h-6 w-6 text-[#00457B] mb-2" />
-                  <span className="text-sm text-gray-500">Banos</span>
-                  <span className="font-bold">{viewModel.bathrooms}</span>
-                </div>
-                <div className="flex flex-col items-center text-center p-3">
-                  <Car className="h-6 w-6 text-[#00457B] mb-2" />
-                  <span className="text-sm text-gray-500">Estacionamientos</span>
-                  <span className="font-bold">{viewModel.parking}</span>
-                </div>
+              <div
+                className={`grid gap-4 bg-gray-50 p-4 rounded-xl ${
+                  (viewModel.summaryAmenities?.length || 0) <= 2 ? "justify-items-center" : ""
+                }`}
+                style={{
+                  gridTemplateColumns: `repeat(${Math.min(Math.max(viewModel.summaryAmenities?.length || 1, 1), 4)}, minmax(0, 1fr))`,
+                }}
+              >
+                {(viewModel.summaryAmenities || []).map((item, index) => {
+                  const Icon = item.Icon || Home;
+                  return (
+                    <div key={`${item.label}-${index}`} className="flex flex-col items-center text-center p-3">
+                      <Icon className="h-6 w-6 text-[#00457B] mb-2" />
+                      <span className="text-sm text-gray-500">{item.label}</span>
+                      <span className="font-bold">{item.value}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="space-y-4">
@@ -350,10 +371,13 @@ export default function PropertyDetailPage() {
       </section>
 
       <section className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <Tabs defaultValue="caracteristicas" className="w-full">
+        <div className="space-y-8">
+          <div className="space-y-8">
+            <Tabs defaultValue="descripcion" className="w-full">
               <TabsList className="grid w-full grid-cols-3 h-12 rounded-xl bg-white">
+                <TabsTrigger value="descripcion" className="rounded-lg">
+                  Descripcion
+                </TabsTrigger>
                 <TabsTrigger value="caracteristicas" className="rounded-lg">
                   Caracteristicas
                 </TabsTrigger>
@@ -361,6 +385,17 @@ export default function PropertyDetailPage() {
                   Ubicacion
                 </TabsTrigger>
               </TabsList>
+
+              <TabsContent value="descripcion" className="mt-6">
+                <Card>
+                  <CardContent className="p-6">
+                    <h2 className="text-xl font-bold mb-4">Descripcion</h2>
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                      {viewModel.description || "Sin descripcion."}
+                    </p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               <TabsContent value="caracteristicas" className="mt-6">
                 <Card>
@@ -398,48 +433,6 @@ export default function PropertyDetailPage() {
               </TabsContent>
             </Tabs>
           </div>
-
-          <div className="space-y-6">
-            <Card className="border-none shadow-md">
-              <CardContent className="p-6">
-                <div className="flex flex-col items-center text-center mb-4">
-                  <Avatar className="h-24 w-24 mb-4">
-                    <AvatarImage src="/avatar-agent-1.jpg" alt="Ana Rodriguez" />
-                    <AvatarFallback>AR</AvatarFallback>
-                  </Avatar>
-                  <h3 className="font-bold text-lg">Ana Rodriguez</h3>
-                  <p className="text-[#00457B]">Agente Inmobiliario Senior</p>
-                  <div className="flex items-center mt-1">
-                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                    <span className="ml-1 text-sm text-gray-500">(28 resenas)</span>
-                  </div>
-                </div>
-                <CardContent className="p-4">
-                  <h3 className="font-bold text-lg mb-1">{property?.titulo || property?.direccion || "Inmueble"}</h3>
-                  <div className="flex items-center text-gray-500 text-sm mb-2">
-                    <MapPin className="h-4 w-4 mr-1" /> {property?.ciudad || "Ciudad"}, {property?.departamento || "Depto"}
-                  </div>
-                  <div className="flex items-center justify-center">
-                    <MessageSquare className="h-5 w-5 text-[#00457B] mr-2" />
-                    <span>ana.rodriguez@matriz.com</span>
-                  </div>
-                </CardContent>
-
-                <div className="space-y-3">
-                  <Button className="w-full bg-[#00457B] hover:bg-[#003b69]">
-                    <Phone className="h-5 w-5 mr-2" /> Llamar ahora
-                  </Button>
-                  <Button variant="outline" className="w-full border-[#00457B] text-[#00457B] hover:bg-[#00457B]/10">
-                    <MessageSquare className="h-5 w-5 mr-2" /> Enviar mensaje
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </section>
 
@@ -453,36 +446,3 @@ export default function PropertyDetailPage() {
   );
 }
 
-function getAmenityIcon(iconName) {
-  switch (iconName) {
-    case "pool":
-      return <Tv className="h-6 w-6 text-[#00457B]" />;
-    case "gym":
-      return <ThumbsUp className="h-6 w-6 text-[#00457B]" />;
-    case "garden":
-      return <Trees className="h-6 w-6 text-[#00457B]" />;
-    case "wifi":
-      return <Wifi className="h-6 w-6 text-[#00457B]" />;
-    default:
-      return <CheckCircle className="h-6 w-6 text-[#00457B]" />;
-  }
-}
-
-function getPoiIcon(poiType) {
-  switch (poiType) {
-    case "school":
-      return <Building2 className="h-4 w-4 text-[#00457B]" />;
-    case "mall":
-      return <Building2 className="h-4 w-4 text-[#00457B]" />;
-    case "park":
-      return <Trees className="h-4 w-4 text-[#00457B]" />;
-    case "hospital":
-      return <Building2 className="h-4 w-4 text-[#00457B]" />;
-    case "restaurant":
-      return <Building2 className="h-4 w-4 text-[#00457B]" />;
-    case "transport":
-      return <Building2 className="h-4 w-4 text-[#00457B]" />;
-    default:
-      return <MapPin className="h-4 w-4 text-[#00457B]" />;
-  }
-}

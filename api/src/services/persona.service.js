@@ -341,9 +341,58 @@ class PersonaService {
             i.precio_venta,
             i.precio_arriendo,
             i.estado,
-            i.estado_frontend
+            i.estado_frontend,
+            ar.id_arrendamiento,
+            ar.estado AS arriendo_estado,
+            ar.fecha_inicio AS arriendo_fecha_inicio,
+            ar.fecha_finalizacion AS arriendo_fecha_finalizacion,
+            ar.valor_mensual AS arriendo_valor_mensual,
+            ar.tipo_garantia AS arriendo_tipo_garantia,
+            arren.id_arrendatario,
+            pa_arr.nombre_completo AS arrendatario_nombre_completo,
+            pa_arr.correo AS arrendatario_correo,
+            pa_arr.telefono AS arrendatario_telefono,
+            v.id_venta,
+            v.estado AS venta_estado,
+            v.fecha_venta,
+            v.valor_venta,
+            c.id_comprador,
+            pa_comp.nombre_completo AS comprador_nombre_completo,
+            pa_comp.correo AS comprador_correo,
+            pa_comp.telefono AS comprador_telefono
           FROM Propiedad_inmueble pi
           INNER JOIN Inmuebles i ON pi.id_inmueble = i.id_inmueble
+          OUTER APPLY (
+            SELECT TOP 1
+              a.id_arrendamiento,
+              a.estado,
+              a.fecha_inicio,
+              a.fecha_finalizacion,
+              a.valor_mensual,
+              a.tipo_garantia,
+              a.id_arrendatario
+            FROM Arrendamientos a
+            WHERE a.id_inmueble = i.id_inmueble
+            ORDER BY
+              CASE WHEN a.estado = 'Activo' THEN 0 ELSE 1 END,
+              a.fecha_inicio DESC,
+              a.id_arrendamiento DESC
+          ) ar
+          LEFT JOIN Arrendatarios arren ON arren.id_arrendatario = ar.id_arrendatario
+          LEFT JOIN Personas pa_arr ON pa_arr.id_persona = arren.id_persona
+          OUTER APPLY (
+            SELECT TOP 1
+              s.id_venta,
+              s.estado,
+              s.fecha_venta,
+              s.valor_venta,
+              s.id_comprador
+            FROM Ventas s
+            WHERE s.id_inmueble = i.id_inmueble
+            ORDER BY s.fecha_venta DESC, s.id_venta DESC
+          ) v
+          LEFT JOIN Compradores c ON c.id_comprador = v.id_comprador
+          LEFT JOIN Personas pa_comp ON pa_comp.id_persona = c.id_persona
           WHERE ${whereOwnerClause}
             AND pi.id_persona = :id
           `,
@@ -353,7 +402,57 @@ class PersonaService {
           }
         );
 
-        inmuebles = Array.isArray(rows) ? rows : [];
+        inmuebles = Array.isArray(rows)
+          ? rows.map((row) => ({
+              id_inmueble: row.id_inmueble,
+              titulo: row.titulo,
+              registro_inmobiliario: row.registro_inmobiliario,
+              direccion: row.direccion,
+              ciudad: row.ciudad,
+              departamento: row.departamento,
+              pais: row.pais,
+              operacion: row.operacion,
+              categoria: row.categoria,
+              precio_venta: row.precio_venta,
+              precio_arriendo: row.precio_arriendo,
+              estado: row.estado,
+              estado_frontend: row.estado_frontend,
+              arriendo: row.id_arrendamiento
+                ? {
+                    id_arrendamiento: row.id_arrendamiento,
+                    estado: row.arriendo_estado,
+                    fecha_inicio: row.arriendo_fecha_inicio,
+                    fecha_finalizacion: row.arriendo_fecha_finalizacion,
+                    valor_mensual: row.arriendo_valor_mensual,
+                    tipo_garantia: row.arriendo_tipo_garantia
+                  }
+                : null,
+              arrendatario: row.id_arrendatario
+                ? {
+                    id_arrendatario: row.id_arrendatario,
+                    nombre_completo: row.arrendatario_nombre_completo,
+                    correo: row.arrendatario_correo,
+                    telefono: row.arrendatario_telefono
+                  }
+                : null,
+              venta: row.id_venta
+                ? {
+                    id_venta: row.id_venta,
+                    estado: row.venta_estado,
+                    fecha_venta: row.fecha_venta,
+                    valor_venta: row.valor_venta
+                  }
+                : null,
+              comprador: row.id_comprador
+                ? {
+                    id_comprador: row.id_comprador,
+                    nombre_completo: row.comprador_nombre_completo,
+                    correo: row.comprador_correo,
+                    telefono: row.comprador_telefono
+                  }
+                : null
+            }))
+          : [];
       } catch (propError) {
         logger.warn(`No se pudieron cargar inmuebles para persona ${personaId}: ${propError.message}`);
       }

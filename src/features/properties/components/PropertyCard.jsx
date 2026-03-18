@@ -14,7 +14,7 @@ export function PropertyCard({ property }) {
           alt={property.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <Badge className="absolute top-4 right-4 bg-[#00457B] px-3 py-1 text-sm font-medium">
+        <Badge className="absolute top-4 right-4 bg-[#00457B] px-3 py-1 text-sm font-medium text-white">
           {property.status}
         </Badge>
         {property.featured && (

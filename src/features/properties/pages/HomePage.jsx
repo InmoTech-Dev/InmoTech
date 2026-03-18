@@ -61,10 +61,12 @@ export default function HomePage() {
       const formatted = numericPrice.toLocaleString("es-CO", {
         style: "currency",
         currency: "COP",
+        currencyDisplay: "code",
         maximumFractionDigits: 0,
       });
 
-      return property.precio_arriendo && !property.precio_venta ? `${formatted}/mes` : formatted;
+      const normalized = formatted.replace(/COP\s*\$/i, "COP ").trim();
+      return property.precio_arriendo && !property.precio_venta ? `${normalized}/mes` : normalized;
     };
 
     const normalizeOperation = (operacion = "") => {
@@ -101,6 +103,40 @@ export default function HomePage() {
       return match?.cantidad ?? "N/D";
     };
 
+    const buildAmenityFeatures = (property, maxItems = 3) => {
+      const normalize = (text = "") =>
+        String(text)
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim();
+
+      const resolveAmenityIcon = (label = "") => {
+        const clean = normalize(label);
+        if (["habitaciones", "cuartos", "dormitorios", "alcobas"].some((item) => clean.includes(item))) return "bedrooms";
+        if (["banos", "bano"].some((item) => clean.includes(item))) return "bathrooms";
+        return "area";
+      };
+
+      const selectedAmenities = (property.comodidades || [])
+        .filter((item) => item && (item.seleccionada ?? true))
+        .map((item) => ({
+          label:
+            Number.isFinite(Number(item.cantidad)) && Number(item.cantidad) > 0
+              ? `${Number(item.cantidad)} ${String(item.nombre || "").trim()}`
+              : String(item.nombre || "").trim(),
+        }))
+        .filter((item) => item.label.length > 0)
+        .map((item) => ({ ...item, icon: resolveAmenityIcon(item.label) }));
+
+      const areaFeature = {
+        icon: "area",
+        label: property.area_construida ? `${property.area_construida} m2` : "N/D m2",
+      };
+
+      return [areaFeature, ...selectedAmenities.slice(0, 2)].slice(0, maxItems);
+    };
+
     return featuredProperties.slice(0, 6).map((property) => ({
       id: property.id,
       title: property.titulo || "Inmueble",
@@ -111,6 +147,7 @@ export default function HomePage() {
       area: property.area_construida ? `${property.area_construida} m2` : "N/D",
       bedrooms: findAmenityAmount(property, ["habitaciones", "cuartos", "dormitorios"]),
       bathrooms: findAmenityAmount(property, ["banos", "baños", "bano", "baño"]),
+      features: buildAmenityFeatures(property, 3),
       image:
         (Array.isArray(property.imagenes) && property.imagenes[0]) ||
         property.image ||
@@ -425,9 +462,6 @@ export default function HomePage() {
                       <h3 className="text-2xl font-bold text-white mb-2">
                         {category.title}
                       </h3>
-                      <p className="text-white/90 text-sm mb-3">
-                        {category.count} propiedades
-                      </p>
                       <div className="flex items-center text-white text-sm font-medium">
                         <span>Ver propiedades</span>
                         <ArrowRight className="h-4 w-4 ml-2 transition-transform duration-300 group-hover:translate-x-2" />
@@ -579,19 +613,23 @@ export default function HomePage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex justify-between text-sm bg-gray-50 p-3 rounded-lg">
-                    <div className="flex items-center">
-                      <Home className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
-                      {property.area}
-                    </div>
-                    <div className="flex items-center">
-                      <Building2 className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
-                      {property.bedrooms} Hab.
-                    </div>
-                    <div className="flex items-center">
-                      <Key className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
-                      {property.bathrooms} Baños
-                    </div>
+                  <div
+                    className={`flex text-sm bg-gray-50 p-3 rounded-lg ${
+                      (property.features?.length || 0) <= 2 ? "justify-center gap-8" : "justify-between"
+                    }`}
+                  >
+                    {property.features?.length ? (
+                      property.features.map((feature, featureIndex) => (
+                        <div key={`${property.id}-${featureIndex}`} className="flex items-center">
+                          {feature.icon === "area" && <Home className="h-4 w-4 mr-1 text-[#00457B]" />}
+                          {feature.icon === "bedrooms" && <Building2 className="h-4 w-4 mr-1 text-[#00457B]" />}
+                          {feature.icon === "bathrooms" && <Key className="h-4 w-4 mr-1 text-[#00457B]" />}
+                          {feature.label}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-gray-600">Sin comodidades</div>
+                    )}
                   </div>
                 </CardContent>
                 <CardFooter>

@@ -62,7 +62,9 @@ const Sidebar = React.forwardRef(({
     }
 
     if (roleNames.includes('Propietario')) {
-      return navigationItems.filter(item => item.id === 'dashboard');
+      return navigationItems
+        .filter(item => item.id === 'dashboard')
+        .map((item) => ({ ...item, title: 'Mis inmuebles' }));
     }
 
     if (roleNames.includes('Arrendatario')) {

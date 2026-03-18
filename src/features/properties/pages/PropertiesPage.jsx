@@ -4,7 +4,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Badge } from "@/shared/components/ui/badge";
-import { Building2, Home, Key, MapPin, Search, Filter } from "lucide-react";
+import { Building2, Home, Key, MapPin, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { inmueblesAPI } from "@/shared/services/propertyApidervice";
 
@@ -13,7 +13,6 @@ export default function PropertiesPage() {
   const [filters, setFilters] = useState({
     type: "Todos los tipos",
     location: "Todas las ubicaciones",
-    maxPrice: "Sin límite",
   });
   const [propertiesVisible, setPropertiesVisible] = useState(false);
   const [properties, setProperties] = useState([]);
@@ -110,6 +109,40 @@ export default function PropertiesPage() {
     return match?.cantidad ?? "N/D";
   };
 
+  const buildAmenityFeatures = (property, maxItems = 3) => {
+    const normalize = (text = "") =>
+      String(text)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+
+    const resolveAmenityIcon = (label = "") => {
+      const clean = normalize(label);
+      if (["habitaciones", "cuartos", "dormitorios", "alcobas"].some((item) => clean.includes(item))) return "bedrooms";
+      if (["banos", "bano"].some((item) => clean.includes(item))) return "bathrooms";
+      return "area";
+    };
+
+    const selectedAmenities = (property.comodidades || [])
+      .filter((item) => item && (item.seleccionada ?? true))
+      .map((item) => ({
+        label:
+          Number.isFinite(Number(item.cantidad)) && Number(item.cantidad) > 0
+            ? `${Number(item.cantidad)} ${String(item.nombre || "").trim()}`
+            : String(item.nombre || "").trim(),
+      }))
+      .filter((item) => item.label.length > 0)
+      .map((item) => ({ ...item, icon: resolveAmenityIcon(item.label) }));
+
+    const areaFeature = {
+      icon: "area",
+      label: property.area_construida ? `${property.area_construida} m2` : "N/D m2",
+    };
+
+    return [areaFeature, ...selectedAmenities.slice(0, 2)].slice(0, maxItems);
+  };
+
   const normalizedProperties = properties.map((property) => {
     const operation = normalizeOperation(property.operacion);
 
@@ -122,6 +155,7 @@ export default function PropertiesPage() {
       area: property.area_construida ? `${property.area_construida} m2` : "N/D",
       bedrooms: findAmenityAmount(property, ["habitaciones", "cuartos", "dormitorios"]),
       bathrooms: findAmenityAmount(property, ["banos", "baños", "bano", "baño"]),
+      features: buildAmenityFeatures(property, 3),
       image:
         Array.isArray(property.imagenes) && property.imagenes.length
           ? property.imagenes[0]
@@ -190,7 +224,7 @@ export default function PropertiesPage() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="venta" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-1 block">Tipo de propiedad</label>
                     <Select value={filters.type} onValueChange={(value) => setFilters({ ...filters, type: value })}>
@@ -221,36 +255,16 @@ export default function PropertiesPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Precio máximo</label>
-                    <Select value={filters.maxPrice} onValueChange={(value) => setFilters({ ...filters, maxPrice: value })}>
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Sin límite" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white">
-                        <SelectItem value="Sin límite">Sin límite</SelectItem>
-                        <SelectItem value="200000">$200,000</SelectItem>
-                        <SelectItem value="500000">$500,000</SelectItem>
-                        <SelectItem value="1000000">$1,000,000</SelectItem>
-                        <SelectItem value="2000000">$2,000,000+</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <div className="flex items-end">
                     <Button className="w-full bg-[#0c4a7b] hover:bg-[#0a3d68] text-white">
                       <Search className="h-4 w-4 mr-2" /> Buscar
                     </Button>
                   </div>
                 </div>
-                <div className="flex justify-end">
-                  <Button variant="ghost" size="sm" className="text-[#0c4a7b]">
-                    <Filter className="h-4 w-4 mr-2" /> Filtros avanzados
-                  </Button>
-                </div>
               </TabsContent>
 
               <TabsContent value="alquiler" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="text-sm font-medium mb-1 block">Tipo de propiedad</label>
                     <Select value={filters.type} onValueChange={(value) => setFilters({ ...filters, type: value })}>
@@ -280,31 +294,11 @@ export default function PropertiesPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Precio máximo mensual</label>
-                    <Select value={filters.maxPrice} onValueChange={(value) => setFilters({ ...filters, maxPrice: value })}>
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Sin límite" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white transition-all duration-300 animate-in fade-in-0 slide-in-from-top-2">
-                        <SelectItem value="Sin límite">Sin límite</SelectItem>
-                        <SelectItem value="1000">$1,000</SelectItem>
-                        <SelectItem value="2000">$2,000</SelectItem>
-                        <SelectItem value="3000">$3,000</SelectItem>
-                        <SelectItem value="5000">$5,000+</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <div className="flex items-end">
                     <Button className="w-full bg-[#0c4a7b] hover:bg-[#0a3d68] text-white">
                       <Search className="h-4 w-4 mr-2" /> Buscar
                     </Button>
                   </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button variant="ghost" size="sm" className="text-[#0c4a7b]">
-                    <Filter className="h-4 w-4 mr-2" /> Filtros avanzados
-                  </Button>
                 </div>
               </TabsContent>
             </Tabs>
@@ -367,7 +361,7 @@ export default function PropertiesPage() {
                 >
                   <div className="relative h-64">
                     <img src={property.image || "/placeholder.svg"} alt={property.title} className="w-full h-full object-cover" />
-                    <Badge className="absolute top-4 right-4 bg-[#0c4a7b]">{property.status}</Badge>
+                    <Badge className="absolute top-4 right-4 bg-[#0c4a7b] text-white">{property.status}</Badge>
                   </div>
                   <CardHeader>
                     <div className="flex justify-between items-start">
@@ -378,17 +372,24 @@ export default function PropertiesPage() {
                       <MapPin className="h-4 w-4 mr-1" /> {property.location}
                     </div>
                   </CardHeader>
-                    <CardContent>
-                    <div className="flex justify-between text-sm">
-                      <div className="flex items-center">
-                        <Home className="h-4 w-4 mr-1" /> {property.area}
-                      </div>
-                      <div className="flex items-center">
-                        <Building2 className="h-4 w-4 mr-1" /> {property.bedrooms} Hab.
-                      </div>
-                      <div className="flex items-center">
-                        <Key className="h-4 w-4 mr-1" /> {property.bathrooms} Baños
-                      </div>
+                  <CardContent>
+                    <div
+                      className={`flex text-sm bg-gray-50 p-3 rounded-lg ${
+                        (property.features?.length || 0) <= 2 ? "justify-center gap-8" : "justify-between"
+                      }`}
+                    >
+                      {property.features?.length ? (
+                        property.features.map((feature, featureIndex) => (
+                          <div key={`${property.id}-${featureIndex}`} className="flex items-center">
+                            {feature.icon === "area" && <Home className="h-4 w-4 mr-1" />}
+                            {feature.icon === "bedrooms" && <Building2 className="h-4 w-4 mr-1" />}
+                            {feature.icon === "bathrooms" && <Key className="h-4 w-4 mr-1" />}
+                            {feature.label}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-gray-600">Sin comodidades</div>
+                      )}
                     </div>
                   </CardContent>
                   <CardFooter>

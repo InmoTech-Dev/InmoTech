@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, FileText, HandCoins, UserRound } from 'lucide-react';
+import { Building2, HandCoins, UserRound } from 'lucide-react';
 import ownerPortalApiService from '../../../../shared/services/ownerPortalApiService';
 
 const formatCurrency = (value) =>
@@ -15,6 +15,13 @@ const formatDate = (value) => {
   if (Number.isNaN(date.getTime())) return 'Sin fecha';
   return date.toLocaleDateString('es-CO');
 };
+
+const normalizeText = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
 
 const StatCard = ({ title, value, icon: Icon }) => (
   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -81,17 +88,16 @@ const OwnerPortfolioPage = () => {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Mis inmuebles</h1>
         <p className="text-sm text-slate-600">
-          {portfolio?.propietario?.nombre_completo || 'Propietario'} - seguimiento de inmuebles y arriendos
+          {portfolio?.propietario?.nombre_completo || 'Propietario'} - seguimiento de inmuebles
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <StatCard title="Total inmuebles" value={portfolio?.resumen?.total_inmuebles || 0} icon={Building2} />
-        <StatCard title="Con arriendo" value={portfolio?.resumen?.inmuebles_con_arriendo || 0} icon={FileText} />
         <StatCard title="Arriendos activos" value={portfolio?.resumen?.arriendos_activos || 0} icon={UserRound} />
         <StatCard
           title="Canon estimado"
-          value={formatCurrency(portfolio?.resumen?.canon_total_estimado || 0)}
+          value={formatCurrency(portfolio?.resumen?.canon_total_esperado || 0)}
           icon={HandCoins}
         />
       </div>
@@ -99,49 +105,67 @@ const OwnerPortfolioPage = () => {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {portfolio.inmuebles.map((item) => (
           <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-base font-semibold text-slate-800">{item.titulo}</h3>
-                <p className="text-xs text-slate-500">Registro: {item.registro}</p>
-              </div>
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                {item.arriendo?.estado || 'Sin arriendo'}
-              </span>
-            </div>
+            {(() => {
+              const estadoNormalizado = normalizeText(item.estadoInmueble || item.estadoFrontend);
+              const esArrendado = estadoNormalizado === 'arrendado';
+              const esVendido = estadoNormalizado === 'vendido';
 
-            <p className="mt-2 text-sm text-slate-700">{item.direccion}</p>
-            <p className="text-sm text-slate-500">{item.ciudad}</p>
-
-            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <p>
-                <span className="text-slate-500">Estado inmueble:</span> {item.estadoInmueble}
-              </p>
-              <p>
-                <span className="text-slate-500">Operacion:</span> {item.operacion}
-              </p>
-              <p className="col-span-2">
-                <span className="text-slate-500">Canon:</span> {formatCurrency(item.canon)}
-              </p>
-              <p>
-                <span className="text-slate-500">Inicio:</span> {formatDate(item.arriendo?.fechaInicio)}
-              </p>
-              <p>
-                <span className="text-slate-500">Finalizacion:</span> {formatDate(item.arriendo?.fechaFinalizacion)}
-              </p>
-            </div>
-
-            <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
-              <p className="font-medium text-slate-700">Arrendatario</p>
-              {item.arrendatario ? (
+              return (
                 <>
-                  <p>{item.arrendatario.nombre}</p>
-                  <p className="text-slate-500">{item.arrendatario.correo || 'Sin correo'}</p>
-                  <p className="text-slate-500">{item.arrendatario.telefono || 'Sin telefono'}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-800">{item.titulo}</h3>
+                      <p className="text-xs text-slate-500">Registro: {item.registro}</p>
+                    </div>
+                  </div>
+
+                  <p className="mt-2 text-sm text-slate-700">{item.direccion}</p>
+                  <p className="text-sm text-slate-500">{item.ciudad}</p>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <p>
+                      <span className="text-slate-500">Estado inmueble:</span> {item.estadoInmueble}
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Operacion:</span> {item.operacion}
+                    </p>
+
+                    {esArrendado && (
+                      <>
+                        <p>
+                          <span className="text-slate-500">Canon:</span> {formatCurrency(item.arriendo?.valorMensual || item.canon)}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Arrendatario:</span>{' '}
+                          {item.arrendatario?.nombre || 'Sin arrendatario asignado'}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Inicio contrato:</span> {formatDate(item.arriendo?.fechaInicio)}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Fin contrato:</span> {formatDate(item.arriendo?.fechaFinalizacion)}
+                        </p>
+                      </>
+                    )}
+
+                    {esVendido && (
+                      <>
+                        <p>
+                          <span className="text-slate-500">Valor venta:</span> {formatCurrency(item.venta?.valorVenta || item.precioVenta)}
+                        </p>
+                        <p>
+                          <span className="text-slate-500">Comprador:</span>{' '}
+                          {item.comprador?.nombre || 'Sin comprador registrado'}
+                        </p>
+                        <p className="col-span-2">
+                          <span className="text-slate-500">Fecha venta:</span> {formatDate(item.venta?.fechaVenta)}
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </>
-              ) : (
-                <p className="text-slate-500">Sin arrendatario asignado</p>
-              )}
-            </div>
+              );
+            })()}
           </div>
         ))}
         {portfolio.inmuebles.length === 0 && (

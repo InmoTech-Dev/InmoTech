@@ -1,19 +1,13 @@
 name: 🌐 Deploy Frontend
 
 on:
-  push:
-    branches: [main, Develop]
-    paths-ignore:
-      - "api/**"
-      - "database/**"
-      - "docs/**"
+  workflow_dispatch:    # ← Solo se ejecuta manualmente, no automático
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Deploy a Vercel
         uses: amondnet/vercel-action@v25
         with:

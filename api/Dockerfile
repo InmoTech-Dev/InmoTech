@@ -3,5 +3,5 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 COPY . .
-EXPOSE 3000
+EXPOSE 5000
 CMD ["node", "-r", "dotenv/config", "src/server.js"]

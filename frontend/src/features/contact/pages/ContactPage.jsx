@@ -25,7 +25,7 @@ export default function ContactPage() {
 
   const validateForm = () => {
     const newErrors = {}
-    
+
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
@@ -44,11 +44,11 @@ export default function ContactPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    
+
     if (name === "phone") {
       // Remove all non-numeric characters
       const numbersOnly = value.replace(/\D/g, "")
-      
+
       let formattedPhone = ""
       if (numbersOnly.length > 0) {
         // If the user already typed 57 as the start, just add + and space
@@ -59,7 +59,7 @@ export default function ContactPage() {
           formattedPhone = "+57 " + numbersOnly.slice(0, 10)
         }
       }
-      
+
       setFormData(prev => ({ ...prev, [name]: formattedPhone }))
     } else {
       setFormData(prev => ({ ...prev, [name]: value }))
@@ -73,7 +73,7 @@ export default function ContactPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!validateForm()) return
 
     setIsSubmitting(true)
@@ -361,8 +361,8 @@ export default function ContactPage() {
                   transition={{ duration: 0.5, delay: 0.6 }}
                   viewport={{ once: true }}
                 >
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full bg-[#00457B] hover:bg-[#003b69] text-white"
                     disabled={isSubmitting}
                   >
@@ -508,3 +508,6 @@ const offices = [
     image: "/images/contact/oficina-3.jpg",
   },
 ]
+
+
+

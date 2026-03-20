@@ -5,6 +5,7 @@ on:
     branches: [main, Develop]
     paths:
       - "api/**"
+      - "shared/**"
 
 jobs:
   build-and-deploy:
@@ -22,7 +23,7 @@ jobs:
 
       - name: Build y Push imagen Docker
         run: |
-          docker build ./api \
+          docker build . -f api/Dockerfile \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }} \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }}

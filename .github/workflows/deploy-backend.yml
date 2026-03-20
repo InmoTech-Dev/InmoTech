@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +20,7 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build y Push imagen
+      - name: Build y Push imagen Docker
         run: |
           docker build ./api \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }} \

@@ -123,5 +123,5 @@ Este proyecto está bajo la Licencia **MIT**. Para más detalles, revisa el arch
 
 ---
 <div align="center">
-  Hecho con ❤️ por el <b>Inmotech Development Team</b>.
+  Hecho con ❤️ por el <b>Inmotech Development Team SENA</b>.
 </div>

@@ -4,6 +4,8 @@
  * standardized realtime events for appointments/notifications.
  */
 
+import { getApiBaseUrl } from '../config/runtime';
+
 const parseRetryAfterMs = (rawValue) => {
   if (!rawValue) return null;
 
@@ -36,7 +38,7 @@ class SSEService {
   }
 
   getApiBaseUrl() {
-    return import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+    return getApiBaseUrl();
   }
 
   parseEventData(event) {

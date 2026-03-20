@@ -4,6 +4,7 @@ const { Invitacion, Persona, Acceso, Rol, PersonasRol } = require('../models');
 const bcryptUtils = require('../utils/bcrypt');
 const logger = require('../utils/logger');
 const emailService = require('./email.service');
+const { invitationUrlBase } = require('../config/runtime');
 
 const INVITE_TTL_HOURS = Number(process.env.INVITATION_TTL_HOURS || 24);
 const INVITE_MAX_INTENTOS = Number(process.env.INVITATION_MAX_INTENTOS || 5);
@@ -78,7 +79,7 @@ class InvitacionService {
       reenvios
     });
 
-    const activationBase = process.env.INVITATION_URL_BASE || 'http://localhost:3000/activar';
+    const activationBase = invitationUrlBase;
     const activationLink = `${activationBase}?token=${encodeURIComponent(token)}`;
 
     const sendEmail = async () => emailService.enviarEmailInvitacion({

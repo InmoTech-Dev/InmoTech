@@ -1,12 +1,12 @@
 const app = require('./app');
 const { testConnection } = require('./config/database');
+const { apiBaseUrl } = require('./config/runtime');
 const { runPermissionsBackfill } = require('./startup/backfillPermissions');
 const { runVentaAdjuntosBackfill } = require('./startup/backfillVentaAdjuntos');
 const { scheduleDailyLeaseAutoFinalize } = require('./jobs/leasesAutoFinalize.job');
 
 const PORT = process.env.PORT || 5000;
 const API_VERSION = String(process.env.API_VERSION || 'v1').toLowerCase();
-const BASE_URL = `http://localhost:${PORT}`;
 const STARTUP_BANNER_STYLE = String(process.env.STARTUP_BANNER_STYLE || 'emoji').toLowerCase();
 const BANNER_ICONS =
   STARTUP_BANNER_STYLE === 'ascii'
@@ -97,12 +97,13 @@ const startServer = async () => {
     }
 
     const server = app.listen(PORT, () => {
+      const runtimeBaseUrl = apiBaseUrl || `http://localhost:${PORT}`;
       console.log('=================================================');
       console.log(`${BANNER_ICONS.ok} Servidor corriendo en puerto ${PORT}`);
       console.log(`${BANNER_ICONS.env} Entorno: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`${BANNER_ICONS.url} URL: ${BASE_URL}`);
-      console.log(`${BANNER_ICONS.api} API: ${BASE_URL}/api/${API_VERSION}`);
-      console.log(`${BANNER_ICONS.health} Health: ${BASE_URL}/api/${API_VERSION}/health`);
+      console.log(`${BANNER_ICONS.url} URL: ${runtimeBaseUrl}`);
+      console.log(`${BANNER_ICONS.api} API: ${runtimeBaseUrl}/api/${API_VERSION}`);
+      console.log(`${BANNER_ICONS.health} Health: ${runtimeBaseUrl}/api/${API_VERSION}/health`);
       console.log('=================================================');
     });
 

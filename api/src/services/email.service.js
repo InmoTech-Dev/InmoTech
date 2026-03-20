@@ -1,5 +1,10 @@
 const nodemailer = require("nodemailer");
 const logger = require("../utils/logger");
+const {
+  frontendUrl,
+  passwordResetFrontendUrl,
+  isProduction,
+} = require("../config/runtime");
 
 const EMAIL_SEND_RETRY_ATTEMPTS = Math.max(1, Number(process.env.EMAIL_SEND_RETRY_ATTEMPTS || 3));
 const EMAIL_SEND_RETRY_BASE_DELAY_MS = Math.max(0, Number(process.env.EMAIL_SEND_RETRY_BASE_DELAY_MS || 2000));
@@ -7,6 +12,27 @@ const EMAIL_SEND_RETRY_BASE_DELAY_MS = Math.max(0, Number(process.env.EMAIL_SEND
 class EmailService {
   constructor() {
     const port = Number(process.env.EMAIL_PORT) || 587;
+    this.isConfigured = Boolean(
+      process.env.EMAIL_HOST &&
+      process.env.EMAIL_USER &&
+      process.env.EMAIL_PASS &&
+      process.env.EMAIL_FROM
+    );
+
+    if (!this.isConfigured) {
+      const logMethod = isProduction ? 'error' : 'warn';
+      logger[logMethod](
+        '[EMAIL] Configuracion incompleta. Define EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS y EMAIL_FROM.'
+      );
+      this.transporter = {
+        sendMail: async () => {
+          const error = new Error('Servicio de correo no configurado');
+          error.code = 'EMAIL_NOT_CONFIGURED';
+          throw error;
+        },
+      };
+      return;
+    }
 
     this.transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
@@ -127,13 +153,7 @@ class EmailService {
   }
 
   _buildResetPasswordUrl(token, email = '') {
-    const frontendBase =
-      process.env.PASSWORD_RESET_FRONTEND_URL ||
-      process.env.FRONTEND_URL ||
-      process.env.CLIENT_URL ||
-      "http://localhost:3000";
-
-    const normalizedBase = String(frontendBase).replace(/\/+$/, "");
+    const normalizedBase = String(passwordResetFrontendUrl || frontendUrl).replace(/\/+$/, "");
     const params = new URLSearchParams({ token: String(token) });
     if (email) {
       params.set('email', String(email).trim().toLowerCase());
@@ -536,6 +556,7 @@ class EmailService {
   generarTemplateBienvenida(nombreCompleto = "") {
     const primerNombre = nombreCompleto.trim().split(" ")[0] || "Hola";
     const logoUrl = process.env.EMAIL_LOGO_URL || "https://matrizinmobiliaria.com/images/logo-matriz-sin-fondo.png";
+    const appUrl = frontendUrl;
 
     return `
       <!DOCTYPE html>
@@ -617,7 +638,7 @@ class EmailService {
                     </div>
 
                     <div class="cta-wrap">
-                      <a class="cta" href="http://localhost:3000/" target="_blank" rel="noopener noreferrer">Empezar ahora</a>
+                      <a class="cta" href="${appUrl}" target="_blank" rel="noopener noreferrer">Empezar ahora</a>
                     </div>
 
                     <div class="tips">

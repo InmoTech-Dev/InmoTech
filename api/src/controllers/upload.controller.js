@@ -77,7 +77,7 @@ const upload = multer({
   }
 });
 
-// Variante que permite imágenes y PDFs (para comprobantes/contratos)
+// Variante que permite imagenes y PDFs (para comprobantes/contratos)
 const uploadAny = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -153,20 +153,13 @@ const uploadSingleAny = (req, res, next) => {
 
 const subirImagen = async (req, res) => {
   try {
-    const hasCloudinaryUrl = Boolean(process.env.CLOUDINARY_URL);
-    const hasCloudinaryCredentials = Boolean(
-      process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-    );
-
-    if (!hasCloudinaryUrl && !hasCloudinaryCredentials) {
-      logger.error('Subida abortada: Cloudinary no está configurado correctamente');
-      return res.status(500).json({ success: false, message: 'Servicio de imágenes no configurado' });
+    if (typeof cloudinary.isConfigured === 'function' && !cloudinary.isConfigured()) {
+      logger.error('Subida abortada: Cloudinary no esta configurado correctamente');
+      return res.status(500).json({ success: false, message: 'Servicio de imagenes no configurado' });
     }
 
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No se envió archivo' });
+      return res.status(400).json({ success: false, message: 'No se envio archivo' });
     }
 
     const requestedFolder =
@@ -190,9 +183,9 @@ const subirImagen = async (req, res) => {
           resource_type: resourceType,
           timeout: CLOUDINARY_UPLOAD_TIMEOUT_MS,
         },
-        (error, result) => {
+        (error, uploadResult) => {
           if (error) return reject(error);
-          return resolve(result);
+          return resolve(uploadResult);
         }
       );
       stream.end(req.file.buffer);

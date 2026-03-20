@@ -1,5 +1,5 @@
 const path = require('path');
-const permissionsConfig = require(path.resolve(__dirname, '../../..', 'shared/config/permissions-map.json'));
+const permissionsConfig = require(path.resolve(__dirname, '../../..', 'frontend/shared/config/permissions-map.json'));
 
 const modulesConfig = permissionsConfig.modules || {};
 const permissionsConfigMap = permissionsConfig.permissions || {};

@@ -15,7 +15,7 @@ const isTruthyEnv = (value, defaultValue = false) => {
   return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
 };
 
-const ADMIN_INVITE_EMAIL_ASYNC = isTruthyEnv(process.env.ADMIN_INVITE_EMAIL_ASYNC, true);
+const ADMIN_INVITE_EMAIL_ASYNC = isTruthyEnv(process.env.ADMIN_INVITE_EMAIL_ASYNC, false);
 
 const buildHttpError = (message, status) => {
   const error = new Error(message);
@@ -537,10 +537,19 @@ class AdministrativoService {
         }
 
         const { personaData, administrativoData, rolId } = updateData;
+        let emailCambiado = false;
 
         // Actualizar datos de persona si se proporcionan
         if (personaData) {
-          await administrativo.persona.update(personaData, { transaction: t });
+          if (personaData.correo && personaData.correo !== administrativo.persona.correo) {
+            emailCambiado = true;
+          }
+          await administrativo.persona.update(
+            emailCambiado
+              ? { ...personaData, tiene_cuenta: false, correo_verificado: false }
+              : personaData,
+            { transaction: t }
+          );
         }
 
         // Actualizar datos administrativos
@@ -595,7 +604,7 @@ class AdministrativoService {
 
         logger.info(`Administrativo actualizado: ID ${id}`);
 
-        return administrativo;
+        return { administrativo, emailCambiado, id_persona: administrativo.persona.id_persona, persona: administrativo.persona };
 
       } catch (error) {
         logger.error('Error actualizando administrativo:', error);
@@ -603,7 +612,24 @@ class AdministrativoService {
       }
     });
 
-    return result;
+    if (result && result.emailCambiado) {
+      try {
+        const rolNombre = result.persona.roles?.[0]?.nombre_rol || 'Administrativo';
+        await invitacionService.crearInvitacion({
+          id_persona: result.id_persona,
+          creado_por: updateData.actualizado_por || null,
+          tipo: 'admin_invite',
+          rol_asignado: rolNombre,
+          es_administrativo: true,
+          deferEmail: false
+        });
+        logger.info(`Nueva invitacion enviada porque el correo del administrativo ID ${id} fue modificado.`);
+      } catch (inviteError) {
+        logger.error('Error enviando nueva invitacion despues de modificar el correo:', inviteError);
+      }
+    }
+
+    return result.administrativo;
   }
 
   /**

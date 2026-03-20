@@ -1,0 +1,16 @@
+node_modules/
+.env
+
+# Ignorar archivos de log para evitar errores de permiso
+api/logs/*.log
+api/logs/combined*
+api/logs/error*
+api/logs/exceptions*
+api/logs/rejections*
+
+# Ignorar la carpeta de compilación
+dist/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db

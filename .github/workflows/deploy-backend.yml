@@ -1,0 +1,35 @@
+name: 🚀 Deploy Backend
+
+on:
+  push:
+    branches: [main, Develop]
+    paths:
+      - "api/**"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login a Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build y Push imagen
+        run: |
+          docker build ./api \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }}
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest
+
+      - name: Deploy en Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }}

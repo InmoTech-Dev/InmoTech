@@ -10,6 +10,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +20,12 @@ jobs:
 
       - name: Pull Vercel Environment
         working-directory: ./frontend
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+          fi
 
       - name: Build Project
         working-directory: ./frontend
@@ -26,4 +33,11 @@ jobs:
 
       - name: Deploy to Vercel
         working-directory: ./frontend
-        run: vercel deploy --prebuilt ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Mostrar URL del deploy
+        run: |
+          echo "🚀 Deploy URL: ${{ steps.deploy.outputs.url }}"

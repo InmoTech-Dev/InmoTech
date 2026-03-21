@@ -10,9 +10,19 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Login a GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login a Azure Container Registry
         uses: azure/docker-login@v1
@@ -25,9 +35,13 @@ jobs:
         run: |
           docker build . -f api/Dockerfile \
             -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }} \
-            -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest \
+            -t ghcr.io/inmotech-dev/inmotech-api:${{ github.sha }} \
+            -t ghcr.io/inmotech-dev/inmotech-api:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest
+          docker push ghcr.io/inmotech-dev/inmotech-api:${{ github.sha }}
+          docker push ghcr.io/inmotech-dev/inmotech-api:latest
 
       - name: Deploy en Azure Web App
         uses: azure/webapps-deploy@v2

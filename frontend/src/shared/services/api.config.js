@@ -3,8 +3,10 @@
  * Incluye refresh single-flight, retry unico en 401 y envio de CSRF para mutaciones.
  */
 
+import { getApiBaseUrl } from '../config/runtime';
+
 const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1',
+  BASE_URL: getApiBaseUrl(),
   TIMEOUT: 60000,
   RETRY_ATTEMPTS: 2,
   RETRY_DELAY: 1000,

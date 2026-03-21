@@ -1,4 +1,5 @@
 import { API_CONFIG } from './api.config';
+import { getApiBaseUrl } from '../config/runtime';
 
 /**
  * Sube un archivo a Cloudinary a través del backend.
@@ -21,7 +22,7 @@ export async function uploadToCloudinary(file, options = {}) {
   const csrfToken = csrfMatch ? decodeURIComponent(csrfMatch[1]) : null;
   const headers = csrfToken ? { [API_CONFIG.CSRF_HEADER_NAME]: csrfToken } : {};
 
-  const response = await fetch(`${API_CONFIG.BASE_URL}/files/upload`, {
+  const response = await fetch(`${getApiBaseUrl()}/files/upload`, {
     method: 'POST',
     body: formData,
     credentials: 'include',

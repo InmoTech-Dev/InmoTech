@@ -5,19 +5,11 @@
 
 const logger = require('../utils/logger');
 const opsConsoleLogger = require('../utils/opsConsoleLogger');
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean)
-  : ['http://localhost:5173', 'http://localhost:3000'];
-const isDevelopment = process.env.NODE_ENV !== 'production';
+const { isAllowedOrigin } = require('../config/runtime');
 
 const resolveSseOrigin = (requestOrigin) => {
   if (!requestOrigin) return null;
-  if (allowedOrigins.includes(requestOrigin)) return requestOrigin;
-
-  if (
-    isDevelopment &&
-    (requestOrigin.startsWith('http://localhost:') || requestOrigin.startsWith('http://127.0.0.1:'))
-  ) {
+  if (isAllowedOrigin(requestOrigin)) {
     return requestOrigin;
   }
 

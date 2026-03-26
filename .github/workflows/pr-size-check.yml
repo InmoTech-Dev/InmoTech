@@ -1,0 +1,23 @@
+name: PR Size Check
+
+on:
+  pull_request:
+    branches: [Develop, main]
+
+jobs:
+  size-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verificar tamaño del PR
+        run: |
+          ADDITIONS=$(git diff --numstat origin/${{ github.base_ref }}...HEAD | awk '{sum += $1} END {print sum+0}')
+          echo "📊 Líneas agregadas: $ADDITIONS"
+          if [ "$ADDITIONS" -gt 400 ]; then
+            echo "⚠️ PR demasiado grande ($ADDITIONS líneas). Divídelo en PRs más pequeños para facilitar la revisión."
+            exit 1
+          fi
+          echo "✅ Tamaño aceptable: $ADDITIONS líneas"

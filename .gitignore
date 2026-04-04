@@ -23,8 +23,8 @@ api/.env.*
 frontend/.env
 frontend/.env.*
 
-# Logs
-logs/
+# Logs (en cualquier subdirectorio)
+**/logs/
 *.log
 
 # Coverage

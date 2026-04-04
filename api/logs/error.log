@@ -21,3 +21,24 @@
 {"level":"error","message":"  - Error: Failed to connect to localhost:1433 - Could not connect (sequence)","timestamp":"2026-03-19 17:43:14"}
 {"code":"INVALID_REFRESH_TOKEN","level":"error","message":"Error refrescando token: Credenciales invalidas","stack":"Error: Credenciales invalidas\n    at AuthService.refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\services\\auth.service.js:365:23)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\controllers\\auth.controller.js:310:22)","status":401,"timestamp":"2026-03-19 18:07:54"}
 {"code":"INVALID_REFRESH_TOKEN","level":"error","message":"Error refrescando token: Credenciales invalidas","stack":"Error: Credenciales invalidas\n    at AuthService.refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\services\\auth.service.js:365:23)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\controllers\\auth.controller.js:310:22)","status":401,"timestamp":"2026-03-19 18:07:54"}
+{"level":"error","message":"Error al conectar con SQL Server:","timestamp":"2026-03-27 10:28:39"}
+{"level":"error","message":"  - Host: localhost","timestamp":"2026-03-27 10:28:39"}
+{"level":"error","message":"  - Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:28:39"}
+{"level":"error","message":"  - Puerto: (dinamico/instancia)","timestamp":"2026-03-27 10:28:39"}
+{"level":"error","message":"  - Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:28:39"}
+{"level":"error","message":"  - Usuario: sa","timestamp":"2026-03-27 10:28:39"}
+{"level":"error","message":"  - Error: Failed to connect to localhost\\SQLEXPRESS in 60000ms","timestamp":"2026-03-27 10:28:39"}
+{"level":"error","message":"Error al conectar con SQL Server:","timestamp":"2026-03-27 10:29:44"}
+{"level":"error","message":"  - Host: localhost","timestamp":"2026-03-27 10:29:44"}
+{"level":"error","message":"  - Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:29:44"}
+{"level":"error","message":"  - Puerto: (dinamico/instancia)","timestamp":"2026-03-27 10:29:44"}
+{"level":"error","message":"  - Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:29:44"}
+{"level":"error","message":"  - Usuario: sa","timestamp":"2026-03-27 10:29:44"}
+{"level":"error","message":"  - Error: Failed to connect to localhost\\SQLEXPRESS in 60000ms","timestamp":"2026-03-27 10:29:44"}
+{"level":"error","message":"Error al conectar con SQL Server:","timestamp":"2026-03-27 10:30:49"}
+{"level":"error","message":"  - Host: localhost","timestamp":"2026-03-27 10:30:49"}
+{"level":"error","message":"  - Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:30:49"}
+{"level":"error","message":"  - Puerto: (dinamico/instancia)","timestamp":"2026-03-27 10:30:49"}
+{"level":"error","message":"  - Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:30:49"}
+{"level":"error","message":"  - Usuario: sa","timestamp":"2026-03-27 10:30:49"}
+{"level":"error","message":"  - Error: Failed to connect to localhost\\SQLEXPRESS in 60000ms","timestamp":"2026-03-27 10:30:49"}

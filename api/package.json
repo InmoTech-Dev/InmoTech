@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node -r ./src/config/loadEnv.js src/server.js",
     "dev": "nodemon -r ./src/config/loadEnv.js src/server.js",
-    "test": "jest --coverage"
+    "test": "jest --coverage",
+    "lint": "echo \"API sin ESLint configurado — configuración pendiente\""
   },
   "keywords": [
     "api",

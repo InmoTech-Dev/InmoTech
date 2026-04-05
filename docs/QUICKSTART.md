@@ -112,6 +112,17 @@ CORS_ORIGIN=http://localhost:5173
 ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
+En producción usa el dominio público del frontend y, si necesitas previews por rama de Vercel, puedes agregar patrones con wildcard:
+
+```env
+PUBLIC_API_URL=https://inmotech-api.duckdns.org
+FRONTEND_URL=https://inmotech-red.vercel.app
+ALLOWED_ORIGINS=https://inmotech-red.vercel.app,https://inmotech-dev.vercel.app,https://*.pabloisaacruizdelgado1-gmailcoms-projects.vercel.app
+COOKIE_SAMESITE=none
+COOKIE_SECURE=true
+AUTH_VALIDATE_ORIGIN=true
+```
+
 ### Ejemplo de Uso desde React
 
 ```javascript

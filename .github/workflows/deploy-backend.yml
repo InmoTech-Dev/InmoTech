@@ -68,8 +68,12 @@ jobs:
               -e EMAIL_USER=${{ secrets.EMAIL_USER }} \
               -e EMAIL_PASS=${{ secrets.EMAIL_PASS }} \
               -e EMAIL_FROM=${{ secrets.EMAIL_FROM }} \
-              -e PUBLIC_API_URL=${{ secrets.NGROK_URL }} \
-              -e ALLOWED_ORIGINS=https://inmotech-red.vercel.app,${{ secrets.NGROK_URL }},https://*.pabloisaacruizdelgado1-gmailcoms-projects.vercel.app \
+              -e PUBLIC_API_URL=${{ secrets.PUBLIC_API_URL }} \
+              -e FRONTEND_URL=${{ secrets.FRONTEND_URL }} \
+              -e ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }} \
+              -e COOKIE_SAMESITE=none \
+              -e COOKIE_SECURE=true \
+              -e AUTH_VALIDATE_ORIGIN=true \
               -e SETUP_ENABLE_ENDPOINT=${{ secrets.SETUP_ENABLE_ENDPOINT || 'false' }} \
               -e SETUP_SECRET_KEY=${{ secrets.SETUP_SECRET_KEY }} \
               ghcr.io/inmotech-dev/inmotech-api:latest

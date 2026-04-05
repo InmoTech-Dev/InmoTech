@@ -10,4 +10,4 @@ COPY api/ .
 COPY frontend/shared/ /frontend/shared/
 
 EXPOSE 5000
-CMD ["node", "-r", "dotenv/config", "src/server.js"]
+CMD ["node", "-r", "./src/config/loadEnv.js", "src/server.js"]

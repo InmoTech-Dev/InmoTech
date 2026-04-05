@@ -18,6 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 1. Build y Push imagen a GHCR
       - name: Login a GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -27,27 +28,46 @@ jobs:
 
       - name: Build y Push imagen backend a GHCR
         run: |
-          docker build -t ghcr.io/inmotech-dev/inmotech-api:latest -f api/Dockerfile .
-          docker push ghcr.io/inmotech-dev/inmotech-api:latest
-
-      - name: Login a Azure Container Registry
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Build y Push imagen Docker a ACR
-        run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }} \
-            -t ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest \
+          docker build -t ghcr.io/inmotech-dev/inmotech-api:latest \
+            -t ghcr.io/inmotech-dev/inmotech-api:${{ github.sha }} \
             -f api/Dockerfile .
-          docker push ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }}
-          docker push ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:latest
+          docker push ghcr.io/inmotech-dev/inmotech-api:latest
+          docker push ghcr.io/inmotech-dev/inmotech-api:${{ github.sha }}
 
-      - name: Deploy en Azure Web App
-        uses: azure/webapps-deploy@v2
+      # 2. Deploy en Oracle Cloud via SSH
+      - name: Deploy en Oracle Cloud via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: ${{ secrets.ACR_LOGIN_SERVER }}/inmotech-api:${{ github.sha }}
+          host: ${{ secrets.ORACLE_SSH_HOST }}
+          username: ${{ secrets.ORACLE_SSH_USER }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          script: |
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ghcr.io/inmotech-dev/inmotech-api:latest
+            docker stop inmotech-api || true
+            docker rm inmotech-api || true
+            docker run -d \
+              --name inmotech-api \
+              --restart unless-stopped \
+              -p 80:5000 \
+              -e NODE_ENV=production \
+              -e PORT=5000 \
+              -e DB_DIALECT=mssql \
+              -e DB_SERVER=${{ secrets.DB_SERVER }} \
+              -e DB_PORT=1433 \
+              -e DB_NAME=${{ secrets.DB_NAME }} \
+              -e DB_USER=${{ secrets.DB_USER }} \
+              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
+              -e JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }} \
+              -e CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }} \
+              -e CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }} \
+              -e CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }} \
+              -e EMAIL_HOST=${{ secrets.EMAIL_HOST }} \
+              -e EMAIL_PORT=${{ secrets.EMAIL_PORT }} \
+              -e EMAIL_USER=${{ secrets.EMAIL_USER }} \
+              -e EMAIL_PASS=${{ secrets.EMAIL_PASS }} \
+              -e EMAIL_FROM=${{ secrets.EMAIL_FROM }} \
+              -e PUBLIC_API_URL=${{ secrets.NGROK_URL }} \
+              -e ALLOWED_ORIGINS=https://inmotech-red.vercel.app,${{ secrets.NGROK_URL }},https://*.pabloisaacruizdelgado1-gmailcoms-projects.vercel.app \
+              ghcr.io/inmotech-dev/inmotech-api:latest

@@ -4,8 +4,8 @@
   "description": "API RESTful para el sistema inmobiliario Inmotech - Módulo de Citas",
   "main": "src/server.js",
   "scripts": {
-    "start": "node -r dotenv/config src/server.js",
-    "dev": "nodemon -r dotenv/config src/server.js",
+    "start": "node -r ./src/config/loadEnv.js src/server.js",
+    "dev": "nodemon -r ./src/config/loadEnv.js src/server.js",
     "test": "jest --coverage"
   },
   "keywords": [

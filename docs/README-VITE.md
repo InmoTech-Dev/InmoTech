@@ -1,15 +1,29 @@
-# React + Vite
+# Frontend con Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Desarrollo local
 
-Currently, two official plugins are available:
+Usa `frontend/.env.development` con:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```env
+VITE_API_URL=http://localhost:5000/api/v1
+VITE_CSRF_COOKIE_NAME=csrfToken
+VITE_CSRF_HEADER_NAME=X-CSRF-Token
+```
 
+Luego ejecuta:
 
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-credenciales para super administrador
+## Producción
 
-admin@inmotech.com
-Pepipro24#
+En Vercel, la variable requerida es:
+
+```env
+VITE_API_URL=https://inmotech-api.duckdns.org/api/v1
+```
+
+El proyecto ya resuelve la base URL desde `import.meta.env.VITE_API_URL` en `frontend/src/shared/config/runtime.js`, así que no debe existir ningún fallback hardcodeado en producción.

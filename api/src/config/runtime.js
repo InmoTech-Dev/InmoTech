@@ -9,7 +9,7 @@ const DEFAULT_LOCAL_ORIGINS = [
   'ionic://localhost',
 ];
 const DEFAULT_PRODUCTION_FRONTEND_URL = 'https://inmotech-red.vercel.app';
-const DEFAULT_PRODUCTION_API_URL = 'https://inmotech-api.azurewebsites.net';
+const DEFAULT_PRODUCTION_API_URL = 'https://inmotech-api.duckdns.org';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -26,6 +26,58 @@ const splitCsv = (value = '') =>
     .filter(Boolean);
 
 const toUniqueList = (values = []) => Array.from(new Set(values.filter(Boolean)));
+
+const parseOriginPattern = (value) => {
+  const normalizedValue = normalizeUrl(value);
+  if (!normalizedValue) return null;
+
+  try {
+    const parsed = new URL(normalizedValue);
+    const wildcardPrefix = '*.';
+    const isWildcardHost = parsed.hostname.startsWith(wildcardPrefix);
+
+    return {
+      raw: normalizedValue,
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      port: parsed.port,
+      isWildcardHost,
+      hostnameSuffix: isWildcardHost ? parsed.hostname.slice(wildcardPrefix.length).toLowerCase() : null,
+    };
+  } catch {
+    return {
+      raw: normalizedValue,
+      protocol: '',
+      hostname: '',
+      port: '',
+      isWildcardHost: false,
+      hostnameSuffix: null,
+    };
+  }
+};
+
+const doesOriginMatchPattern = (origin, pattern) => {
+  if (!origin || !pattern) return false;
+  if (!pattern.isWildcardHost) {
+    return origin === pattern.raw;
+  }
+
+  let parsedOrigin;
+  try {
+    parsedOrigin = new URL(origin);
+  } catch {
+    return false;
+  }
+
+  if (pattern.protocol && parsedOrigin.protocol !== pattern.protocol) return false;
+  if (pattern.port && parsedOrigin.port !== pattern.port) return false;
+
+  const candidateHost = parsedOrigin.hostname.toLowerCase();
+  const suffix = pattern.hostnameSuffix;
+  if (!suffix || candidateHost === suffix) return false;
+
+  return candidateHost.endsWith(`.${suffix}`);
+};
 
 const apiBaseUrl = normalizeUrl(
   process.env.PUBLIC_API_URL,
@@ -58,21 +110,24 @@ const isLocalOrigin = (origin = '') =>
 const allowedOrigins = (() => {
   const configuredOrigins = splitCsv(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN);
   if (configuredOrigins.length > 0) {
-    return toUniqueList(configuredOrigins.map((origin) => normalizeUrl(origin)));
+    return configuredOrigins
+      .map((origin) => parseOriginPattern(origin))
+      .filter(Boolean)
+      .filter((pattern, index, patterns) => patterns.findIndex((item) => item.raw === pattern.raw) === index);
   }
 
   if (isProduction) {
-    return frontendUrl ? [frontendUrl] : [];
+    return frontendUrl ? [parseOriginPattern(frontendUrl)] : [];
   }
 
-  return DEFAULT_LOCAL_ORIGINS.slice();
+  return DEFAULT_LOCAL_ORIGINS.map((origin) => parseOriginPattern(origin));
 })();
 
 const isAllowedOrigin = (origin) => {
   if (!origin) return true;
   const normalizedOrigin = normalizeUrl(origin);
   if (!normalizedOrigin) return true;
-  if (allowedOrigins.includes(normalizedOrigin)) return true;
+  if (allowedOrigins.some((pattern) => doesOriginMatchPattern(normalizedOrigin, pattern))) return true;
   return !isProduction && isLocalOrigin(normalizedOrigin);
 };
 

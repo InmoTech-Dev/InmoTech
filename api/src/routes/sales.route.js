@@ -77,17 +77,17 @@ router.post(
   authenticateToken,
   salesController.attachMiddleware(),
   validate(createAttachmentSchema),
-  salesController.addAttachment
+  salesController.addAttachment.bind(salesController)
 );
 
 // GET /api/v1/sales/:id/attachments - Listar adjuntos
-router.get('/:id/attachments', authenticateToken, salesController.listAttachments);
+router.get('/:id/attachments', authenticateToken, salesController.listAttachments.bind(salesController));
 
 // GET /api/v1/sales/:id/attachments/:adjuntoId/file - Visualizar/descargar adjunto
 router.get('/:id/attachments/:adjuntoId/file', authenticateToken, salesController.streamAttachment.bind(salesController));
 
 // DELETE /api/v1/sales/:id/attachments/:adjuntoId - Borrar adjunto
-router.delete('/:id/attachments/:adjuntoId', authenticateToken, salesController.deleteAttachment);
+router.delete('/:id/attachments/:adjuntoId', authenticateToken, salesController.deleteAttachment.bind(salesController));
 
 // GET /api/v1/sales/dashboard/statistics - Obtener estadísticas
 router.get('/dashboard/statistics', salesController.getStatistics);

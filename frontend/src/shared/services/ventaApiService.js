@@ -150,7 +150,14 @@ export const ventaApiService = {
       throw new Error(`No se pudo obtener el adjunto. Código ${response.status}.`);
     }
 
-    return response.blob();
+    const blob = await response.blob();
+    const contentType = response.headers.get('content-type') || blob.type || '';
+
+    if (contentType.toLowerCase().includes('pdf') || !contentType) {
+      return new Blob([blob], { type: 'application/pdf' });
+    }
+
+    return blob;
   },
 };
 

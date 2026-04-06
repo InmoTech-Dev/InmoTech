@@ -21,7 +21,6 @@ import ViewSaleModal from "../../components/sales/ViewSale";
 import ventaApiService from "../../../../shared/services/ventaApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 
-import { buyersApiService } from "../../../../shared/services/buyersApiService";
 
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
@@ -867,18 +866,6 @@ const toISODate = (value) => {
 };
 
 
-
-const mapPaymentToPurchaseType = (medioPago = "") => {
-
-  const normalized = medioPago.toLowerCase();
-
-  if (normalized === "credito") return "Financiada";
-
-  if (normalized === "mixto") return "Mixta";
-
-  return normalized === "transferencia" ? "Directa" : "Directa";
-
-};
 
 const INMUEBLES_FICHAS_STORAGE_KEY = "inmuebles:fichas-tecnicas";
 
@@ -1814,40 +1801,6 @@ export function SalesManagementPage() {
 
 
 
-      let buyerUpdateError = null;
-
-      const buyerIdForUpdate =
-        buyerInfo?.id ||
-        buyerInfo?.compradorId ||
-        buyerInfo?.raw?.id_comprador;
-
-      try {
-        if (buyerIdForUpdate) {
-          await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
-
-            id_inmueble: payload.id_inmueble,
-
-            id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
-
-            fecha_compra: payload.fecha_venta,
-
-            valor_compra: payload.valor_venta,
-
-            tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
-
-          });
-        }
-
-      } catch (error) {
-
-        buyerUpdateError = error;
-
-        console.error("No fue posible actualizar al comprador:", error);
-
-      }
-
-
-
       setVentas((prev) => [...prev, normalizedSale]);
       fetchVentas(searchTerm.trim(), 1);
       loadProperties();
@@ -1857,9 +1810,7 @@ export function SalesManagementPage() {
         cambios: "Cambio automático de estado a En proceso de venta por registro de venta",
       });
 
-      const successText = buyerUpdateError
-        ? MESSAGES.sale.create.partialBuyer
-        : MESSAGES.sale.create.success;
+      const successText = MESSAGES.sale.create.success;
       setStatusMessage({
         type: "success",
         text: successText,

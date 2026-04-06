@@ -1,7 +1,41 @@
 const rolesService = require('../services/roles.service');
 const logger = require('../utils/logger');
+const sseService = require('../services/sse.service');
+const realtimeAudienceService = require('../services/realtimeAudience.service');
 
 class RolesController {
+  async emitirCambioRol({
+    action,
+    roleId,
+    actorUserId,
+    affectedUserIds = [],
+    meta = {},
+  }) {
+    try {
+      const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+      const audienceUserIds = Array.from(
+        new Set([...adminIds, actorUserId].filter((value) => Number.isInteger(value) && value > 0))
+      );
+
+      sseService.emitRoleChanged({
+        action,
+        roleId,
+        affectedUserIds,
+        audienceUserIds,
+        meta,
+      });
+
+      return audienceUserIds;
+    } catch (sseError) {
+      logger.error('[SSE][ROLE] No se pudo emitir evento realtime', {
+        action,
+        roleId,
+        error: sseError.message,
+      });
+      return [actorUserId].filter((value) => Number.isInteger(value) && value > 0);
+    }
+  }
+
   /**
    * Crear un nuevo rol (solo Super Administrador)
    */
@@ -11,6 +45,11 @@ class RolesController {
       const userId = req.user.id;
 
       const rol = await rolesService.crearRol(rolData, userId);
+      await this.emitirCambioRol({
+        action: 'created',
+        roleId: rol?.id_rol || rol?.id,
+        actorUserId: userId,
+      });
 
       return res.status(201).json({
         success: true,
@@ -70,6 +109,11 @@ class RolesController {
       const userId = req.user.id;
 
       const rol = await rolesService.actualizarRol(parseInt(id), updateData, userId);
+      await this.emitirCambioRol({
+        action: updateData?.permisos ? 'permissions_changed' : 'updated',
+        roleId: parseInt(id),
+        actorUserId: userId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -91,6 +135,11 @@ class RolesController {
       const userId = req.user.id;
 
       await rolesService.eliminarRol(parseInt(id), userId);
+      await this.emitirCambioRol({
+        action: 'deleted',
+        roleId: parseInt(id),
+        actorUserId: userId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -111,6 +160,21 @@ class RolesController {
       const userId = req.user.id;
 
       const asignacion = await rolesService.asignarRol(parseInt(idPersona), parseInt(idRol), userId);
+      const audienceUserIds = await this.emitirCambioRol({
+        action: 'assigned',
+        roleId: parseInt(idRol),
+        actorUserId: userId,
+        affectedUserIds: [parseInt(idPersona)],
+        meta: {
+          target_user_id: parseInt(idPersona),
+        },
+      });
+      sseService.emitUserChanged({
+        action: 'role_changed',
+        userId: parseInt(idPersona),
+        affectedUserIds: [parseInt(idPersona)],
+        audienceUserIds,
+      });
 
       return res.status(201).json({
         success: true,
@@ -132,6 +196,21 @@ class RolesController {
       const userId = req.user.id;
 
       await rolesService.removerRol(parseInt(idPersona), parseInt(idRol), userId);
+      const audienceUserIds = await this.emitirCambioRol({
+        action: 'unassigned',
+        roleId: parseInt(idRol),
+        actorUserId: userId,
+        affectedUserIds: [parseInt(idPersona)],
+        meta: {
+          target_user_id: parseInt(idPersona),
+        },
+      });
+      sseService.emitUserChanged({
+        action: 'role_changed',
+        userId: parseInt(idPersona),
+        affectedUserIds: [parseInt(idPersona)],
+        audienceUserIds,
+      });
 
       return res.status(200).json({
         success: true,

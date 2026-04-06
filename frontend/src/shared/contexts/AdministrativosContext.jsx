@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import administrativosApiService from '../services/administrativosApiService';
 import { useToast } from '../hooks/use-toast';
 import { useAuth } from './AuthContext';
-import sseService from '../services/sseService';
+import realtimeBus from '../services/realtimeBus';
 
 const AdministrativosContext = createContext();
 
@@ -20,6 +20,8 @@ export const AdministrativosProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const { toast } = useToast();
   const { isAuthenticated, user } = useAuth();
+  const realtimeRefreshRef = React.useRef(null);
+  const loadAdministrativosInFlightRef = React.useRef(null);
   const getAdministrativoId = useCallback(
     (admin) => admin?.id_administrativo ?? admin?.administrativo?.id_administrativo ?? null,
     []
@@ -27,25 +29,35 @@ export const AdministrativosProvider = ({ children }) => {
 
   // Cargar administrativos
   const loadAdministrativos = useCallback(async (params = {}) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await administrativosApiService.getAdministrativos(params);
-      const administrativosResponse = response?.data?.data?.administrativos
-        || response?.data?.administrativos
-        || response?.administrativos
-        || [];
-      setAdministrativos(Array.isArray(administrativosResponse) ? administrativosResponse.filter(Boolean) : []);
-    } catch (err) {
-      setError(err.message || 'Error al cargar administrativos');
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los administrativos",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+    if (loadAdministrativosInFlightRef.current) {
+      return loadAdministrativosInFlightRef.current;
     }
+
+    const request = (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await administrativosApiService.getAdministrativos(params);
+        const administrativosResponse = response?.data?.data?.administrativos
+          || response?.data?.administrativos
+          || response?.administrativos
+          || [];
+        setAdministrativos(Array.isArray(administrativosResponse) ? administrativosResponse.filter(Boolean) : []);
+      } catch (err) {
+        setError(err.message || 'Error al cargar administrativos');
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los administrativos",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+        loadAdministrativosInFlightRef.current = null;
+      }
+    })();
+
+    loadAdministrativosInFlightRef.current = request;
+    return request;
   }, [toast]);
 
   // Agregar administrativo
@@ -211,16 +223,35 @@ export const AdministrativosProvider = ({ children }) => {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const handleUserChanged = (data) => {
-      console.log('Realtime: User change detected in AdministrativosContext', data);
-      // Recargar la lista de administrativos para reflejar cambios de estado o rol
-      loadAdministrativos();
+    const scheduleRealtimeLoad = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+      }
+
+      realtimeRefreshRef.current = setTimeout(() => {
+        loadAdministrativos().catch((refreshError) => {
+          console.warn('[REALTIME][ADMINISTRATIVOS] No se pudo refrescar listado:', refreshError);
+        });
+      }, 450);
     };
 
-    const unsubscribe = sseService.on('user.changed', handleUserChanged);
+    const offUserChanged = realtimeBus.on('user.changed', scheduleRealtimeLoad);
+    const offRoleChanged = realtimeBus.on('role.changed', scheduleRealtimeLoad);
+    const offAccessChanged = realtimeBus.on('access.changed', scheduleRealtimeLoad);
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', scheduleRealtimeLoad);
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', scheduleRealtimeLoad);
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      offUserChanged();
+      offRoleChanged();
+      offAccessChanged();
+      offFallbackTick();
+      offReconcile();
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+        realtimeRefreshRef.current = null;
+      }
+      loadAdministrativosInFlightRef.current = null;
     };
   }, [isAuthenticated, loadAdministrativos]);
 

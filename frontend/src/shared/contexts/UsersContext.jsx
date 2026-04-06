@@ -376,6 +376,12 @@ export const UsersProvider = ({ children }) => {
     const offUserChanged = realtimeBus.on('user.changed', () => {
       scheduleLoadUsers();
     });
+    const offRoleChanged = realtimeBus.on('role.changed', () => {
+      scheduleLoadUsers();
+    });
+    const offAccessChanged = realtimeBus.on('access.changed', () => {
+      scheduleLoadUsers();
+    });
     const offFallbackTick = realtimeBus.on('realtime.fallback.tick', () => {
       scheduleLoadUsers();
     });
@@ -385,6 +391,8 @@ export const UsersProvider = ({ children }) => {
 
     return () => {
       offUserChanged();
+      offRoleChanged();
+      offAccessChanged();
       offFallbackTick();
       offReconcile();
       if (realtimeRefreshRef.current) {

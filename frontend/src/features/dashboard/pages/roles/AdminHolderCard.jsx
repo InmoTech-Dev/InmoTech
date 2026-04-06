@@ -5,6 +5,7 @@ import { useToast } from "../../../../shared/hooks/use-toast";
 import rolesApiService from "../../../../shared/services/rolesApiService";
 import administrativosApiService from "../../../../shared/services/administrativosApiService";
 import { apiClient } from "../../../../shared/services/api.config";
+import realtimeBus from "../../../../shared/services/realtimeBus";
 import { Select, SelectTrigger, SelectContent, SelectItem } from "../../../../shared/components/ui/select";
 import ConfirmationDialog from "../../../../shared/components/ui/ConfirmationDialog";
 
@@ -191,6 +192,29 @@ export default function AdminHolderCard({ className = "" }) {
   useEffect(() => {
     loadCurrentHolder();
   }, [loadCurrentHolder]);
+
+  useEffect(() => {
+    const refresh = () => {
+      loadCurrentHolder();
+      if (isModalOpen) {
+        loadCandidates();
+      }
+    };
+
+    const offUserChanged = realtimeBus.on('user.changed', refresh);
+    const offRoleChanged = realtimeBus.on('role.changed', refresh);
+    const offAccessChanged = realtimeBus.on('access.changed', refresh);
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', refresh);
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', refresh);
+
+    return () => {
+      offUserChanged?.();
+      offRoleChanged?.();
+      offAccessChanged?.();
+      offFallbackTick?.();
+      offReconcile?.();
+    };
+  }, [isModalOpen, loadCandidates, loadCurrentHolder]);
 
   useEffect(() => {
     if (!isModalOpen || typeof document === "undefined") return undefined;

@@ -3,12 +3,12 @@ const Joi = require('joi');
 const transferAdminHolderSchema = Joi.object({
   target_persona_id: Joi.number()
     .integer()
-    .positive()
+    .min(0)
     .required()
     .messages({
       'number.base': 'El target_persona_id debe ser numérico',
       'number.integer': 'El target_persona_id debe ser un entero',
-      'number.positive': 'El target_persona_id debe ser mayor a 0',
+      'number.min': 'El target_persona_id no puede ser negativo',
       'any.required': 'El target_persona_id es obligatorio',
     }),
   disable_previous_account: Joi.boolean()

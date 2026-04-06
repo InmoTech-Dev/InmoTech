@@ -3,10 +3,11 @@ const Joi = require('joi');
 const documentTypes = ['CC', 'CE', 'NIT', 'Pasaporte', 'TI'];
 const tenantStatuses = ['Activo', 'Inactivo', 'Moroso', 'Proceso'];
 const tenantTypes = ['Potencial', 'En Proceso', 'Activo', 'Inactivo'];
+const documentNumberSchema = Joi.string().trim().min(7).max(10);
 
 const createRenantSchema = Joi.object({
   tipo_documento: Joi.string().valid(...documentTypes).required(),
-  numero_documento: Joi.string().max(20).required(),
+  numero_documento: documentNumberSchema.required(),
   nombre_completo: Joi.string().max(100).required(),
   apellido_completo: Joi.string().max(100).required(),
   correo: Joi.string().email().required(),
@@ -39,7 +40,7 @@ const updateRenantSchema = Joi.object({
 
 const searchRenantsSchema = Joi.object({
   tipo_documento: Joi.string().valid(...documentTypes),
-  numero_documento: Joi.string().max(20),
+  numero_documento: documentNumberSchema,
   criterio: Joi.string().max(100),
   nombre: Joi.string().max(100),
   search: Joi.string().max(100),

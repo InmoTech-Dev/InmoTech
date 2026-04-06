@@ -2,6 +2,8 @@ const Joi = require('joi');
 
 const leaseStatuses = ['Activo', 'Al día', 'Pendiente', 'Debe', 'Finalizado'];
 
+const documentNumberSchema = Joi.string().trim().min(7).max(10);
+
 const validateMinimumLeaseMonth = (value, helpers) => {
   const fechaInicio = value.fecha_inicio ? new Date(value.fecha_inicio) : null;
   const fechaFinalizacion = value.fecha_finalizacion ? new Date(value.fecha_finalizacion) : null;
@@ -27,7 +29,7 @@ const createLeaseSchema = Joi.object({
   fecha_cobro: Joi.date().iso().optional(),
   codeudor: Joi.object({
     tipo_documento: Joi.string().required(),
-    numero_documento: Joi.string().required(),
+    numero_documento: documentNumberSchema.required(),
     nombre_completo: Joi.string().allow('', null),
     apellido_completo: Joi.string().allow('', null),
     correo: Joi.string().email().allow('', null),
@@ -45,7 +47,7 @@ const updateLeaseSchema = Joi.object({
   id_codeudor: Joi.number().integer().allow(null),
   codeudor: Joi.object({
     tipo_documento: Joi.string().required(),
-    numero_documento: Joi.string().required(),
+    numero_documento: documentNumberSchema.required(),
     nombre_completo: Joi.string().allow('', null),
     apellido_completo: Joi.string().allow('', null),
     correo: Joi.string().email().allow('', null),

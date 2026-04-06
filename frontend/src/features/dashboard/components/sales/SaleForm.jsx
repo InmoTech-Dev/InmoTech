@@ -339,34 +339,20 @@ export default function SalesForm({ onClose, onSubmit }) {
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = cleanDocumentByType(tipoDocumento, numeroDocumento);
 
+        if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
+            return 'El número de documento debe tener entre 7 y 10 caracteres';
+        }
+
         switch (tipoDocumento) {
             case 'CC':
-                if (!/^[0-9]{7,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de ciudadanía debe tener entre 7 y 10 dígitos';
-                }
-                break;
             case 'CE':
-                if (!/^[0-9]{6,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
-                }
-                break;
             case 'NIT':
-                if (!/^[0-9]{9,10}$/.test(numeroLimpio)) {
-                    return 'El NIT debe tener 9 o 10 dígitos';
-                }
-                break;
             case 'PASAPORTE':
-                if (numeroLimpio.length < 6 || numeroLimpio.length > 20) {
-                    return 'El pasaporte debe tener entre 6 y 20 caracteres';
-                }
                 if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) {
                     return 'El pasaporte solo puede contener letras y números';
                 }
                 break;
             case 'TI':
-                if (!/^[0-9]{10,11}$/.test(numeroLimpio)) {
-                    return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
-                }
                 break;
             default:
                 return 'Tipo de documento no válido';
@@ -525,12 +511,12 @@ export default function SalesForm({ onClose, onSubmit }) {
                     if (buyerLookupTimeoutRef.current) {
                         clearTimeout(buyerLookupTimeoutRef.current);
                     }
-                    resetBuyerSelection({ resetState: false, resetFields: true });
+                    clearBuyerAutofill({ resetValidation: false });
                 } else if (!shouldTriggerBuyerLookup(tipoDocActual, numeroDocActual)) {
                     if (buyerLookupTimeoutRef.current) {
                         clearTimeout(buyerLookupTimeoutRef.current);
                     }
-                    resetBuyerSelection({ resetState: false, resetFields: true });
+                    clearBuyerAutofill({ resetValidation: false });
                 }
             }
         }
@@ -918,6 +904,42 @@ export default function SalesForm({ onClose, onSubmit }) {
         return value.toString().trim();
     };
 
+    const clearBuyerAutofill = useCallback((options = {}) => {
+        const { resetValidation = true } = options;
+        selectedBuyerRef.current = null;
+        buyerMatchedDocumentRef.current = {
+            tipo: "",
+            numero: "",
+        };
+
+        valuesRef.current.compradorPersonaId = "";
+        valuesRef.current.compradorNombreCompleto = "";
+        valuesRef.current.compradorCorreo = "";
+        valuesRef.current.compradorTelefono = "";
+        displayValuesRef.current.compradorNombreCompleto = "";
+        displayValuesRef.current.compradorCorreo = "";
+        displayValuesRef.current.compradorTelefono = "";
+
+        const nombreEl = elRefs.current.compradorNombreCompleto;
+        const correoEl = elRefs.current.compradorCorreo;
+        const telefonoEl = elRefs.current.compradorTelefono;
+
+        if (nombreEl) nombreEl.value = "";
+        if (correoEl) correoEl.value = "";
+        if (telefonoEl) telefonoEl.value = "";
+
+        if (resetValidation) {
+            setErrors((prev) => {
+                const next = { ...prev };
+                BUYER_AUTOFILL_FIELDS.forEach((field) => {
+                    delete next[field];
+                });
+                delete next.compradorDocumento;
+                return next;
+            });
+        }
+    }, []);
+
     const resetBuyerSelection = useCallback(
         ({ resetState = false, resetFields = false } = {}) => {
             selectedBuyerRef.current = null;
@@ -928,13 +950,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             };
 
             if (resetFields) {
-                valuesRef.current.compradorPersonaId = "";
-                valuesRef.current.compradorNombreCompleto = "";
-                valuesRef.current.compradorCorreo = "";
-                valuesRef.current.compradorTelefono = "";
-                displayValuesRef.current.compradorNombreCompleto = "";
-                displayValuesRef.current.compradorCorreo = "";
-                displayValuesRef.current.compradorTelefono = "";
+                clearBuyerAutofill({ resetValidation: resetState });
             }
 
             if (resetState) {
@@ -945,7 +961,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 });
             }
         },
-        []
+        [clearBuyerAutofill]
     );
 
     const clearBuyerAutofillIfDocumentIncomplete = useCallback(() => {
@@ -960,16 +976,16 @@ export default function SalesForm({ onClose, onSubmit }) {
             clearTimeout(buyerLookupTimeoutRef.current);
         }
 
-        resetBuyerSelection({ resetState: true, resetFields: true });
+        clearBuyerAutofill({ resetValidation: true });
         buyerDocumentSnapshotRef.current = {
             tipo: tipoDocumento,
             numero: numeroDocumento,
         };
         return true;
-    }, [resetBuyerSelection]);
+    }, [clearBuyerAutofill]);
 
     const applyBuyerData = useCallback((buyer) => {
-        if (!buyer) return;
+        if (!buyer) return false;
         if (!buyerIsActive(buyer)) {
             const inactiveMsg = "No se puede asociar una venta a un comprador en estado inactivo.";
             setBuyerLookupState({
@@ -987,7 +1003,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 variant: "destructive",
             });
             resetBuyerSelection({ resetState: true, resetFields: true });
-            return;
+            return false;
         }
 
         selectedBuyerRef.current = buyer;
@@ -1062,6 +1078,8 @@ export default function SalesForm({ onClose, onSubmit }) {
             delete nextErrors.compradorDocumento;
             return nextErrors;
         });
+
+        return true;
     }, []);
 
     const splitFullNameToParts = (fullName = "") => {
@@ -1133,7 +1151,10 @@ export default function SalesForm({ onClose, onSubmit }) {
         try {
             const existingBuyer = await buyersApiService.findByDocument(tipoDocumento, documento);
             if (existingBuyer?.id || existingBuyer?.compradorId || existingBuyer?.raw?.id_comprador) {
-                applyBuyerData(existingBuyer);
+                const wasApplied = applyBuyerData(existingBuyer);
+                if (!wasApplied) {
+                    return null;
+                }
                 setBuyerLookupState({
                     loading: false,
                     message: "Comprador encontrado y seleccionado.",
@@ -1154,7 +1175,10 @@ export default function SalesForm({ onClose, onSubmit }) {
                 estado: "Activo",
             });
 
-            applyBuyerData(createdBuyer);
+            const wasApplied = applyBuyerData(createdBuyer);
+            if (!wasApplied) {
+                return null;
+            }
             setBuyerLookupState({
                 loading: false,
                 message: "Comprador creado y seleccionado.",
@@ -1191,15 +1215,14 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         const documentError = validateDocument(tipoDocumento, numeroDocumento);
         if (documentError) {
+            setErrors((prev) => ({
+                ...prev,
+                compradorDocumento: documentError,
+            }));
             setBuyerLookupState({
                 loading: false,
                 message: "",
-                error: "Documento inválido. Corrija el formato antes de buscar.",
-            });
-            toast({
-                title: "Documento inválido",
-                description: "Corrige el tipo y número antes de buscar.",
-                variant: "destructive",
+                error: null,
             });
             return;
         }
@@ -1224,7 +1247,10 @@ export default function SalesForm({ onClose, onSubmit }) {
             }
 
             if (buyer) {
-                applyBuyerData(buyer);
+                const wasApplied = applyBuyerData(buyer);
+                if (!wasApplied) {
+                    return;
+                }
 
                 setBuyerLookupState({
                     loading: false,
@@ -1518,7 +1544,7 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         let fieldPlaceholder = placeholder;
         if (isDocField) {
-            fieldPlaceholder = "Ej: 1234567890 (8-10 dígitos según el tipo)";
+            fieldPlaceholder = "Ej: 1234567 a 1234567890";
         }
         if (isPhoneField) {
             fieldPlaceholder = "Ej: 3001234567 (10 dígitos mínimo)";
@@ -1613,6 +1639,8 @@ export default function SalesForm({ onClose, onSubmit }) {
                     defaultValue={(displayValuesRef.current[name] || initial[name]) ?? ""}
                     onChange={handleInputChange}
                     onBlur={onBlurHandler}
+                    minLength={isDocField ? 7 : undefined}
+                    maxLength={isDocField ? 10 : undefined}
                 />
                 {errorMessage && (
                     <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
@@ -1706,13 +1734,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         <div className="md:col-span-3">
                                             <Field name="inmuebleDireccion" as="textarea" placeholder="Ej: Calle 10 # 45-20" />
                                         </div>
-                                        {inmuebleLookupState.error && (
-                                            <div className="md:col-span-3 mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                                {!inmuebleLookupState.loading && inmuebleLookupState.error && (
-                                                    <p className="text-red-700">{inmuebleLookupState.error}</p>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
                                 </section>
                             )}
@@ -1730,7 +1751,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                             as="select"
                                             options={DOCUMENT_OPTIONS}
                                         />
-                                        <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                        <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567 a 1234567890" />
                                         <Field name="vendedorNombreCompleto" placeholder="Solo letras y espacios." />
                                         <Field name="vendedorCorreo" placeholder="correo@dominio.com" type="email" />
                                         <Field name="vendedorTelefono" placeholder="Ej: 3001234567 (10 dígitos mínimo)" />
@@ -1751,19 +1772,13 @@ export default function SalesForm({ onClose, onSubmit }) {
                                             as="select"
                                             options={DOCUMENT_OPTIONS}
                                         />
-                                        <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                        <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567 a 1234567890" />
                                         <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
                                         <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
                                         <Field name="compradorTelefono" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
                                     </div>
-                                    {buyerLookupState.error && (
-                                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                            <p className="text-red-700">{buyerLookupState.error}</p>
-                                        </div>
-                                    )}
                                 </section>
                             )}
-
                             {/* PASO 4: Precio y Medio de Pago */}
                             {step === 4 && (
                                 <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
@@ -1852,3 +1867,4 @@ export default function SalesForm({ onClose, onSubmit }) {
         </AnimatePresence>
     );
 }
+

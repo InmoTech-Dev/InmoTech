@@ -7,6 +7,48 @@ const { uploadSingleAny } = require('./upload.controller');
 const { normalizePagination } = require('../utils/pagination');
 
 class SalesController {
+  buildContentDisposition(fileName, disposition = 'inline') {
+    const safeName = String(fileName || 'archivo').replace(/["\r\n]/g, '').trim() || 'archivo';
+    const encodedName = encodeURIComponent(safeName);
+    return `${disposition}; filename="${safeName}"; filename*=UTF-8''${encodedName}`;
+  }
+
+  getFileExtension(fileName = '') {
+    const match = String(fileName || '').trim().match(/\.([a-zA-Z0-9]+)$/);
+    return match ? match[1].toLowerCase() : '';
+  }
+
+  buildCloudinaryAttachmentUrl(uploadResult, resourceType, originalFileName = '') {
+    const publicId = uploadResult?.public_id;
+    if (!publicId) return uploadResult?.secure_url || '';
+
+    const extension = uploadResult?.format || this.getFileExtension(originalFileName);
+    return cloudinary.url(publicId, {
+      resource_type: resourceType,
+      type: 'upload',
+      secure: true,
+      format: extension || undefined,
+    });
+  }
+
+  buildAlternativeAttachmentUrl(adjunto = {}) {
+    const originalUrl = String(adjunto?.url || '').trim();
+    if (!originalUrl) return '';
+
+    const expectedResourceType = String(adjunto?.mime_type || '').toLowerCase().includes('pdf') ? 'raw' : 'image';
+    const replacement =
+      expectedResourceType === 'raw'
+        ? originalUrl.replace('/image/upload/', '/raw/upload/')
+        : originalUrl.replace('/raw/upload/', '/image/upload/');
+
+    const extension = this.getFileExtension(adjunto?.nombre_archivo || '');
+    if (!extension || replacement.toLowerCase().includes(`.${extension}`)) {
+      return replacement;
+    }
+
+    return `${replacement}.${extension}`;
+  }
+
   async createSale(req, res, next) {
     try {
       const data = req.validatedData || req.body;
@@ -240,13 +282,14 @@ class SalesController {
         });
       }
 
-      // Subir a Cloudinary (permite PDF e imágenes)
+      // Subir a Cloudinary (alineado con el uploader general: PDF como raw)
       const folder = `inmotech/ventas/${saleId}`;
+      const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
       const uploadResult = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
           {
             folder,
-            resource_type: 'auto'
+            resource_type: resourceType
           },
           (error, result) => {
             if (error) return reject(error);
@@ -260,7 +303,7 @@ class SalesController {
         id_venta: saleId,
         tipo,
         nombre_archivo: req.file.originalname || uploadResult.original_filename,
-        url: uploadResult.secure_url,
+        url: this.buildCloudinaryAttachmentUrl(uploadResult, resourceType, req.file.originalname),
         mime_type: req.file.mimetype || uploadResult.resource_type,
         tamano_bytes: req.file.size || uploadResult.bytes
       });
@@ -293,6 +336,63 @@ class SalesController {
       });
     } catch (error) {
       next(error);
+    }
+  }
+
+  async streamAttachment(req, res) {
+    try {
+      const saleId = parseInt(req.params.id, 10);
+      const adjuntoId = parseInt(req.params.adjuntoId, 10);
+      const disposition = String(req.query.download || '').trim() === '1' ? 'attachment' : 'inline';
+
+      const adjunto = await VentaAdjunto.findOne({
+        where: { id_venta: saleId, id_adjunto: adjuntoId }
+      });
+
+      if (!adjunto?.url) {
+        return res.status(404).json({
+          success: false,
+          message: 'Adjunto no encontrado'
+        });
+      }
+
+      let upstreamResponse = await fetch(adjunto.url);
+      if (!upstreamResponse.ok) {
+        const alternativeUrl = this.buildAlternativeAttachmentUrl(adjunto);
+        if (alternativeUrl && alternativeUrl !== adjunto.url) {
+          upstreamResponse = await fetch(alternativeUrl);
+        }
+      }
+
+      if (!upstreamResponse.ok) {
+        return res.status(502).json({
+          success: false,
+          message: 'No se pudo obtener el archivo remoto'
+        });
+      }
+
+      const contentType =
+        upstreamResponse.headers.get('content-type') ||
+        adjunto.mime_type ||
+        'application/octet-stream';
+      const contentLength = upstreamResponse.headers.get('content-length');
+      const fileName = adjunto.nombre_archivo || `adjunto-${adjuntoId}`;
+      const buffer = Buffer.from(await upstreamResponse.arrayBuffer());
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', this.buildContentDisposition(fileName, disposition));
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+
+      return res.status(200).send(buffer);
+    } catch (error) {
+      logger.error(`Error al servir adjunto de venta: ${error.message}`);
+      return res.status(500).json({
+        success: false,
+        message: 'No se pudo visualizar el adjunto'
+      });
     }
   }
 

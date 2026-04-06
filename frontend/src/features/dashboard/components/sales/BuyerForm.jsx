@@ -113,12 +113,11 @@ export default function BuyerForm({
 
     const validationError = validateDocument(tipoDocumento, numeroDocumento);
     if (validationError) {
+      setErrors((prev) => ({
+        ...prev,
+        documento: validationError,
+      }));
       setLookupState({ loading: false, message: "", error: null });
-      toast({
-        title: "Documento inválido",
-        description: validationError,
-        variant: "destructive",
-      });
       return;
     }
 
@@ -188,22 +187,16 @@ export default function BuyerForm({
   // Validación por tipo de documento (igual TenantForm)
   const validateDocument = (tipoDocumento, numeroDocumento) => {
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
+    if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
+      return 'El número de documento debe tener entre 7 y 10 caracteres';
+    }
     switch (tipoDocumento) {
       case 'CC':
-        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return 'La cédula de ciudadanía debe tener entre 8 y 10 dígitos';
-        break;
       case 'CE':
-        if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
-        break;
       case 'NIT':
-        if (!/^[0-9]{9,10}$/.test(numeroLimpio)) return 'El NIT debe tener 9 o 10 dígitos';
-        break;
       case 'PASAPORTE':
-        if (numeroLimpio.length < 6 || numeroLimpio.length > 20) return 'El pasaporte debe tener entre 6 y 20 caracteres';
-        if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) return 'El pasaporte solo puede contener letras y números';
-        break;
       case 'TI':
-        if (!/^[0-9]{10,11}$/.test(numeroLimpio)) return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
+        if (!/^[0-9]+$/.test(numeroLimpio)) return 'El número de documento solo puede contener números';
         break;
       default:
         return 'Tipo de documento no válido';
@@ -432,6 +425,8 @@ export default function BuyerForm({
             onChange={handleInputChange}
             onBlur={handleInputBlur}
             ref={setElRef(name)}
+            minLength={docFields.includes(name) ? 7 : undefined}
+            maxLength={docFields.includes(name) ? 10 : undefined}
             className={`${getFieldClass(name)} ${Icon ? "pl-10" : ""} ${as === "textarea" ? "resize-none min-h-[100px]" : ""}`}
           />
         </div>
@@ -510,7 +505,7 @@ export default function BuyerForm({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field as="select" name="tipoDocumento" options={DOC_OPTIONS} />
                 <div className="md:col-span-2">
-                  <Field name="documento" placeholder="Ej: 1234567890" icon={FileText} />
+                  <Field name="documento" placeholder="Ej: 1234567 a 1234567890" icon={FileText} />
                 </div>
               </div>
 

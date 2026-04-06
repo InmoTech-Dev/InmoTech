@@ -195,22 +195,16 @@ export default function TenantForm({
   // Funcion para validar documentos segun el tipo
   const validateDocument = (tipoDocumento, numeroDocumento) => {
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
+    if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
+      return "El numero de documento debe tener entre 7 y 10 caracteres";
+    }
     switch (tipoDocumento) {
       case "CC":
-        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return "La cedula de ciudadania debe tener entre 8 y 10 digitos";
-        break;
       case "CE":
-        if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return "La cedula de extranjeria debe tener entre 6 y 10 digitos";
-        break;
       case "NIT":
-        if (!/^[0-9]{9,10}$/.test(numeroLimpio)) return "El NIT debe tener 9 o 10 digitos";
-        break;
       case "PASAPORTE":
-        if (numeroLimpio.length < 6 || numeroLimpio.length > 20) return "El pasaporte debe tener entre 6 y 20 caracteres";
-        if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) return "El pasaporte solo puede contener letras y numeros";
-        break;
       case "TI":
-        if (!/^[0-9]{10,11}$/.test(numeroLimpio)) return "La tarjeta de identidad debe tener 10 u 11 digitos";
+        if (!/^[0-9]+$/.test(numeroLimpio)) return "El numero de documento solo puede contener numeros";
         break;
       default:
         return "Tipo de documento no valido";
@@ -457,7 +451,7 @@ export default function TenantForm({
     // Placeholders mejorados
     let fieldPlaceholder = placeholder;
     if (isDocField) {
-      fieldPlaceholder = "Ej: 1234567890 (8-10 digitos segun el tipo)";
+      fieldPlaceholder = "Ej: 1234567 a 1234567890";
     }
     if (isPhoneField) {
       fieldPlaceholder = "Ej: 3001234567 (10 digitos minimo)";
@@ -529,6 +523,8 @@ export default function TenantForm({
             className={`${getFieldClass(name)} ${Icon ? 'pl-10' : ''}`}
             type={inputType}
             placeholder={fieldPlaceholder}
+            minLength={isDocField ? 7 : undefined}
+            maxLength={isDocField ? 10 : undefined}
             defaultValue={defaultFormData[name] ?? ""}
             onChange={handleInputChange}
             onBlur={onBlurHandler}
@@ -625,8 +621,8 @@ export default function TenantForm({
                   />
 
                 <Field 
-                  name="documento"
-                  placeholder="Ej: 1234567890 (8-10 digitos segun el tipo)"
+                  name="documento" 
+                  placeholder="Ej: 1234567 a 1234567890"
                   icon={FileText}
                   className="md:col-span-2"
                 />

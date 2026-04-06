@@ -7,12 +7,15 @@ export const useGeneralFollowUp = (reportId, currentUser) => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [newFollowUpNote, setNewFollowUpNote] = useState('');
-  
+
   // Reemplazo: usar toasts estilo Citas
   const { toast } = useToast();
 
-  // Cargar seguimientos al montar el componente
+  // Cargar seguimientos y resetear estado cuando cambia el reportId (abre nuevo modal)
   useEffect(() => {
+    // Limpiar siempre al cambiar de reporte
+    setFollowUps([]);
+    setNewFollowUpNote('');
     if (reportId) {
       loadFollowUps();
     }
@@ -21,14 +24,14 @@ export const useGeneralFollowUp = (reportId, currentUser) => {
   // Cargar seguimientos desde la API
   const loadFollowUps = useCallback(async () => {
     if (!reportId) return;
-    
+
     setLoading(true);
     try {
       const response = await reportesInmobiliariosService.obtenerHistorialSeguimientos(reportId);
-      setFollowUps(response.data || []);
+      setFollowUps(Array.isArray(response) ? response : (response?.data || []));
     } catch (err) {
       console.error('Error cargando seguimientos:', err);
-      
+
       // Detect dev environment safely for Vite (import.meta.env.DEV) and CRA (process.env.NODE_ENV)
       const isDev =
         (typeof import.meta !== 'undefined' && import.meta.env?.DEV === true) ||
@@ -84,14 +87,33 @@ export const useGeneralFollowUp = (reportId, currentUser) => {
     setSubmitting(true);
     try {
       let newFollowUp;
-      
+
+      // Objeto responsable basado en el usuario actual (para mostrar nombre correcto)
+      const responsableActual = {
+        id_persona: currentUser.id_persona,
+        primer_nombre: currentUser.primer_nombre,
+        primer_apellido: currentUser.primer_apellido,
+        nombre_completo: currentUser.nombre_completo || [
+          currentUser.primer_nombre,
+          currentUser.primer_apellido
+        ].filter(Boolean).join(' ')
+      };
+
       if (reportId) {
         // Si el reporte ya existe, crear el seguimiento en la API
         const response = await reportesInmobiliariosService.crearSeguimiento(
-          reportId, 
+          reportId,
           descripcion.trim()
         );
-        newFollowUp = response.data;
+        // El backend puede no devolver el responsable con nombre; lo enriquecemos con el usuario actual
+        const fromApi = response?.data || response || {};
+        newFollowUp = {
+          ...fromApi,
+          responsable: fromApi.responsable || responsableActual,
+          fecha_creacion: fromApi.fecha_creacion || new Date().toISOString(),
+          fecha: fromApi.fecha || new Date().toISOString(),
+          estado: fromApi.estado || 'Pendiente',
+        };
       } else {
         // Si es un reporte nuevo, crear un seguimiento temporal
         newFollowUp = {
@@ -101,16 +123,12 @@ export const useGeneralFollowUp = (reportId, currentUser) => {
           fecha: new Date().toISOString(),
           estado: 'Pendiente',
           id_responsable: currentUser.id_persona,
-          responsable: {
-            id_persona: currentUser.id_persona,
-            primer_nombre: currentUser.primer_nombre,
-            primer_apellido: currentUser.primer_apellido
-          },
+          responsable: responsableActual,
           fecha_creacion: new Date().toISOString(),
           temporal: true // Marca para identificar seguimientos temporales
         };
       }
-      
+
       setFollowUps(prev => [newFollowUp, ...prev]);
       setNewFollowUpNote('');
       toast({
@@ -136,15 +154,15 @@ export const useGeneralFollowUp = (reportId, currentUser) => {
       if (reportId && !followUpId.toString().startsWith('temp_')) {
         // Solo actualizar en la API si no es temporal
         await reportesInmobiliariosService.actualizarEstadoSeguimiento(
-          reportId, 
-          followUpId, 
+          reportId,
+          followUpId,
           newStatus
         );
       }
-      
-      setFollowUps(prev => 
-        prev.map(followUp => 
-          followUp.id_seguimiento === followUpId 
+
+      setFollowUps(prev =>
+        prev.map(followUp =>
+          followUp.id_seguimiento === followUpId
             ? { ...followUp, estado: newStatus }
             : followUp
         )

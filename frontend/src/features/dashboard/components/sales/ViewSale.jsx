@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FaTimes } from "react-icons/fa";
 import ventaApiService from "../../../../shared/services/ventaApiService";
+import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
+import { downloadFile } from "../../../../shared/utils/downloadFile";
 
 /* ---------- UI helpers (mismo estilo compacto) ---------- */
 function Field({ label, value, className = "" }) {
@@ -199,6 +201,8 @@ export default function ViewSaleModal({ sale, onClose }) {
   const estadoVenta = pick(sale.estado, sale.estado_venta, raw.estado_venta, raw.estado);
 
   const [attachments, setAttachments] = useState(sale.adjuntos || []);
+  const [viewer, setViewer] = useState({ isOpen: false, items: [], index: 0 });
+  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", sourceUrl: "", name: "" });
 
   useEffect(() => {
     const loadAttachments = async () => {
@@ -214,6 +218,73 @@ export default function ViewSaleModal({ sale, onClose }) {
     };
     loadAttachments();
   }, [sale]);
+
+  const imageAdjuntos = useMemo(
+    () =>
+      attachments
+        .filter((adj) => {
+          const target = String(adj?.mime_type || adj?.url || "").toLowerCase();
+          return !target.includes("pdf") && !/\.pdf$/i.test(adj?.url || "");
+        })
+        .map((adj) => ({
+          url: adj.url,
+          downloadUrl: sale?.id_venta || sale?.id
+            ? ventaApiService.getAttachmentFileUrl(sale.id_venta || sale.id, adj.id_adjunto || adj.id, { download: true })
+            : adj.url,
+          alt: adj.nombre_archivo || adj.nombre || "Adjunto de venta",
+          name: adj.nombre_archivo || adj.nombre || "Adjunto de venta",
+          id: adj.id_adjunto || adj.id || adj.url,
+        }))
+        .filter((item) => Boolean(item.url)),
+    [attachments]
+  );
+
+  const openImageViewer = (index) => {
+    if (!imageAdjuntos.length) return;
+    setViewer({ isOpen: true, items: imageAdjuntos, index });
+  };
+
+  const openPdfViewer = async (url, name) => {
+    if (!url) return;
+    const saleId = sale?.id_venta || sale?.id;
+    const attachment = attachments.find((item) => item.url === url && (item.nombre_archivo || item.nombre || "Documento PDF") === name);
+    const attachmentId = attachment?.id_adjunto || attachment?.id;
+
+    const inlineUrl =
+      saleId && attachmentId
+        ? ventaApiService.getAttachmentFileUrl(saleId, attachmentId)
+        : url;
+
+    setPdfViewer({ isOpen: true, url: inlineUrl, sourceUrl: inlineUrl, name: name || "Documento PDF" });
+  };
+
+  const closePdfViewer = () => {
+    setPdfViewer({ isOpen: false, url: "", sourceUrl: "", name: "" });
+  };
+
+  const handleDownloadAttachment = async (url, name) => {
+    if (!url) return;
+    const saleId = sale?.id_venta || sale?.id;
+    const attachment = attachments.find((item) => item.url === url && (item.nombre_archivo || item.nombre || `Archivo`) === name);
+    const attachmentId = attachment?.id_adjunto || attachment?.id;
+
+    if (saleId && attachmentId) {
+      const link = document.createElement('a');
+      link.href = ventaApiService.getAttachmentFileUrl(saleId, attachmentId, { download: true });
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    try {
+      await downloadFile(url, name);
+    } catch (_error) {
+      window.open(url, "_blank", "noopener");
+    }
+  };
 
   const cleanDescription = (text) => {
     if (!text) return "Sin descripción";
@@ -456,6 +527,12 @@ export default function ViewSaleModal({ sale, onClose }) {
                       {attachments.map((file, idx) => {
                         const name = file.nombre_archivo || file.nombre || file.filename || `Archivo ${idx + 1}`;
                         const url = file.url;
+                        const isPdf =
+                          String(file.mime_type || url || "").toLowerCase().includes("pdf") ||
+                          /\.pdf$/i.test(url || "");
+                        const imageIndex = imageAdjuntos.findIndex(
+                          (item) => item.id === (file.id_adjunto || file.id || file.url)
+                        );
                         return (
                           <li
                             key={file.id_adjunto || file.id || idx}
@@ -464,12 +541,28 @@ export default function ViewSaleModal({ sale, onClose }) {
                             <span className="truncate flex-1 text-gray-900">{name}</span>
                             {url ? (
                               <div className="flex items-center gap-3 shrink-0">
-                                <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                                <button
+                                  type="button"
+                                  className="text-blue-600 hover:underline"
+                                  onClick={() => {
+                                    if (isPdf) {
+                                      openPdfViewer(url, name);
+                                    } else if (imageIndex >= 0) {
+                                      openImageViewer(imageIndex);
+                                    } else {
+                                      window.open(url, "_blank", "noopener");
+                                    }
+                                  }}
+                                >
                                   Ver
-                                </a>
-                                <a href={url} download className="text-blue-600 hover:underline">
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-blue-600 hover:underline"
+                                  onClick={() => handleDownloadAttachment(url, name)}
+                                >
                                   Descargar
-                                </a>
+                                </button>
                               </div>
                             ) : (
                               <span className="text-gray-400 text-xs">Sin URL</span>
@@ -494,6 +587,53 @@ export default function ViewSaleModal({ sale, onClose }) {
                 Cerrar
               </motion.button>
             </div>
+
+            <ImageViewer
+              isOpen={viewer.isOpen}
+              onClose={() => setViewer((current) => ({ ...current, isOpen: false }))}
+              images={viewer.items}
+              currentIndex={viewer.index}
+              onIndexChange={(index) => setViewer((current) => ({ ...current, index }))}
+            />
+
+            {pdfViewer.isOpen && (
+              <div
+                className="fixed inset-0 z-[70] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
+                onClick={closePdfViewer}
+              >
+                <div
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+                    <span className="text-sm font-semibold text-gray-800 truncate">
+                      {pdfViewer.name || "Documento PDF"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
+                        onClick={() => window.open(pdfViewer.sourceUrl || pdfViewer.url, "_blank", "noopener")}
+                      >
+                        Abrir en nueva pestaña
+                      </button>
+                      <button
+                        className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                        onClick={closePdfViewer}
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 bg-gray-100">
+                    <iframe
+                      title={pdfViewer.name || "PDF"}
+                      src={pdfViewer.url}
+                      className="w-full h-full border-0"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}

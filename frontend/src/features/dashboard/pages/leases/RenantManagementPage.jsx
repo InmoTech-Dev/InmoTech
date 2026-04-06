@@ -509,13 +509,10 @@ export function RenantManagementPage() {
   const openExtensionModal = (rent) => {
     const startDate = parseIsoDate(rent.fechaInicio);
     const endDate = parseIsoDate(rent.fechaFinal);
-    const trackedExtensionMonths = parseExtensionMonthsFromComment(rent.ultimoSeguimientoComentario);
-    const durationMonths = Number(trackedExtensionMonths) > 0
-      ? Number(trackedExtensionMonths)
-      : Number(rent.duracionProrrogaMeses) > 0
+    const durationMonths = Number(rent.duracionProrrogaMeses) > 0
       ? Number(rent.duracionProrrogaMeses)
       : Number(rent.duracionMeses) > 0
-        ? Number(rent.duracionMeses)
+      ? Number(rent.duracionMeses)
       : Math.max(diffMonthsUtc(startDate, endDate), 1);
     const suggestedEndDate = addMonthsClampedUtc(endDate, durationMonths);
 
@@ -660,6 +657,24 @@ export function RenantManagementPage() {
   const handleStatusSave = async () => {
     if (!statusRent) return;
     const { id, nuevoEstado, comentario } = statusRent;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+      today.getDate()
+    ).padStart(2, "0")}`;
+    const hasOverduePayments = payments.some(
+      (payment) =>
+        payment?.estado !== "Pagado" &&
+        !payment?.comprobante &&
+        String(payment?.fecha_cobro || "").slice(0, 10) <= todayStr
+    );
+    if (nuevoEstado === "Debe" && !hasOverduePayments) {
+      toast({
+        title: "Arriendo al dia",
+        description: "El arriendo esta al dia, por eso no se puede cambiar el estado a Debe.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (nuevoEstado === "Finalizado") {
       const shouldFinalize = window.confirm(
         "Al finalizar este arriendo ya no podras hacer prorroga ni mas seguimiento. ¿Deseas continuar?"
@@ -770,7 +785,19 @@ export function RenantManagementPage() {
         estado: 'En revisión',
         observaciones: form.observaciones,
       };
-      await arriendoApiService.crearComprobante(statusRent.id, paymentId, payload);
+      const receiptResponse = await arriendoApiService.crearComprobante(statusRent.id, paymentId, payload);
+      const updatedLeaseState = receiptResponse?.data?.lease_estado;
+      if (updatedLeaseState) {
+        setStatusRent((prev) =>
+          prev
+            ? {
+                ...prev,
+                estado: updatedLeaseState,
+                nuevoEstado: updatedLeaseState,
+              }
+            : prev
+        );
+      }
       toast({
         title: "Comprobante registrado",
         description: "El comprobante se cargó y registró correctamente.",

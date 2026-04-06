@@ -1,9 +1,9 @@
-const app = require('./app');
-const { testConnection } = require('./config/database');
 const { apiBaseUrl } = require('./config/runtime');
-const { runPermissionsBackfill } = require('./startup/backfillPermissions');
-const { runVentaAdjuntosBackfill } = require('./startup/backfillVentaAdjuntos');
-const { scheduleDailyLeaseAutoFinalize } = require('./jobs/leasesAutoFinalize.job');
+const {
+  applyConfigToProcessEnv,
+  buildCandidatesFromEnv,
+  testCandidateConnection,
+} = require('./config/database.bootstrap');
 
 const PORT = process.env.PORT || 5000;
 const API_VERSION = String(process.env.API_VERSION || 'v1').toLowerCase();
@@ -28,8 +28,8 @@ const BANNER_ICONS =
       };
 
 // Configuración de reintentos para la conexión a BD
-const MAX_DB_RETRIES = parseInt(process.env.DB_MAX_RETRIES || '2', 10);
-const DB_RETRY_DELAY_MS = parseInt(process.env.DB_RETRY_DELAY_MS || '5000', 10);
+const MAX_DB_RETRIES = parseInt(process.env.DB_MAX_RETRIES || '0', 10);
+const DB_RETRY_DELAY_MS = parseInt(process.env.DB_RETRY_DELAY_MS || '1000', 10);
 const PERMISSIONS_BACKFILL_FAIL_HARD = process.env.PERMISSIONS_BACKFILL_FAIL_HARD === 'true';
 const VENTA_ADJUNTOS_BACKFILL_FAIL_HARD = process.env.VENTA_ADJUNTOS_BACKFILL_FAIL_HARD === 'true';
 const LEASE_AUTO_FINALIZE_JOB_ENABLED =
@@ -37,26 +37,61 @@ const LEASE_AUTO_FINALIZE_JOB_ENABLED =
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const connectWithRetries = async () => {
-  for (let attempt = 0; attempt <= MAX_DB_RETRIES; attempt++) {
-    const ok = await testConnection();
-    if (ok) return true;
+const describeCandidate = (candidate) => {
+  const instanceLabel = candidate.instanceName || '(por defecto)';
+  const portLabel = candidate.port || '(dinamico/instancia)';
+  return `${candidate.source}: ${candidate.host} | instancia=${instanceLabel} | puerto=${portLabel} | db=${candidate.database}`;
+};
 
-    if (attempt < MAX_DB_RETRIES) {
-      console.warn(
-        `Reintento de conexion a BD en ${DB_RETRY_DELAY_MS}ms (intento ${attempt + 2}/${MAX_DB_RETRIES + 1})`
+const resolveDatabaseConnection = async () => {
+  const candidates = buildCandidatesFromEnv();
+
+  if (candidates.length === 0) {
+    console.error('No hay configuraciones de base de datos validas en variables de entorno.');
+    return { ok: false, selected: null };
+  }
+
+  for (const candidate of candidates) {
+    for (let attempt = 0; attempt <= MAX_DB_RETRIES; attempt++) {
+      console.log(`[DB] Probando conexion ${describeCandidate(candidate)} (intento ${attempt + 1}/${MAX_DB_RETRIES + 1})`);
+      const result = await testCandidateConnection(candidate);
+      if (result.ok) {
+        applyConfigToProcessEnv(candidate);
+        console.log(
+          `[DB] Conexion activa: ${candidate.source} -> ${result.meta.serverName} / ${result.meta.databaseName}`
+        );
+        process.env.DB_ACTIVE_SOURCE = candidate.source;
+        return { ok: true, selected: candidate, meta: result.meta };
+      }
+
+      console.error(
+        `[DB] Fallo ${candidate.source}: ${result.error?.message || 'Error desconocido'}`
       );
-      await delay(DB_RETRY_DELAY_MS);
+
+      if (attempt < MAX_DB_RETRIES) {
+        console.warn(
+          `Reintento de conexion a BD en ${DB_RETRY_DELAY_MS}ms (intento ${attempt + 2}/${MAX_DB_RETRIES + 1})`
+        );
+        await delay(DB_RETRY_DELAY_MS);
+      }
     }
   }
-  return false;
+
+  applyConfigToProcessEnv(candidates[0]);
+  process.env.DB_ACTIVE_SOURCE = candidates[0].source;
+  return { ok: false, selected: candidates[0] };
 };
 
 const startServer = async () => {
   try {
     console.log(`${BANNER_ICONS.start} Iniciando servidor...`);
 
-    const dbConnected = await connectWithRetries();
+    const dbResolution = await resolveDatabaseConnection();
+    const app = require('./app');
+    const { runPermissionsBackfill } = require('./startup/backfillPermissions');
+    const { runVentaAdjuntosBackfill } = require('./startup/backfillVentaAdjuntos');
+    const { scheduleDailyLeaseAutoFinalize } = require('./jobs/leasesAutoFinalize.job');
+    const dbConnected = dbResolution.ok;
     if (!dbConnected) {
       const failHard = process.env.FAIL_ON_DB_ERROR === 'true';
       console.error('No se pudo conectar a la base de datos.');
@@ -101,6 +136,7 @@ const startServer = async () => {
       console.log('=================================================');
       console.log(`${BANNER_ICONS.ok} Servidor corriendo en puerto ${PORT}`);
       console.log(`${BANNER_ICONS.env} Entorno: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`${BANNER_ICONS.env} DB activa: ${process.env.DB_ACTIVE_SOURCE || 'unknown'}`);
       console.log(`${BANNER_ICONS.url} URL: ${runtimeBaseUrl}`);
       console.log(`${BANNER_ICONS.api} API: ${runtimeBaseUrl}/api/${API_VERSION}`);
       console.log(`${BANNER_ICONS.health} Health: ${runtimeBaseUrl}/api/${API_VERSION}/health`);

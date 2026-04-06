@@ -1,4 +1,5 @@
 import { apiClient } from './api.config';
+import { getApiBaseUrl } from '../config/runtime';
 
 const extractList = (response) => {
   const data = response?.data?.data ?? response?.data ?? response;
@@ -126,6 +127,25 @@ export const ventaApiService = {
 
   async listarAdjuntos(idVenta) {
     return apiClient.get(`/sales/${idVenta}/attachments`);
+  },
+
+  getAttachmentFileUrl(idVenta, adjuntoId, { download = false } = {}) {
+    const baseUrl = getApiBaseUrl();
+    const suffix = download ? '?download=1' : '';
+    return `${baseUrl}/sales/${idVenta}/attachments/${adjuntoId}/file${suffix}`;
+  },
+
+  async fetchAttachmentBlob(idVenta, adjuntoId) {
+    const response = await fetch(this.getAttachmentFileUrl(idVenta, adjuntoId), {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`No se pudo obtener el adjunto. Código ${response.status}.`);
+    }
+
+    return response.blob();
   },
 };
 

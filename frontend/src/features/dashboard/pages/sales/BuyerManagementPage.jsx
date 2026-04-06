@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { Plus, Search, Filter, Eye, Edit, AlertCircle, Mail, Home, Phone, ChevronDown } from 'lucide-react';
@@ -72,18 +72,7 @@ const mapApiBuyerToRow = (buyer = {}, formData = {}) => {
 
 const filterRealBuyers = (list = []) => {
     if (!Array.isArray(list)) return [];
-    return list.filter((buyer) => {
-        if (!buyer) return false;
-        return Boolean(
-            buyer.buyerId ||
-            buyer.id_buyer ||
-            buyer.id_comprador ||
-            buyer.registroComprador ||
-            buyer.raw?.id_buyer ||
-            buyer.raw?.id_comprador ||
-            buyer.raw?.registro_comprador
-        );
-    });
+    return list.filter(Boolean);
 };
 
 const normalizeEstado = (estado = "") => (estado || "").toString().trim().toLowerCase();
@@ -178,7 +167,8 @@ export function BuyersManagementPage() {
             if (query) params.search = query;
             if (estadoFilter !== "todos") params.estado = estadoFilter;
             const result = await buyersApiService.getAll(params);
-            setCompradores(normalizeBuyers(filterRealBuyers(result.data)));
+            const buyers = normalizeBuyers(filterRealBuyers(result.data));
+            setCompradores(buyers);
             setPagination(result.pagination);
             setCurrentPage(result.pagination?.pagina || page);
         } catch (error) {
@@ -187,6 +177,8 @@ export function BuyersManagementPage() {
             setIsLoading(false);
         }
     }, [estadoFilter]);
+
+    const paginatedCompradores = useMemo(() => compradores, [compradores]);
 
     useEffect(() => {
         fetchBuyers();
@@ -600,8 +592,8 @@ export function BuyersManagementPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ) : compradores.length > 0 ? (
-                                        compradores.map((c) => {
+                                    ) : paginatedCompradores.length > 0 ? (
+                                        paginatedCompradores.map((c) => {
                                             const nombreCompleto = [c.primerNombre, c.segundoNombre, c.primerApellido, c.segundoApellido].filter(Boolean).join(' ');
                                             const { inmuebleActivo, hasAssociatedSale: isEditBlocked } = getBuyerAssociationState(c);
                                             const estado = getBuyerDisplayEstado(c);

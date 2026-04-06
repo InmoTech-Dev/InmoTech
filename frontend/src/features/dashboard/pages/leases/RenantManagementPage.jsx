@@ -339,58 +339,24 @@ export function RenantManagementPage() {
     setIsLoading(true);
     try {
       const response = await arriendoApiService.obtenerArriendos({
-        page: 1,
-        limit: 200,
+        page,
+        limit: PAGE_SIZE,
+        search: query || undefined,
+        estado: estadoFilter !== "todos" ? estadoFilter : undefined,
+        tipo_inmueble: tipoInmuebleFilter !== "todos" ? tipoInmuebleFilter : undefined,
       });
       const list = response?.data || [];
-      const normalizedQuery = String(query || "").trim().toLowerCase();
       const normalizedList = list.map(mapApiArriendoToRow);
-      const filteredList = normalizedList.filter((item) => {
-        const matchesSearch =
-          !normalizedQuery ||
-          [
-            item.nombreInmueble,
-            item.registroInmobiliario,
-            item.tipoInmueble,
-            item.direccion,
-            item.ciudad,
-            item.departamento,
-            item.barrio,
-            item.numeroDocArrendatario,
-            item.correoArrendatario,
-            item.telefonoArrendatario,
-            item.primerNombreArrendatario,
-            item.segundoNombreArrendatario,
-            item.primerApellidoArrendatario,
-            item.segundoApellidoArrendatario,
-            item.primerNombreCodeudor,
-            item.primerApellidoCodeudor,
-          ]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-
-        const matchesEstado =
-          estadoFilter === "todos" ||
-          normalizeFilterText(item.estado) === normalizeFilterText(estadoFilter);
-
-        const matchesTipoInmueble =
-          tipoInmuebleFilter === "todos" ||
-          normalizeFilterText(item.tipoInmueble) === normalizeFilterText(tipoInmuebleFilter);
-
-        return matchesSearch && matchesEstado && matchesTipoInmueble;
-      });
-      const totalPages = Math.max(Math.ceil(filteredList.length / PAGE_SIZE), 1);
-      const resolvedPage = Math.min(Math.max(page, 1), totalPages);
-      setArriendos(filteredList);
-      setPagination({
-        total: filteredList.length,
-        pagina: resolvedPage,
+      setArriendos(normalizedList);
+      setPagination(response?.pagination || {
+        total: normalizedList.length,
+        pagina: page,
         limite: PAGE_SIZE,
-        paginas_totales: totalPages,
-        has_next_page: resolvedPage < totalPages,
-        has_prev_page: resolvedPage > 1,
+        paginas_totales: 1,
+        has_next_page: false,
+        has_prev_page: false,
       });
-      setCurrentPage(resolvedPage);
+      setCurrentPage(response?.pagination?.pagina || page);
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage({
@@ -407,10 +373,7 @@ export function RenantManagementPage() {
     }
   }, [estadoFilter, setStatusMessage, tipoInmuebleFilter]);
 
-  const paginatedArriendos = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return arriendos.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [arriendos, currentPage]);
+  const paginatedArriendos = useMemo(() => arriendos, [arriendos]);
 
   useEffect(() => {
     fetchArriendos();
@@ -1887,6 +1850,7 @@ const renderDeleteModal = () => {
               onPageChange={(page) => {
                 if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
                 setCurrentPage(page);
+                fetchArriendos(searchTerm.trim(), page);
               }}
             />
           </div>

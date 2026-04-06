@@ -5,7 +5,12 @@
 import { apiClient } from './api.config';
 
 const extractPagination = (response, fallback = {}) => {
-  const payload = response?.data ?? response ?? {};
+  const payload =
+    response && typeof response === 'object' && !Array.isArray(response)
+      ? response
+      : response?.data && typeof response.data === 'object' && !Array.isArray(response.data)
+        ? response.data
+        : {};
   const pagination = payload?.pagination || payload?.paginacion || {};
   const page = fallback.page ?? 1;
   const limit = fallback.limit ?? 5;

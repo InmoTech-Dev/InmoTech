@@ -15,8 +15,8 @@ const toInt = (rawValue, fallbackValue) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackValue;
 };
 
-const REQUEST_TIMEOUT = toInt(process.env.DB_REQUEST_TIMEOUT, 8000);
-const CONNECT_TIMEOUT = toInt(process.env.DB_CONNECT_TIMEOUT, 8000);
+const REQUEST_TIMEOUT = toInt(process.env.DB_REQUEST_TIMEOUT, 60000);
+const CONNECT_TIMEOUT = toInt(process.env.DB_CONNECT_TIMEOUT, 60000);
 const POOL_MAX = toInt(process.env.DB_POOL_MAX, 20);
 const POOL_MIN = toInt(process.env.DB_POOL_MIN, 2);
 const POOL_ACQUIRE = toInt(process.env.DB_POOL_ACQUIRE, 20000);
@@ -30,18 +30,15 @@ const instanceFromServer = serverParts[1] || '';
 const configuredInstance = (process.env.DB_INSTANCE || '').trim();
 const resolvedInstance = configuredInstance || instanceFromServer;
 const hasInstanceConfigured = Boolean(resolvedInstance);
-const hasPortConfigured = Boolean(toInt(process.env.DB_PORT, undefined));
-const usePortTransport =
-  hasPortConfigured && (process.env.DB_FORCE_PORT === 'true' || !hasInstanceConfigured);
-const configuredPort = usePortTransport ? toInt(process.env.DB_PORT, undefined) : undefined;
-const instanceName = usePortTransport ? '' : (hasInstanceConfigured ? resolvedInstance : '');
+// MSSQL no permite instancia + puerto simultaneamente.
+// Priorizamos instancia cuando existe para evitar errores con SQLEXPRESS.
+const configuredPort = hasInstanceConfigured ? undefined : toInt(process.env.DB_PORT, undefined);
+const instanceName = hasInstanceConfigured ? resolvedInstance : '';
 
-if (hasInstanceConfigured && hasPortConfigured && !usePortTransport) {
-  logger.warn('[DB] DB_INSTANCE y DB_PORT detectados. Se usa instancia; define DB_FORCE_PORT=true para forzar puerto.');
-}
-
-if (usePortTransport) {
-  logger.info(`[DB] Usando transporte por puerto fijo ${configuredPort} (DB_FORCE_PORT=true).`);
+if (hasInstanceConfigured && process.env.DB_PORT) {
+  logger.warn(
+    '[DB] DB_INSTANCE/instancia detectada. Se ignora DB_PORT para evitar conflicto de MSSQL.'
+  );
 }
 
 const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {

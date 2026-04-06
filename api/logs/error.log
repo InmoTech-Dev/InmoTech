@@ -19,17 +19,8 @@
 {"level":"error","message":"  - Base de datos: InmobiliariaDB","timestamp":"2026-03-19 17:43:14"}
 {"level":"error","message":"  - Usuario: sa","timestamp":"2026-03-19 17:43:14"}
 {"level":"error","message":"  - Error: Failed to connect to localhost:1433 - Could not connect (sequence)","timestamp":"2026-03-19 17:43:14"}
-{"hasBearerToken":false,"hasRefreshToken":true,"level":"warn","message":"[AUTH] Missing access token (cookie/bearer)","method":"GET","timestamp":"2026-03-19 18:07:52","url":"/me"}
 {"code":"INVALID_REFRESH_TOKEN","level":"error","message":"Error refrescando token: Credenciales invalidas","stack":"Error: Credenciales invalidas\n    at AuthService.refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\services\\auth.service.js:365:23)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\controllers\\auth.controller.js:310:22)","status":401,"timestamp":"2026-03-19 18:07:54"}
 {"code":"INVALID_REFRESH_TOKEN","level":"error","message":"Error refrescando token: Credenciales invalidas","stack":"Error: Credenciales invalidas\n    at AuthService.refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\services\\auth.service.js:365:23)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async refrescarToken (C:\\Users\\YO SOY YO SOY YO SOY\\Downloads\\InmoTech\\api\\src\\controllers\\auth.controller.js:310:22)","status":401,"timestamp":"2026-03-19 18:07:54"}
-{"level":"warn","message":"[DB] DB_INSTANCE/instancia detectada. Se ignora DB_PORT para evitar conflicto de MSSQL.","timestamp":"2026-03-27 10:27:36"}
-{"level":"info","message":"Intentando conectar a SQL Server...","timestamp":"2026-03-27 10:27:39"}
-{"level":"info","message":"  Host: localhost","timestamp":"2026-03-27 10:27:39"}
-{"level":"info","message":"  Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:27:39"}
-{"level":"info","message":"  Puerto: (dinamico/instancia)","timestamp":"2026-03-27 10:27:39"}
-{"level":"info","message":"  Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:27:39"}
-{"level":"info","message":"  Timeouts (ms): connect=60000, request=60000","timestamp":"2026-03-27 10:27:39"}
-{"level":"info","message":"  Pool: max=20, min=2, acquire=20000, idle=10000","timestamp":"2026-03-27 10:27:39"}
 {"level":"error","message":"Error al conectar con SQL Server:","timestamp":"2026-03-27 10:28:39"}
 {"level":"error","message":"  - Host: localhost","timestamp":"2026-03-27 10:28:39"}
 {"level":"error","message":"  - Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:28:39"}
@@ -37,13 +28,6 @@
 {"level":"error","message":"  - Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:28:39"}
 {"level":"error","message":"  - Usuario: sa","timestamp":"2026-03-27 10:28:39"}
 {"level":"error","message":"  - Error: Failed to connect to localhost\\SQLEXPRESS in 60000ms","timestamp":"2026-03-27 10:28:39"}
-{"level":"info","message":"Intentando conectar a SQL Server...","timestamp":"2026-03-27 10:28:44"}
-{"level":"info","message":"  Host: localhost","timestamp":"2026-03-27 10:28:44"}
-{"level":"info","message":"  Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:28:44"}
-{"level":"info","message":"  Puerto: (dinamico/instancia)","timestamp":"2026-03-27 10:28:44"}
-{"level":"info","message":"  Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:28:44"}
-{"level":"info","message":"  Timeouts (ms): connect=60000, request=60000","timestamp":"2026-03-27 10:28:44"}
-{"level":"info","message":"  Pool: max=20, min=2, acquire=20000, idle=10000","timestamp":"2026-03-27 10:28:44"}
 {"level":"error","message":"Error al conectar con SQL Server:","timestamp":"2026-03-27 10:29:44"}
 {"level":"error","message":"  - Host: localhost","timestamp":"2026-03-27 10:29:44"}
 {"level":"error","message":"  - Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:29:44"}
@@ -51,13 +35,6 @@
 {"level":"error","message":"  - Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:29:44"}
 {"level":"error","message":"  - Usuario: sa","timestamp":"2026-03-27 10:29:44"}
 {"level":"error","message":"  - Error: Failed to connect to localhost\\SQLEXPRESS in 60000ms","timestamp":"2026-03-27 10:29:44"}
-{"level":"info","message":"Intentando conectar a SQL Server...","timestamp":"2026-03-27 10:29:49"}
-{"level":"info","message":"  Host: localhost","timestamp":"2026-03-27 10:29:49"}
-{"level":"info","message":"  Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:29:49"}
-{"level":"info","message":"  Puerto: (dinamico/instancia)","timestamp":"2026-03-27 10:29:49"}
-{"level":"info","message":"  Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:29:49"}
-{"level":"info","message":"  Timeouts (ms): connect=60000, request=60000","timestamp":"2026-03-27 10:29:49"}
-{"level":"info","message":"  Pool: max=20, min=2, acquire=20000, idle=10000","timestamp":"2026-03-27 10:29:49"}
 {"level":"error","message":"Error al conectar con SQL Server:","timestamp":"2026-03-27 10:30:49"}
 {"level":"error","message":"  - Host: localhost","timestamp":"2026-03-27 10:30:49"}
 {"level":"error","message":"  - Instancia: SQLEXPRESS","timestamp":"2026-03-27 10:30:49"}
@@ -65,4 +42,7 @@
 {"level":"error","message":"  - Base de datos: InmobiliariaDB","timestamp":"2026-03-27 10:30:49"}
 {"level":"error","message":"  - Usuario: sa","timestamp":"2026-03-27 10:30:49"}
 {"level":"error","message":"  - Error: Failed to connect to localhost\\SQLEXPRESS in 60000ms","timestamp":"2026-03-27 10:30:49"}
-{"hasBearerToken":false,"hasRefreshToken":false,"level":"warn","message":"[AUTH] Missing access token (cookie/bearer)","method":"GET","timestamp":"2026-04-04 13:27:44","url":"/me"}
+{"code":"ACCOUNT_DISABLED","level":"error","message":"Error en inicio de sesion: Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.","stack":"Error: Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.\n    at buildAccountDisabledError (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\services\\auth.service.js:162:17)\n    at AuthService.iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\services\\auth.service.js:295:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\controllers\\auth.controller.js:146:22)","status":423,"timestamp":"2026-04-05 17:30:21"}
+{"code":"ACCOUNT_DISABLED","level":"error","message":"Error en inicio de sesion: Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.","stack":"Error: Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.\n    at buildAccountDisabledError (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\services\\auth.service.js:162:17)\n    at AuthService.iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\services\\auth.service.js:295:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\controllers\\auth.controller.js:146:22)","status":423,"timestamp":"2026-04-05 17:30:21"}
+{"code":"INVALID_CREDENTIALS","level":"error","message":"Error en inicio de sesion: Credenciales invalidas","stack":"Error: Credenciales invalidas\n    at AuthService.iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\services\\auth.service.js:300:23)\n    at async iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\controllers\\auth.controller.js:146:22)","status":401,"timestamp":"2026-04-05 17:45:54"}
+{"code":"INVALID_CREDENTIALS","level":"error","message":"Error en inicio de sesion: Credenciales invalidas","stack":"Error: Credenciales invalidas\n    at AuthService.iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\services\\auth.service.js:300:23)\n    at async iniciarSesion (C:\\Users\\Chadi\\Devs inmotech\\InmoTech\\api\\src\\controllers\\auth.controller.js:146:22)","status":401,"timestamp":"2026-04-05 17:45:54"}

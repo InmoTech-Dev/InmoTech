@@ -98,8 +98,7 @@ Sigue estos pasos para levantar el entorno de desarrollo de forma local.
    ```bash
    cd api
    npm install
-   # Crea y rellena tu archivo .env basado en el .env.example
-   cp .env.example .env
+   # Configura tus variables locales para SQL Server y frontend local
    # Ejecuta el servidor en modo desarrollo
    npm run dev
    ```
@@ -109,11 +108,42 @@ Sigue estos pasos para levantar el entorno de desarrollo de forma local.
    ```bash
    cd frontend
    npm install
+   # Asegúrate de que frontend/.env.development use la API local
    # Ejecuta el panel de React
    npm run dev
    ```
 
-El frontend estará disponible normalmente en `http://localhost:5173/` y la API en el puerto configurado (ej. `http://localhost:3000/`).
+El frontend estará disponible normalmente en `http://localhost:5173/` y la API en `http://localhost:5000/`.
+
+## Producción actual
+
+- Frontend principal: `https://inmotech-red.vercel.app`
+- API pública: `https://inmotech-api.duckdns.org/api/v1`
+- Backend: Oracle Cloud + Docker
+- Base de datos: Azure SQL `inmotech-server.database.windows.net` / `InmobiliariaDB`
+
+### Variables de entorno de producción
+
+Frontend en Vercel:
+
+```env
+VITE_API_URL=https://inmotech-api.duckdns.org/api/v1
+VITE_CSRF_COOKIE_NAME=csrfToken
+VITE_CSRF_HEADER_NAME=X-CSRF-Token
+```
+
+Backend en Oracle Cloud:
+
+```env
+PUBLIC_API_URL=https://inmotech-api.duckdns.org
+FRONTEND_URL=https://inmotech-red.vercel.app
+ALLOWED_ORIGINS=https://inmotech-red.vercel.app,https://inmotech-dev.vercel.app,https://*.pabloisaacruizdelgado1-gmailcoms-projects.vercel.app
+COOKIE_SAMESITE=none
+COOKIE_SECURE=true
+AUTH_VALIDATE_ORIGIN=true
+```
+
+`ALLOWED_ORIGINS` acepta dominios exactos y patrones tipo `https://*.subdominio.vercel.app`. Evita usar `https://*.vercel.app` en producción porque abriría el acceso a previews ajenos al proyecto.
 
 ---
 

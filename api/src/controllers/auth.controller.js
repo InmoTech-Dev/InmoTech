@@ -1,5 +1,7 @@
 const authService = require('../services/auth.service');
 const personaService = require('../services/persona.service');
+const sseService = require('../services/sse.service');
+const realtimeAudienceService = require('../services/realtimeAudience.service');
 const logger = require('../utils/logger');
 const opsConsoleLogger = require('../utils/opsConsoleLogger');
 const jwtUtils = require('../utils/jwt');
@@ -160,6 +162,24 @@ class AuthController {
         footer: '✅ sesion iniciada',
       });
 
+      try {
+        const userId = result?.user?.id_persona || result?.user?.id || null;
+        const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+        sseService.emitAccessChanged({
+          action: 'login',
+          userId,
+          affectedUserIds: [userId],
+          audienceUserIds: adminIds,
+          meta: {
+            target_user_id: userId,
+          },
+        });
+      } catch (sseError) {
+        logger.warn('[SSE][ACCESS] No se pudo emitir login realtime', {
+          error: sseError.message,
+        });
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Inicio de sesion exitoso',
@@ -240,6 +260,24 @@ class AuthController {
         ...mobileTokenData.user,
         inmuebles: inmueblesAsignados
       };
+
+      try {
+        const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+        sseService.emitAccessChanged({
+          action: 'login',
+          userId,
+          affectedUserIds: [userId],
+          audienceUserIds: adminIds,
+          meta: {
+            target_user_id: userId,
+            source: 'mobile',
+          },
+        });
+      } catch (sseError) {
+        logger.warn('[SSE][ACCESS] No se pudo emitir login realtime movil', {
+          error: sseError.message,
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -509,6 +547,7 @@ class AuthController {
 
   async cerrarSesion(req, res, next) {
     try {
+      const targetUserId = req.user?.id || req.user?.id_persona || null;
       const cookieOptions = buildCookieOptions();
       clearAuthCookies(res, cookieOptions);
 
@@ -522,6 +561,23 @@ class AuthController {
         ],
         footer: '✅ sesion cerrada',
       });
+
+      try {
+        const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+        sseService.emitAccessChanged({
+          action: 'logout',
+          userId: targetUserId,
+          affectedUserIds: [targetUserId],
+          audienceUserIds: adminIds,
+          meta: {
+            target_user_id: targetUserId,
+          },
+        });
+      } catch (sseError) {
+        logger.warn('[SSE][ACCESS] No se pudo emitir logout realtime', {
+          error: sseError.message,
+        });
+      }
 
       return res.status(200).json({
         success: true,

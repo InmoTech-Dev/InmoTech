@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from "react"
+import ReactDOM from "react-dom"
 import { useToast } from "../../hooks/use-toast"
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react"
 
 export function Toaster() {
   const { toasts } = useToast()
 
-  return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2 max-w-sm">
+  if (typeof document === "undefined") return null
+
+  return ReactDOM.createPortal(
+    <div className="fixed bottom-4 right-4 z-[12000] flex flex-col-reverse gap-2 max-w-sm">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
       ))}
-    </div>
+    </div>,
+    document.body
   )
 }
 

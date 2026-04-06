@@ -522,7 +522,6 @@ class CitaApiService {
           const [horasColombia, minutosColombia] = colombia24
             .split(':')
             .map((value) => parseInt(value, 10));
-          console.log(`🔄 Hora UTC: ${fecha.getUTCHours()}:${fecha.getUTCMinutes()} → Hora Colombia: ${horasColombia}:${minutosColombia}`);
         }
       }
 
@@ -705,19 +704,15 @@ class CitaApiService {
    */
   async obtenerHorariosDisponibles(data) {
     try {
-      console.log(` Obteniendo horarios disponibles (admin):`, data);
 
       // ð¨ LÃGICA ESPECIAL: Si es servicio "Visita a Propiedad" (ID 1)
       if (data.id_servicio === 1 || data.servicio === 1) {
-        console.log("Servicio 'Visita a Propiedad': Aplicando restricciones de bloqueo");
 
         // Obtener citas existentes para esa fecha y servicio de visitas a inmuebles
         const citasExistentes = await this.obtenerCitas({
           fecha: data.fecha_cita,
           servicio: 1 // Solo visitas a inmuebles
         });
-
-        console.log(`Citas existentes para ${data.fecha_cita}:`, citasExistentes.length);
 
         // Generar todos los horarios disponibles inicialmente
         const todosHorarios = [];
@@ -771,13 +766,10 @@ class CitaApiService {
           return !estaOcupado && !tieneDemasiadasSolicitudes;
         });
 
-        console.log(`Horarios disponibles para visitas:`, horariosDisponibles.length, 'de', todosHorarios.length);
-
         return horariosDisponibles;
 
       } else {
         // ð PARA OTROS SERVICIOS: Sin restricciones, todos los horarios disponibles
-        console.log("Otro servicio: Sin restricciones de bloqueo");
 
         const defaultHorarios = [];
         // Mañana: 8:00 AM - 1:00 PM (último inicio 12:30)
@@ -820,7 +812,6 @@ class CitaApiService {
    */
   async obtenerHorariosDisponiblesUsuario(data) {
     try {
-      console.log(`Usuario obteniendo horarios disponibles para reagendamiento:`, data);
 
       const params = new URLSearchParams();
       params.append("fecha_cita", data.fecha_cita);
@@ -833,8 +824,6 @@ class CitaApiService {
         console.error("Formato de respuesta invÃ¡lido para horarios disponibles de usuario:", response.data);
         throw new Error("Formato de respuesta invÃ¡lido del servidor");
       }
-
-      console.log(`Horarios disponibles para reagendamiento obtenidos: ${result.length}`);
       return result;
 
     } catch (error) {
@@ -1029,3 +1018,4 @@ export const actualizarEstadoCita = async (idCita, idEstadoCita) => {
     throw error;
   }
 };
+

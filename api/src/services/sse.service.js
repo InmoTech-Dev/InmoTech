@@ -38,6 +38,33 @@ class SSEService {
     );
   }
 
+  buildRealtimePayload({
+    action,
+    entity,
+    entityId,
+    affectedUserIds = [],
+    scope,
+    meta = {},
+    extra = {},
+  }) {
+    return {
+      action: action || 'updated',
+      entity: entity || null,
+      entity_id: this.normalizeUserId(entityId),
+      affected_user_ids: this.normalizeUserIds(affectedUserIds),
+      scope: scope || null,
+      occurred_at: new Date().toISOString(),
+      meta: meta && typeof meta === 'object' ? meta : {},
+      ...extra,
+    };
+  }
+
+  getConnectedUserIds() {
+    return Array.from(this.clients.keys())
+      .map((userId) => this.normalizeUserId(userId))
+      .filter(Boolean);
+  }
+
   /**
    * Inicia el envio de heartbeats para mantener conexiones vivas
    */
@@ -100,6 +127,12 @@ class SSEService {
       user_connections: this.clients.get(normalizedUserId).size,
     });
 
+    this.emitPresenceChanged({
+      action: 'connected',
+      userId: normalizedUserId,
+      audienceUserIds: this.getConnectedUserIds(),
+    });
+
     // Manejar desconexion
     res.on('close', () => {
       this.removeClient(normalizedUserId, res);
@@ -132,6 +165,12 @@ class SSEService {
       opsConsoleLogger.info('SSE', 'DISCONNECT', 'OK', {
         user_id: normalizedUserId,
         active_users: this.clients.size,
+      });
+
+      this.emitPresenceChanged({
+        action: 'disconnected',
+        userId: normalizedUserId,
+        audienceUserIds: this.getConnectedUserIds(),
       });
     }
   }
@@ -262,6 +301,16 @@ class SSEService {
    * @param {number} userId - ID del usuario
    */
   notifyUserDisabled(userId) {
+    this.emitAccessChanged({
+      action: 'account_disabled',
+      userId,
+      affectedUserIds: [userId],
+      audienceUserIds: [userId, ...this.getConnectedUserIds()],
+      meta: {
+        target_user_id: this.normalizeUserId(userId),
+      },
+    });
+
     this.sendImmediateLogout(userId, {
       reason: 'account_disabled',
       message: 'Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.',
@@ -275,6 +324,16 @@ class SSEService {
    * @param {number} userId - ID del usuario
    */
   notifyPasswordChanged(userId) {
+    this.emitAccessChanged({
+      action: 'password_changed',
+      userId,
+      affectedUserIds: [userId],
+      audienceUserIds: [userId, ...this.getConnectedUserIds()],
+      meta: {
+        target_user_id: this.normalizeUserId(userId),
+      },
+    });
+
     this.emitSessionForceLogout({
       userId,
       reason: 'password_changed',
@@ -294,6 +353,16 @@ class SSEService {
    * @param {number} userId - ID del usuario
    */
   notifyAdminAccessRevoked(userId) {
+    this.emitAccessChanged({
+      action: 'admin_access_revoked',
+      userId,
+      affectedUserIds: [userId],
+      audienceUserIds: [userId, ...this.getConnectedUserIds()],
+      meta: {
+        target_user_id: this.normalizeUserId(userId),
+      },
+    });
+
     this.emitSessionForceLogout({
       userId,
       reason: 'admin_access_revoked',
@@ -323,38 +392,149 @@ class SSEService {
     const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
     if (recipients.length === 0) return;
 
-    this.sendToUsers(recipients, 'report.changed', {
-      action: action || 'updated',
-      report_id: this.normalizeUserId(reportId),
-      affected_user_ids: this.normalizeUserIds(affectedUserIds),
-      occurred_at: new Date().toISOString(),
-    });
+    this.sendToUsers(
+      recipients,
+      'report.changed',
+      this.buildRealtimePayload({
+        action,
+        entity: 'report',
+        entityId: reportId,
+        affectedUserIds,
+        scope: 'reports',
+        extra: {
+          report_id: this.normalizeUserId(reportId),
+        },
+      })
+    );
+  }
+
+  emitAppointmentChanged({ action, appointmentId, affectedUserIds = [], audienceUserIds = [] }) {
+    const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
+    if (recipients.length === 0) return;
+
+    this.sendToUsers(
+      recipients,
+      'appointment.changed',
+      this.buildRealtimePayload({
+        action,
+        entity: 'appointment',
+        entityId: appointmentId,
+        affectedUserIds,
+        scope: 'appointments',
+        extra: {
+          appointment_id: this.normalizeUserId(appointmentId),
+        },
+      })
+    );
   }
 
   emitNotificationChanged({ userIds = [], scope = 'citas', unreadCountHint = null }) {
     const recipients = this.normalizeUserIds(userIds);
     if (recipients.length === 0) return;
 
-    this.sendToUsers(recipients, 'notification.changed', {
-      scope,
-      unread_count_hint:
-        typeof unreadCountHint === 'number' && Number.isFinite(unreadCountHint)
-          ? unreadCountHint
-          : null,
-      occurred_at: new Date().toISOString(),
-    });
+    this.sendToUsers(
+      recipients,
+      'notification.changed',
+      this.buildRealtimePayload({
+        action: 'updated',
+        entity: 'notification',
+        entityId: null,
+        affectedUserIds: recipients,
+        scope,
+        extra: {
+          unread_count_hint:
+            typeof unreadCountHint === 'number' && Number.isFinite(unreadCountHint)
+              ? unreadCountHint
+              : null,
+        },
+      })
+    );
   }
 
   emitUserChanged({ action, userId, affectedUserIds = [], audienceUserIds = [] }) {
     const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
     if (recipients.length === 0) return;
 
-    this.sendToUsers(recipients, 'user.changed', {
-      action: action || 'updated',
-      user_id: this.normalizeUserId(userId),
-      affected_user_ids: this.normalizeUserIds(affectedUserIds),
-      occurred_at: new Date().toISOString(),
-    });
+    this.sendToUsers(
+      recipients,
+      'user.changed',
+      this.buildRealtimePayload({
+        action,
+        entity: 'user',
+        entityId: userId,
+        affectedUserIds,
+        scope: 'users',
+        extra: {
+          user_id: this.normalizeUserId(userId),
+        },
+      })
+    );
+  }
+
+  emitRoleChanged({ action, roleId, affectedUserIds = [], audienceUserIds = [], meta = {} }) {
+    const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
+    if (recipients.length === 0) return;
+
+    this.sendToUsers(
+      recipients,
+      'role.changed',
+      this.buildRealtimePayload({
+        action,
+        entity: 'role',
+        entityId: roleId,
+        affectedUserIds,
+        scope: 'roles',
+        meta,
+        extra: {
+          role_id: this.normalizeUserId(roleId),
+        },
+      })
+    );
+  }
+
+  emitAccessChanged({ action, userId, affectedUserIds = [], audienceUserIds = [], meta = {} }) {
+    const recipients = this.normalizeUserIds([...affectedUserIds, ...audienceUserIds]);
+    if (recipients.length === 0) return;
+
+    this.sendToUsers(
+      recipients,
+      'access.changed',
+      this.buildRealtimePayload({
+        action,
+        entity: 'session',
+        entityId: userId,
+        affectedUserIds,
+        scope: 'access',
+        meta,
+        extra: {
+          user_id: this.normalizeUserId(userId),
+        },
+      })
+    );
+  }
+
+  emitPresenceChanged({ action, userId, audienceUserIds = [], meta = {} }) {
+    const recipients = this.normalizeUserIds(audienceUserIds);
+    if (recipients.length === 0) return;
+
+    this.sendToUsers(
+      recipients,
+      'presence.changed',
+      this.buildRealtimePayload({
+        action,
+        entity: 'presence',
+        entityId: userId,
+        affectedUserIds: [userId],
+        scope: 'presence',
+        meta: {
+          user_id: this.normalizeUserId(userId),
+          ...meta,
+        },
+        extra: {
+          user_id: this.normalizeUserId(userId),
+        },
+      })
+    );
   }
 
   /**

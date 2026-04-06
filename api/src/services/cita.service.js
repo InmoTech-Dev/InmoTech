@@ -7,6 +7,11 @@ const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { isSuperAdministrator } = require('../middlewares/auth.middleware');
 const logger = require('../utils/logger');
+const {
+  calculateEndTime,
+  isValidAppointmentStart,
+  isWithinBusinessSchedule,
+} = require('../constants/appointmentSchedule');
 
 const normalizarFechaCita = (fecha) => {
   if (!fecha) return fecha;
@@ -81,24 +86,44 @@ const sumarMinutosHora = (hora, minutosASumar = 30) => {
 
 const resolverRangoHorario = ({ horaInicio, horaFin }) => {
   const inicioNormalizado = normalizarHoraTexto(horaInicio);
-  if (!inicioNormalizado) {
+  if (!inicioNormalizado || !isValidAppointmentStart(inicioNormalizado)) {
+    return { horaInicio: null, horaFin: null };
+  }
+
+  const horaFinEsperada = calculateEndTime(inicioNormalizado);
+  if (!horaFinEsperada) {
     return { horaInicio: null, horaFin: null };
   }
 
   const finNormalizado = normalizarHoraTexto(horaFin);
-  const inicioMinutos = horaEnMinutos(inicioNormalizado);
-  const finMinutos = finNormalizado ? horaEnMinutos(finNormalizado) : null;
-
-  if (finMinutos === null || finMinutos <= inicioMinutos) {
-    return {
-      horaInicio: inicioNormalizado,
-      horaFin: sumarMinutosHora(inicioNormalizado, 30)
-    };
+  if (finNormalizado && finNormalizado !== horaFinEsperada) {
+    return { horaInicio: null, horaFin: null };
   }
 
   return {
     horaInicio: inicioNormalizado,
-    horaFin: finNormalizado
+    horaFin: horaFinEsperada
+  };
+};
+
+const validarHorarioCita = ({ fecha_cita, hora_inicio, hora_fin }) => {
+  const rangoHorario = resolverRangoHorario({
+    horaInicio: hora_inicio,
+    horaFin: hora_fin
+  });
+
+  if (!rangoHorario.horaInicio || !rangoHorario.horaFin) {
+    return { ok: false, horaInicio: null, horaFin: null };
+  }
+
+  return {
+    ok: isWithinBusinessSchedule({
+      fecha: fecha_cita,
+      horaInicio: rangoHorario.horaInicio,
+      horaFin: rangoHorario.horaFin
+    }),
+    horaInicio: rangoHorario.horaInicio,
+    horaFin: rangoHorario.horaFin
   };
 };
 class CitaService {
@@ -138,6 +163,19 @@ class CitaService {
 
         dataCita.id_inmueble = idInmueble;
         dataCita.id_servicio = idServicio;
+
+        const horarioValidado = validarHorarioCita({
+          fecha_cita: dataCita.fecha_cita,
+          hora_inicio: dataCita.hora_inicio,
+          hora_fin: dataCita.hora_fin
+        });
+
+        if (!horarioValidado.ok) {
+          throw asBadRequest('Horario de cita inválido. Selecciona un horario permitido de 30 minutos dentro de la jornada laboral.');
+        }
+
+        dataCita.hora_inicio = horarioValidado.horaInicio;
+        dataCita.hora_fin = horarioValidado.horaFin;
 
         // âœ… Usar directamente nombre_completo y apellido_completo como vienen del frontend
         const nombre_completo = dataCita.nombre_completo || '';
@@ -193,20 +231,15 @@ class CitaService {
           });
 
           if (personaPorCorreo) {
-            // CONFLICTO: El documento es nuevo pero el correo ya existe.
-            // Para evitar errores 409 y duplicados inconsistentes, asumimos que es la misma persona 
-            // pero que tal vez se registrÃ³ con otro documento antes o hubo un error.
-            // Por seguridad en este flujo de citas, usamos la persona encontrada por correo.
-            persona = personaPorCorreo;
-            logger.info(`Persona encontrada por correo (${correoPrincipal}) aunque el documento es distinto.`);
-
-            // Actualizamos el documento si es necesario? Mejor no por seguridad, 
-            // solo actualizamos nombres y telÃ©fono.
-            await persona.update({
-              nombre_completo,
-              apellido_completo,
-              telefono: dataCita.telefono
-            }, { transaction: t });
+            const documentoExistente = [
+              personaPorCorreo.tipo_documento,
+              personaPorCorreo.numero_documento
+            ].filter(Boolean).join(' ');
+            const correoConflictError = new Error(
+              `El correo ${correoPrincipal} ya estÃ¡ asociado a otro documento${documentoExistente ? ` (${documentoExistente})` : ''}. Usa otro correo o corrige el documento.`
+            );
+            correoConflictError.status = 409;
+            throw correoConflictError;
           } else {
             // Si no existe por ninguno, creamos nuevo
             persona = await Persona.create({
@@ -1311,6 +1344,7 @@ class CitaService {
           throw horarioError;
         }
 
+        let idPersonaFinal = citaOriginal.id_persona;
         const debeActualizarPersona = [
           'tipo_documento',
           'numero_documento',
@@ -1339,86 +1373,132 @@ class CitaService {
             throw new Error(`Persona asociada a la cita ${idCita} no encontrada`);
           }
 
-          const datosPersonaActualizados = {};
-
-          if (typeof nuevosDatos.nombre_completo !== 'undefined') {
-            datosPersonaActualizados.nombre_completo = String(nuevosDatos.nombre_completo || '').trim();
-          }
-
-          if (typeof nuevosDatos.apellido_completo !== 'undefined') {
-            datosPersonaActualizados.apellido_completo = String(nuevosDatos.apellido_completo || '').trim();
-          }
-
-          if (typeof nuevosDatos.telefono !== 'undefined') {
-            datosPersonaActualizados.telefono = nuevosDatos.telefono;
-          }
-
           const correoEntrada = typeof nuevosDatos.email !== 'undefined'
             ? nuevosDatos.email
             : nuevosDatos.correo;
+          const correoFinal = typeof correoEntrada !== 'undefined'
+            ? (correoEntrada ? String(correoEntrada).trim().toLowerCase() : null)
+            : (personaAsociada.correo ? String(personaAsociada.correo).trim().toLowerCase() : null);
 
-          if (typeof correoEntrada !== 'undefined') {
-            const correoNormalizado = correoEntrada
-              ? String(correoEntrada).trim().toLowerCase()
-              : null;
+          const datosPersonaFinales = {
+            tipo_documento: typeof nuevosDatos.tipo_documento !== 'undefined'
+              ? nuevosDatos.tipo_documento
+              : personaAsociada.tipo_documento,
+            numero_documento: typeof nuevosDatos.numero_documento !== 'undefined'
+              ? nuevosDatos.numero_documento
+              : personaAsociada.numero_documento,
+            nombre_completo: typeof nuevosDatos.nombre_completo !== 'undefined'
+              ? String(nuevosDatos.nombre_completo || '').trim()
+              : String(personaAsociada.nombre_completo || '').trim(),
+            apellido_completo: typeof nuevosDatos.apellido_completo !== 'undefined'
+              ? String(nuevosDatos.apellido_completo || '').trim()
+              : String(personaAsociada.apellido_completo || '').trim(),
+            telefono: typeof nuevosDatos.telefono !== 'undefined'
+              ? nuevosDatos.telefono
+              : personaAsociada.telefono,
+            correo: correoFinal
+          };
 
-            if (correoNormalizado) {
-              const correoEnUso = await Persona.findOne({
-                where: {
-                  correo: correoNormalizado,
-                  id_persona: { [Op.ne]: personaAsociada.id_persona }
-                },
-                transaction: t
-              });
+          const huboCambiosPersonales =
+            datosPersonaFinales.tipo_documento !== personaAsociada.tipo_documento ||
+            datosPersonaFinales.numero_documento !== personaAsociada.numero_documento ||
+            datosPersonaFinales.nombre_completo !== (personaAsociada.nombre_completo || '') ||
+            datosPersonaFinales.apellido_completo !== (personaAsociada.apellido_completo || '') ||
+            datosPersonaFinales.telefono !== personaAsociada.telefono ||
+            (datosPersonaFinales.correo || null) !== ((personaAsociada.correo || null));
 
-              if (correoEnUso) {
-                const correoError = new Error(`El correo ${correoNormalizado} ya esta en uso por otra persona`);
-                correoError.status = 409;
-                throw correoError;
-              }
-            }
+          if (huboCambiosPersonales) {
+            const citasDeLaPersona = await Cita.count({
+              where: { id_persona: personaAsociada.id_persona },
+              transaction: t
+            });
 
-            datosPersonaActualizados.correo = correoNormalizado;
-          }
-
-          const tipoDocumentoFinal = typeof nuevosDatos.tipo_documento !== 'undefined'
-            ? nuevosDatos.tipo_documento
-            : personaAsociada.tipo_documento;
-          const numeroDocumentoFinal = typeof nuevosDatos.numero_documento !== 'undefined'
-            ? nuevosDatos.numero_documento
-            : personaAsociada.numero_documento;
-          const documentoFueEditado = typeof nuevosDatos.tipo_documento !== 'undefined'
-            || typeof nuevosDatos.numero_documento !== 'undefined';
-
-          if (documentoFueEditado) {
             const documentoEnUso = await Persona.findOne({
               where: {
-                tipo_documento: tipoDocumentoFinal,
-                numero_documento: numeroDocumentoFinal,
-                id_persona: { [Op.ne]: personaAsociada.id_persona }
+                tipo_documento: datosPersonaFinales.tipo_documento,
+                numero_documento: datosPersonaFinales.numero_documento
               },
               transaction: t
             });
 
-            if (documentoEnUso) {
-              const documentoError = new Error(
-                `Ya existe una persona con documento ${tipoDocumentoFinal} ${numeroDocumentoFinal}`
-              );
-              documentoError.status = 409;
-              throw documentoError;
+            if (documentoEnUso && documentoEnUso.id_persona !== personaAsociada.id_persona) {
+              if (datosPersonaFinales.correo) {
+                const correoEnUso = await Persona.findOne({
+                  where: {
+                    correo: datosPersonaFinales.correo,
+                    id_persona: { [Op.ne]: documentoEnUso.id_persona }
+                  },
+                  transaction: t
+                });
+
+                if (correoEnUso) {
+                  const correoError = new Error(`El correo ${datosPersonaFinales.correo} ya esta en uso por otra persona`);
+                  correoError.status = 409;
+                  throw correoError;
+                }
+              }
+
+              await documentoEnUso.update({
+                nombre_completo: datosPersonaFinales.nombre_completo,
+                apellido_completo: datosPersonaFinales.apellido_completo,
+                telefono: datosPersonaFinales.telefono,
+                correo: datosPersonaFinales.correo
+              }, { transaction: t });
+
+              idPersonaFinal = documentoEnUso.id_persona;
+            } else if (citasDeLaPersona > 1) {
+              if (datosPersonaFinales.correo) {
+                const correoEnUso = await Persona.findOne({
+                  where: {
+                    correo: datosPersonaFinales.correo,
+                    id_persona: { [Op.ne]: personaAsociada.id_persona }
+                  },
+                  transaction: t
+                });
+
+                if (correoEnUso) {
+                  const correoError = new Error(`El correo ${datosPersonaFinales.correo} ya esta en uso por otra persona`);
+                  correoError.status = 409;
+                  throw correoError;
+                }
+              }
+
+              const nuevaPersona = await Persona.create({
+                tipo_documento: datosPersonaFinales.tipo_documento,
+                numero_documento: datosPersonaFinales.numero_documento,
+                nombre_completo: datosPersonaFinales.nombre_completo,
+                apellido_completo: datosPersonaFinales.apellido_completo,
+                correo: datosPersonaFinales.correo,
+                telefono: datosPersonaFinales.telefono,
+                tiene_cuenta: false
+              }, { transaction: t });
+
+              idPersonaFinal = nuevaPersona.id_persona;
+            } else {
+              if (datosPersonaFinales.correo) {
+                const correoEnUso = await Persona.findOne({
+                  where: {
+                    correo: datosPersonaFinales.correo,
+                    id_persona: { [Op.ne]: personaAsociada.id_persona }
+                  },
+                  transaction: t
+                });
+
+                if (correoEnUso) {
+                  const correoError = new Error(`El correo ${datosPersonaFinales.correo} ya esta en uso por otra persona`);
+                  correoError.status = 409;
+                  throw correoError;
+                }
+              }
+
+              await personaAsociada.update(datosPersonaFinales, { transaction: t });
             }
-
-            datosPersonaActualizados.tipo_documento = tipoDocumentoFinal;
-            datosPersonaActualizados.numero_documento = numeroDocumentoFinal;
-          }
-
-          if (Object.keys(datosPersonaActualizados).length > 0) {
-            await personaAsociada.update(datosPersonaActualizados, { transaction: t });
           }
         }
 
         // Actualizacion atomica: fecha/hora y contador en una sola operacion
         const datosCompletos = {
+          id_persona: idPersonaFinal,
           fecha_cita: fechaFinal,
           hora_inicio: rangoHorarioFinal.horaInicio,
           hora_fin: rangoHorarioFinal.horaFin,

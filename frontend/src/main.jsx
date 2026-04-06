@@ -8,6 +8,7 @@ import { AuthProvider } from './shared/contexts/AuthContext.jsx'
 import { AdministrativosProvider } from './shared/contexts/AdministrativosContext.jsx'
 import RealtimeBridge from './shared/components/realtime/RealtimeBridge.jsx'
 import { Toaster } from './shared/components/ui/toaster.jsx'
+import { ReportsProvider } from './shared/contexts/ReportsContext.jsx'
 import App from './App.jsx'
 import './shared/styles/globals.css'
 import './shared/styles/animations.css'
@@ -20,7 +21,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <AppointmentProvider>
           <AdministrativosProvider>
             <UsersProvider>
-              <App />
+              <ReportsProvider>
+                <App />
+              </ReportsProvider>
               <Toaster />
             </UsersProvider>
           </AdministrativosProvider>

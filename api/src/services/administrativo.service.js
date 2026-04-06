@@ -712,6 +712,15 @@ class AdministrativoService {
           affectedUserIds: [personaId],
           audienceUserIds: adminIds
         });
+        sseService.emitAccessChanged({
+          action: estadoLaboral === 'Retirado' || estadoLaboral === 'Inactivo' ? 'account_disabled' : 'access_enabled',
+          userId: personaId,
+          affectedUserIds: [personaId],
+          audienceUserIds: adminIds,
+          meta: {
+            target_user_id: personaId,
+          },
+        });
       }
 
       return result;
@@ -793,6 +802,15 @@ class AdministrativoService {
         userId: targetPersonaId,
         affectedUserIds: [targetPersonaId],
         audienceUserIds: adminIds
+      });
+      sseService.emitAccessChanged({
+        action: 'account_disabled',
+        userId: targetPersonaId,
+        affectedUserIds: [targetPersonaId],
+        audienceUserIds: adminIds,
+        meta: {
+          target_user_id: targetPersonaId,
+        },
       });
     }
 

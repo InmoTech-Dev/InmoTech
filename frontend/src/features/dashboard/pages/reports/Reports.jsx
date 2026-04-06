@@ -12,7 +12,7 @@ import authService from '../../../../shared/services/authService'
 import { useToast } from '../../../../shared/hooks/use-toast'
 import { uploadToCloudinary } from '../../../../shared/services/cloudinary'
 import { Grid3X3, List } from 'lucide-react'
-import sseService from '../../../../shared/services/sseService'
+import realtimeBus from '../../../../shared/services/realtimeBus'
 import * as XLSX from "xlsx";
 import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog'
 import AdminReportsView from './AdminReportsView'
@@ -41,6 +41,7 @@ const ReportsContent = () => {
   const [dbReports, setDbReports] = useState([])
   const [dbLoading, setDbLoading] = useState(true)
   const [dbError, setDbError] = useState(null)
+  const realtimeRefreshRef = React.useRef(null)
 
   // Función reutilizable para cargar desde la base de datos
   const fetchReports = async () => {
@@ -86,18 +87,54 @@ const ReportsContent = () => {
     }
   }
 
-  // Cargar desde la base de datos al montar y suscribirse a SSE
+  // Cargar desde la base de datos al montar y suscribirse al bus realtime
   useEffect(() => {
     fetchReports()
 
-    // Suscribirse a cambios en tiempo real
-    const unsubscribe = sseService.on('report.changed', () => {
-      console.log('--- SSE: Refreshing reports due to real-time event ---');
-      fetchReports();
-    });
+    const scheduleRefresh = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+      }
 
-    return () => unsubscribe();
+      realtimeRefreshRef.current = setTimeout(() => {
+        fetchReports()
+      }, 450)
+    }
+
+    const offReportChanged = realtimeBus.on('report.changed', scheduleRefresh)
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', scheduleRefresh)
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', scheduleRefresh)
+
+    return () => {
+      offReportChanged()
+      offFallbackTick()
+      offReconcile()
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+        realtimeRefreshRef.current = null
+      }
+    }
   }, [])
+
+  useEffect(() => {
+    if (!selectedReport || dbReports.length === 0) return
+
+    const selectedId = getBackendId(selectedReport)
+    if (!selectedId) return
+
+    const updatedReport = dbReports.find((report) => getBackendId(report) === selectedId)
+    if (!updatedReport) {
+      setSelectedReport(null)
+      setIsViewModalOpen(false)
+      setIsEditModalOpen(false)
+      return
+    }
+
+    setSelectedReport((prev) => ({
+      ...prev,
+      ...updatedReport,
+    }))
+  }, [dbReports])
 
   // Filtrar reportes (solo los del backend)
   const filteredReports = dbReports.filter(report =>

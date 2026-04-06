@@ -31,7 +31,9 @@ const Header = () => {
   const [unreadNotificationIds, setUnreadNotificationIds] = useState([]);
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
   const [previousTotalCount, setPreviousTotalCount] = useState(0);
-  const audioRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const audioErrorLoggedRef = useRef(false);
+  const canPlayAudioRef = useRef(false);
   const [isMarkingRead, setIsMarkingRead] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [reports, setReports] = useState([]);
@@ -100,16 +102,78 @@ const Header = () => {
   const unseenReportsCount = reports.filter(r => !seenReportIds.includes(r.id_reporte || r.id)).length;
   const totalNotificationsCount = (canViewCitas ? pendingAppointments.length : 0) + (canViewReportes ? unseenReportsCount : 0);
 
+  const playNotificationSound = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!canPlayAudioRef.current) return;
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+      return;
+    }
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass();
+      }
+
+      const context = audioContextRef.current;
+      if (context.state === 'suspended') {
+        context.resume().catch(() => {});
+      }
+
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, context.currentTime);
+      gainNode.gain.setValueAtTime(0.0001, context.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+
+      oscillator.start(context.currentTime);
+      oscillator.stop(context.currentTime + 0.18);
+    } catch (error) {
+      if (!audioErrorLoggedRef.current) {
+        console.warn('Notification sound unavailable:', error);
+        audioErrorLoggedRef.current = true;
+      }
+    }
+  }, []);
+
   // Efecto para sonido de notificación
   useEffect(() => {
     if (totalNotificationsCount > previousTotalCount) {
-      if (!audioRef.current) {
-        audioRef.current = new Audio('https://cdn.pixabay.com/audio/2022/10/16/audio_2cadc3d64f.mp3');
-      }
-      audioRef.current.play().catch(e => console.warn('Audio play blocked or failed:', e));
+      playNotificationSound();
     }
     setPreviousTotalCount(totalNotificationsCount);
-  }, [totalNotificationsCount, previousTotalCount]);
+  }, [playNotificationSound, totalNotificationsCount, previousTotalCount]);
+
+  useEffect(() => () => {
+    if (audioContextRef.current && typeof audioContextRef.current.close === 'function') {
+      audioContextRef.current.close().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const enableAudio = () => {
+      canPlayAudioRef.current = true;
+      window.removeEventListener('pointerdown', enableAudio);
+      window.removeEventListener('keydown', enableAudio);
+    };
+
+    window.addEventListener('pointerdown', enableAudio, { once: true });
+    window.addEventListener('keydown', enableAudio, { once: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', enableAudio);
+      window.removeEventListener('keydown', enableAudio);
+    };
+  }, []);
 
   const triggerBellFx = useCallback(() => {
     if (bellFxTimeoutRef.current) {

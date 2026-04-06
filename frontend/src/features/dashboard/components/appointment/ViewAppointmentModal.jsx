@@ -2,12 +2,9 @@ import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Phone, Mail, Calendar, Clock, Home, FileText, MapPin, Hash } from 'lucide-react';
-import { useAuth } from '../../../../shared/contexts/AuthContext';
 import citaApiService from '../../../../shared/services/citaApiService';
 
 const ViewAppointmentModal = ({ isOpen, onClose, cita }) => {
-  const { user } = useAuth();
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -126,6 +123,11 @@ const ViewAppointmentModal = ({ isOpen, onClose, cita }) => {
   const cliente = cita.cliente || {};
   const inmueble = cita.inmueble || {};
   const servicio = cita.servicio || {};
+  const nombreCliente = `${cliente.nombre_completo || ''} ${cliente.apellido_completo || ''}`.trim();
+  const nombreCreador = cita.creador
+    ? `${cita.creador.nombre_completo || ''} ${cita.creador.apellido_completo || ''}`.trim()
+    : '';
+  const creadorDisplay = nombreCreador || nombreCliente || 'Creador no registrado';
   const editNote =
     cita.motivo_reagendamiento ||
     cita.comentario_edicion ||
@@ -356,12 +358,7 @@ const ViewAppointmentModal = ({ isOpen, onClose, cita }) => {
                       <div className="flex-1">
                         <p className="text-xs font-medium text-green-600">Creador de la Cita</p>
                         <p className="text-sm text-green-800 font-semibold leading-snug">
-                          {cita.creador
-                            ? `${cita.creador.nombre_completo} ${cita.creador.apellido_completo}`
-                            : user
-                              ? `${user.nombre_completo} ${user.apellido_completo}`
-                              : 'Creador no registrado'
-                          }
+                          {creadorDisplay}
                         </p>
                       </div>
                     </div>

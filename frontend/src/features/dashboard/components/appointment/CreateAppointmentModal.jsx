@@ -9,11 +9,12 @@ import DetailsStepStep from './steps/DetailsStep';
 import SummaryStepStep from './steps/SummaryStep';
 import { useToast } from '../../../../shared/hooks/use-toast';
 import { formatPhoneNumber } from '../../../../shared/utils/phoneFormatter';
+import { formatTimeTo24Hour } from '../../../../shared/utils/time';
 import { useAppointments } from '../../../../shared/contexts/AppointmentContext';
 import { useAuth } from '../../../../shared/contexts/AuthContext';
 import { apiClient } from '../../../../shared/services/api.config';
 import citaApiService from '../../../../shared/services/citaApiService';
-import { calculateEndTime, getBusinessHoursMessage } from '../../../../shared/constants/appointmentSchedule';
+import { calculateEndTime, getBusinessHoursMessage, isValidAppointmentStart } from '../../../../shared/constants/appointmentSchedule';
 
 const SERVICIO_MAP = {
   "Visita a Propiedad": 1,
@@ -186,7 +187,7 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
   };
 
   // Función para validar hora (horario laboral)
-  const validateHora = (hora) => {
+  const validateHoraLegacy = (hora) => {
     if (!hora) return 'La hora es requerida';
 
     // Check for multiple AM/PM suffixes
@@ -230,6 +231,29 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
   };
 
   // Función para validar servicio
+  const validateHora = (hora) => {
+    if (!hora) return 'La hora es requerida';
+
+    const amMatches = hora.match(/\b(am|AM)\b/g);
+    const pmMatches = hora.match(/\b(pm|PM)\b/g);
+    const totalSuffixes = (amMatches ? amMatches.length : 0) + (pmMatches ? pmMatches.length : 0);
+
+    if (totalSuffixes > 1) {
+      return 'La hora no puede tener mÃºltiples sufijos AM/PM';
+    }
+
+    const horaNormalizada = formatTimeTo24Hour(String(hora));
+    if (!horaNormalizada) {
+      return 'Formato de hora invÃ¡lido';
+    }
+
+    if (!isValidAppointmentStart(horaNormalizada) || !calculateEndTime(horaNormalizada)) {
+      return `Las citas solo se pueden agendar ${getBusinessHoursMessage()} y en intervalos de 30 minutos`;
+    }
+
+    return '';
+  };
+
   const validateServicio = (servicio) => {
     if (!servicio || servicio.trim() === '') {
       return 'El servicio es requerido';
@@ -448,7 +472,7 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
   };
 
   // Función para convertir hora de 12h a 24h
-  const formatHoraParaAPI = (hora) => {
+  const formatHoraParaAPILegacy = (hora) => {
     if (!hora) return "09:00";
 
     const horaLimpia = hora.toLowerCase().replace(/\s+/g, "");
@@ -467,6 +491,8 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
   };
 
   // Función para calcular hora_fin con duración de una hora
+  const formatHoraParaAPI = (hora) => formatTimeTo24Hour(String(hora || ''));
+
   const calcularHoraFin = (horaInicio) => calculateEndTime(horaInicio);
 
   // ✅ MODIFICADO: Crear la cita directamente sin modal de confirmación
@@ -493,6 +519,16 @@ const CreateAppointmentModal = ({ isOpen, onClose, onSubmit, preselectedDate }) 
       // 🛡️ VALIDACIÓN FINAL: Verificar que el horario sigua disponible justo antes de crear
       const idServicio = getServicioIdFromNombre(formData.servicio) || 1;
       const horaInicio24h = formatHoraParaAPI(formData.hora);
+
+      if (!horaInicio24h || !isValidAppointmentStart(horaInicio24h)) {
+        toast({
+          title: "Horario no vÃ¡lido",
+          description: `Selecciona un horario disponible dentro de ${getBusinessHoursMessage().toLowerCase()}.`,
+          variant: "destructive"
+        });
+        setCurrentStep(3);
+        return;
+      }
 
       const disponibilidadData = {
         fecha_cita: formData.fecha,

@@ -8,6 +8,7 @@ import AdminHolderCard from "./AdminHolderCard";
 import DeleteConfirmModal from "../../../../shared/components/modals/DeleteConfirmModal";
 import ConfirmationDialog from "../../../../shared/components/ui/ConfirmationDialog";
 import rolesApiService from "../../../../shared/services/rolesApiService";
+import realtimeBus from "../../../../shared/services/realtimeBus";
 import { useAuth } from "../../../../shared/contexts/AuthContext";
 import { useToast } from "../../../../shared/hooks/use-toast";
 import EmptyState from "../../../../shared/components/ui/EmptyState";
@@ -50,6 +51,7 @@ const RolesContent = () => {
   const [rolSeleccionado, setRolSeleccionado] = useState(null);
   const [isDeletingRol, setIsDeletingRol] = useState(false);
   const [isChangingRolStatus, setIsChangingRolStatus] = useState(false);
+  const realtimeRefreshRef = React.useRef(null);
   
   // Estado para la paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -145,6 +147,60 @@ const RolesContent = () => {
       setRoles([]);
     }
   }, [isAuthenticated, authLoading, isSuperAdmin, isAdmin]);
+
+  useEffect(() => {
+    if (!rolSeleccionado || roles.length === 0) return;
+    const selectedId = Number(rolSeleccionado.id ?? rolSeleccionado.id_rol ?? 0);
+    if (!selectedId) return;
+
+    const updatedRol = roles.find((rol) => Number(rol.id ?? rol.id_rol ?? 0) === selectedId);
+    if (!updatedRol) {
+      setRolSeleccionado(null);
+      setEditarModalOpen(false);
+      setVerModalOpen(false);
+      setIsDeleteModalOpen(false);
+      setIsStatusChangeDialogOpen(false);
+      return;
+    }
+
+    if (updatedRol !== rolSeleccionado) {
+      setRolSeleccionado(updatedRol);
+    }
+  }, [roles, rolSeleccionado]);
+
+  useEffect(() => {
+    if (!isAuthorized) return undefined;
+
+    const scheduleReload = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+      }
+
+      realtimeRefreshRef.current = setTimeout(() => {
+        cargarRoles().catch((refreshError) => {
+          console.warn('[REALTIME][ROLES] No se pudo refrescar listado:', refreshError);
+        });
+      }, 450);
+    };
+
+    const offRoleChanged = realtimeBus.on('role.changed', scheduleReload);
+    const offUserChanged = realtimeBus.on('user.changed', scheduleReload);
+    const offAccessChanged = realtimeBus.on('access.changed', scheduleReload);
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', scheduleReload);
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', scheduleReload);
+
+    return () => {
+      offRoleChanged();
+      offUserChanged();
+      offAccessChanged();
+      offFallbackTick();
+      offReconcile();
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+        realtimeRefreshRef.current = null;
+      }
+    };
+  }, [cargarRoles, isAuthorized]);
 
 
 

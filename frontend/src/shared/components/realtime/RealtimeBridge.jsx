@@ -272,6 +272,18 @@ const RealtimeBridge = () => {
       ['user.changed', (payload) => {
         realtimeBus.emit('user.changed', payload);
       }],
+      ['report.changed', (payload) => {
+        realtimeBus.emit('report.changed', payload);
+      }],
+      ['role.changed', (payload) => {
+        realtimeBus.emit('role.changed', payload);
+      }],
+      ['access.changed', (payload) => {
+        realtimeBus.emit('access.changed', payload);
+      }],
+      ['presence.changed', (payload) => {
+        realtimeBus.emit('presence.changed', payload);
+      }],
       ['session.force_logout', handleForcedLogout],
       ['user_disabled', handleForcedLogout],
       ['password_changed', handleForcedLogout],

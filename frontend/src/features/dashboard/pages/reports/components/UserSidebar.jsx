@@ -1,16 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Search, User, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
 
-const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, onToggle }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-
+const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, onToggle, searchTerm, onSearchChange }) => {
     const filteredUsers = users.filter(user =>
-        `${user.nombre_completo} ${user.apellido_completo}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.rol?.toLowerCase().includes(searchTerm.toLowerCase())
+        `${user.nombre_completo} ${user.apellido_completo}`.toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+        user.rol?.toLowerCase().includes((searchTerm || '').toLowerCase())
     );
 
     return (

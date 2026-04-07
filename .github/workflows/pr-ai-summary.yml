@@ -23,9 +23,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 3. Generar Descripción
+      - name: 3. Generar Descripción (Groq Llama 3)
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
@@ -39,103 +39,89 @@ jobs:
           async function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
           async function run() {
-            const apiKey = process.env.GEMINI_API_KEY;
-            const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 30000);
+            const apiKey = process.env.GROQ_API_KEY;
+            if (!apiKey) {
+              console.log("⚠️ GROQ_API_KEY no encontrada. Por favor agrégala en los Secrets de GitHub.");
+              process.exit(0);
+            }
+
+            // Llama 3 tiene un contexto excelente de 8k tokens. ~20000 caracteres encajan perfecto.
+            const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 20000); 
             if (!diff.trim()) {
               console.log("⚠️ Diff vacío, nada que resumir.");
               return;
             }
 
-            // 1. DESCUBRIMIENTO HÍBRIDO CON MAPEADO DE VERSIÓN
-            console.log("🔍 Descubriendo modelos en v1 y v1beta...");
-            let modelMap = new Map(); // { model: version }
-            for (let version of ["v1beta", "v1"]) {
-              try {
-                const res = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`);
-                const data = await res.json();
-                if (data.models) {
-                  data.models.forEach(m => {
-                    const name = m.name.split("/").pop();
-                    if (!modelMap.has(name)) modelMap.set(name, version);
-                  });
-                }
-              } catch (e) {}
-            }
-
-            console.log("📦 Modelos encontrados:", Array.from(modelMap.keys()).join(", "));
-
-            // Prioridad absoluta por estabilidad y cuota
-            const priorityList = [
-              "gemini-1.5-flash", "gemini-flash-latest", 
-              "gemini-2.0-flash-lite", "gemini-1.5-pro", 
-              "gemini-pro-latest", "gemini-pro"
-            ];
-            
-            const modelsToTry = priorityList.filter(p => modelMap.has(p));
-            if (modelsToTry.length === 0) modelsToTry.push(Array.from(modelMap.keys())[0]);
+            console.log("🤖 Conectando a la velocidad de la luz con Groq (Meta Llama 3 70B)...");
 
             const promptText = `
             Actúa como Senior Developer. Genera una descripción de Pull Request en Markdown:
             
-            1. REGLA: Mantén los encabezados: "## 📋 Descripción", "## 🔗 Rama", "## ✅ Tipo de cambio", "## ✔️ Checklist antes de enviar".
+            1. REGLA DE ORO: Mantén los encabezados exactos: "## 📋 Descripción", "## 🔗 Rama", "## ✅ Tipo de cambio", "## ✔️ Checklist antes de enviar".
             2. NO escribas nada en: "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)" y "## 📸 Screenshots". Deja sus comentarios <!-- --> intactos.
             3. Analiza el código para marcar [x] en Tipo de cambio y Checklist.
+            4. Se super claro y profesional en la descripción.
             
-            DIFF:
+            DIFF DEL PR:
             ${diff}
             
-            DEVUELVE SOLO EL MARKDOWN.
+            DEVUELVE SOLO EL TEXTO DE LA DESCRIPCIÓN EN MARKDOWN PURO.
             `;
 
-            // 2. SISTEMA DE REINTENTOS CON VERSIÓN CORRECTA
-            for (let modelName of modelsToTry) {
-              const version = modelMap.get(modelName) || "v1beta";
-              console.log(`🤖 Intentando con: ${modelName} vía ${version}...`);
-              const url = `https://generativelanguage.googleapis.com/${version}/models/${modelName}:generateContent?key=${apiKey}`;
+            for (let i = 0; i < 2; i++) {
+              try {
+                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    model: "llama3-70b-8192",
+                    messages: [{ role: "user", content: promptText }],
+                    temperature: 0.3
+                  })
+                });
 
-              for (let i = 0; i < 2; i++) {
-                try {
-                  const response = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-                  });
+                const data = await response.json();
 
-                  const data = await response.json();
-
-                  if (response.status === 429) {
-                    console.log(`⚠️ Cuota excedida para ${modelName}. Esperando 12s...`);
-                    await sleep(12000);
+                if (response.status === 429) {
+                    console.log("⚠️ Límite excedido (muy inusual en Groq). Esperando 5s...");
+                    await sleep(5000);
                     continue; 
-                  }
-
-                  if (data.candidates && data.candidates[0].content) {
-                    fs.writeFileSync("ai_description.md", data.candidates[0].content.parts[0].text);
-                    console.log(`✅ ¡Éxito total con ${modelName}!`);
-                    return;
-                  } else {
-                    console.error(`❌ Falló con ${modelName}:`, JSON.stringify(data));
-                    break; 
-                  }
-                } catch (err) {
-                  console.error(`❌ Error (${modelName}):`, err.message);
-                  break;
                 }
+
+                if (data.choices && data.choices[0].message) {
+                  fs.writeFileSync("ai_description.md", data.choices[0].message.content);
+                  console.log("✅ ¡Resumen generado instantáneamente por Meta Llama 3!");
+                  return;
+                } else {
+                  console.error("❌ Falló la conexión con Groq:", JSON.stringify(data));
+                  break; 
+                }
+              } catch (err) {
+                console.error("❌ Error de red:", err.message);
+                break;
               }
             }
-            console.error("💥 No se pudo generar el resumen tras agotar los modelos.");
-            process.exit(1);
+
+            console.log("-----------------------------------------------------------------");
+            console.log("⚠️ LA IA SE QUEDÓ SIN ENERGÍA.");
+            console.log("Todo está bien, el PR puede continuar. Simplemente rellena la descripción a mano hoy.");
+            console.log("-----------------------------------------------------------------");
+            process.exit(0); // IMPORTANTE: Salir con 0 para no bloquear el PR
           }
           run();
           EOF
           
-          # Instalar dependencias si faltan (aunque fetch es nativo en Node 20)
+          # Ejecutar el script nativo de Node 20
           node summarize.js
           
           if [ -f ai_description.md ]; then
             gh pr edit $PR_NUMBER --body-file ai_description.md
-            echo "🚀 PR Actualizado exitosamente."
+            echo "🚀 PR Actualizado a la velocidad de la luz."
           else
-            echo "❌ No se pudo generar la descripción."
-            exit 1
+            echo "ℹ️ La descripción de IA fue omitida porque hubo un error en Groq."
+            echo "✅ El flujo finalizó sin errores para no bloquear tu trabajo."
+            exit 0
           fi

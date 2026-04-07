@@ -32,47 +32,60 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          # Obtener la diferencia de código con la rama base
+          # Obtener el diff
           git fetch origin $BASE_REF
           git diff origin/$BASE_REF...HEAD > pr_diff.txt
           
-          # Crear el script de ejecución (Archivo summarize.js)
+          # Crear el script de ejecución
           cat << 'EOF' > summarize.js
           const { GoogleGenerativeAI } = require("@google/generative-ai");
           const fs = require("fs");
 
           async function run() {
             try {
+              // Inicializamos la versión estable de la API
               const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
               
-              // Usamos el prefijo 'models/' y la versión flash que es rápida
+              // Intentamos con el modelo Pro que tiene rutas más estables para cuentas nuevas
               const model = genAI.getGenerativeModel({ 
-                model: "models/gemini-1.5-flash" 
+                model: "gemini-1.5-pro" 
               });
 
-              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 40000);
+              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 30000);
               
-              const prompt = `Actúa como Desarrollador Senior. Genera un resumen técnico para este PR en Markdown basado en el siguiente DIFF:\n\n${diff}`;
+              if (!diff || diff.trim().length < 10) {
+                console.log("⚠️ Diff muy corto, saltando...");
+                return;
+              }
+
+              const prompt = `Actúa como Desarrollador Senior. Resume este DIFF de código en Markdown para un Pull Request:\n\n${diff}`;
 
               const result = await model.generateContent(prompt);
               const response = await result.response;
               const text = response.text();
               
               fs.writeFileSync("ai_description.md", text);
-              console.log("✅ Descripción generada correctamente.");
+              console.log("✅ Generado con éxito");
             } catch (err) {
-              console.error("❌ Error Detallado:", err.message);
-              process.exit(1);
+              console.error("❌ Error de API:", err.message);
+              // Si falla el 1.5-pro, intentamos el flash como último recurso con el nombre completo
+              try {
+                 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+                 const fallbackModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                 const result = await fallbackModel.generateContent("Hola, genera un resumen corto: " + diff);
+                 const response = await result.response;
+                 fs.writeFileSync("ai_description.md", response.text());
+              } catch (innerErr) {
+                 process.exit(1);
+              }
             }
           }
           run();
           EOF
 
-          # Ejecutar el script de Node
           node summarize.js
           
-          # Actualizar el cuerpo del PR en GitHub usando GitHub CLI
           if [ -f ai_description.md ]; then
             gh pr edit $PR_NUMBER --body-file ai_description.md
-            echo "🚀 PR actualizado exitosamente."
+            echo "🚀 PR actualizado!"
           fi

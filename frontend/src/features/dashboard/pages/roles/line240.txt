@@ -1,1 +1,0 @@
-﻿        nombre_rol: nombre.trim(),   // à¹‚ï¿½ï¿½ Ahora se envà¸£à¸a para el API

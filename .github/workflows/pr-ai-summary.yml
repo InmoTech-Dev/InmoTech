@@ -10,27 +10,33 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+
     steps:
-      - name: Checkout code
+      - name: 1. Checkout del código
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 3. Instalar SDK de Google
         run: npm install @google/generative-ai
 
-      - name: Generate AI Summary
+      - name: 4. Generar Descripción con IA
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          # 1. Asegurar que tenemos la rama base para comparar
+          # Obtener la diferencia de código con la rama base
           git fetch origin $BASE_REF
           git diff origin/$BASE_REF...HEAD > pr_diff.txt
           
-          # 2. Crear el script de Node con el modelo correcto
+          # Crear el script de ejecución
           cat << 'EOF' > summarize.js
           const { GoogleGenerativeAI } = require("@google/generative-ai");
           const fs = require("fs");
@@ -39,35 +45,54 @@ jobs:
             try {
               const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
               
-              // CAMBIO CLAVE: Usar "gemini-1.5-flash" (es el más estable y rápido)
+              // MODELO DEFINITIVO: gemini-1.5-flash (Evita el error 404)
               const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 50000);
+              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 45000);
               
-              const prompt = `Actúa como Desarrollador Senior. Genera un resumen técnico para este Pull Request en Markdown.
-              Incluye:
-              ## 📋 Descripción (Resumen de cambios)
-              ## ✅ Tipo de cambio (Bugfix, Feature, etc.)
-              ## ✔️ Checklist (Cosas que detectes en el código)
+              if (!diff || diff.trim().length < 10) {
+                console.log("⚠️ Diff insuficiente para analizar.");
+                return;
+              }
+
+              const prompt = `
+              Actúa como un Desarrollador Senior. Analiza este DIFF y genera una descripción técnica para el Pull Request en Markdown:
               
-              Usa este DIFF:
-              ${diff}`;
+              Estructura requerida:
+              ## 📋 Descripción
+              (Resumen breve de qué hace este código)
+              
+              ## ✅ Tipo de cambio
+              (Indica si es Feature, Bugfix o Refactor)
+              
+              ## ✔️ Checklist
+              - [x] Código analizado por IA.
+              
+              DIFF:
+              ${diff}
+              
+              Responde SOLO con el contenido en Markdown.
+              `;
 
               const result = await model.generateContent(prompt);
               const response = await result.response;
-              fs.writeFileSync("ai_description.md", response.text());
+              const text = response.text();
               
+              fs.writeFileSync("ai_description.md", text);
+              console.log("✅ Descripción generada.");
             } catch (err) {
-              console.error("Error crítico:", err.message);
+              console.error("❌ Error en Gemini:", err.message);
               process.exit(1);
             }
           }
           run();
           EOF
 
-          # 3. Ejecutar y actualizar el PR
+          # Ejecutar el script
           node summarize.js
+          
+          # Actualizar el cuerpo del PR en GitHub
           if [ -f ai_description.md ]; then
             gh pr edit $PR_NUMBER --body-file ai_description.md
-            echo "✅ PR actualizado con éxito."
+            echo "🚀 PR actualizado exitosamente."
           fi

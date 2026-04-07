@@ -1,12 +1,75 @@
+const fs = require('fs');
+const path = require('path');
 const saleService = require('../services/sales.service');
 const personaService = require('../services/persona.service');
 const logger = require('../utils/logger');
 const { VentaAdjunto } = require('../models');
 const cloudinary = require('../config/cloudinary');
+const { apiBaseUrl } = require('../config/runtime');
 const { uploadSingleAny } = require('./upload.controller');
 const { normalizePagination } = require('../utils/pagination');
 
 class SalesController {
+  getLocalUploadsRoot() {
+    return path.join(__dirname, '..', '..', 'public', 'uploads');
+  }
+
+  sanitizeAttachmentFileName(fileName = '') {
+    const baseName = path.basename(String(fileName || '').trim() || 'adjunto');
+    const sanitized = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return sanitized || 'adjunto';
+  }
+
+  buildLocalAttachmentRelativePath(saleId, fileName) {
+    return `/uploads/ventas/${saleId}/${fileName}`;
+  }
+
+  buildAttachmentPublicUrl(relativePath = '') {
+    const normalizedPath = String(relativePath || '').trim();
+    if (!normalizedPath) return '';
+    const baseUrl = String(apiBaseUrl || '').replace(/\/+$/, '');
+    return baseUrl ? `${baseUrl}${normalizedPath}` : normalizedPath;
+  }
+
+  resolveLocalAttachmentFilePath(rawUrl = '') {
+    const value = String(rawUrl || '').trim();
+    if (!value) return null;
+
+    let pathname = value;
+    try {
+      pathname = new URL(value).pathname;
+    } catch (_error) {
+      pathname = value;
+    }
+
+    const normalizedPath = pathname.replace(/\\/g, '/');
+    if (!normalizedPath.startsWith('/uploads/')) {
+      return null;
+    }
+
+    const relativePath = normalizedPath.replace(/^\/uploads\/+/, '');
+    if (!relativePath) return null;
+
+    return path.join(this.getLocalUploadsRoot(), ...relativePath.split('/'));
+  }
+
+  async saveAttachmentLocally(saleId, file) {
+    const safeOriginalName = this.sanitizeAttachmentFileName(file?.originalname || 'adjunto');
+    const fileName = `${Date.now()}-${safeOriginalName}`;
+    const targetDir = path.join(this.getLocalUploadsRoot(), 'ventas', String(saleId));
+    await fs.promises.mkdir(targetDir, { recursive: true });
+
+    const targetPath = path.join(targetDir, fileName);
+    await fs.promises.writeFile(targetPath, file.buffer);
+
+    const relativePath = this.buildLocalAttachmentRelativePath(saleId, fileName);
+    return {
+      nombreArchivo: safeOriginalName,
+      url: this.buildAttachmentPublicUrl(relativePath),
+      filePath: targetPath,
+    };
+  }
+
   buildContentDisposition(fileName, disposition = 'inline') {
     const safeName = String(fileName || 'archivo').replace(/["\r\n]/g, '').trim() || 'archivo';
     const encodedName = encodeURIComponent(safeName);
@@ -19,8 +82,12 @@ class SalesController {
   }
 
   buildCloudinaryAttachmentUrl(uploadResult, resourceType, originalFileName = '') {
+    if (uploadResult?.secure_url) {
+      return uploadResult.secure_url;
+    }
+
     const publicId = uploadResult?.public_id;
-    if (!publicId) return uploadResult?.secure_url || '';
+    if (!publicId) return '';
 
     const extension = uploadResult?.format || this.getFileExtension(originalFileName);
     return cloudinary.url(publicId, {
@@ -31,22 +98,36 @@ class SalesController {
     });
   }
 
-  buildAlternativeAttachmentUrl(adjunto = {}) {
+  buildAlternativeAttachmentUrls(adjunto = {}) {
     const originalUrl = String(adjunto?.url || '').trim();
-    if (!originalUrl) return '';
+    if (!originalUrl) return [];
 
     const expectedResourceType = String(adjunto?.mime_type || '').toLowerCase().includes('pdf') ? 'raw' : 'image';
+    const candidates = new Set();
+    candidates.add(originalUrl);
+
     const replacement =
       expectedResourceType === 'raw'
         ? originalUrl.replace('/image/upload/', '/raw/upload/')
         : originalUrl.replace('/raw/upload/', '/image/upload/');
 
     const extension = this.getFileExtension(adjunto?.nombre_archivo || '');
-    if (!extension || replacement.toLowerCase().includes(`.${extension}`)) {
-      return replacement;
+    if (replacement && replacement !== originalUrl) {
+      candidates.add(replacement);
+      if (extension && !replacement.toLowerCase().includes(`.${extension}`)) {
+        candidates.add(`${replacement}.${extension}`);
+      }
     }
 
-    return `${replacement}.${extension}`;
+    // Compatibilidad con adjuntos viejos generados manualmente como /upload/v1/...
+    if (originalUrl.includes('/upload/v1/')) {
+      candidates.add(originalUrl.replace('/upload/v1/', '/upload/'));
+    }
+    if (replacement && replacement.includes('/upload/v1/')) {
+      candidates.add(replacement.replace('/upload/v1/', '/upload/'));
+    }
+
+    return Array.from(candidates).filter(Boolean);
   }
 
   async createSale(req, res, next) {
@@ -282,30 +363,48 @@ class SalesController {
         });
       }
 
-      // Subir a Cloudinary (alineado con el uploader general: PDF como raw)
-      const folder = `inmotech/ventas/${saleId}`;
       const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
-      const uploadResult = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          {
-            folder,
-            resource_type: resourceType
-          },
-          (error, result) => {
-            if (error) return reject(error);
-            return resolve(result);
-          }
-        );
-        stream.end(req.file.buffer);
-      });
+      let attachmentUrl = '';
+      let originalFileName = req.file.originalname;
+
+      if (typeof cloudinary.isConfigured === 'function' && cloudinary.isConfigured()) {
+        try {
+          const folder = `inmotech/ventas/${saleId}`;
+          const uploadResult = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              {
+                folder,
+                resource_type: resourceType,
+                timeout: 120000,
+              },
+              (error, result) => {
+                if (error) return reject(error);
+                return resolve(result);
+              }
+            );
+            stream.end(req.file.buffer);
+          });
+
+          attachmentUrl = this.buildCloudinaryAttachmentUrl(uploadResult, resourceType, req.file.originalname);
+          originalFileName = req.file.originalname || uploadResult.original_filename || originalFileName;
+        } catch (uploadError) {
+          logger.warn(`Cloudinary no disponible para adjunto de venta ${saleId}. Se usa almacenamiento local. Motivo: ${uploadError.message}`);
+        }
+      }
+
+      if (!attachmentUrl) {
+        const localFile = await this.saveAttachmentLocally(saleId, req.file);
+        attachmentUrl = localFile.url;
+        originalFileName = req.file.originalname || localFile.nombreArchivo;
+      }
 
       const adjunto = await VentaAdjunto.create({
         id_venta: saleId,
         tipo,
-        nombre_archivo: req.file.originalname || uploadResult.original_filename,
-        url: this.buildCloudinaryAttachmentUrl(uploadResult, resourceType, req.file.originalname),
-        mime_type: req.file.mimetype || uploadResult.resource_type,
-        tamano_bytes: req.file.size || uploadResult.bytes
+        nombre_archivo: originalFileName,
+        url: attachmentUrl,
+        mime_type: req.file.mimetype || null,
+        tamano_bytes: req.file.size || null
       });
 
       return res.status(201).json({
@@ -356,15 +455,38 @@ class SalesController {
         });
       }
 
-      let upstreamResponse = await fetch(adjunto.url);
-      if (!upstreamResponse.ok) {
-        const alternativeUrl = this.buildAlternativeAttachmentUrl(adjunto);
-        if (alternativeUrl && alternativeUrl !== adjunto.url) {
-          upstreamResponse = await fetch(alternativeUrl);
+      const localFilePath = this.resolveLocalAttachmentFilePath(adjunto.url);
+      if (localFilePath) {
+        try {
+          const buffer = await fs.promises.readFile(localFilePath);
+          const fileName = adjunto.nombre_archivo || `adjunto-${adjuntoId}`;
+
+          res.setHeader('Content-Type', adjunto.mime_type || 'application/octet-stream');
+          res.setHeader('Content-Disposition', this.buildContentDisposition(fileName, disposition));
+          res.setHeader('Cache-Control', 'private, max-age=300');
+          res.setHeader('Content-Length', buffer.length);
+
+          return res.status(200).send(buffer);
+        } catch (localError) {
+          logger.error(`Error leyendo adjunto local de venta ${adjuntoId}: ${localError.message}`);
+          return res.status(404).json({
+            success: false,
+            message: 'El archivo adjunto no existe en el almacenamiento local'
+          });
         }
       }
 
-      if (!upstreamResponse.ok) {
+      const candidateUrls = this.buildAlternativeAttachmentUrls(adjunto);
+      let upstreamResponse = null;
+
+      for (const candidateUrl of candidateUrls) {
+        upstreamResponse = await fetch(candidateUrl);
+        if (upstreamResponse.ok) {
+          break;
+        }
+      }
+
+      if (!upstreamResponse || !upstreamResponse.ok) {
         return res.status(502).json({
           success: false,
           message: 'No se pudo obtener el archivo remoto'

@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Building2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { WizardModalLayout } from '../../Inmuebles/components/common/wizardModalLayout';
 import { AgregarInmuebleModal } from '../../Inmuebles/components/inmuebles/AgregarInmuebleModal';
 
-const DOCUMENT_TYPES = ['CC', 'CE', 'NIT', 'Pasaporte', 'TI'];
+const DOCUMENT_TYPES = [
+  { value: 'CC', label: 'CC' },
+  { value: 'CE', label: 'CE' },
+  { value: 'NIT', label: 'NIT' },
+  { value: 'PASAPORTE', label: 'Pasaporte' },
+  { value: 'TI', label: 'TI' }
+];
 
 const INITIAL_FORM = {
   tipoDocumento: 'CC',
@@ -24,9 +29,7 @@ const SectionCard = ({ title, subtitle, children }) => (
     {(title || subtitle) && (
       <div>
         {subtitle && (
-          <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-blue-500">
-            {subtitle}
-          </p>
+          <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-blue-500">{subtitle}</p>
         )}
         {title && <h3 className="text-base font-semibold text-slate-900">{title}</h3>}
       </div>
@@ -52,13 +55,52 @@ const hasValue = (value) => {
   return true;
 };
 
+const normalizeDocumentType = (value = '') => String(value).trim().toUpperCase();
+
+const cleanDocumentByType = (tipoDocumento, value = '') => {
+  const rawValue = String(value || '');
+  const normalizedType = normalizeDocumentType(tipoDocumento);
+
+  if (normalizedType === 'PASAPORTE') {
+    return rawValue.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  return rawValue.replace(/[^\d]/g, '');
+};
+
+const validateNumeroDocumentoByType = (numeroDocumento, tipoDocumento) => {
+  if (!numeroDocumento.trim()) return 'El numero de documento es obligatorio';
+
+  const normalizedType = normalizeDocumentType(tipoDocumento);
+  const numeroLimpio = cleanDocumentByType(normalizedType, numeroDocumento);
+
+  switch (normalizedType) {
+    case 'CC':
+      if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return 'La cedula debe tener entre 8 y 10 digitos';
+      break;
+    case 'CE':
+      if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return 'La cedula de extranjeria debe tener entre 6 y 10 digitos';
+      break;
+    case 'NIT':
+      if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return 'El NIT debe tener entre 8 y 10 digitos';
+      break;
+    case 'PASAPORTE':
+      if (numeroLimpio.length < 6 || numeroLimpio.length > 20) return 'El pasaporte debe tener entre 6 y 20 caracteres';
+      if (!/^[A-Z0-9]+$/.test(numeroLimpio)) return 'El pasaporte solo puede contener letras y numeros';
+      break;
+    case 'TI':
+      if (!/^[0-9]{10,11}$/.test(numeroLimpio)) return 'La tarjeta de identidad debe tener 10 u 11 digitos';
+      break;
+    default:
+      return 'Tipo de documento no valido';
+  }
+
+  return '';
+};
+
 const OwnerSummary = ({ owner, inmuebles }) => {
-  const nombres =
-    owner.nombres ||
-    [owner.primerNombre, owner.segundoNombre].filter(Boolean).join(' ');
-  const apellidos =
-    owner.apellidos ||
-    [owner.primerApellido, owner.segundoApellido].filter(Boolean).join(' ');
+  const nombres = owner.nombres || [owner.primerNombre, owner.segundoNombre].filter(Boolean).join(' ');
+  const apellidos = owner.apellidos || [owner.primerApellido, owner.segundoApellido].filter(Boolean).join(' ');
 
   const fullName = [nombres, apellidos].filter(Boolean).join(' ').trim();
   const documentText = [owner.tipoDocumento, owner.numeroDocumento].filter(Boolean).join(' ').trim();
@@ -89,9 +131,7 @@ const OwnerView = ({ owner, inmuebles }) => (
       <OwnerSummary owner={owner} inmuebles={inmuebles} />
     </SectionCard>
     <SectionCard title="Inmuebles asociados" subtitle="Detalle">
-      {inmuebles.length === 0 && (
-        <p className="text-xs text-slate-500">No hay inmuebles asociados.</p>
-      )}
+      {inmuebles.length === 0 && <p className="text-xs text-slate-500">No hay inmuebles asociados.</p>}
       <div className="grid gap-3 md:grid-cols-2">
         {inmuebles.map((inmueble) => (
           <div
@@ -104,17 +144,13 @@ const OwnerView = ({ owner, inmuebles }) => (
                 {inmueble.titulo || inmueble.registro_inmobiliario || inmueble.direccion || 'Sin titulo'}
               </p>
             </div>
-            {hasValue(inmueble.direccion) && (
-              <p className="text-[11px] text-slate-600">{inmueble.direccion}</p>
-            )}
+            {hasValue(inmueble.direccion) && <p className="text-[11px] text-slate-600">{inmueble.direccion}</p>}
             {hasValue([inmueble.ciudad, inmueble.departamento, inmueble.pais].filter(Boolean).join(' - ')) && (
               <p className="text-[11px] text-slate-600">
                 {[inmueble.ciudad, inmueble.departamento, inmueble.pais].filter(Boolean).join(' - ')}
               </p>
             )}
-            {hasValue(inmueble.operacion) && (
-              <p className="text-[11px] text-slate-500 mt-1">Operacion: {inmueble.operacion}</p>
-            )}
+            {hasValue(inmueble.operacion) && <p className="text-[11px] text-slate-500 mt-1">Operacion: {inmueble.operacion}</p>}
             {(inmueble.precio_venta || inmueble.precio_arriendo) && (
               <p className="text-[11px] text-slate-500">
                 {inmueble.precio_venta ? `Precio venta: ${inmueble.precio_venta}` : ''}
@@ -122,15 +158,14 @@ const OwnerView = ({ owner, inmuebles }) => (
                 {inmueble.precio_arriendo ? `Canon: ${inmueble.precio_arriendo}` : ''}
               </p>
             )}
-            {hasValue(inmueble.estado) && (
-              <p className="text-[10px] text-slate-400 mt-1">Estado: {inmueble.estado}</p>
-            )}
+            {hasValue(inmueble.estado) && <p className="text-[10px] text-slate-400 mt-1">Estado: {inmueble.estado}</p>}
           </div>
         ))}
       </div>
     </SectionCard>
   </div>
 );
+
 const OwnerForm = ({
   isOpen,
   mode,
@@ -165,21 +200,12 @@ const OwnerForm = ({
     }
 
     if ((mode === 'edit' || mode === 'view') && selectedOwner) {
-      const cleanDoc =
-        documentoBase || selectedOwner.documento?.split(' ')?.pop() || '';
-      const [primerNombre = '', segundoNombre = ''] =
-        (selectedOwner.nombres || selectedOwner.nombreCompleto || '').split(
-          ' '
-        );
-      const [primerApellido = '', segundoApellido = ''] = (
-        selectedOwner.apellidos || ''
-      ).split(' ');
+      const cleanDoc = documentoBase || selectedOwner.documento?.split(' ')?.pop() || '';
+      const [primerNombre = '', segundoNombre = ''] = (selectedOwner.nombres || selectedOwner.nombreCompleto || '').split(' ');
+      const [primerApellido = '', segundoApellido = ''] = (selectedOwner.apellidos || '').split(' ');
 
       setFormData({
-        tipoDocumento:
-          selectedOwner.tipoDocumento ||
-          selectedOwner?.documento?.split(' ')?.[0] ||
-          'CC',
+        tipoDocumento: selectedOwner.tipoDocumento || selectedOwner?.documento?.split(' ')?.[0] || 'CC',
         numeroDocumento: cleanDoc,
         primerNombre,
         segundoNombre,
@@ -192,9 +218,7 @@ const OwnerForm = ({
       if (selectedOwner.inmuebles && selectedOwner.inmuebles.length) {
         setSelectedInmuebles(selectedOwner.inmuebles);
       } else {
-        const ownerId = String(
-          selectedOwner.id || selectedOwner.id_persona || selectedOwner.idPersona || ''
-        );
+        const ownerId = String(selectedOwner.id || selectedOwner.id_persona || selectedOwner.idPersona || '');
         const derivados = availableInmuebles.filter((inmueble) => {
           if (!Array.isArray(inmueble.ownerIds)) return false;
           return inmueble.ownerIds.map((v) => String(v)).includes(ownerId);
@@ -208,16 +232,6 @@ const OwnerForm = ({
       setActiveStep(0);
     }
   }, [isOpen, mode, selectedOwner, documentoBase, availableInmuebles]);
-
-  const toggleInmuebleSelection = (inmueble) => {
-    setSelectedInmuebles((prev) => {
-      const exists = prev.some((item) => item.id === inmueble.id);
-      if (exists) {
-        return prev.filter((item) => item.id !== inmueble.id);
-      }
-      return [...prev, inmueble];
-    });
-  };
 
   const handleOpenPropertyModal = () => {
     if (mode === 'view') return;
@@ -233,39 +247,27 @@ const OwnerForm = ({
     try {
       const nuevoInmueble = await onCreateInmueble(payload);
       if (nuevoInmueble) {
-        const normalized = normalizeInmuebleForSelection(nuevoInmueble);
-        setSelectedInmuebles((prev) => {
-          if (prev.some((item) => item.id === normalized.id)) {
-            return prev;
-          }
-          return [...prev, normalized];
-        });
+        if (mode === 'edit') {
+          const normalized = normalizeInmuebleForSelection(nuevoInmueble);
+          setSelectedInmuebles((prev) => (prev.some((item) => item.id === normalized.id) ? prev : [...prev, normalized]));
+        }
         setFormAlert({
           type: 'success',
-          message: 'Inmueble creado y asignado automáticamente al propietario.'
+          message:
+            mode === 'edit'
+              ? 'Inmueble creado y asignado automaticamente al propietario.'
+              : 'Inmueble creado correctamente.'
         });
       }
     } catch (error) {
-      setFormAlert({
-        type: 'error',
-        message: error.message || 'No se pudo crear el inmueble'
-      });
+      setFormAlert({ type: 'error', message: error.message || 'No se pudo crear el inmueble' });
       throw error;
     }
   };
 
-  // Validadores
   const validators = {
-    tipoDocumento: (value) =>
-      !value ? 'Selecciona un tipo de documento' : '',
-    numeroDocumento: (value) => {
-      const v = value.trim();
-      if (!v) return 'El número de documento es obligatorio';
-      if (!/^\d{4,20}$/.test(v)) {
-        return 'Ingresa un documento válido (solo números, 4-20 dígitos)';
-      }
-      return '';
-    },
+    tipoDocumento: (value) => (!value ? 'Selecciona un tipo de documento' : ''),
+    numeroDocumento: (value) => validateNumeroDocumentoByType(value, formData.tipoDocumento),
     primerNombre: (value) => {
       const v = value.trim();
       if (!v) return 'El primer nombre es obligatorio';
@@ -281,40 +283,20 @@ const OwnerForm = ({
     email: (value) => {
       const v = value.trim();
       if (!v) return 'El correo es obligatorio';
-      if (!/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(v)) {
-        return 'Ingresa un correo válido';
-      }
+      if (!/^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/.test(v)) return 'Ingresa un correo valido';
       return '';
     },
     telefono: (value) => {
       const clean = value.replace(/[^\d]/g, '');
-      if (!clean) return 'El teléfono es obligatorio';
-      if (!/^3\d{9}$/.test(clean)) {
-        return 'Ingresa un celular colombiano (3XXXXXXXXX)';
-      }
+      if (!clean) return 'El telefono es obligatorio';
+      if (!/^3\d{9}$/.test(clean)) return 'Ingresa un celular colombiano (3XXXXXXXXX)';
       return '';
     }
   };
 
-  // Paso 0: todos los campos obligatorios; paso 1: solo confirmación
-  const STEP_FIELDS = [
-    [
-      'tipoDocumento',
-      'numeroDocumento',
-      'primerNombre',
-      'primerApellido',
-      'email',
-      'telefono'
-    ],
-    []
-  ];
+  const STEP_FIELDS = [['tipoDocumento', 'numeroDocumento', 'primerNombre', 'primerApellido', 'email', 'telefono'], []];
 
-  const validateField = (name, value) => {
-    if (validators[name]) {
-      return validators[name](value);
-    }
-    return '';
-  };
+  const validateField = (name, value) => (validators[name] ? validators[name](value) : '');
 
   const validateStep = (step) => {
     const fields = STEP_FIELDS[step] || [];
@@ -327,54 +309,49 @@ const OwnerForm = ({
 
     setErrors((prev) => ({ ...prev, ...newErrors }));
     const hasErrors = Object.values(newErrors).some((msg) => msg);
-    if (hasErrors) {
-      setFormAlert({
-        type: 'error',
-        message: 'Revisa la información resaltada antes de continuar.'
-      });
-    } else {
-      setFormAlert({ type: '', message: '' });
-    }
+    setFormAlert(hasErrors ? { type: 'error', message: 'Revisa la informacion resaltada antes de continuar.' } : { type: '', message: '' });
     return !hasErrors;
   };
 
   const validateForm = () => {
-    const allFields = Object.keys(validators);
     const fieldErrors = {};
-    allFields.forEach((field) => {
+    Object.keys(validators).forEach((field) => {
       fieldErrors[field] = validators[field](formData[field]);
     });
     setErrors(fieldErrors);
+
     const hasErrors = Object.values(fieldErrors).some((msg) => msg);
-    if (mode === 'create' && selectedInmuebles.length === 0) {
-      setFormAlert({
-        type: 'error',
-        message: 'Debes asignar al menos un inmueble para crear el propietario.'
-      });
-      return false;
-    }
-    if (hasErrors) {
-      setFormAlert({
-        type: 'error',
-        message: 'Revisa la información resaltada antes de continuar.'
-      });
-    } else {
-      setFormAlert({ type: 'success', message: 'Todo listo para guardar.' });
-    }
+    setFormAlert(
+      hasErrors
+        ? { type: 'error', message: 'Revisa la informacion resaltada antes de continuar.' }
+        : { type: 'success', message: 'Todo listo para guardar.' }
+    );
     return !hasErrors;
   };
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    let newValue = value;
+    const nextForm = { ...formData };
 
-    // Solo números para documento y teléfono
-    if (name === 'numeroDocumento' || name === 'telefono') {
-      newValue = value.replace(/[^\d]/g, '');
+    if (name === 'tipoDocumento') {
+      nextForm.tipoDocumento = value;
+      nextForm.numeroDocumento = cleanDocumentByType(value, formData.numeroDocumento);
+    } else if (name === 'numeroDocumento') {
+      nextForm.numeroDocumento = cleanDocumentByType(formData.tipoDocumento, value);
+    } else if (name === 'telefono') {
+      nextForm.telefono = value.replace(/[^\d]/g, '');
+    } else {
+      nextForm[name] = value;
     }
 
-    setFormData((prev) => ({ ...prev, [name]: newValue }));
-    setErrors((prev) => ({ ...prev, [name]: validateField(name, newValue) }));
+    setFormData(nextForm);
+
+    const nextErrors = { ...errors, [name]: validateField(name, nextForm[name] || '') };
+    if (name === 'tipoDocumento' || name === 'numeroDocumento') {
+      nextErrors.numeroDocumento = validateField('numeroDocumento', nextForm.numeroDocumento || '');
+      nextErrors.tipoDocumento = validateField('tipoDocumento', nextForm.tipoDocumento || '');
+    }
+    setErrors(nextErrors);
   };
 
   const handleSubmit = () => {
@@ -383,15 +360,9 @@ const OwnerForm = ({
 
     const payload = {
       tipoDocumento: formData.tipoDocumento,
-      numeroDocumento: formData.numeroDocumento.trim(),
-      nombres: [formData.primerNombre, formData.segundoNombre]
-        .filter(Boolean)
-        .join(' ')
-        .trim(),
-      apellidos: [formData.primerApellido, formData.segundoApellido]
-        .filter(Boolean)
-        .join(' ')
-        .trim(),
+      numeroDocumento: cleanDocumentByType(formData.tipoDocumento, formData.numeroDocumento),
+      nombres: [formData.primerNombre, formData.segundoNombre].filter(Boolean).join(' ').trim(),
+      apellidos: [formData.primerApellido, formData.segundoApellido].filter(Boolean).join(' ').trim(),
       email: formData.email.trim(),
       telefono: formData.telefono.trim(),
       estado: selectedOwner?.estado || 'Activo'
@@ -400,11 +371,7 @@ const OwnerForm = ({
     try {
       onSubmit(payload, selectedInmuebles);
     } catch (error) {
-      setFormAlert({
-        type: 'error',
-        message:
-          error.message || 'No se pudo guardar la información. Intenta de nuevo.'
-      });
+      setFormAlert({ type: 'error', message: error.message || 'No se pudo guardar la informacion. Intenta de nuevo.' });
     }
   };
 
@@ -450,23 +417,17 @@ const OwnerForm = ({
               onClick={handleBack}
               className="rounded-xl border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
             >
-              Atrás
+              Atras
             </button>
           )}
           <button
             type="button"
-            onClick={
-              activeStep === STEPS.length - 1 ? handleSubmit : handleNext
-            }
+            onClick={activeStep === STEPS.length - 1 ? handleSubmit : handleNext}
             disabled={isSubmitting}
             className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting && (
-              <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-            )}
-            {activeStep === STEPS.length - 1
-              ? 'Guardar propietario'
-              : 'Siguiente'}
+            {isSubmitting && <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />}
+            {activeStep === STEPS.length - 1 ? 'Guardar propietario' : 'Siguiente'}
           </button>
         </div>
       </div>
@@ -474,21 +435,12 @@ const OwnerForm = ({
 
   const renderStepContent = () => {
     if (mode === 'view') {
-      return (
-        <OwnerView
-          owner={selectedOwner || formData}
-          inmuebles={selectedInmuebles}
-        />
-      );
+      return <OwnerView owner={selectedOwner || formData} inmuebles={selectedInmuebles} />;
     }
 
-    // PASO 0: agregar información + asignar/crear inmueble (todo en un solo paso)
     if (activeStep === 0) {
       return (
-        <SectionCard
-          title="Datos del propietario y asignación"
-          subtitle="Completa la información en un paso"
-        >
+        <SectionCard title="Datos del propietario" subtitle="Completa la informacion en un paso">
           {formAlert.message && (
             <div
               className={`mb-3 rounded-xl px-3 py-2 text-xs flex items-center gap-2 border ${
@@ -502,86 +454,60 @@ const OwnerForm = ({
           )}
 
           <div className="grid gap-3 md:grid-cols-2">
-            {/* Tipo de documento */}
             <div>
               <label className="text-xs text-slate-600 flex justify-between">
                 Tipo de documento
-                {errors.tipoDocumento && (
-                  <span className="text-[10px] text-red-500">
-                    {errors.tipoDocumento}
-                  </span>
-                )}
+                {errors.tipoDocumento && <span className="text-[10px] text-red-500">{errors.tipoDocumento}</span>}
               </label>
               <select
                 name="tipoDocumento"
                 value={formData.tipoDocumento}
                 onChange={handleInputChange}
                 className={`mt-1 w-full rounded-xl border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 ${
-                  errors.tipoDocumento
-                    ? 'border-red-300 focus:ring-red-500'
-                    : 'border-slate-200 focus:ring-blue-500'
+                  errors.tipoDocumento ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'
                 }`}
               >
                 {DOCUMENT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
+                  <option key={type.value} value={type.value}>
+                    {type.label}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Número de documento */}
             <div>
               <label className="text-xs text-slate-600 flex justify-between">
-                Número de documento
-                {errors.numeroDocumento && (
-                  <span className="text-[10px] text-red-500">
-                    {errors.numeroDocumento}
-                  </span>
-                )}
+                Numero de documento
+                {errors.numeroDocumento && <span className="text-[10px] text-red-500">{errors.numeroDocumento}</span>}
               </label>
               <input
-                type="tel"
-                inputMode="numeric"
+                type="text"
+                inputMode={normalizeDocumentType(formData.tipoDocumento) === 'PASAPORTE' ? 'text' : 'numeric'}
                 name="numeroDocumento"
                 value={formData.numeroDocumento}
                 onChange={handleInputChange}
-                className={`mt-1 w-full rounded-xl border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 ${
-                  errors.numeroDocumento
-                    ? 'border-red-300 focus:ring-red-500'
-                    : 'border-slate-200 focus:ring-blue-500'
+                className={`mt-1 w-full rounded-xl border px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-2 ${
+                  errors.numeroDocumento ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'
                 }`}
               />
-              {!errors.numeroDocumento && (
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Solo números (4-20 dígitos).
-                </p>
-              )}
+              {!errors.numeroDocumento && <p className="text-[10px] text-slate-400 mt-0.5">Formato segun tipo de documento.</p>}
             </div>
 
-            {/* Primer nombre */}
             <div>
               <label className="text-xs text-slate-600 flex justify-between">
                 Primer nombre
-                {errors.primerNombre && (
-                  <span className="text-[10px] text-red-500">
-                    {errors.primerNombre}
-                  </span>
-                )}
+                {errors.primerNombre && <span className="text-[10px] text-red-500">{errors.primerNombre}</span>}
               </label>
               <input
                 name="primerNombre"
                 value={formData.primerNombre}
                 onChange={handleInputChange}
                 className={`mt-1 w-full rounded-xl border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 ${
-                  errors.primerNombre
-                    ? 'border-red-300 focus:ring-red-500'
-                    : 'border-slate-200 focus:ring-blue-500'
+                  errors.primerNombre ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'
                 }`}
               />
             </div>
 
-            {/* Segundo nombre */}
             <div>
               <label className="text-xs text-slate-600">Segundo nombre</label>
               <input
@@ -592,29 +518,21 @@ const OwnerForm = ({
               />
             </div>
 
-            {/* Primer apellido */}
             <div>
               <label className="text-xs text-slate-600 flex justify-between">
                 Primer apellido
-                {errors.primerApellido && (
-                  <span className="text-[10px] text-red-500">
-                    {errors.primerApellido}
-                  </span>
-                )}
+                {errors.primerApellido && <span className="text-[10px] text-red-500">{errors.primerApellido}</span>}
               </label>
               <input
                 name="primerApellido"
                 value={formData.primerApellido}
                 onChange={handleInputChange}
                 className={`mt-1 w-full rounded-xl border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 ${
-                  errors.primerApellido
-                    ? 'border-red-300 focus:ring-red-500'
-                    : 'border-slate-200 focus:ring-blue-500'
+                  errors.primerApellido ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'
                 }`}
               />
             </div>
 
-            {/* Segundo apellido */}
             <div>
               <label className="text-xs text-slate-600">Segundo apellido</label>
               <input
@@ -625,15 +543,10 @@ const OwnerForm = ({
               />
             </div>
 
-            {/* Correo */}
             <div>
               <label className="text-xs text-slate-600 flex justify-between">
-                Correo electrónico
-                {errors.email && (
-                  <span className="text-[10px] text-red-500">
-                    {errors.email}
-                  </span>
-                )}
+                Correo electronico
+                {errors.email && <span className="text-[10px] text-red-500">{errors.email}</span>}
               </label>
               <input
                 type="email"
@@ -641,22 +554,15 @@ const OwnerForm = ({
                 value={formData.email}
                 onChange={handleInputChange}
                 className={`mt-1 w-full rounded-xl border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 ${
-                  errors.email
-                    ? 'border-red-300 focus:ring-red-500'
-                    : 'border-slate-200 focus:ring-blue-500'
+                  errors.email ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'
                 }`}
               />
             </div>
 
-            {/* Teléfono */}
             <div>
               <label className="text-xs text-slate-600 flex justify-between">
-                Teléfono
-                {errors.telefono && (
-                  <span className="text-[10px] text-red-500">
-                    {errors.telefono}
-                  </span>
-                )}
+                Telefono
+                {errors.telefono && <span className="text-[10px] text-red-500">{errors.telefono}</span>}
               </label>
               <input
                 type="tel"
@@ -666,86 +572,33 @@ const OwnerForm = ({
                 onChange={handleInputChange}
                 placeholder="3XXXXXXXXX"
                 className={`mt-1 w-full rounded-xl border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 ${
-                  errors.telefono
-                    ? 'border-red-300 focus:ring-red-500'
-                    : 'border-slate-200 focus:ring-blue-500'
+                  errors.telefono ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'
                 }`}
               />
-              {!errors.telefono && (
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Número celular colombiano (3XXXXXXXXX).
-                </p>
-              )}
+              {!errors.telefono && <p className="text-[10px] text-slate-400 mt-0.5">Numero celular colombiano (3XXXXXXXXX).</p>}
             </div>
           </div>
 
-          {/* Asignar inmuebles (opcional) en el mismo paso */}
           <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-semibold text-slate-800">
-                Asignar inmuebles (opcional)
-              </h4>
+              <h4 className="text-xs font-semibold text-slate-800">Inmuebles</h4>
               <button
                 type="button"
                 onClick={handleOpenPropertyModal}
                 disabled={!onCreateInmueble}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-2.5 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-3.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Building2 className="w-3.5 h-3.5" />
+                <Building2 className="w-4 h-4" />
                 Crear inmueble
               </button>
             </div>
-            <div className="max-h-44 overflow-y-auto rounded-2xl border border-slate-100 bg-white divide-y divide-slate-100">
-              {availableInmuebles.length === 0 && (
-                <p className="px-3 py-2 text-xs text-slate-500">
-                  No hay inmuebles disponibles.
-                </p>
-              )}
-              {availableInmuebles.map((inmueble) => {
-                const isSelected = selectedInmuebles.some(
-                  (item) => item.id === inmueble.id
-                );
-                return (
-                  <label
-                    key={inmueble.id}
-                    className={`flex items-center justify-between px-3 py-2 text-xs cursor-pointer transition-colors ${
-                      isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-800">
-                        {inmueble.titulo || inmueble.direccion}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        {inmueble.ciudad} · {inmueble.tipo}
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleInmuebleSelection(inmueble)}
-                      className="text-blue-600 focus:ring-blue-500 rounded"
-                    />
-                  </label>
-                );
-              })}
-            </div>
-            {selectedInmuebles.length > 0 && (
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Inmuebles seleccionados: {selectedInmuebles.length}
-              </div>
-            )}
           </div>
         </SectionCard>
       );
     }
 
-    // PASO 1: Confirmación SOLO LECTURA
     return (
-      <SectionCard
-        title="Confirmación"
-        subtitle="Revisa la información antes de guardar"
-      >
+      <SectionCard title="Confirmacion" subtitle="Revisa la informacion antes de guardar">
         {formAlert.message && (
           <div
             className={`mb-3 rounded-xl px-3 py-2 text-xs flex items-center gap-2 border ${
@@ -758,41 +611,23 @@ const OwnerForm = ({
           </div>
         )}
 
-        {/* Datos del propietario */}
         <OwnerSummary owner={formData} inmuebles={selectedInmuebles} />
 
-        {/* Inmuebles en modo solo lectura */}
         <div className="mt-4">
-          <h4 className="text-xs font-semibold text-slate-800 mb-1.5">
-            Inmuebles asociados
-          </h4>
-          {selectedInmuebles.length === 0 && (
-            <p className="text-xs text-slate-500">
-              No se han asignado inmuebles.
-            </p>
-          )}
+          <h4 className="text-xs font-semibold text-slate-800 mb-1.5">Inmuebles asociados</h4>
+          {selectedInmuebles.length === 0 && <p className="text-xs text-slate-500">No se han asignado inmuebles.</p>}
           <div className="divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white">
             {selectedInmuebles.map((inmueble) => (
-              <div
-                key={inmueble.id}
-                className="px-3 py-2 text-xs text-slate-700 flex flex-col gap-0.5"
-              >
+              <div key={inmueble.id} className="px-3 py-2 text-xs text-slate-700 flex flex-col gap-0.5">
                 <div className="flex items-center gap-2">
                   <Building2 className="w-3.5 h-3.5 text-blue-500" />
-                  <p className="font-semibold text-slate-900">
-                    {inmueble.titulo || inmueble.direccion}
-                  </p>
+                  <p className="font-semibold text-slate-900">{inmueble.titulo || inmueble.direccion}</p>
                 </div>
-                <p>
-                  {inmueble.ciudad} · {inmueble.tipo}
-                </p>
+                <p>{inmueble.ciudad} - {inmueble.tipo}</p>
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[10px] text-slate-400">
-            Si necesitas cambiar algo, usa el botón “Atrás”. En esta vista no se
-            puede editar.
-          </p>
+          <p className="mt-2 text-[10px] text-slate-400">Si necesitas cambiar algo, usa el boton "Atras". En esta vista no se puede editar.</p>
         </div>
       </SectionCard>
     );
@@ -806,18 +641,8 @@ const OwnerForm = ({
       <WizardModalLayout
         isOpen={isOpen}
         onClose={onClose}
-        title={
-          mode === 'view'
-            ? 'Resumen de Propietario'
-            : mode === 'edit'
-            ? 'Editar Propietario'
-            : 'Nuevo Propietario'
-        }
-        subtitle={
-          mode === 'view'
-            ? 'Consulta la información registrada'
-            : 'Completa la información y confírmala'
-        }
+        title={mode === 'view' ? 'Resumen de Propietario' : mode === 'edit' ? 'Editar Propietario' : 'Nuevo Propietario'}
+        subtitle={mode === 'view' ? 'Consulta la informacion registrada' : 'Completa la informacion y confirmala'}
         steps={stepsForLayout}
         activeStep={activeStepForLayout}
         footer={footer}
@@ -838,8 +663,3 @@ const OwnerForm = ({
 };
 
 export default OwnerForm;
-
-
-
-
-

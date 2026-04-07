@@ -1,40 +1,69 @@
-name: PR Description Validator
+name: PR Superior Validator (Super Robot)
 
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
 
 jobs:
-  validate:
+  validate-quality:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate PR Description
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necesario para comparar ramas
+
+      - name: 🤖 Validación de Descripción y Checklist
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          echo "🔍 Validando descripción del PR..."
-
-          # 1. Verificar si la descripción está vacía
+          echo "🔍 Revisando descripción del PR..."
           if [ -z "$PR_BODY" ] || [ ${#PR_BODY} -lt 10 ]; then
-            echo "❌ La descripción del PR está vacía o es demasiado corta."
-            echo "Por favor, completa el template de Pull Request."
+            echo "❌ ERROR: Descripción vacía o muy corta."
             exit 1
           fi
 
-          # 2. Verificar secciones obligatorias
+          # Validar secciones
           MANDATORY_SECTIONS=("## 📋 Descripción" "## ✅ Tipo de cambio" "## 🧪 ¿Cómo lo probaste?")
           for section in "${MANDATORY_SECTIONS[@]}"; do
             if ! echo "$PR_BODY" | grep -q "$section"; then
-              echo "❌ Falta la sección obligatoria: $section"
+              echo "❌ ERROR: Falta la sección obligatoria: $section"
               exit 1
             fi
           done
 
-          # 3. Verificar si se seleccionó al menos un "Tipo de cambio"
-          # Buscamos "- [x]" en el texto
+          # Validar Tipo de Cambio (al menos uno marcado con [x])
           if ! echo "$PR_BODY" | grep -q "\- \[x\]"; then
-            echo "❌ No has seleccionado ningún 'Tipo de cambio'. Por favor, marca al menos una opción con [x]."
+            echo "❌ ERROR: No has marcado ningún 'Tipo de cambio'. Usa [x] en al menos uno."
             exit 1
           fi
+          echo "✅ Descripción validada."
 
-          echo "✅ ¡Descripción validada correctamente!"
+      - name: 🛡️ Verificación de Seguridad (.env)
+        run: |
+          echo "🔍 Buscando archivos sensibles..."
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.env$'; then
+            echo "❌ ERROR: Se detectó un archivo .env en los cambios. ¡No subas credenciales!"
+            exit 1
+          fi
+          echo "✅ No se detectaron archivos .env."
+
+      - name: 🧹 Verificación de Código (console.log)
+        run: |
+          echo "🔍 Buscando console.log residuales..."
+          # Buscamos console.log solo en las líneas AGREGADAS (+)
+          if git diff --unified=0 origin/${{ github.base_ref }}...HEAD | grep "^+" | grep -v "^+++" | grep "console\.log"; then
+            echo "❌ ERROR: Se encontraron console.log en tu código. Por favor, elimínalos antes de subir."
+            exit 1
+          fi
+          echo "✅ Código limpio de console.log."
+
+      - name: 🔄 Verificación de Sincronización (Branch Sync)
+        run: |
+          echo "🔍 Verificando si la rama está al día con ${{ github.base_ref }}..."
+          if ! git merge-base --is-ancestor origin/${{ github.base_ref }} HEAD; then
+            echo "❌ ERROR: Tu rama no está actualizada con ${{ github.base_ref }}."
+            echo "Por favor, haz merge o rebase de ${{ github.base_ref }} en tu rama."
+            exit 1
+          fi
+          echo "✅ Rama sincronizada."

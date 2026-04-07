@@ -7,8 +7,8 @@ const StatusChangeConfirmModal = ({
   isOpen,
   onClose,
   onConfirm,
-  title = 'Confirmar Cambio de Estado',
-  message = 'Estas seguro de que deseas cambiar el estado?',
+  title = 'Confirmar cambio de estado',
+  message = '¿Estás seguro de que deseas cambiar el estado?',
   currentStatus,
   newStatus,
   citaInfo,
@@ -115,7 +115,7 @@ const StatusChangeConfirmModal = ({
               <div className="bg-slate-50 rounded-lg p-4 mb-4">
                 <div className="text-sm text-slate-800 font-medium">{administrativoInfo.nombre}</div>
                 {administrativoInfo.codigo && (
-                  <div className="text-sm text-slate-600">Codigo: {administrativoInfo.codigo}</div>
+                  <div className="text-sm text-slate-600">Código: {administrativoInfo.codigo}</div>
                 )}
               </div>
             )}
@@ -169,7 +169,7 @@ const StatusChangeConfirmModal = ({
               className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              {isLoading ? 'Procesando...' : 'Confirmar Cambio'}
+              {isLoading ? 'Procesando...' : 'Confirmar cambio'}
             </motion.button>
           </div>
         </motion.div>

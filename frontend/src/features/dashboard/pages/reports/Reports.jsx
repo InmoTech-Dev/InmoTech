@@ -73,7 +73,7 @@ const ReportsContent = () => {
           id_persona_reporta: Number(r.id_persona_reporta || (r.reportado_por?.id_persona ?? r.reportado_por?.id ?? 0)),
           reportado_por: r.reportado_por || null,
           prioridad: r.prioridad || 'Media',
-          tipoReporte: (r.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento'),
+          tipoReporte: (r.tipo_reporte || '').replace('Mantenimiento', 'Mantenimiento'),
           fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
           estado: r.estado || 'Pendiente',
         };
@@ -206,7 +206,7 @@ const ReportsContent = () => {
         getBackendId(selectedReport)
 
       if (!backendId) {
-        throw new Error('No se pudo determinar el ID del reporte para actualizar estado.')
+        throw new Error('No se pudo determinar el ID del reporte para actualizar el estado.')
       }
 
       const estadoNormalizado = normalizeEstado(nuevoEstado)
@@ -262,7 +262,7 @@ const ReportsContent = () => {
       // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
       detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
       detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
-      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimiento', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
       detailedReport.prioridad = report.prioridad || detailedReport.prioridad || 'Media'
@@ -334,7 +334,7 @@ const ReportsContent = () => {
       // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
       detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
       detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
-      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimiento', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
       detailedReport.responsable = report.responsable || detailedReport.responsable || 'No asignado'

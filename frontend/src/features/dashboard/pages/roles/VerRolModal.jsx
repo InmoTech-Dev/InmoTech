@@ -24,23 +24,47 @@ import {
 
 const modulesData = [
   {
-    name: "Gestion de Inmuebles",
+    name: "Gestión de Inmuebles",
     key: "inmuebles",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: Building2,
     color: "bg-slate-50 border-slate-200",
-    description: "Administracion completa del portafolio inmobiliario"
+    description: "Administración completa del portafolio inmobiliario"
   },
   {
-    name: "Gestion de Citas",
+    name: "Gestión de Citas",
     key: "citas",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: Calendar,
     color: "bg-slate-50 border-slate-200",
-    description: "Programacion y seguimiento de citas comerciales"
+    description: "Programación y seguimiento de citas comerciales"
   },
   {
-    name: "Gestion de Ventas",
+    name: "Gestión de Usuarios",
+    key: "usuarios",
+    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    icon: Users,
+    color: "bg-slate-50 border-slate-200",
+    description: "Administración de usuarios y cuentas de acceso"
+  },
+  {
+    name: "Gestión de Administrativos",
+    key: "administrativos",
+    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    icon: User,
+    color: "bg-slate-50 border-slate-200",
+    description: "Control de personal administrativo y asesores"
+  },
+  {
+    name: "Gestión de Roles",
+    key: "roles",
+    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    icon: Shield,
+    color: "bg-slate-50 border-slate-200",
+    description: "Configuración de perfiles y permisos del sistema"
+  },
+  {
+    name: "Gestión de Ventas",
     key: "ventas",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: DollarSign,
@@ -48,7 +72,7 @@ const modulesData = [
     description: "Control de procesos de venta y transacciones"
   },
   {
-    name: "Gestion de Arriendos",
+    name: "Gestión de Arriendos",
     key: "arriendos",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: Key,
@@ -61,7 +85,7 @@ const modulesData = [
     permisos: ["Crear", "Editar", "Anular", "Ver"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
-    description: "Generacion de informes y analisis de mercado"
+    description: "Generación de informes y análisis de mercado"
   }
 ];
 
@@ -74,16 +98,6 @@ const permissionConfig = {
 };
 
 // Vista simple para roles normales
-const permissionGroups = [
-  { key: "roles", label: "Roles" },
-  { key: "gEmpleados", label: "G Empleados" },
-  { key: "clientes", label: "Clientes" },
-  { key: "usuarios", label: "Usuarios" },
-  { key: "reporteInmuebles", label: "Reporte inmuebles" },
-  { key: "inmuebles", label: "Inmuebles" },
-  { key: "citas", label: "Citas" },
-];
-
 const permissionActions = ["crear", "editar", "eliminar", "ver"];
 
 export default function VerRolModal({ isOpen, onClose, rol }) {

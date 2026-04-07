@@ -1,0 +1,70 @@
+name: AI PR Summary (Gemini Robot)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm install @google/generative-ai
+
+      - name: Generate AI Summary
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Obtener el DIFF de los cambios
+          git diff origin/$BASE_REF...HEAD > pr_diff.txt
+          
+          # Script para llamar a Gemini
+          cat << 'EOF' > summarize.js
+          const { GoogleGenerativeAI } = require("@google/generative-ai");
+          const fs = require("fs");
+
+          async function run() {
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+            const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 20000); // Limitar tamaño
+            const prompt = `
+            Eres un experto desarrollador. Analiza el siguiente DIFF de un Pull Request y genera el contenido de la descripción siguiendo este formato estrictamente.
+            
+            REGLAS:
+            1. Llena la sección "## 📋 Descripción" con un resumen ejecutivo de lo que hace el código.
+            2. En "## 🔗 Rama", indica que viene de "${process.env.HEAD_REF}" hacia "${process.env.BASE_REF}".
+            3. En "## ✅ Tipo de cambio", marca con [x] las opciones que detectes (Feature, Bug fix, Refactor, Documentation, Estilos, Configuración). SI DETECTAS ALGO NUEVO, PUEDES AGREGAR UNA NUEVA LÍNEA CON UN EMOJI.
+            4. En "## ✔️ Checklist antes de enviar", marca con [x] si el código NO tiene console.log, NO tiene .env, y si la rama parece sincronizada. SI DETECTAS UN RIESGO O ALGO NUEVO, AGREGA UNA LÍNEA AL CHECKLIST.
+            5. DEJA LAS SECCIONES "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)" Y "## 📸 Screenshots" EXACTAMENTE COMO ESTÁN EN EL TEMPLATE (con sus comentarios <!-- -->). No intentes inventar pruebas.
+            
+            DIFF:
+            ${diff}
+            
+            DEVUELVE SOLO EL MARKDOWN PARA LA DESCRIPCIÓN.
+            `;
+
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            console.log(response.text());
+          }
+          run().catch(console.error);
+          EOF
+
+          # Ejecutar script y guardar resultado
+          node summarize.js > ai_description.md
+
+          # Actualizar el PR usando la CLI de GitHub
+          gh pr edit $PR_NUMBER --body-file ai_description.md

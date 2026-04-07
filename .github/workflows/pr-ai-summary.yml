@@ -23,63 +23,51 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          BASE_REF: ${{ github.base_ref }}
-          HEAD_REF: ${{ github.head_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          # Obtener el DIFF de los cambios
+          # 1. Asegurar que tenemos la rama base para comparar
+          git fetch origin $BASE_REF
           git diff origin/$BASE_REF...HEAD > pr_diff.txt
           
-          # Script para llamar a Gemini
+          # 2. Crear el script de Node con el modelo correcto
           cat << 'EOF' > summarize.js
           const { GoogleGenerativeAI } = require("@google/generative-ai");
           const fs = require("fs");
 
           async function run() {
-            if (!process.env.GEMINI_API_KEY) {
-              throw new Error("Falta GEMINI_API_KEY en los Secrets.");
-            }
-            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-            // Cambiamos a gemini-pro que es el modelo más estable y compatible
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+            try {
+              const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+              
+              // CAMBIO CLAVE: Usar "gemini-1.5-flash" (es el más estable y rápido)
+              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-            const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 30000); 
-            const prompt = `
-            Eres un experto desarrollador. Analiza el siguiente DIFF de un Pull Request y genera el contenido de la descripción siguiendo este formato estrictamente:
-            
-            1. Llena la sección "## 📋 Descripción" con un resumen ejecutivo.
-            2. En "## 🔗 Rama", indica: De: \`${process.env.HEAD_REF}\` → A: \`${process.env.BASE_REF}\`.
-            3. En "## ✅ Tipo de cambio", marca con [x] las opciones detectadas.
-            4. En "## ✔️ Checklist antes de enviar", marca con [x] lo que el código CUMPLE (sin console.log, sin .env, etc).
-            5. DEJA LAS SECCIONES "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)" Y "## 📸 Screenshots" CON SUS COMENTARIOS ORIGINALES.
-            
-            DIFF:
-            ${diff}
-            
-            DEVUELVE SOLO EL MARKDOWN.
-            `;
+              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 50000);
+              
+              const prompt = `Actúa como Desarrollador Senior. Genera un resumen técnico para este Pull Request en Markdown.
+              Incluye:
+              ## 📋 Descripción (Resumen de cambios)
+              ## ✅ Tipo de cambio (Bugfix, Feature, etc.)
+              ## ✔️ Checklist (Cosas que detectes en el código)
+              
+              Usa este DIFF:
+              ${diff}`;
 
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const text = response.text();
-            if (text) {
-              fs.writeFileSync("ai_description.md", text);
-            } else {
-              throw new Error("La IA no generó respuesta.");
+              const result = await model.generateContent(prompt);
+              const response = await result.response;
+              fs.writeFileSync("ai_description.md", response.text());
+              
+            } catch (err) {
+              console.error("Error crítico:", err.message);
+              process.exit(1);
             }
           }
-          run().catch(err => {
-            console.error(err);
-            process.exit(1);
-          });
+          run();
           EOF
 
-          # Ejecutar script
+          # 3. Ejecutar y actualizar el PR
           node summarize.js
-
-          # Actualizar el PR usando la CLI de GitHub
           if [ -f ai_description.md ]; then
             gh pr edit $PR_NUMBER --body-file ai_description.md
-            echo "✅ Descripción actualizada por IA."
+            echo "✅ PR actualizado con éxito."
           fi

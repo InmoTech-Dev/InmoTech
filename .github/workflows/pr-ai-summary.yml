@@ -38,17 +38,53 @@ jobs:
           async function run() {
             const apiKey = process.env.GEMINI_API_KEY;
             const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 30000);
+            if (!diff.trim()) {
+              console.log("⚠️ Diff vacío, nada que resumir.");
+              return;
+            }
+
+            // 1. DESCUBRIMIENTO AUTOMÁTICO DE MODELO (Solución definitiva para el 404)
+            console.log("🔍 Descubriendo modelos disponibles para esta clave...");
+            let modelName = "gemini-1.5-flash"; // Por defecto
             
-            if (!diff.trim()) return;
+            try {
+              const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+              const listRes = await fetch(listUrl);
+              const listData = await listRes.json();
+              
+              if (listData.models) {
+                // Buscamos el mejor disponible: flash 1.5 -> pro 1.5 -> pro 1.0
+                const available = listData.models.map(m => m.name.split("/").pop());
+                console.log("📦 Modelos encontrados:", available.join(", "));
+                
+                if (available.includes("gemini-1.5-flash")) modelName = "gemini-1.5-flash";
+                else if (available.includes("gemini-1.5-pro")) modelName = "gemini-1.5-pro";
+                else if (available.includes("gemini-pro")) modelName = "gemini-pro";
+                else modelName = available[0]; // Último recurso
+              }
+            } catch (e) {
+              console.log("⚠️ No se pudo listar modelos, usando gemini-1.5-flash por defecto.");
+            }
+
+            console.log(`🤖 Usando modelo: ${modelName}`);
+
+            const promptText = `
+            Actúa como Senior Developer. Analiza este DIFF y genera una descripción siguiendo este formato:
+            
+            1. REGLA DE ORO: Mantén los encabezados exactos: "## 📋 Descripción", "## 🔗 Rama", "## ✅ Tipo de cambio", "## ✔️ Checklist antes de enviar".
+            2. DEJA LAS SECCIONES "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)" Y "## 📸 Screenshots" CON SUS COMENTARIOS ORIGINALES. No escribas nada en ellas.
+            
+            DIFF:
+            ${diff}
+            
+            DEVUELVE SOLO EL MARKDOWN PARA LA DESCRIPCIÓN.
+            `;
 
             const prompt = {
-              contents: [{
-                parts: [{ text: "Actúa como Senior Dev. Resume este DIFF en Markdown:\n\n" + diff }]
-              }]
+              contents: [{ parts: [{ text: promptText }] }]
             };
 
-            // Intentamos con 1.5-flash que es el que tiene más cuota gratuita
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
             try {
               const response = await fetch(url, {
@@ -61,9 +97,9 @@ jobs:
 
               if (data.candidates && data.candidates[0].content) {
                 fs.writeFileSync("ai_description.md", data.candidates[0].content.parts[0].text);
-                console.log("✅ Resumen generado.");
+                console.log("✅ Resumen generado exitosamente.");
               } else {
-                console.error("❌ Error de la API:", JSON.stringify(data));
+                console.error("❌ Error de la API (Respuesta):", JSON.stringify(data));
                 process.exit(1);
               }
             } catch (err) {

@@ -4,6 +4,7 @@ import { FaTimes } from "react-icons/fa";
 import ventaApiService from "../../../../shared/services/ventaApiService";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 import { downloadFile } from "../../../../shared/utils/downloadFile";
+import { useToast } from "../../../../shared/hooks/use-toast";
 
 /* ---------- UI helpers (mismo estilo compacto) ---------- */
 function Field({ label, value, className = "" }) {
@@ -80,6 +81,7 @@ function hasDisplayValue(value) {
 /* ---------- Component ---------- */
 export default function ViewSaleModal({ sale, onClose }) {
   if (!sale) return null;
+  const { toast } = useToast();
 
   const raw = sale.raw || {};
   const snapshot = sale.formSnapshot || {};
@@ -205,6 +207,14 @@ export default function ViewSaleModal({ sale, onClose }) {
   const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", sourceUrl: "", name: "" });
 
   useEffect(() => {
+    return () => {
+      if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+        URL.revokeObjectURL(pdfViewer.url);
+      }
+    };
+  }, [pdfViewer.url]);
+
+  useEffect(() => {
     const loadAttachments = async () => {
       const id = sale.id_venta || sale.id;
       if (!id) return;
@@ -250,15 +260,34 @@ export default function ViewSaleModal({ sale, onClose }) {
     const attachment = attachments.find((item) => item.url === url && (item.nombre_archivo || item.nombre || "Documento PDF") === name);
     const attachmentId = attachment?.id_adjunto || attachment?.id;
 
-    const inlineUrl =
-      saleId && attachmentId
-        ? ventaApiService.getAttachmentFileUrl(saleId, attachmentId)
-        : url;
+    try {
+      if (saleId && attachmentId) {
+        const rawBlob = await ventaApiService.fetchAttachmentBlob(saleId, attachmentId);
+        const pdfBlob = new Blob([rawBlob], { type: "application/pdf" });
+        const inlineUrl = URL.createObjectURL(pdfBlob);
+        setPdfViewer({
+          isOpen: true,
+          url: inlineUrl,
+          sourceUrl: ventaApiService.getAttachmentFileUrl(saleId, attachmentId),
+          name: name || "Documento PDF",
+        });
+        return;
+      }
 
-    setPdfViewer({ isOpen: true, url: inlineUrl, sourceUrl: inlineUrl, name: name || "Documento PDF" });
+      setPdfViewer({ isOpen: true, url, sourceUrl: url, name: name || "Documento PDF" });
+    } catch (error) {
+      toast({
+        title: "No se pudo abrir el PDF",
+        description: error?.message || "La vista previa no esta disponible. Usa la descarga o vuelve a subir el archivo.",
+        variant: "destructive",
+      });
+    }
   };
 
   const closePdfViewer = () => {
+    if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+      URL.revokeObjectURL(pdfViewer.url);
+    }
     setPdfViewer({ isOpen: false, url: "", sourceUrl: "", name: "" });
   };
 

@@ -83,6 +83,14 @@ export default function PurchaseTrackingModal({
   const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
   const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", sourceUrl: "", name: "" });
 
+  useEffect(() => {
+    return () => {
+      if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+        URL.revokeObjectURL(pdfViewer.url);
+      }
+    };
+  }, [pdfViewer.url]);
+
   // Refrescar adjuntos al abrir modal / cambiar venta para que el cierre persista tras recarga
   useEffect(() => {
     const load = async () => {
@@ -137,15 +145,34 @@ export default function PurchaseTrackingModal({
     const attachment = existingAdjuntos.find((item) => item.url === url && item.nombre_archivo === name);
     const attachmentId = attachment?.id_adjunto || attachment?.id;
 
-    const inlineUrl =
-      saleId && attachmentId
-        ? ventaApiService.getAttachmentFileUrl(saleId, attachmentId)
-        : url;
+    try {
+      if (saleId && attachmentId) {
+        const rawBlob = await ventaApiService.fetchAttachmentBlob(saleId, attachmentId);
+        const pdfBlob = new Blob([rawBlob], { type: "application/pdf" });
+        const inlineUrl = URL.createObjectURL(pdfBlob);
+        setPdfViewer({
+          isOpen: true,
+          url: inlineUrl,
+          sourceUrl: ventaApiService.getAttachmentFileUrl(saleId, attachmentId),
+          name,
+        });
+        return;
+      }
 
-    setPdfViewer({ isOpen: true, url: inlineUrl, sourceUrl: inlineUrl, name });
+      setPdfViewer({ isOpen: true, url, sourceUrl: url, name });
+    } catch (error) {
+      toast({
+        title: "No se pudo abrir el PDF",
+        description: error?.message || "La vista previa no esta disponible. Usa la descarga o vuelve a subir el archivo.",
+        variant: "destructive",
+      });
+    }
   };
 
   const closePdfViewer = () => {
+    if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+      URL.revokeObjectURL(pdfViewer.url);
+    }
     setPdfViewer({ isOpen: false, url: "", sourceUrl: "", name: "" });
   };
 

@@ -41,6 +41,14 @@ const BUYER_AUTOFILL_FIELDS = [
     "compradorTelefono",
 ];
 
+const SELLER_LOCKED_FIELDS = [
+    "vendedorTipoDocumento",
+    VENDEDOR_DOC,
+    "vendedorNombreCompleto",
+    "vendedorCorreo",
+    "vendedorTelefono",
+];
+
 // Estado inicial
 const initial = {
     vendedorTipoDocumento: "",
@@ -400,6 +408,15 @@ export default function SalesForm({ onClose, onSubmit }) {
         if (el.type === "checkbox") {
             el.checked = !!valuesRef.current[name];
         } else {
+            const isEditableFocusedField =
+                typeof document !== "undefined" &&
+                document.activeElement === el &&
+                !SELLER_LOCKED_FIELDS.includes(name);
+
+            if (isEditableFocusedField) {
+                return;
+            }
+
             if (displayValuesRef.current[name] !== undefined) {
                 try { el.value = displayValuesRef.current[name]; } catch (err) { /* ignore */ }
             }
@@ -445,6 +462,64 @@ export default function SalesForm({ onClose, onSubmit }) {
         return "";
     };
 
+    const validateFieldValue = useCallback((fieldName, value) => {
+        const stringValue = value?.toString?.() ?? "";
+        const trimmedValue = stringValue.trim();
+        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
+        const isMixto = medioPagoActual === "mixto";
+        const isCashSplit = fieldName === "medioPagoEfectivo";
+        const isTransferSplit = fieldName === "medioPagoTransferencia";
+        const isRequired =
+            requiredFields.includes(fieldName) ||
+            (isMixto && (isCashSplit || isTransferSplit));
+
+        if (isRequired && !trimmedValue) {
+            return "Este campo es obligatorio.";
+        }
+
+        if (!trimmedValue) {
+            return null;
+        }
+
+        if (nameFields.includes(fieldName) && !isValidName(stringValue)) {
+            return "Solo se permiten letras.";
+        }
+
+        if (docFields.includes(fieldName)) {
+            const tipoDocumento = getDocumentTypeForField(fieldName) || "CC";
+
+            if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[fieldName] || stringValue)) {
+                return "Solo se permiten letras, números, espacios, puntos y guiones";
+            }
+
+            return validateDocument(tipoDocumento, stringValue) || null;
+        }
+
+        if (phoneFields.includes(fieldName)) {
+            if (!isValidNumeric(stringValue)) {
+                return "Solo se permiten números.";
+            }
+            if (trimmedValue.length < 10) {
+                return "El teléfono debe tener al menos 10 dígitos";
+            }
+            return null;
+        }
+
+        if (emailFields.includes(fieldName) && !isValidEmail(stringValue)) {
+            return "El correo electrónico debe ser válido.";
+        }
+
+        if (strictNumericFields.includes(fieldName) && !isValidNumeric(stringValue)) {
+            return "Solo se permiten números enteros.";
+        }
+
+        if ((isCashSplit || isTransferSplit) && !isValidNumeric(stringValue)) {
+            return "Solo se permiten números enteros.";
+        }
+
+        return null;
+    }, [getDocumentTypeForField, strictNumericFields]);
+
     // Manejador de cambios en inputs MEJORADO
     const handleInputChange = (e) => {
         let { name, type, value, checked } = e.target;
@@ -465,10 +540,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 cleanValue = isDocFieldChange
                     ? cleanDocumentByType(getDocumentTypeForField(name), value)
                     : sanitizeNumericString(value);
-                displayValuesRef.current[name] = cleanValue;
-                if (e.target.value !== cleanValue) {
-                    e.target.value = cleanValue;
-                }
+                displayValuesRef.current[name] = value;
             } else {
                 displayValuesRef.current[name] = value;
             }
@@ -482,42 +554,31 @@ export default function SalesForm({ onClose, onSubmit }) {
             if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
                 selectedBuyerRef.current = null;
                 manuallyEditedBuyerFieldsRef.current.clear();
-            }
 
-            if (BUYER_AUTOFILL_FIELDS.includes(name)) {
-                manuallyEditedBuyerFieldsRef.current.add(name);
-            }
-
-            if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
                 const tipoDocActual =
                     name === "compradorTipoDocumento" ? cleanValue : (valuesRef.current.compradorTipoDocumento || "");
                 const numeroDocActual =
                     name === COMPRADOR_DOC ? cleanValue : (valuesRef.current.compradorDocumento || "");
                 const normalizedTipoActual = String(tipoDocActual || "").trim().toUpperCase();
                 const normalizedNumeroActual = cleanDocumentByType(tipoDocActual, numeroDocActual || "");
-
-                buyerDocumentSnapshotRef.current = {
-                    tipo: tipoDocActual,
-                    numero: normalizedNumeroActual,
-                };
-
-                if (
+                const matchedBuyerChanged =
                     buyerMatchedDocumentRef.current.numero &&
                     (
                         buyerMatchedDocumentRef.current.tipo !== normalizedTipoActual ||
                         buyerMatchedDocumentRef.current.numero !== normalizedNumeroActual
-                    )
-                ) {
-                    if (buyerLookupTimeoutRef.current) {
-                        clearTimeout(buyerLookupTimeoutRef.current);
-                    }
-                    clearBuyerAutofill({ resetValidation: false });
-                } else if (!shouldTriggerBuyerLookup(tipoDocActual, numeroDocActual)) {
-                    if (buyerLookupTimeoutRef.current) {
-                        clearTimeout(buyerLookupTimeoutRef.current);
-                    }
+                    );
+
+                if (buyerLookupTimeoutRef.current) {
+                    clearTimeout(buyerLookupTimeoutRef.current);
+                }
+
+                if (matchedBuyerChanged || !tipoDocActual || !normalizedNumeroActual) {
                     clearBuyerAutofill({ resetValidation: false });
                 }
+            }
+
+            if (BUYER_AUTOFILL_FIELDS.includes(name)) {
+                manuallyEditedBuyerFieldsRef.current.add(name);
             }
         }
 
@@ -1523,24 +1584,24 @@ export default function SalesForm({ onClose, onSubmit }) {
         const isStrictNumeric = strictNumericFields.includes(name);
         const isNameField = nameFields.includes(name);
         const isCurrencyField = currencyFields.includes(name);
+        const isSellerLocked = SELLER_LOCKED_FIELDS.includes(name);
         const documentType = isDocField ? getDocumentTypeForField(name) : "";
         const isPassportDocument = documentType === "PASAPORTE" || documentType === "PAS";
+        const lockedFieldClass = isSellerLocked
+            ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed focus:border-slate-200 focus:ring-0"
+            : "";
 
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
 
         let inputType = type;
-        if ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
-            if (type !== 'date' && type !== 'email') {
+        if (isPhoneField || (isStrictNumeric && !isCurrencyField)) {
+            if (type !== "date" && type !== "email") {
                 inputType = "tel";
             }
-        }
-        else if (isEmailField) {
+        } else if (isEmailField) {
             inputType = "email";
         }
-
-        const inputMode = ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "numeric" : undefined;
-        const pattern = ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "[0-9]*" : undefined;
 
         let fieldPlaceholder = placeholder;
         if (isDocField) {
@@ -1583,10 +1644,11 @@ export default function SalesForm({ onClose, onSubmit }) {
                         id={name}
                         name={name}
                         ref={setElRef(name)}
-                        className={getFieldClass(name)}
+                        className={`${getFieldClass(name)} ${lockedFieldClass}`}
                         defaultValue={initial[name] ?? ""}
                         onChange={handleInputChange}
                         onBlur={onBlurHandler}
+                        disabled={isSellerLocked}
                     >
                         <option value="">Seleccione...</option>
                         {options.map((op) => (
@@ -1610,12 +1672,13 @@ export default function SalesForm({ onClose, onSubmit }) {
                         id={name}
                         name={name}
                         ref={setElRef(name)}
-                        className={getFieldClass(name)}
+                        className={`${getFieldClass(name)} ${lockedFieldClass}`}
                         placeholder={fieldPlaceholder}
                         defaultValue={initial[name] ?? ""}
                         onChange={handleInputChange}
                         onBlur={onBlurHandler}
                         rows="3"
+                        readOnly={isSellerLocked}
                     />
                     {errorMessage && (
                         <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
@@ -1630,17 +1693,15 @@ export default function SalesForm({ onClose, onSubmit }) {
                 <input
                     id={name}
                     name={name}
-                    ref={setElRef(name)}
-                    className={getFieldClass(name)}
                     type={inputType}
-                    inputMode={inputMode}
-                    pattern={pattern}
-                    placeholder={fieldPlaceholder}
-                    defaultValue={(displayValuesRef.current[name] || initial[name]) ?? ""}
+                    placeholder={fieldPlaceholder || label}
                     onChange={handleInputChange}
                     onBlur={onBlurHandler}
+                    ref={setElRef(name)}
                     minLength={isDocField ? 7 : undefined}
                     maxLength={isDocField ? 10 : undefined}
+                    className={`${getFieldClass(name)} ${lockedFieldClass}`}
+                    readOnly={isSellerLocked}
                 />
                 {errorMessage && (
                     <p className="text-red-500 text-xs mt-1">{errorMessage}</p>

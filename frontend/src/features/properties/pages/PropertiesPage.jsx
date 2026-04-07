@@ -208,17 +208,15 @@ export default function PropertiesPage() {
                 />
                 <TabsTrigger
                   value="venta"
-                  className={`relative z-10 py-2 text-center text-sm font-medium cursor-pointer ${
-                    activeTab === "venta" ? "text-black" : "text-gray-500"
-                  }`}
+                  className={`relative z-10 py-2 text-center text-sm font-medium cursor-pointer ${activeTab === "venta" ? "text-black" : "text-gray-500"
+                    }`}
                 >
                   Venta
                 </TabsTrigger>
                 <TabsTrigger
                   value="alquiler"
-                  className={`relative z-10 py-2 text-center text-sm font-medium cursor-pointer ${
-                    activeTab === "alquiler" ? "text-black" : "text-gray-500"
-                  }`}
+                  className={`relative z-10 py-2 text-center text-sm font-medium cursor-pointer ${activeTab === "alquiler" ? "text-black" : "text-gray-500"
+                    }`}
                 >
                   Alquiler
                 </TabsTrigger>
@@ -346,16 +344,15 @@ export default function PropertiesPage() {
               propertiesToShow.map((property, index) => (
                 <Card
                   key={index}
-                  className={`overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-600 ease-out ${
-                    propertiesVisible ? "animate-fade-in-up" : ""
-                  }`}
+                  className={`overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-600 ease-out ${propertiesVisible ? "animate-fade-in-up" : ""
+                    }`}
                   style={
                     propertiesVisible
                       ? {
-                          animationDelay: `${index * 100}ms`,
-                          animationFillMode: "both",
-                          animationTimingFunction: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-                        }
+                        animationDelay: `${index * 100}ms`,
+                        animationFillMode: "both",
+                        animationTimingFunction: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                      }
                       : {}
                   }
                 >
@@ -374,9 +371,8 @@ export default function PropertiesPage() {
                   </CardHeader>
                   <CardContent>
                     <div
-                      className={`flex text-sm bg-gray-50 p-3 rounded-lg ${
-                        (property.features?.length || 0) <= 2 ? "justify-center gap-8" : "justify-between"
-                      }`}
+                      className={`flex text-sm bg-gray-50 p-3 rounded-lg ${(property.features?.length || 0) <= 2 ? "justify-center gap-8" : "justify-between"
+                        }`}
                     >
                       {property.features?.length ? (
                         property.features.map((feature, featureIndex) => (

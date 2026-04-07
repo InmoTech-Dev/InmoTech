@@ -328,7 +328,7 @@ export default function ContactPage() {
                         <SelectItem value="Gestión de Alquileres">Gestión de Alquileres</SelectItem>
                         <SelectItem value="Avalúos Certificados">Avalúos Certificados</SelectItem>
                         <SelectItem value="Asesoría Legal">Asesoría Legal</SelectItem>
-                        <SelectItem value="otro">Otro</SelectItem>
+                        <SelectItem value="Otro">Otro</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

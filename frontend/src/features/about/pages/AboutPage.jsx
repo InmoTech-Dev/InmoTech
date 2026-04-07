@@ -189,7 +189,7 @@ const reasonsVariants = {
 
 export default function AboutPage() {
   const storyLines = [
-    "Matriz Inmobiliaria nació en 2008 con la visión de transformar la experiencia de comprar, vender y alquilar propiedades en el mercado inmobiliario.",
+    "Matriz Inmobiliaria nació en 2020 con la visión de transformar la experiencia de comprar, vender y alquilar propiedades en el mercado inmobiliario.",
     "Fundada por un grupo de profesionales con amplia experiencia en el sector, nuestra empresa ha crecido hasta convertirse en un referente en el mercado.",
     "A lo largo de estos años, hemos ayudado a cientos de familias a encontrar el hogar de sus sueños y a inversionistas a maximizar el rendimiento de sus activos inmobiliarios.",
     "Nuestro compromiso con la excelencia y la satisfacción del cliente nos ha permitido crecer de manera sostenida.",
@@ -583,7 +583,7 @@ const reasons = [
   {
     title: "Experiencia Comprobada",
     description:
-      "Más de 15 años en el mercado inmobiliario nos respaldan, con cientos de transacciones exitosas y clientes satisfechos.",
+      "Más de 5 años en el mercado inmobiliario nos respaldan, con cientos de transacciones exitosas y clientes satisfechos.",
     icon: <Clock className="h-8 w-8 text-[#00457B]" />,
   },
   {

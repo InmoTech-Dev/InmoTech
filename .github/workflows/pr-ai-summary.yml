@@ -45,27 +45,26 @@ jobs:
               return;
             }
 
-            // 1. DESCUBRIMIENTO AUTOMÁTICO DE MODELO CON PRIORIDAD (Solución de Cuota)
+            // 1. DESCUBRIMIENTO AUTOMÁTICO DE MODELO CON PRIORIDAD (Usa v1 para mayor estabilidad)
             console.log("🔍 Descubriendo modelos disponibles...");
-            let modelName = "";
+            let available = ["gemini-1.5-flash"]; // Fallback inicial
             try {
-              const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+              const listRes = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
               const listData = await listRes.json();
-              
               if (listData.models) {
-                const available = listData.models.map(m => m.name.split("/").pop());
-                console.log("📦 Modelos disponibles:", available.join(", "));
-                
-                // Prioridad para modelos con mayor cuota gratuita
-                const priority = ["gemini-1.5-flash", "gemini-flash-latest", "gemini-1.5-pro", "gemini-pro-latest", "gemini-pro"];
-                modelName = priority.find(p => available.includes(p)) || available[0];
+                available = listData.models.map(m => m.name.split("/").pop());
+                console.log("📦 Modelos disponibles (v1):", available.join(", "));
               }
             } catch (e) {
-              modelName = "gemini-1.5-flash";
-              console.log("⚠️ Error listando modelos, usando gemini-1.5-flash por defecto.");
+              console.log("⚠️ Error con v1, intentando v1beta...");
+              const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+              const listData = await listRes.json();
+              if (listData.models) available = listData.models.map(m => m.name.split("/").pop());
             }
 
-            console.log(`🤖 Usando modelo: ${modelName} (Elegido para evitar límites de cuota)`);
+            const priorityList = ["gemini-1.5-flash", "gemini-flash-latest", "gemini-1.5-flash-8b", "gemini-1.5-pro", "gemini-pro-latest", "gemini-pro"];
+            const modelsToTry = priorityList.filter(p => available.includes(p));
+            if (modelsToTry.length === 0) modelsToTry.push(available[0]);
 
             const promptText = `
             Actúa como Senior Developer. Analiza este DIFF y genera una descripción oficial siguiendo este formato:
@@ -81,38 +80,43 @@ jobs:
             DEVUELVE SOLO EL TEXTO DE LA DESCRIPCIÓN EN MARKDOWN.
             `;
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+            // 2. SISTEMA DE REINTENTOS CON FALLBACK DE MODELO
+            for (let modelName of modelsToTry) {
+              console.log(`🤖 Probando modelo: ${modelName}...`);
+              const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
 
-            // Reintento simple para errores 429
-            for (let i = 0; i < 3; i++) {
-              try {
-                const response = await fetch(url, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-                });
+              for (let i = 0; i < 2; i++) {
+                try {
+                  const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+                  });
 
-                const data = await response.json();
+                  const data = await response.json();
 
-                if (response.status === 429) {
-                  console.log(`⚠️ Límite excedido (429). Reintentando en ${5 * (i+1)}s...`);
-                  await sleep(5000 * (i+1));
-                  continue;
+                  if (response.status === 429) {
+                    console.log(`⚠️ Límite excedido para ${modelName}. Esperando 8s...`);
+                    await sleep(8000);
+                    continue; // Reintenta el mismo modelo
+                  }
+
+                  if (data.candidates && data.candidates[0].content) {
+                    fs.writeFileSync("ai_description.md", data.candidates[0].content.parts[0].text);
+                    console.log(`✅ ¡Éxito con ${modelName}!`);
+                    return;
+                  } else {
+                    console.error(`❌ Falló con ${modelName}:`, JSON.stringify(data));
+                    break; // Sal del reintento de este modelo
+                  }
+                } catch (err) {
+                  console.error(`❌ Error de red (${modelName}):`, err.message);
+                  break;
                 }
-
-                if (data.candidates && data.candidates[0].content) {
-                  fs.writeFileSync("ai_description.md", data.candidates[0].content.parts[0].text);
-                  console.log("✅ Resumen generado exitosamente.");
-                  return;
-                } else {
-                  console.error("❌ Error de la API:", JSON.stringify(data));
-                  process.exit(1);
-                }
-              } catch (err) {
-                console.error("❌ Error de red:", err.message);
-                process.exit(1);
               }
             }
+            console.error("💥 Todos los modelos fallaron o excedieron la cuota.");
+            process.exit(1);
           }
           run();
           EOF

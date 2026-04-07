@@ -4,15 +4,16 @@ import jsPDF from 'jspdf';
 import { ModalContainer } from '../common/modalContainer';
 import { getEstadoColor, getEstadoDotColor } from '../../utils/helpers';
 
-const getOwnerField = (owner = {}, type) => {
+const getOwnerField = (owner, type) => {
+  const safeOwner = owner && typeof owner === 'object' ? owner : {};
   const name =
-    owner.nombreCompleto ||
-    [owner.nombres, owner.apellidos].filter(Boolean).join(' ').trim() ||
-    owner.nombre ||
-    owner.nombre_completo;
+    safeOwner.nombreCompleto ||
+    [safeOwner.nombres, safeOwner.apellidos].filter(Boolean).join(' ').trim() ||
+    safeOwner.nombre ||
+    safeOwner.nombre_completo;
 
-  const email = owner.email || owner.correo;
-  const phone = owner.telefono || owner.celular;
+  const email = safeOwner.email || safeOwner.correo;
+  const phone = safeOwner.telefono || safeOwner.celular;
 
   if (type === 'name') return name || '';
   if (type === 'email') return email || '';

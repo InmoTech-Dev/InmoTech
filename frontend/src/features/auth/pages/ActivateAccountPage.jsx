@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, Eye, EyeOff, Lock, Mail, RefreshCcw, Shiel
 import invitacionApi from '../../../shared/services/invitacionApiService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
-const strengthLabels = ['Muy debil', 'Debil', 'Regular', 'Buena', 'Fuerte'];
+const strengthLabels = ['Muy débil', 'Débil', 'Regular', 'Buena', 'Fuerte'];
 
 const isUsedOrInvalid = (msg = '') => {
   const normalized = (msg || '').toLowerCase();
@@ -92,16 +92,16 @@ export default function ActivateAccountPage() {
       const res = await invitacionApi.reenviar(token);
       if (res && res.success) {
         setEstado('ready');
-        setMensaje('Enviamos un nuevo enlace y codigo a tu correo.');
+        setMensaje('Enviamos un nuevo enlace y código a tu correo.');
         setCanResend(false);
       } else {
         setEstado('error');
-        setMensaje(res?.message || 'No se pudo reenviar la invitacion');
+        setMensaje(res?.message || 'No se pudo reenviar la invitación');
         setCanResend(!(res?.message || '').toLowerCase().includes('vigente'));
       }
     } catch (err) {
       setEstado('error');
-      setMensaje(err?.data?.message || err.message || 'No se pudo reenviar la invitacion');
+      setMensaje(err?.data?.message || err.message || 'No se pudo reenviar la invitación');
       setCanResend(!(err?.data?.message || err.message || '').toLowerCase().includes('vigente'));
     } finally {
       setIsSubmitting(false);
@@ -112,7 +112,7 @@ export default function ActivateAccountPage() {
     const fetchData = async () => {
       if (!token) {
         setEstado('error');
-        setMensaje('Token de invitacion no encontrado');
+        setMensaje('Token de invitación no encontrado');
         setCanResend(false);
         return;
       }
@@ -129,22 +129,22 @@ export default function ActivateAccountPage() {
           setEstado('ready');
           setCanResend(true);
         } else {
-          const rawMsg = res?.message || 'Invitacion invalida o expirada';
+          const rawMsg = res?.message || 'Invitación inválida o expirada';
           if (isUsedOrInvalid(rawMsg)) {
-          setMensaje('Esta invitacion ya fue utilizada o es inexistente. Volviendo al inicio...');
-          setEstado('redirect');
-          setCanResend(false);
-          setTimeout(() => navigate('/'), 2500);
-          return;
-        }
-        setEstado('error');
-        setMensaje(rawMsg);
-        setCanResend(true);
+            setMensaje('Esta invitación ya fue utilizada o es inexistente. Volviendo al inicio...');
+            setEstado('redirect');
+            setCanResend(false);
+            setTimeout(() => navigate('/'), 2500);
+            return;
+          }
+          setEstado('error');
+          setMensaje(rawMsg);
+          setCanResend(true);
         }
       } catch (err) {
-        const rawMsg = err?.data?.message || err.message || 'No se pudo validar la invitacion';
+        const rawMsg = err?.data?.message || err.message || 'No se pudo validar la invitación';
         if (isUsedOrInvalid(rawMsg)) {
-            setMensaje('Esta invitacion ya fue utilizada o es inexistente. Volviendo al inicio...');
+          setMensaje('Esta invitación ya fue utilizada o es inexistente. Volviendo al inicio...');
           setEstado('redirect');
           setCanResend(false);
           setTimeout(() => navigate('/'), 2500);
@@ -164,12 +164,12 @@ export default function ActivateAccountPage() {
     const codigo = codigoDigits.join('');
     if (codigo.length !== 6) {
       setEstado('error');
-      setMensaje('Ingresa el codigo completo de 6 digitos');
+      setMensaje('Ingresa el código completo de 6 dígitos');
       return;
     }
     if (password !== confirmPassword) {
       setEstado('error');
-      setMensaje('Las contrasenas no coinciden');
+      setMensaje('Las contraseñas no coinciden');
       return;
     }
 
@@ -180,13 +180,13 @@ export default function ActivateAccountPage() {
       const res = await invitacionApi.aceptar({ token, codigo_6d: codigo, password });
       if (res && res.success) {
         setEstado('success');
-        setMensaje('Contrasena creada. Ya puedes iniciar sesion.');
+        setMensaje('Contraseña creada. Ya puedes iniciar sesión.');
         setTimeout(() => navigate('/login'), 1200);
       } else {
-        const rawMsg = res?.message || 'No se pudo completar la activacion';
+        const rawMsg = res?.message || 'No se pudo completar la activación';
         if (isUsedOrInvalid(rawMsg)) {
           setEstado('redirect');
-          setMensaje('Esta invitacion ya fue utilizada. Volviendo al inicio...');
+          setMensaje('Esta invitación ya fue utilizada. Volviendo al inicio...');
           setTimeout(() => navigate('/'), 2500);
           return;
         }
@@ -199,10 +199,10 @@ export default function ActivateAccountPage() {
         }
       }
     } catch (err) {
-      const rawMsg = err?.data?.message || err.message || 'No se pudo completar la activacion';
+      const rawMsg = err?.data?.message || err.message || 'No se pudo completar la activación';
       if (isUsedOrInvalid(rawMsg)) {
         setEstado('redirect');
-        setMensaje('Esta invitacion ya fue utilizada. Volviendo al inicio...');
+        setMensaje('Esta invitación ya fue utilizada. Volviendo al inicio...');
         setTimeout(() => navigate('/'), 2500);
         return;
       }
@@ -232,7 +232,7 @@ export default function ActivateAccountPage() {
     if (estado === 'loading') {
       return (
         <div className="text-center space-y-3">
-          <div className="animate-pulse text-gray-600">Validando invitacion...</div>
+          <div className="animate-pulse text-gray-600">Validando invitación...</div>
           <div className="flex justify-center">
             <div className="h-10 w-10 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin" />
           </div>
@@ -253,7 +253,7 @@ export default function ActivateAccountPage() {
                 className="mt-3 text-sm font-medium text-[#00457B] hover:text-[#003b69] underline"
                 disabled={isSubmitting}
               >
-                Reenviar invitacion
+                Reenviar invitación
               </button>
             )}
           </div>
@@ -266,7 +266,7 @@ export default function ActivateAccountPage() {
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center space-x-3">
           <ShieldCheck className="h-5 w-5 text-green-600" />
           <div>
-            <p className="text-green-700 font-semibold">Activacion completada</p>
+            <p className="text-green-700 font-semibold">Activación completada</p>
             <p className="text-green-600 text-sm">Redirigiendo al login...</p>
           </div>
         </div>
@@ -300,7 +300,7 @@ export default function ActivateAccountPage() {
               <img src="/images/logo-matriz-sin-fondo.png" alt="Matriz Inmobiliaria" className="w-52 drop-shadow-md" />
             </div>
             <h1 className="text-3xl font-bold leading-tight">Activa tu cuenta</h1>
-            <p className="text-blue-100 max-w-md">Define tu contrasena y usa el codigo de 6 digitos que te enviamos al correo.</p>
+            <p className="text-blue-100 max-w-md">Define tu contraseña y usa el código de 6 dígitos que te enviamos al correo.</p>
             <div className="grid gap-3 text-sm text-blue-50/90 w-full max-w-md">
               <div className="flex items-center space-x-3 bg-white/10 rounded-xl px-3 py-2 justify-center">
                 <ShieldCheck className="h-5 w-5 -ml-1" />
@@ -312,7 +312,7 @@ export default function ActivateAccountPage() {
               <div className="flex items-center space-x-3 bg-black/10 rounded-xl px-3 py-2 justify-center">
                 <RefreshCcw className="h-5 w-5 -ml-1" />
                 <div>
-                  <div className="font-semibold text-white">Expirio?</div>
+                  <div className="font-semibold text-white">¿Expiró?</div>
                   <div className="text-xs text-blue-100">Pide un nuevo enlace a un administrador.</div>
                 </div>
               </div>
@@ -325,8 +325,8 @@ export default function ActivateAccountPage() {
 
           {estado === 'ready' && sessionBlocked && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <p className="text-amber-800 font-semibold">Para activar esta cuenta debes cerrar la sesion actual.</p>
-              <p className="text-amber-700 text-sm mb-3">Cierra sesion y continuaremos con la activacion.</p>
+              <p className="text-amber-800 font-semibold">Para activar esta cuenta debes cerrar la sesión actual.</p>
+              <p className="text-amber-700 text-sm mb-3">Cierra sesión y continuaremos con la activación.</p>
               <button
                 type="button"
                 onClick={handleLogoutAndReload}
@@ -334,7 +334,7 @@ export default function ActivateAccountPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00457B] text-white font-medium hover:bg-[#003b69] disabled:opacity-50"
               >
                 <RefreshCcw className="h-4 w-4" />
-                Cerrar sesion y continuar
+                Cerrar sesión y continuar
               </button>
             </div>
           )}
@@ -344,7 +344,7 @@ export default function ActivateAccountPage() {
               <div className="space-y-2">
                 <p className="text-gray-800 font-semibold text-lg">Hola {nombre || 'usuario'}</p>
                 <p className="text-gray-600 text-sm">Tu correo de acceso: <strong>{correo}</strong></p>
-                <p className="text-gray-500 text-sm">Ingresa el codigo que te llego al correo y define tu contrasena.</p>
+                <p className="text-gray-500 text-sm">Ingresa el código que te llegó al correo y define tu contraseña.</p>
                 {canResend && (
                   <button
                     type="button"
@@ -352,7 +352,7 @@ export default function ActivateAccountPage() {
                     disabled={isSubmitting}
                     className="text-sm font-semibold text-[#00457B] hover:text-[#003b69] underline"
                   >
-                    ¿No recibiste el correo? Reenviar invitacion
+                    ¿No recibiste el correo? Reenviar invitación
                   </button>
                 )}
               </div>
@@ -361,7 +361,7 @@ export default function ActivateAccountPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 flex items-center">
                     <ShieldCheck className="h-4 w-4 mr-2 text-[#00457B]" />
-                    Codigo de verificacion (6 digitos)
+                    Código de verificación (6 dígitos)
                   </label>
                   <div className="flex gap-2">
                     {codigoDigits.map((digit, idx) => (
@@ -392,7 +392,7 @@ export default function ActivateAccountPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 flex items-center">
                     <Lock className="h-4 w-4 mr-2 text-[#00457B]" />
-                    Define tu contrasena
+                    Define tu contraseña
                   </label>
                   <div className="relative">
                     <input
@@ -405,7 +405,7 @@ export default function ActivateAccountPage() {
                       }}
                       ref={passwordRef}
                       className="w-full h-12 px-4 pr-12 rounded-xl border-2 border-gray-200 focus:border-[#00457B] focus:ring-[#00457B] transition-all"
-                      placeholder="Contrasena segura"
+                      placeholder="Contraseña segura"
                       disabled={isSubmitting}
                     />
                     <button
@@ -423,7 +423,7 @@ export default function ActivateAccountPage() {
                     </div>
                     <span className="text-xs font-semibold text-gray-700">{getPasswordStrengthText()}</span>
                   </div>
-                  <p className="text-xs text-gray-500">Minimo 8 caracteres, incluye mayuscula, minuscula, numero y simbolo.</p>
+                  <p className="text-xs text-gray-500">Mínimo 8 caracteres, incluye mayúscula, minúscula, número y símbolo.</p>
                   {password && (
                     <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-3 rounded-xl border border-gray-200">
                       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -441,7 +441,7 @@ export default function ActivateAccountPage() {
                           ) : (
                             <XCircle className="h-3 w-3 text-red-500 mr-1" />
                           )}
-                          <span className="text-gray-600">Mayuscula</span>
+                          <span className="text-gray-600">Mayúscula</span>
                         </div>
                         <div className="flex items-center">
                           {passwordStrength.number ? (
@@ -449,7 +449,7 @@ export default function ActivateAccountPage() {
                           ) : (
                             <XCircle className="h-3 w-3 text-red-500 mr-1" />
                           )}
-                          <span className="text-gray-600">Numero</span>
+                          <span className="text-gray-600">Número</span>
                         </div>
                         <div className="flex items-center">
                           {passwordStrength.special ? (
@@ -457,7 +457,7 @@ export default function ActivateAccountPage() {
                           ) : (
                             <XCircle className="h-3 w-3 text-red-500 mr-1" />
                           )}
-                          <span className="text-gray-600">Simbolo</span>
+                          <span className="text-gray-600">Símbolo</span>
                         </div>
                       </div>
                     </div>
@@ -467,7 +467,7 @@ export default function ActivateAccountPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 flex items-center">
                     <Lock className="h-4 w-4 mr-2 text-[#00457B]" />
-                    Confirma tu contrasena
+                    Confirma tu contraseña
                   </label>
                   <div className="relative">
                     <input
@@ -476,7 +476,7 @@ export default function ActivateAccountPage() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="w-full h-12 px-4 pr-12 rounded-xl border-2 border-gray-200 focus:border-[#00457B] focus:ring-[#00457B] transition-all"
-                      placeholder="Repite la contrasena"
+                      placeholder="Repite la contraseña"
                       disabled={isSubmitting}
                     />
                     <button
@@ -491,13 +491,13 @@ export default function ActivateAccountPage() {
                   {password && confirmPassword && password !== confirmPassword && (
                     <div className="flex items-center mt-2 text-red-600">
                       <XCircle className="h-4 w-4 mr-1" />
-                      <span className="text-sm">Las contrasenas no coinciden</span>
+                      <span className="text-sm">Las contraseñas no coinciden</span>
                     </div>
                   )}
                   {password && confirmPassword && password === confirmPassword && (
                     <div className="flex items-center mt-2 text-green-600">
                       <CheckCircle2 className="h-4 w-4 mr-1" />
-                      <span className="text-sm">Las contrasenas coinciden</span>
+                      <span className="text-sm">Las contraseñas coinciden</span>
                     </div>
                   )}
                 </div>
@@ -515,7 +515,7 @@ export default function ActivateAccountPage() {
                   ) : (
                     <>
                       <Mail className="h-5 w-5" />
-                      <span>Activar y guardar contrasena</span>
+                      <span>Activar y guardar contraseña</span>
                     </>
                   )}
                 </button>

@@ -23,23 +23,47 @@ import {
 
 const modulesData = [
   {
-    name: "Gestion de Inmuebles",
+    name: "Gestión de Inmuebles",
     key: "inmuebles",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: Building2,
     color: "bg-slate-50 border-slate-200",
-    description: "Administracion completa del portafolio inmobiliario"
+    description: "Administración completa del portafolio inmobiliario"
   },
   {
-    name: "Gestion de Citas",
+    name: "Gestión de Citas",
     key: "citas",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: Calendar,
     color: "bg-slate-50 border-slate-200",
-    description: "Programacion y seguimiento de citas comerciales"
+    description: "Programación y seguimiento de citas comerciales"
   },
   {
-    name: "Gestion de Ventas",
+    name: "Gestión de Usuarios",
+    key: "usuarios",
+    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    icon: Users,
+    color: "bg-slate-50 border-slate-200",
+    description: "Administración de usuarios y cuentas de acceso"
+  },
+  {
+    name: "Gestión de Administrativos",
+    key: "administrativos",
+    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    icon: User,
+    color: "bg-slate-50 border-slate-200",
+    description: "Control de personal administrativo y asesores"
+  },
+  {
+    name: "Gestión de Roles",
+    key: "roles",
+    permisos: ["Crear", "Editar", "Eliminar", "Ver"],
+    icon: Shield,
+    color: "bg-slate-50 border-slate-200",
+    description: "Configuración de perfiles y permisos del sistema"
+  },
+  {
+    name: "Gestión de Ventas",
     key: "ventas",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: DollarSign,
@@ -47,7 +71,7 @@ const modulesData = [
     description: "Control de procesos de venta y transacciones"
   },
   {
-    name: "Gestion de Arriendos",
+    name: "Gestión de Arriendos",
     key: "arriendos",
     permisos: ["Crear", "Editar", "Eliminar", "Ver"],
     icon: Key,
@@ -60,7 +84,7 @@ const modulesData = [
     permisos: ["Crear", "Editar", "Anular", "Ver"],
     icon: BarChart3,
     color: "bg-slate-50 border-slate-200",
-    description: "Generacion de informes y analisis de mercado"
+    description: "Generación de informes y análisis de mercado"
   }
 ];
 
@@ -213,7 +237,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
       const rolEditado = {
         ...rol,
         nombre: nombre.trim(),       // Para el frontend
-        nombre_rol: nombre.trim(),   // โ�� Ahora se envรญa para el API
+        nombre_rol: nombre.trim(),   // Ahora se envía para el API
         permisos
       };
 
@@ -267,7 +291,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
               <div className="flex gap-4 mt-3 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <span>{activeModulesCount} mรณdulos activos</span>
+                  <span>{activeModulesCount} módulos activos</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
@@ -321,10 +345,10 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                 </div>
               )}
 
-              {/* Mรณdulos y Permisos */}
+              {/* Módulos y Permisos */}
               <div>
                 <h3 className="text-lg font-semibold text-slate-800 mb-4">
-                  Configuraciรณn de Permisos por Mรณdulo
+                  Configuración de Permisos por Módulo
                 </h3>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -342,7 +366,7 @@ export default function EditarRolModal({ isOpen, onClose, rol, onSave }) {
                           : 'bg-gray-50 border-gray-200'
                           }`}
                       >
-                        {/* Header del mรณdulo */}
+                        {/* Header del módulo */}
                         <div className="p-4 border-b border-gray-200">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-3 flex-1">

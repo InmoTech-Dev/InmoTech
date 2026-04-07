@@ -230,7 +230,7 @@ const mainServices = [
     duration: "2-3 meses",
     features: [
       "Tasaciones para alquiler y arrendamiento",
-      "Valuaciónes para seguros y garantías",
+      "Valuaciones para seguros y garantías",
       "Certificación de valor para trámites legales",
       "Informes con respaldo institucional",
       "Análisis de plusvalía y proyecciones",

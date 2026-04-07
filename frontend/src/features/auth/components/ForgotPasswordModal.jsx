@@ -37,7 +37,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSubmit }) => {
     }
 
     if (!form.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) {
-      setStatus({ type: "error", message: "Ingresa un correo valido." });
+      setStatus({ type: "error", message: "Ingresa un correo válido." });
       return;
     }
 
@@ -48,7 +48,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSubmit }) => {
       setStatus({
         type: "success",
         message:
-          "Correo de recuperacion enviado. Si no lo ves, revisa spam o correo no deseado.",
+          "Correo de recuperación enviado. Si no lo ves, revisa spam o correo no deseado.",
       });
     } catch (error) {
       setStatus({
@@ -83,7 +83,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSubmit }) => {
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Recuperar contrasena</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Recuperar contraseña</h2>
             <p className="text-xs text-slate-500">
               Verificaremos los datos antes de enviar el enlace seguro.
             </p>
@@ -105,7 +105,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSubmit }) => {
           <div>
             <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
               <Mail className="h-3.5 w-3.5 text-blue-500" />
-              Correo electronico registrado
+              Correo electrónico registrado
             </label>
             <input
               name="email"

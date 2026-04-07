@@ -29,7 +29,7 @@ class LeaseService {
     const normalized = this.normalizeFilterValue(value);
     const map = {
       activo: 'Activo',
-      'al dia': 'Al día',
+      'al dia': 'Al dÃƒÂ­a',
       pendiente: 'Pendiente',
       debe: 'Debe',
       finalizado: 'Finalizado'
@@ -75,14 +75,14 @@ class LeaseService {
     const endDate = this.parseDateFlexible(endDateInput);
 
     if (!startDate || !endDate) {
-      const error = new Error('Las fechas del arrendamiento no son válidas.');
+      const error = new Error('Las fechas del arrendamiento no son vÃƒÂ¡lidas.');
       error.status = 400;
       throw error;
     }
 
     const minimumEndDate = this.addUtcMonths(startDate, 1);
     if (!minimumEndDate || endDate < minimumEndDate) {
-      const error = new Error('La duración mínima del contrato de arriendo es de un mes.');
+      const error = new Error('La duraciÃƒÂ³n mÃƒÂ­nima del contrato de arriendo es de un mes.');
       error.status = 400;
       throw error;
     }
@@ -106,7 +106,7 @@ class LeaseService {
     return [
       'Cobros vencidos o exigibles sin pagar',
       'Todos los cobros pagados',
-      'Estado restaurado automáticamente tras saldar cobros pendientes'
+      'Estado restaurado automÃƒÂ¡ticamente tras saldar cobros pendientes'
     ];
   }
 
@@ -159,7 +159,7 @@ class LeaseService {
       return null;
     }
 
-    const observationMatch = text.match(/Observación:\s*(.*?)(?:\s+Soporte:\s*https?:\/\/\S+)?$/i);
+    const observationMatch = text.match(/ObservaciÃƒÂ³n:\s*(.*?)(?:\s+Soporte:\s*https?:\/\/\S+)?$/i);
     const supportMatch = text.match(/Soporte:\s*(https?:\/\/\S+)/i);
 
     return {
@@ -188,7 +188,14 @@ class LeaseService {
   parseExtensionTracking(comment = '') {
     const text = String(comment || '');
     const normalized = this.normalizeFilterValue(text);
-    if (!normalized.includes('prorroga aplicada')) {
+    const rawLower = text.trim().toLowerCase();
+    const hasExtensionMarker =
+      normalized.includes('prorroga aplicada') ||
+      rawLower.includes('prÃƒÂ³rroga aplicada') ||
+      rawLower.includes('prÃƒÂ£Ã‚Â³rroga aplicada') ||
+      rawLower.includes('prorroga aplicada');
+
+    if (!hasExtensionMarker) {
       return null;
     }
 
@@ -278,139 +285,22 @@ class LeaseService {
       return lease.estado;
     }
 
-    const latestManualTracking = await this.getLatestManualTrackingEntry(
-      lease.id_arrendamiento,
-      transaction
-    );
-
-    if (latestManualTracking?.estado) {
-      return latestManualTracking.estado;
-    }
-
-    if (lease.estado && lease.estado !== 'Debe') {
-      return lease.estado;
-    }
-
-    return 'Al día';
+    return lease.estado || 'Al día';
   }
-  // Recalcula el estado del arrendamiento según cobros pendientes/vencidos.
+  // Recalcula el estado del arrendamiento segÃƒÂºn cobros pendientes/vencidos.
+  // Mantiene el estado del arrendamiento de forma manual, sin recalcularlo por cobros.
   async getDisplayedLeaseState(leaseId, lease = null, transaction = null) {
     const currentLease = lease || await this.getLeaseById(leaseId, transaction);
     if (!currentLease) return null;
 
-    if (['Finalizado'].includes(currentLease.estado)) {
-      return currentLease.estado;
-    }
-
-    const today = this.formatDateOnly(new Date());
-    const pendingCount = await Payment.count({
-      where: {
-        id_arrendamiento: leaseId,
-        [Op.or]: [
-          { estado: 'Vencido' },
-          {
-            estado: 'Pendiente',
-            fecha_cobro: { [Op.lte]: today }
-          }
-        ]
-      },
-      transaction
-    });
-
-    if (pendingCount > 0) {
-      return 'Debe';
-    }
-
-    return this.resolveStateAfterPaymentsAreUpToDate(currentLease, transaction);
+    return currentLease.estado || 'Al día';
   }
 
   async syncLeaseStateFromPayments(leaseId, transaction = null) {
-    const today = this.formatDateOnly(new Date());
-    const pendingCount = await Payment.count({
-      where: {
-        id_arrendamiento: leaseId,
-        [Op.or]: [
-          { estado: 'Vencido' },
-          {
-            estado: 'Pendiente',
-            fecha_cobro: { [Op.lte]: today }
-          }
-        ]
-      },
-      transaction
-    });
-
     const lease = await this.getLeaseById(leaseId, transaction);
     if (!lease) return null;
 
-    if (['Finalizado'].includes(lease.estado)) {
-      return lease.estado;
-    }
-
-    const latestTracking = await this.getLatestTrackingEntry(leaseId, transaction);
-
-    if (pendingCount === 0) {
-      const resolvedState = await this.resolveStateAfterPaymentsAreUpToDate(lease, transaction);
-
-      if (lease.estado !== resolvedState) {
-        await lease.update({ estado: resolvedState }, { transaction });
-      }
-
-      const restoreComment =
-        resolvedState === 'Al dÃ­a'
-          ? 'Todos los cobros pagados'
-          : 'Estado restaurado automÃ¡ticamente tras saldar cobros pendientes';
-
-      if (
-        latestTracking?.estado === 'Debe' &&
-        latestTracking?.comentario === 'Cobros vencidos o exigibles sin pagar'
-      ) {
-        await this.logSeguimiento({
-          id_arrendamiento: leaseId,
-          estado: resolvedState,
-          comentario: restoreComment,
-          transaction
-        });
-      }
-
-      return resolvedState;
-    }
-
-    if (
-      latestTracking?.estado !== 'Debe' ||
-      latestTracking?.comentario !== 'Cobros vencidos o exigibles sin pagar'
-    ) {
-      await this.logSeguimiento({
-        id_arrendamiento: leaseId,
-        estado: 'Debe',
-        comentario: 'Cobros vencidos o exigibles sin pagar',
-        transaction
-      });
-    }
-
-    return 'Debe';
-
-    /*
-    if (pendingCount === 0) {
-      await lease.update({ estado: 'Al día' }, { transaction });
-      await this.logSeguimiento({
-        id_arrendamiento: leaseId,
-        estado: 'Al día',
-        comentario: 'Todos los cobros pagados',
-        transaction
-      });
-      return 'Al día';
-    }
-
-    await lease.update({ estado: 'Debe' }, { transaction });
-    await this.logSeguimiento({
-      id_arrendamiento: leaseId,
-      estado: 'Debe',
-      comentario: 'Cobros vencidos o exigibles sin pagar',
-      transaction
-    });
-    return 'Debe';
-    */
+    return lease.estado || 'Al día';
   }
 
   async logSeguimiento({ id_arrendamiento, estado, comentario = null, id_persona = null, transaction = null }) {
@@ -422,7 +312,7 @@ class LeaseService {
         id_persona
       }, { transaction });
     } catch (error) {
-      logger.error(`❌ No se pudo registrar seguimiento de arrendamiento ${id_arrendamiento}: ${error.message}`);
+      logger.error(`Ã¢ÂÅ’ No se pudo registrar seguimiento de arrendamiento ${id_arrendamiento}: ${error.message}`);
     }
   }
 
@@ -438,7 +328,7 @@ class LeaseService {
       actividad_economica
     } = codeudorPayload;
     if (!tipo_documento || !numero_documento) {
-      throw new Error('Faltan datos del codeudor (tipo o número de documento)');
+      throw new Error('Faltan datos del codeudor (tipo o nÃƒÂºmero de documento)');
     }
 
     // Buscar si ya existe
@@ -471,7 +361,7 @@ class LeaseService {
         }
       }
     } else {
-      // Actualizar datos básicos si vienen
+      // Actualizar datos bÃƒÂ¡sicos si vienen
       await persona.update({
         nombre_completo: nombre_completo || persona.nombre_completo,
         apellido_completo: apellido_completo || persona.apellido_completo,
@@ -510,14 +400,14 @@ class LeaseService {
           if (estado === true || estado === 1) return true;
           if (['true', '1', 'disponible', 'available'].includes(estadoNorm)) return true;
 
-          // Bloquear estados explícitos de no disponibilidad
+          // Bloquear estados explÃƒÂ­citos de no disponibilidad
           if (['arrendado', 'vendido', 'no disponible'].includes(estadoFrontNorm)) return false;
 
           // Por defecto, permitir
           return true;
         };
 
-        // 1. Validar que el inmueble existe y está disponible
+        // 1. Validar que el inmueble existe y estÃƒÂ¡ disponible
         const inmueble = await Inmueble.findByPk(leaseData.id_inmueble, { transaction: t });
         if (!inmueble) {
           throw new Error('Inmueble no encontrado');
@@ -525,7 +415,7 @@ class LeaseService {
 
         const disponible = isDisponible(inmueble.estado, inmueble.estado_frontend);
         if (!disponible) {
-          logger.warn(`Inmueble ${inmueble.id_inmueble} marcado como NO disponible (estado=${inmueble.estado}, estado_frontend=${inmueble.estado_frontend}). Se continúa bajo override.`);
+          logger.warn(`Inmueble ${inmueble.id_inmueble} marcado como NO disponible (estado=${inmueble.estado}, estado_frontend=${inmueble.estado_frontend}). Se continÃƒÂºa bajo override.`);
         }
 
         // 2. Validar que el arrendatario existe (tabla arrendatarios)
@@ -537,7 +427,7 @@ class LeaseService {
           throw new Error('Arrendatario no encontrado');
         }
         if (this.isInactiveRenant(arrendatario)) {
-          const error = new Error('El arrendatario está inactivo y no puede registrarse en un arriendo.');
+          const error = new Error('El arrendatario estÃƒÂ¡ inactivo y no puede registrarse en un arriendo.');
           error.status = 400;
           throw error;
         }
@@ -572,7 +462,7 @@ class LeaseService {
           destacado: false
         }, { transaction: t });
 
-        // 5. Generar cobros mensuales automáticamente
+        // 5. Generar cobros mensuales automÃƒÂ¡ticamente
         await this.generateMonthlyPayments(newLease.id_arrendamiento, t, {
           chargeDay: this.getFixedChargeDay()
         });
@@ -610,7 +500,7 @@ class LeaseService {
   parseDateFlexible(value) {
     if (!value) return null;
 
-    // Si viene como Date, usamos su ISO (UTC) para conservar el día elegido en el cliente
+    // Si viene como Date, usamos su ISO (UTC) para conservar el dÃƒÂ­a elegido en el cliente
     if (value instanceof Date && !Number.isNaN(value)) {
       const iso = value.toISOString().slice(0, 10); // YYYY-MM-DD
       return this.parseDateOnly(iso);
@@ -641,6 +531,11 @@ class LeaseService {
   }
 
   async resolveLeaseTermMonths(lease, transaction = null) {
+    const storedLeaseMonths = Number(lease?.duracion_meses);
+    if (Number.isFinite(storedLeaseMonths) && storedLeaseMonths > 0) {
+      return storedLeaseMonths;
+    }
+
     const leaseId = lease?.id_arrendamiento;
     if (leaseId) {
       const trackingRows = await SeguimientoArrendamiento.findAll({
@@ -797,13 +692,13 @@ class LeaseService {
       const startDate = this.parseDateOnly(lease.fecha_inicio);
       const endDate = this.parseDateOnly(lease.fecha_finalizacion);
       if (!startDate || !endDate) {
-        throw new Error('Fechas de arrendamiento inválidas');
+        throw new Error('Fechas de arrendamiento invÃƒÂ¡lidas');
       }
 
       const payments = [];
       const chargeDay = requestedChargeDay || this.getFixedChargeDay();
 
-      // Primer cobro: mes de inicio; si el día cae antes del inicio, se mueve al mes siguiente
+      // Primer cobro: mes de inicio; si el dÃƒÂ­a cae antes del inicio, se mueve al mes siguiente
       const firstChargeDate = this.getFirstChargeDate(startDate, chargeDay);
       const additionalChargeAmount = this.calculateAdditionalChargeAmount(
         lease.valor_mensual,
@@ -849,10 +744,10 @@ class LeaseService {
       }
 
       await Payment.bulkCreate(payments, { transaction });
-      logger.info(`✅ ${payments.length} cobros generados para arrendamiento ${leaseId}`);
+      logger.info(`Ã¢Å“â€¦ ${payments.length} cobros generados para arrendamiento ${leaseId}`);
 
     } catch (error) {
-      logger.error(`❌ Error generando cobros: ${error.message}`);
+      logger.error(`Ã¢ÂÅ’ Error generando cobros: ${error.message}`);
       throw error;
     }
   }
@@ -1234,7 +1129,7 @@ class LeaseService {
       const newMonthlyValue = Number(payload.valor_mensual);
 
       if (!adjustmentDate || !startDate || !endDate) {
-        throw new Error('Las fechas del reajuste no son válidas');
+        throw new Error('Las fechas del reajuste no son vÃƒÂ¡lidas');
       }
 
       if (!Number.isFinite(newMonthlyValue) || newMonthlyValue <= 0) {
@@ -1243,7 +1138,7 @@ class LeaseService {
 
       const minimumAdjustmentDate = this.addUtcMonths(startDate, 12);
       if (this.isDateBefore(adjustmentDate, minimumAdjustmentDate)) {
-        throw new Error('El reajuste del canon solo puede aplicarse a partir del primer año del contrato');
+        throw new Error('El reajuste del canon solo puede aplicarse a partir del primer aÃƒÂ±o del contrato');
       }
 
       if (adjustmentDate > endDate) {
@@ -1299,19 +1194,19 @@ class LeaseService {
       const requestedEndDate = this.parseDateFlexible(fechaFinalizacion);
 
       if (!startDate || !oldEndDate) {
-        throw new Error('Las fechas del arrendamiento no son válidas para aplicar la prórroga');
+        throw new Error('Las fechas del arrendamiento no son vÃƒÂ¡lidas para aplicar la prÃƒÂ³rroga');
       }
 
       const leaseTermMonths = await this.resolveLeaseTermMonths(lease, t);
       const newEndDate = this.addMonthsClamped(oldEndDate, leaseTermMonths);
 
       if (!newEndDate || newEndDate <= oldEndDate) {
-        throw new Error('No fue posible calcular la nueva fecha de finalización de la prórroga');
+        throw new Error('No fue posible calcular la nueva fecha de finalizaciÃƒÂ³n de la prÃƒÂ³rroga');
       }
 
       if (requestedEndDate && this.formatDateOnly(requestedEndDate) !== this.formatDateOnly(newEndDate)) {
         logger.warn(
-          `La fecha de prórroga solicitada (${this.formatDateOnly(requestedEndDate)}) no coincide con la duración original del contrato. Se aplicará ${this.formatDateOnly(newEndDate)} para el arrendamiento ${id}.`
+          `La fecha de prÃƒÂ³rroga solicitada (${this.formatDateOnly(requestedEndDate)}) no coincide con la duraciÃƒÂ³n original del contrato. Se aplicarÃƒÂ¡ ${this.formatDateOnly(newEndDate)} para el arrendamiento ${id}.`
         );
       }
 
@@ -1324,7 +1219,7 @@ class LeaseService {
 
       const comentarioProrroga =
         comentario?.trim() ||
-        `Prórroga aplicada desde ${this.formatDateOnly(oldEndDate)} hasta ${this.formatDateOnly(newEndDate)} (${leaseTermMonths} ${leaseTermMonths === 1 ? 'mes' : 'meses'})`;
+        `PrÃƒÂ³rroga aplicada desde ${this.formatDateOnly(oldEndDate)} hasta ${this.formatDateOnly(newEndDate)} (${leaseTermMonths} ${leaseTermMonths === 1 ? 'mes' : 'meses'})`;
 
       await this.logSeguimiento({
         id_arrendamiento: id,
@@ -1370,7 +1265,7 @@ class LeaseService {
     const comentario = [
       'Preaviso registrado por el arrendatario.',
       `Decision: ${decision}`,
-      `Observación: ${observation}`,
+      `ObservaciÃƒÂ³n: ${observation}`,
       attachmentUrl ? `Soporte: ${attachmentUrl}` : null
     ]
       .filter(Boolean)
@@ -1423,7 +1318,7 @@ class LeaseService {
     try {
       const allowedStatuses = ['Activo', 'Al d\u00eda', 'Pendiente', 'Debe', 'Finalizado'];
       if (!allowedStatuses.includes(estado)) {
-        throw new Error('Estado de arrendamiento no válido');
+        throw new Error('Estado de arrendamiento no vÃƒÂ¡lido');
       }
 
       let updatedLease;
@@ -1577,7 +1472,7 @@ class LeaseService {
 
       await payment.update(updateData);
 
-      // Recalcular estado general del arrendamiento según cobros pendientes/vencidos
+      // Recalcular estado general del arrendamiento segÃƒÂºn cobros pendientes/vencidos
       const leaseState = await this.getDisplayedLeaseState(payment.id_arrendamiento);
 
       return { ...payment.get({ plain: true }), lease_estado: leaseState };
@@ -1591,10 +1486,10 @@ class LeaseService {
       const payment = await Payment.findByPk(receiptData.id_cobro);
       if (!payment) throw new Error('Cobro no encontrado');
 
-      // Normalizar y validar fecha de pago (usar solo la porción de fecha para evitar desfases horario)
+      // Normalizar y validar fecha de pago (usar solo la porciÃƒÂ³n de fecha para evitar desfases horario)
       const payDate = this.parseDateFlexible(receiptData.fecha_pago);
       if (!payDate) {
-        throw new Error('Fecha de pago inválida. Usa formato YYYY-MM-DD o DD/MM/YYYY');
+        throw new Error('Fecha de pago invÃƒÂ¡lida. Usa formato YYYY-MM-DD o DD/MM/YYYY');
       }
       const payDateStr = this.formatDateOnly(payDate);
 
@@ -1608,7 +1503,7 @@ class LeaseService {
         monto_pagado: receiptData.monto_pagado,
         fecha_pago: formattedPayDate,
         // Default debe coincidir con el CHECK de la BD
-        estado: receiptData.estado || 'En revisión',
+        estado: receiptData.estado || 'En revisiÃƒÂ³n',
         observaciones: receiptData.observaciones
       });
 
@@ -1618,7 +1513,7 @@ class LeaseService {
         { where: { id_cobro: receiptData.id_cobro } }
       );
 
-      const leaseState = await this.getDisplayedLeaseState(payment.id_arrendamiento);
+      const leaseState = await this.syncLeaseStateFromPayments(payment.id_arrendamiento);
       return { ...newReceipt.get({ plain: true }), lease_estado: leaseState };
     } catch (error) {
       throw error;

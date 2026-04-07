@@ -3,10 +3,11 @@ const Joi = require('joi');
 const documentTypes = ['CC', 'CE', 'NIT', 'Pasaporte', 'TI'];
 const buyerTypes = ['Potencial', 'En Proceso', 'Finalizado'];
 const buyerStatuses = ['Activo', 'Inactivo', 'Proceso'];
+const documentNumberSchema = Joi.string().trim().min(7).max(10);
 
 const createBuyerSchema = Joi.object({
   tipo_documento: Joi.string().valid(...documentTypes).required(),
-  numero_documento: Joi.string().max(20).required(),
+  numero_documento: documentNumberSchema.required(),
   nombre_completo: Joi.string().max(100).required(),
   apellido_completo: Joi.string().max(100).required(),
   correo: Joi.string().email().required(),
@@ -33,7 +34,7 @@ const updateBuyerSchema = Joi.object({
 
 const searchBuyersSchema = Joi.object({
   tipo_documento: Joi.string().valid(...documentTypes),
-  numero_documento: Joi.string().max(20),
+  numero_documento: documentNumberSchema,
   criterio: Joi.string().max(100),
   nombre: Joi.string().max(100),
   status: Joi.string().valid(...buyerStatuses),

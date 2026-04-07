@@ -3,6 +3,7 @@ const Joi = require('joi');
 const paymentMethods = ['efectivo', 'transferencia', 'credito', 'mixto'];
 // Estados generales de la venta (columna Ventas.estado)
 const saleStatuses = ['Activa', 'Finalizada', 'Cancelada'];
+const optionalDocumentNumberSchema = Joi.string().trim().min(7).max(10).allow(null, '');
 
 const createSaleSchema = Joi.object({
   id_inmueble: Joi.number().integer().required(),
@@ -13,7 +14,7 @@ const createSaleSchema = Joi.object({
   estado: Joi.string().valid(...saleStatuses).default('Activa'),
   // Datos "congelados" del vendedor al momento de crear la venta
   tipo_doc_vendedor: Joi.string().max(20).allow(null, ''),
-  numero_doc_vendedor: Joi.string().max(50).allow(null, ''),
+  numero_doc_vendedor: optionalDocumentNumberSchema,
   nombre_vendedor: Joi.string().max(200).allow(null, ''),
   correo_vendedor: Joi.string().email().max(150).allow(null, ''),
   telefono_vendedor: Joi.string().max(50).allow(null, '')
@@ -27,7 +28,7 @@ const updateSaleSchema = Joi.object({
   medio_pago: Joi.string().valid(...paymentMethods),
   estado: Joi.string().valid(...saleStatuses),
   tipo_doc_vendedor: Joi.string().max(20).allow(null, ''),
-  numero_doc_vendedor: Joi.string().max(50).allow(null, ''),
+  numero_doc_vendedor: optionalDocumentNumberSchema,
   nombre_vendedor: Joi.string().max(200).allow(null, ''),
   correo_vendedor: Joi.string().email().max(150).allow(null, ''),
   telefono_vendedor: Joi.string().max(50).allow(null, '')

@@ -14,7 +14,7 @@ const Navigation = ({ className = '', onLinkClick }) => {
     { to: routes.about, label: 'Nosotros' },
     { to: routes.properties, label: 'Inmuebles' },
     { to: routes.services, label: 'Servicios' },
-    { to: routes.contact, label: 'contáctanos' }
+    { to: routes.contact, label: 'Contáctanos' }
   ];
 
   return (

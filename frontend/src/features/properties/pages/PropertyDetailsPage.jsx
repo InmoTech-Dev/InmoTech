@@ -34,7 +34,7 @@ export default function PropertyDetailPage() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { addExistingAppointment } = useAppointments();
   const { search } = useLocation();
- 
+
   const propertyId = useMemo(() => {
     const parsed = Number(id);
     return Number.isFinite(parsed) ? parsed : null;
@@ -60,7 +60,7 @@ export default function PropertyDetailPage() {
         }
 
         if (propertyId === null) {
-          if (mounted) setError("Identificador de inmueble invalido");
+          if (mounted) setError("Identificador de inmueble inválido");
           return;
         }
 
@@ -68,11 +68,11 @@ export default function PropertyDetailPage() {
           const byId = await inmueblesAPI.getInmuebleById(propertyId);
           if (mounted) setProperty(byId);
         } catch (_err) {
-          if (mounted) setError("No encontramos la informacion de este inmueble");
+          if (mounted) setError("No encontramos la información de este inmueble");
         }
       } catch (err) {
         console.error("Error cargando inmueble:", err);
-        if (mounted) setError("No se pudo cargar la informacion del inmueble");
+        if (mounted) setError("No se pudo cargar la información del inmueble");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -131,7 +131,7 @@ export default function PropertyDetailPage() {
 
     const summaryAmenities = [
       {
-        label: "Area",
+        label: "Área",
         value: property.area_construida ? `${property.area_construida} m2` : "N/D m2",
         Icon: Home,
       },
@@ -155,13 +155,13 @@ export default function PropertyDetailPage() {
         : null,
       area: property.area_construida ? `${property.area_construida} m2` : "N/D",
       bedrooms: findAmenity("habitaciones"),
-      bathrooms: findAmenity("banos"),
+      bathrooms: findAmenity("baños"),
       parking: findAmenity("parqueaderos"),
       code: property.registro || property.registro_inmobiliario || property.id,
       type: property.categoria || property.tipo || "Inmueble",
       operation: property.operacion || "Sin definir",
       status: property.estado_bool === false ? "No disponible" : "Disponible",
-      description: property.descripcion || "Sin descripcion",
+      description: property.descripcion || "Sin descripción",
       amenities: selectedAmenities,
       summaryAmenities,
       images,
@@ -173,7 +173,7 @@ export default function PropertyDetailPage() {
   useEffect(() => {
     setActiveImageIndex(0);
   }, [property?.id]);
- 
+
   useEffect(() => {
     const params = new URLSearchParams(search);
     if (params.get("reschedule") === "true") {
@@ -189,7 +189,7 @@ export default function PropertyDetailPage() {
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600">Cargando informacion del inmueble...</p>
+        <p className="text-gray-600">Cargando información del inmueble...</p>
       </main>
     );
   }
@@ -297,9 +297,8 @@ export default function PropertyDetailPage() {
               </div>
 
               <div
-                className={`grid gap-4 bg-gray-50 p-4 rounded-xl ${
-                  (viewModel.summaryAmenities?.length || 0) <= 2 ? "justify-items-center" : ""
-                }`}
+                className={`grid gap-4 bg-gray-50 p-4 rounded-xl ${(viewModel.summaryAmenities?.length || 0) <= 2 ? "justify-items-center" : ""
+                  }`}
                 style={{
                   gridTemplateColumns: `repeat(${Math.min(Math.max(viewModel.summaryAmenities?.length || 1, 1), 4)}, minmax(0, 1fr))`,
                 }}
@@ -322,7 +321,7 @@ export default function PropertyDetailPage() {
                     <Info className="h-5 w-5 text-[#00457B]" />
                   </div>
                   <div>
-                    <h3 className="font-medium">Codigo de la propiedad</h3>
+                    <h3 className="font-medium">Código de la propiedad</h3>
                     <p className="text-gray-500">{viewModel.code}</p>
                   </div>
                 </div>
@@ -340,7 +339,7 @@ export default function PropertyDetailPage() {
                     <Clock className="h-5 w-5 text-[#00457B]" />
                   </div>
                   <div>
-                    <h3 className="font-medium">Operacion</h3>
+                    <h3 className="font-medium">Operación</h3>
                     <p className="text-gray-500">{viewModel.operation}</p>
                   </div>
                 </div>
@@ -376,22 +375,22 @@ export default function PropertyDetailPage() {
             <Tabs defaultValue="descripcion" className="w-full">
               <TabsList className="grid w-full grid-cols-3 h-12 rounded-xl bg-white">
                 <TabsTrigger value="descripcion" className="rounded-lg">
-                  Descripcion
+                  Descripción
                 </TabsTrigger>
                 <TabsTrigger value="caracteristicas" className="rounded-lg">
-                  Caracteristicas
+                  Características
                 </TabsTrigger>
                 <TabsTrigger value="ubicacion" className="rounded-lg">
-                  Ubicacion
+                  Ubicación
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="descripcion" className="mt-6">
                 <Card>
                   <CardContent className="p-6">
-                    <h2 className="text-xl font-bold mb-4">Descripcion</h2>
+                    <h2 className="text-xl font-bold mb-4">Descripción</h2>
                     <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                      {viewModel.description || "Sin descripcion."}
+                      {viewModel.description || "Sin descripción."}
                     </p>
                   </CardContent>
                 </Card>
@@ -422,12 +421,12 @@ export default function PropertyDetailPage() {
               <TabsContent value="ubicacion" className="mt-6">
                 <Card>
                   <CardContent className="p-6 space-y-2 text-gray-700">
-                    <h2 className="text-xl font-bold mb-2">Ubicacion</h2>
-                    <p><span className="font-medium">Direccion:</span> {property.direccion || "N/D"}</p>
+                    <h2 className="text-xl font-bold mb-2">Ubicación</h2>
+                    <p><span className="font-medium">Dirección:</span> {property.direccion || "N/D"}</p>
                     <p><span className="font-medium">Barrio:</span> {property.barrio || "N/D"}</p>
                     <p><span className="font-medium">Ciudad:</span> {property.ciudad || "N/D"}</p>
                     <p><span className="font-medium">Departamento:</span> {property.departamento || "N/D"}</p>
-                    <p><span className="font-medium">Pais:</span> {property.pais || "N/D"}</p>
+                    <p><span className="font-medium">País:</span> {property.pais || "N/D"}</p>
                   </CardContent>
                 </Card>
               </TabsContent>

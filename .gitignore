@@ -22,9 +22,15 @@ api/.env
 api/.env.*
 frontend/.env
 frontend/.env.*
+!*.env.example
+!*.env.*.example
+!api/.env.example
+!api/.env.*.example
+!frontend/.env.example
+!frontend/.env.*.example
 
-# Logs
-logs/
+# Logs (en cualquier subdirectorio)
+**/logs/
 *.log
 
 # Coverage

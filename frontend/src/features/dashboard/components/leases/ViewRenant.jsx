@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { FaTimes, FaImage } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
-import { API_CONFIG } from "../../../../shared/services/api.config";
 
 function Field({ label, value, className = "" }) {
   const v = value ?? "";
@@ -25,8 +24,11 @@ function Pill({ children, tone = "gray" }) {
     gray: "bg-gray-50 text-gray-700 border-gray-200",
     blue: "bg-blue-50 text-blue-700 border-blue-200",
   };
+
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${tones[tone]}`}>
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${tones[tone]}`}
+    >
       {children || "-"}
     </span>
   );
@@ -51,16 +53,6 @@ function formatDate(value) {
   return m ? m[1] : s;
 }
 
-function formatDocument(tipo, numero) {
-  const safeTipo = String(tipo || "").trim();
-  const safeNumero = String(numero || "").trim();
-
-  if (safeTipo && safeNumero) return `${safeTipo} - ${safeNumero}`;
-  if (safeNumero) return safeNumero;
-  if (safeTipo) return safeTipo;
-  return "-";
-}
-
 function cleanLeaseDescription(value) {
   if (!value) return "";
 
@@ -71,56 +63,29 @@ function cleanLeaseDescription(value) {
     .trim();
 }
 
-function getImageUrl(entry) {
-  if (!entry) return "";
-  const raw =
-    typeof entry === "string"
-      ? entry
-      : (
-    entry.ruta_archivo ||
-    entry.url ||
-    entry.secure_url ||
-    entry.src ||
-    entry.imagen_url ||
-    entry.imagenUrl ||
-    entry.foto_url ||
-    entry.foto ||
-    ""
-  );
-
-  const src = String(raw || "").trim();
-  if (!src) return "";
-  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
-    return src;
-  }
-
-  const normalizedPath = src.startsWith("/") ? src : `/${src}`;
-  if (normalizedPath.startsWith("/uploads/")) {
-    const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api\/v\d+$/i, "");
-    return `${apiOrigin}${normalizedPath}`;
-  }
-
-  return normalizedPath;
-}
-
-function normalizeAmenityName(value = "") {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
 function estadoTone(estado) {
   const e = (estado || "").toLowerCase();
-  if (["pagado", "activo", "vigente"].some((k) => e.includes(k))) return "green";
+  if (["pagado", "activo", "vigente", "al día", "al dia"].some((k) => e.includes(k))) return "green";
   if (["pendiente", "por pagar"].some((k) => e.includes(k))) return "yellow";
   if (!estado) return "gray";
   return "red";
 }
 
+function normalizeAmenityName(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function normalizeDisplayValue(value) {
+  if (value === null || value === undefined) return "";
+  const normalized = String(value).trim();
+  return normalized === "-" ? "" : normalized;
+}
+
 export default function ViewRenant({ renant, onClose }) {
-  const [imageFailed, setImageFailed] = useState(false);
   const descripcionContrato = cleanLeaseDescription(
     renant?.ultimoSeguimientoDescripcion ||
       renant?.ultimoSeguimientoComentario ||
@@ -141,11 +106,54 @@ export default function ViewRenant({ renant, onClose }) {
     renant?.arrendatario ||
     {};
 
-  const tipoDocArr = persona.tipo_documento || renant?.tipoDocArrendatario || renant?.tipoDocInquilino || "";
-  const numeroDocArr = persona.numero_documento || renant?.numeroDocArrendatario || renant?.numeroDocInquilino || "";
+  const inmueble =
+    renant?.rawLease?.Inmueble ||
+    renant?.rawLease?.inmueble ||
+    renant?.inmueble ||
+    {};
+
+  const comodidades = Array.isArray(inmueble?.comodidades) ? inmueble.comodidades : [];
+  const habitacionesComodidad = comodidades.find(
+    (item) => normalizeAmenityName(item?.nombre) === "habitaciones"
+  );
+  const banosComodidad = comodidades.find(
+    (item) => normalizeAmenityName(item?.nombre) === "banos"
+  );
+
+  const habitaciones =
+    normalizeDisplayValue(renant?.habitaciones) ||
+    habitacionesComodidad?.Inmueble_Comodidades?.cantidad ||
+    habitacionesComodidad?.Inmueble_Comodidad?.cantidad ||
+    habitacionesComodidad?.cantidad ||
+    normalizeDisplayValue(inmueble?.habitaciones) ||
+    "-";
+
+  const banos =
+    normalizeDisplayValue(renant?.banos) ||
+    banosComodidad?.Inmueble_Comodidades?.cantidad ||
+    banosComodidad?.Inmueble_Comodidad?.cantidad ||
+    banosComodidad?.cantidad ||
+    normalizeDisplayValue(inmueble?.banos) ||
+    "-";
+
+  const tipoDocArr =
+    persona.tipo_documento || renant?.tipoDocArrendatario || renant?.tipoDocInquilino || "";
+  const numeroDocArr =
+    persona.numero_documento || renant?.numeroDocArrendatario || renant?.numeroDocInquilino || "";
   const correoArr = persona.correo || renant?.correoArrendatario || renant?.correoInquilino || "";
-  const telefonoArr = persona.telefono || renant?.telefonoArrendatario || renant?.telefonoInquilino || "";
-  const nombreArr = persona.nombre_completo || renant?.nombreCompletoArrendatario || "";
+  const telefonoArr =
+    persona.telefono || renant?.telefonoArrendatario || renant?.telefonoInquilino || "";
+  const nombreArr =
+    persona.nombre_completo ||
+    renant?.nombreCompletoArrendatario ||
+    [
+      renant?.primerNombreArrendatario,
+      renant?.segundoNombreArrendatario,
+      renant?.primerApellidoArrendatario,
+      renant?.segundoApellidoArrendatario,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
   const codeudorPersona =
     renant?.codeudorRaw ||
@@ -197,12 +205,11 @@ export default function ViewRenant({ renant, onClose }) {
             transition={{ duration: 0.2 }}
             className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100"
           >
-            {/* Header sticky compacto */}
             <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100">
               <div className="px-4 sm:px-5 py-3.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
-                    Información del Arriendo
+                    Información del arriendo
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
                     Detalles del contrato de arrendamiento.
@@ -221,10 +228,8 @@ export default function ViewRenant({ renant, onClose }) {
               </div>
             </div>
 
-            {/* Body: 2 columnas en desktop para ver más “de un golpe” */}
             <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {/* Contrato */}
                 <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">Contrato</h3>
@@ -249,13 +254,14 @@ export default function ViewRenant({ renant, onClose }) {
                   </div>
                 </section>
 
-                {/* Inmueble */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">Inmueble</h3>
                     <div className="flex flex-wrap gap-2 justify-end">
                       {renant?.tipoInmueble ? <Pill tone="blue">{renant?.tipoInmueble}</Pill> : null}
-                      {renant?.registroInmobiliario ? <Pill tone="gray">{renant?.registroInmobiliario}</Pill> : null}
+                      {renant?.registroInmobiliario ? (
+                        <Pill tone="gray">{renant?.registroInmobiliario}</Pill>
+                      ) : null}
                     </div>
                   </div>
 
@@ -269,38 +275,39 @@ export default function ViewRenant({ renant, onClose }) {
                       </p>
                       <div className="mt-2 grid grid-cols-3 gap-2">
                         <Field label="Área" value={renant?.area ? `${renant?.area} m²` : "-"} />
-                        <Field label="Hab." value={renant?.habitaciones ?? "-"} />
-                        <Field label="Baños" value={renant?.banos ?? "-"} />
+                        <Field label="Hab." value={habitaciones} />
+                        <Field label="Baños" value={banos} />
+                      </div>
+                      <div className="mt-2">
+                        <Field
+                          label="Ciudad/Dep"
+                          value={
+                            (renant?.ciudad || "-") +
+                            (renant?.departamento ? `, ${renant?.departamento}` : "")
+                          }
+                        />
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
                     <Field label="Dirección" value={renant?.direccion || "-"} className="col-span-2" />
-                    <Field label="Ciudad/Dep" value={(renant?.ciudad || "-") + (renant?.departamento ? `, ${renant?.departamento}` : "")} />
-                    <Field label="Barrio/Estrato" value={(renant?.barrio || "-") + (renant?.estrato ? ` · ${renant?.estrato}` : "")} />
                   </div>
                 </section>
               </div>
 
-              {/* Personas: 2 columnas en desktop */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {/* Arrendatario (SIN registro/tipo inmueble) */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3">Arrendatario</h3>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                     <Field label="Tipo doc" value={tipoDocArr} />
                     <Field label="Documento" value={numeroDocArr} />
                     <Field label="Teléfono" value={telefonoArr} />
-                    <Field
-                      label="Correo"
-                      value={correoArr ? correoArr : "-"}
-                    />
-                    <Field label="Nombre" value={nombreArr} className="col-span-2" />
+                    <Field label="Correo" value={correoArr || "-"} />
+                    <Field label="Nombre" value={nombreArr || "-"} className="col-span-2" />
                   </div>
                 </section>
 
-                {/* Codeudor (SIN registro/tipo inmueble) */}
                 <section className="rounded-2xl border border-gray-200 bg-white p-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3">Codeudor</h3>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2">
@@ -315,7 +322,6 @@ export default function ViewRenant({ renant, onClose }) {
               </div>
             </div>
 
-            {/* Footer sticky compacto */}
             <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-5 py-3 flex justify-end">
               <motion.button
                 whileHover={{ scale: 1.02 }}

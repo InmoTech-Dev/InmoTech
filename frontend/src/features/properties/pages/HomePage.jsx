@@ -143,7 +143,7 @@ export default function HomePage() {
       price: formatPrice(property),
       location:
         [property.ciudad, property.departamento].filter(Boolean).join(", ") ||
-        "Ubicacion no disponible",
+        "Ubicación no disponible",
       area: property.area_construida ? `${property.area_construida} m2` : "N/D",
       bedrooms: findAmenityAmount(property, ["habitaciones", "cuartos", "dormitorios"]),
       bathrooms: findAmenityAmount(property, ["banos", "baños", "bano", "baño"]),
@@ -315,7 +315,7 @@ export default function HomePage() {
               ENCUENTRA TU <span className="text-[#00AEFF]">HOGAR IDEAL</span>
             </h1>
             <p className="text-lg md:text-xl max-w-xl mb-10 text-white/90 drop-shadow animate-slide-in-left animation-delay-200">
-              Más de 15 años de experiencia ayudando a familias a encontrar el
+              Más de 5 años de experiencia ayudando a familias a encontrar el
               lugar perfecto para crear recuerdos inolvidables.
             </p>
 
@@ -367,7 +367,7 @@ export default function HomePage() {
                   <Calendar className="h-7 w-7" />
                 </div>
                 <div>
-                  <div className="text-4xl font-bold mb-1 leading-none">4+</div>
+                  <div className="text-4xl font-bold mb-1 leading-none">5+</div>
                   <div className="text-sm font-medium text-blue-100 leading-tight">
                     Años de experiencia
                   </div>
@@ -576,77 +576,76 @@ export default function HomePage() {
               </p>
             ) : (
               landingFeaturedProperties.map((property, index) => (
-              <Card
-                key={property.id ?? index}
-                className="overflow-hidden border-none shadow-xl hover:shadow-2xl transition-all duration-300 group rounded-xl"
-              >
-                <div className="relative h-72 overflow-hidden">
-                  <img
-                    src={
-                      property.image || "/placeholder.svg?height=256&width=384"
-                    }
-                    alt={property.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <Badge className="absolute top-4 right-4 bg-[#00457B] px-3 py-1 text-sm font-medium text-white z-10">
-                    {property.status}
-                  </Badge>
-                  {property.featured && (
-                    <Badge className="absolute top-4 left-4 bg-amber-500 px-3 py-1 text-sm font-medium text-white z-10">
-                      Destacado
+                <Card
+                  key={property.id ?? index}
+                  className="overflow-hidden border-none shadow-xl hover:shadow-2xl transition-all duration-300 group rounded-xl"
+                >
+                  <div className="relative h-72 overflow-hidden">
+                    <img
+                      src={
+                        property.image || "/placeholder.svg?height=256&width=384"
+                      }
+                      alt={property.title}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <Badge className="absolute top-4 right-4 bg-[#00457B] px-3 py-1 text-sm font-medium text-white z-10">
+                      {property.status}
                     </Badge>
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent h-20 transition-transform duration-500 group-hover:scale-105"></div>
-                </div>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl group-hover:text-[#00457B] transition-colors duration-300">
-                      {property.title}
-                    </CardTitle>
-                    <p className="text-xl font-bold text-[#00457B] bg-blue-50 px-3 py-1 rounded-full">
-                      {property.price}
-                    </p>
-                  </div>
-                  <div className="flex items-center text-gray-500 text-sm mt-1">
-                    <MapPin className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
-                    {property.location}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div
-                    className={`flex text-sm bg-gray-50 p-3 rounded-lg ${
-                      (property.features?.length || 0) <= 2 ? "justify-center gap-8" : "justify-between"
-                    }`}
-                  >
-                    {property.features?.length ? (
-                      property.features.map((feature, featureIndex) => (
-                        <div key={`${property.id}-${featureIndex}`} className="flex items-center">
-                          {feature.icon === "area" && <Home className="h-4 w-4 mr-1 text-[#00457B]" />}
-                          {feature.icon === "bedrooms" && <Building2 className="h-4 w-4 mr-1 text-[#00457B]" />}
-                          {feature.icon === "bathrooms" && <Key className="h-4 w-4 mr-1 text-[#00457B]" />}
-                          {feature.label}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-gray-600">Sin comodidades</div>
+                    {property.featured && (
+                      <Badge className="absolute top-4 left-4 bg-amber-500 px-3 py-1 text-sm font-medium text-white z-10">
+                        Destacado
+                      </Badge>
                     )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent h-20 transition-transform duration-500 group-hover:scale-105"></div>
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button
-                    asChild
-                    className="w-full bg-[#00457B] text-white hover:bg-[#003b69] rounded-full group-hover:shadow-lg transition-all duration-300"
-                  >
-                    <Link
-                      to={`/inmuebles/${property.id}`}
-                      className="flex items-center justify-center text-white gap-2"
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-xl group-hover:text-[#00457B] transition-colors duration-300">
+                        {property.title}
+                      </CardTitle>
+                      <p className="text-xl font-bold text-[#00457B] bg-blue-50 px-3 py-1 rounded-full">
+                        {property.price}
+                      </p>
+                    </div>
+                    <div className="flex items-center text-gray-500 text-sm mt-1">
+                      <MapPin className="h-4 w-4 mr-1 text-[#00457B]" />{" "}
+                      {property.location}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div
+                      className={`flex text-sm bg-gray-50 p-3 rounded-lg ${(property.features?.length || 0) <= 2 ? "justify-center gap-8" : "justify-between"
+                        }`}
                     >
-                      Ver detalles
-                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
-                    </Link>
-                  </Button>
-                </CardFooter>
-              </Card>
+                      {property.features?.length ? (
+                        property.features.map((feature, featureIndex) => (
+                          <div key={`${property.id}-${featureIndex}`} className="flex items-center">
+                            {feature.icon === "area" && <Home className="h-4 w-4 mr-1 text-[#00457B]" />}
+                            {feature.icon === "bedrooms" && <Building2 className="h-4 w-4 mr-1 text-[#00457B]" />}
+                            {feature.icon === "bathrooms" && <Key className="h-4 w-4 mr-1 text-[#00457B]" />}
+                            {feature.label}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-gray-600">Sin comodidades</div>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button
+                      asChild
+                      className="w-full bg-[#00457B] text-white hover:bg-[#003b69] rounded-full group-hover:shadow-lg transition-all duration-300"
+                    >
+                      <Link
+                        to={`/inmuebles/${property.id}`}
+                        className="flex items-center justify-center text-white gap-2"
+                      >
+                        Ver detalles
+                        <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
+                      </Link>
+                    </Button>
+                  </CardFooter>
+                </Card>
               ))
             )}
           </div>
@@ -672,7 +671,7 @@ export default function HomePage() {
                     Matriz Inmobiliaria
                   </h3>
                   <p>
-                    Tu socio de confianza en el mercado inmobiliario desde 2008
+                    Tu socio de confianza en el mercado inmobiliario desde 2020
                   </p>
                 </div>
               </div>
@@ -789,7 +788,7 @@ const services = [
     icon: <Briefcase className="h-7 w-7 text-[#00457B]" />,
   },
   {
-    title: "Avaluos",
+    title: "Avalúos",
     description:
       "Valoración profesional de inmuebles para conocer el precio real de mercado de tu propiedad.",
     icon: <Home className="h-7 w-7 text-[#00457B]" />,
@@ -875,7 +874,7 @@ const whyChooseUs = [
   {
     title: "Experiencia y Profesionalismo",
     description:
-      "Más de 15 años en el mercado inmobiliario con un equipo de profesionales altamente calificados.",
+      "Más de 5 años en el mercado inmobiliario con un equipo de profesionales altamente calificados.",
     icon: <Award className="h-7 w-7 text-[#00457B]" />,
   },
   {

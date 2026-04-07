@@ -1,0 +1,22 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    branches: [Develop]
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comentar URL de preview en el PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚀 **Preview automático de Vercel activo.** Revisa los checks de abajo para ver la URL generada por Vercel para este PR.'
+            })

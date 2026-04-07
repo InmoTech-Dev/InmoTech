@@ -154,10 +154,10 @@ const mapApiArriendoToRow = (arriendo = {}) => {
 
   const fechaCobroStr = normalizeDateString(fechaCobroRaw);
 
-  // Extraer comodidades para habitaciones y baÃ±os
+  // Extraer comodidades para habitaciones y baÃƒÂ±os
   const comodidades = inmueble.comodidades || [];
   const habCom = comodidades.find(c => c.nombre === "Habitaciones");
-  const banCom = comodidades.find(c => c.nombre === "BaÃ±os" || c.nombre === "BaÃƒÂ±os");
+  const banCom = comodidades.find(c => c.nombre === "BaÃƒÂ±os" || c.nombre === "BaÃƒÆ’Ã‚Â±os");
   const habCantidad = habCom?.Inmueble_Comodidades?.cantidad || habCom?.Inmueble_Comodidad?.cantidad || habCom?.cantidad || "";
   const banCantidad = banCom?.Inmueble_Comodidades?.cantidad || banCom?.Inmueble_Comodidad?.cantidad || banCom?.cantidad || "";
 
@@ -339,58 +339,24 @@ export function RenantManagementPage() {
     setIsLoading(true);
     try {
       const response = await arriendoApiService.obtenerArriendos({
-        page: 1,
-        limit: 200,
+        page,
+        limit: PAGE_SIZE,
+        search: query || undefined,
+        estado: estadoFilter !== "todos" ? estadoFilter : undefined,
+        tipo_inmueble: tipoInmuebleFilter !== "todos" ? tipoInmuebleFilter : undefined,
       });
       const list = response?.data || [];
-      const normalizedQuery = String(query || "").trim().toLowerCase();
       const normalizedList = list.map(mapApiArriendoToRow);
-      const filteredList = normalizedList.filter((item) => {
-        const matchesSearch =
-          !normalizedQuery ||
-          [
-            item.nombreInmueble,
-            item.registroInmobiliario,
-            item.tipoInmueble,
-            item.direccion,
-            item.ciudad,
-            item.departamento,
-            item.barrio,
-            item.numeroDocArrendatario,
-            item.correoArrendatario,
-            item.telefonoArrendatario,
-            item.primerNombreArrendatario,
-            item.segundoNombreArrendatario,
-            item.primerApellidoArrendatario,
-            item.segundoApellidoArrendatario,
-            item.primerNombreCodeudor,
-            item.primerApellidoCodeudor,
-          ]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-
-        const matchesEstado =
-          estadoFilter === "todos" ||
-          normalizeFilterText(item.estado) === normalizeFilterText(estadoFilter);
-
-        const matchesTipoInmueble =
-          tipoInmuebleFilter === "todos" ||
-          normalizeFilterText(item.tipoInmueble) === normalizeFilterText(tipoInmuebleFilter);
-
-        return matchesSearch && matchesEstado && matchesTipoInmueble;
-      });
-      const totalPages = Math.max(Math.ceil(filteredList.length / PAGE_SIZE), 1);
-      const resolvedPage = Math.min(Math.max(page, 1), totalPages);
-      setArriendos(filteredList);
-      setPagination({
-        total: filteredList.length,
-        pagina: resolvedPage,
+      setArriendos(normalizedList);
+      setPagination(response?.pagination || {
+        total: normalizedList.length,
+        pagina: page,
         limite: PAGE_SIZE,
-        paginas_totales: totalPages,
-        has_next_page: resolvedPage < totalPages,
-        has_prev_page: resolvedPage > 1,
+        paginas_totales: 1,
+        has_next_page: false,
+        has_prev_page: false,
       });
-      setCurrentPage(resolvedPage);
+      setCurrentPage(response?.pagination?.pagina || page);
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage({
@@ -407,10 +373,7 @@ export function RenantManagementPage() {
     }
   }, [estadoFilter, setStatusMessage, tipoInmuebleFilter]);
 
-  const paginatedArriendos = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return arriendos.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [arriendos, currentPage]);
+  const paginatedArriendos = useMemo(() => arriendos, [arriendos]);
 
   useEffect(() => {
     fetchArriendos();
@@ -509,13 +472,10 @@ export function RenantManagementPage() {
   const openExtensionModal = (rent) => {
     const startDate = parseIsoDate(rent.fechaInicio);
     const endDate = parseIsoDate(rent.fechaFinal);
-    const trackedExtensionMonths = parseExtensionMonthsFromComment(rent.ultimoSeguimientoComentario);
-    const durationMonths = Number(trackedExtensionMonths) > 0
-      ? Number(trackedExtensionMonths)
-      : Number(rent.duracionProrrogaMeses) > 0
+    const durationMonths = Number(rent.duracionProrrogaMeses) > 0
       ? Number(rent.duracionProrrogaMeses)
       : Number(rent.duracionMeses) > 0
-        ? Number(rent.duracionMeses)
+      ? Number(rent.duracionMeses)
       : Math.max(diffMonthsUtc(startDate, endDate), 1);
     const suggestedEndDate = addMonthsClampedUtc(endDate, durationMonths);
 
@@ -660,9 +620,27 @@ export function RenantManagementPage() {
   const handleStatusSave = async () => {
     if (!statusRent) return;
     const { id, nuevoEstado, comentario } = statusRent;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+      today.getDate()
+    ).padStart(2, "0")}`;
+    const hasOverduePayments = payments.some(
+      (payment) =>
+        payment?.estado !== "Pagado" &&
+        !payment?.comprobante &&
+        String(payment?.fecha_cobro || "").slice(0, 10) <= todayStr
+    );
+    if (nuevoEstado === "Debe" && !hasOverduePayments) {
+      toast({
+        title: "Arriendo al dia",
+        description: "El arriendo esta al dia, por eso no se puede cambiar el estado a Debe.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (nuevoEstado === "Finalizado") {
       const shouldFinalize = window.confirm(
-        "Al finalizar este arriendo ya no podras hacer prorroga ni mas seguimiento. ¿Deseas continuar?"
+        "Al finalizar este arriendo ya no podrás hacer prórroga ni más seguimiento. ¿Deseas continuar?"
       );
       if (!shouldFinalize) {
         return;
@@ -696,7 +674,7 @@ export function RenantManagementPage() {
     }
   };
 
-  // 🗑️ ELIMINAR
+  // ðŸ—‘ï¸ ELIMINAR
   const [rentToDelete, setRentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -770,7 +748,19 @@ export function RenantManagementPage() {
         estado: 'En revisión',
         observaciones: form.observaciones,
       };
-      await arriendoApiService.crearComprobante(statusRent.id, paymentId, payload);
+      const receiptResponse = await arriendoApiService.crearComprobante(statusRent.id, paymentId, payload);
+      const updatedLeaseState = receiptResponse?.data?.lease_estado;
+      if (updatedLeaseState) {
+        setStatusRent((prev) =>
+          prev
+            ? {
+                ...prev,
+                estado: updatedLeaseState,
+                nuevoEstado: updatedLeaseState,
+              }
+            : prev
+        );
+      }
       toast({
         title: "Comprobante registrado",
         description: "El comprobante se cargó y registró correctamente.",
@@ -870,15 +860,15 @@ export function RenantManagementPage() {
     if (!preNoticeRent) return;
     if (!preNoticeRent.soporte && !preNoticeRent.observacion?.trim()) {
       toast({
-        title: "Informaci?n requerida",
-        description: "Debes registrar una observaci?n o subir un soporte del preaviso.",
+        title: "Información requerida",
+        description: "Debes registrar una observación o subir un soporte del preaviso.",
         variant: "destructive",
       });
       return;
     }
     if (!preNoticeRent.decision) {
       toast({
-        title: "Decision requerida",
+        title: "Decisión requerida",
         description: "Debes seleccionar si el preaviso fue aceptado o rechazado.",
         variant: "destructive",
       });
@@ -1045,7 +1035,7 @@ const renderDeleteModal = () => {
     }
   };
 
-  // Calcular estadÃ­sticas
+  // Calcular estadÃƒÂ­sticas
   const stats = {
     total: pagination.total,
     activos: arriendos.filter(r => r.estado === 'Pagado' || r.estado === 'Activo').length,
@@ -1056,7 +1046,7 @@ const renderDeleteModal = () => {
     }, 0)
   };
 
-  // ðŸ”‘ --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
+  // Ã°Å¸â€â€˜ --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
   const renderFormModal = () => {
     if (!showForm) return null;
 
@@ -1860,6 +1850,7 @@ const renderDeleteModal = () => {
               onPageChange={(page) => {
                 if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
                 setCurrentPage(page);
+                fetchArriendos(searchTerm.trim(), page);
               }}
             />
           </div>

@@ -50,7 +50,7 @@ export default function LoginPage() {
           ? "/dashboard/propietario/inmuebles"
           : isTenantUser(userData)
             ? "/dashboard/arrendatario/facturas"
-          : "/"
+            : "/"
 
       setPendingVerificationEmail(null)
       navigate(redirectPath, { replace: true })
@@ -60,9 +60,9 @@ export default function LoginPage() {
       setPendingVerificationEmail(null)
       setPassword("")
       if (reason === 'account_disabled') {
-        setError('Tu cuenta esta deshabilitada. Comunicate con soporte o con un administrador.')
+        setError('Tu cuenta está deshabilitada. Comunícate con soporte o con un administrador.')
       } else {
-        setError(serverMessage || 'Error al iniciar sesion. Verifica tus credenciales.')
+        setError(serverMessage || 'Error al iniciar sesión. Verifica tus credenciales.')
       }
     } finally {
       setIsLoading(false)
@@ -92,7 +92,7 @@ export default function LoginPage() {
                   <Building2 className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-lg">Gestion de Propiedades</h3>
+                  <h3 className="font-semibold text-lg">Gestión de Propiedades</h3>
                   <p className="text-blue-100 text-sm">Administra tu portafolio completo</p>
                 </div>
               </div>
@@ -113,7 +113,7 @@ export default function LoginPage() {
                 </div>
                 <div className="text-left">
                   <h3 className="font-semibold text-lg">Seguridad Avanzada</h3>
-                  <p className="text-blue-100 text-sm">Proteccion de datos garantizada</p>
+                  <p className="text-blue-100 text-sm">Protección de datos garantizada</p>
                 </div>
               </div>
             </div>
@@ -140,7 +140,7 @@ export default function LoginPage() {
 
           {/* Header */}
           <div className="text-center space-y-2">
-            <h2 className="text-3xl font-bold text-gray-900">Hola de nuevo!</h2>
+            <h2 className="text-3xl font-bold text-gray-900">¡Hola de nuevo!</h2>
             <p className="text-gray-600">Ingresa tus credenciales para continuar</p>
           </div>
 
@@ -155,8 +155,8 @@ export default function LoginPage() {
           {pendingVerificationEmail && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
               <div>
-                <p className="text-blue-800 font-semibold">Tu cuenta aun no esta verificada.</p>
-                <p className="text-blue-700 text-sm">Te enviamos un codigo a {pendingVerificationEmail}. Ingresa con ese enlace.</p>
+                <p className="text-blue-800 font-semibold">Tu cuenta aún no está verificada.</p>
+                <p className="text-blue-700 text-sm">Te enviamos un código a {pendingVerificationEmail}. Ingresa con ese enlace.</p>
               </div>
             </div>
           )}
@@ -170,7 +170,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <label htmlFor="email" className="text-gray-700 font-medium flex items-center">
                   <Mail className="h-4 w-4 mr-2 text-[#00457B]" />
-                  Correo electronico
+                  Correo electrónico
                 </label>
                 <div className="relative">
                   <input
@@ -194,14 +194,14 @@ export default function LoginPage() {
                 <div className="flex justify-between items-center">
                   <label htmlFor="password" className="text-gray-700 font-medium flex items-center">
                     <Lock className="h-4 w-4 mr-2 text-[#00457B]" />
-                    Contrasena
+                    Contraseña
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowForgotModal(true)}
                     className="text-sm text-[#00457B] hover:text-[#003b69] font-medium transition-colors"
                   >
-                    Olvidaste tu contrasena?
+                    ¿Olvidaste tu contraseña?
                   </button>
                 </div>
                 <div className="relative">
@@ -239,11 +239,11 @@ export default function LoginPage() {
               {isLoading ? (
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Iniciando sesion...
+                  Iniciando sesión...
                 </div>
               ) : (
                 <div className="flex items-center justify-center">
-                  Iniciar Sesion
+                  Iniciar Sesión
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </div>
               )}
@@ -252,7 +252,7 @@ export default function LoginPage() {
 
           <div className="text-center space-y-4">
             <p className="text-gray-600">
-              El acceso se habilita por invitacion administrativa enviada a tu correo.
+              El acceso se habilita por invitación administrativa enviada a tu correo.
             </p>
           </div>
         </div>

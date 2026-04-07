@@ -507,7 +507,7 @@ export function ReportForm({
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Título Reporte *
+                  Título del reporte *
                 </label>
                 <Input
                   type="text"

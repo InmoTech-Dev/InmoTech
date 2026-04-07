@@ -12,7 +12,7 @@ import authService from '../../../../shared/services/authService'
 import { useToast } from '../../../../shared/hooks/use-toast'
 import { uploadToCloudinary } from '../../../../shared/services/cloudinary'
 import { Grid3X3, List } from 'lucide-react'
-import sseService from '../../../../shared/services/sseService'
+import realtimeBus from '../../../../shared/services/realtimeBus'
 import * as XLSX from "xlsx";
 import ConfirmationDialog from '../../../../shared/components/ui/ConfirmationDialog'
 import AdminReportsView from './AdminReportsView'
@@ -41,6 +41,7 @@ const ReportsContent = () => {
   const [dbReports, setDbReports] = useState([])
   const [dbLoading, setDbLoading] = useState(true)
   const [dbError, setDbError] = useState(null)
+  const realtimeRefreshRef = React.useRef(null)
 
   // Función reutilizable para cargar desde la base de datos
   const fetchReports = async () => {
@@ -72,7 +73,7 @@ const ReportsContent = () => {
           id_persona_reporta: Number(r.id_persona_reporta || (r.reportado_por?.id_persona ?? r.reportado_por?.id ?? 0)),
           reportado_por: r.reportado_por || null,
           prioridad: r.prioridad || 'Media',
-          tipoReporte: (r.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento'),
+          tipoReporte: (r.tipo_reporte || '').replace('Mantenimiento', 'Mantenimiento'),
           fecha: r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : '',
           estado: r.estado || 'Pendiente',
         };
@@ -86,18 +87,54 @@ const ReportsContent = () => {
     }
   }
 
-  // Cargar desde la base de datos al montar y suscribirse a SSE
+  // Cargar desde la base de datos al montar y suscribirse al bus realtime
   useEffect(() => {
     fetchReports()
 
-    // Suscribirse a cambios en tiempo real
-    const unsubscribe = sseService.on('report.changed', () => {
-      console.log('--- SSE: Refreshing reports due to real-time event ---');
-      fetchReports();
-    });
+    const scheduleRefresh = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+      }
 
-    return () => unsubscribe();
+      realtimeRefreshRef.current = setTimeout(() => {
+        fetchReports()
+      }, 450)
+    }
+
+    const offReportChanged = realtimeBus.on('report.changed', scheduleRefresh)
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', scheduleRefresh)
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', scheduleRefresh)
+
+    return () => {
+      offReportChanged()
+      offFallbackTick()
+      offReconcile()
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+        realtimeRefreshRef.current = null
+      }
+    }
   }, [])
+
+  useEffect(() => {
+    if (!selectedReport || dbReports.length === 0) return
+
+    const selectedId = getBackendId(selectedReport)
+    if (!selectedId) return
+
+    const updatedReport = dbReports.find((report) => getBackendId(report) === selectedId)
+    if (!updatedReport) {
+      setSelectedReport(null)
+      setIsViewModalOpen(false)
+      setIsEditModalOpen(false)
+      return
+    }
+
+    setSelectedReport((prev) => ({
+      ...prev,
+      ...updatedReport,
+    }))
+  }, [dbReports])
 
   // Filtrar reportes (solo los del backend)
   const filteredReports = dbReports.filter(report =>
@@ -169,7 +206,7 @@ const ReportsContent = () => {
         getBackendId(selectedReport)
 
       if (!backendId) {
-        throw new Error('No se pudo determinar el ID del reporte para actualizar estado.')
+        throw new Error('No se pudo determinar el ID del reporte para actualizar el estado.')
       }
 
       const estadoNormalizado = normalizeEstado(nuevoEstado)
@@ -225,7 +262,7 @@ const ReportsContent = () => {
       // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
       detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
       detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
-      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimiento', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
       detailedReport.prioridad = report.prioridad || detailedReport.prioridad || 'Media'
@@ -297,7 +334,7 @@ const ReportsContent = () => {
       // Usar el propietario real del inmueble desde el shallow report (ya corregido en fetchReports)
       detailedReport.propietario = report.propietario || detailedReport.propietario_nombre || ''
       detailedReport.referencia = report.referencia || detailedReport.inmueble_referencia || detailedReport.inmueble?.registro_inmobiliario || ''
-      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimineto', 'Mantenimiento')
+      detailedReport.tipoReporte = (report.tipoReporte || detailedReport.tipo_reporte || '').replace('Mantenimiento', 'Mantenimiento')
       detailedReport.estado = report.estado || detailedReport.estado || 'Pendiente'
       detailedReport.fecha = report.fecha || (detailedReport.fecha_creacion ? new Date(detailedReport.fecha_creacion).toLocaleDateString('es-ES') : '')
       detailedReport.responsable = report.responsable || detailedReport.responsable || 'No asignado'
@@ -1154,6 +1191,8 @@ const ReportsContent = () => {
           filters={adminFilters}
           setFilters={setAdminFilters}
           refreshTrigger={refreshDetailedView}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
         />
       ) : (
         <>

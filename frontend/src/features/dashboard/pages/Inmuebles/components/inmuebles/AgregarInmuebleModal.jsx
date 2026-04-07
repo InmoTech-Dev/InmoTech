@@ -272,7 +272,9 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     try {
       setOwnersLoading(true);
       const { owners: list } = await ownersApiService.getOwners({ limit: 200 });
-      setOwners(list);
+      setOwners(
+        (Array.isArray(list) ? list : []).filter((owner) => owner && typeof owner === 'object')
+      );
     } catch (error) {
       console.error('Error obteniendo propietarios:', error);
     } finally {
@@ -287,9 +289,14 @@ export const AgregarInmuebleModal = ({ isOpen, onClose, onSave, inmuebleEditar }
     try {
       const newOwner = await ownersApiService.createOwner(ownerPayload);
       setOwners((previous) => {
-        const filtered = previous.filter((owner) => String(owner.id) !== String(newOwner.id));
+        const safePrevious = (Array.isArray(previous) ? previous : []).filter(
+          (owner) => owner && typeof owner === 'object'
+        );
+        const filtered = safePrevious.filter((owner) => String(owner.id) !== String(newOwner.id));
         const updated = [newOwner, ...filtered];
-        return updated.sort((a, b) => (a.nombreCompleto || '').localeCompare(b.nombreCompleto || ''));
+        return updated.sort(
+          (a, b) => (a?.nombreCompleto || '').localeCompare(b?.nombreCompleto || '')
+        );
       });
       setSelectedOwnerId(String(newOwner.id));
       return newOwner;

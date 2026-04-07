@@ -440,7 +440,9 @@ export function LeasesManagementPage() {
         const requestId = ++fetchRequestIdRef.current;
         try {
             setIsLoading(true);
-            const tenantParams = { page: 1, limit: 200 };
+            const tenantParams = { page, limit: PAGE_SIZE };
+            if (query) tenantParams.search = query;
+            if (estadoFilter !== "todos") tenantParams.estado = estadoFilter;
             const tenantsResult = await renantsApiService.getAll(tenantParams);
             const apiTenants = tenantsResult?.data || [];
             const baseTenants = apiTenants;
@@ -577,65 +579,21 @@ export function LeasesManagementPage() {
               };
             }
 
-            const normalizedQuery = String(query || "").trim().toLowerCase();
-            const filteredTenants = tenants.filter((tenant) => {
-              const fullName = [
-                tenant.primerNombre,
-                tenant.segundoNombre,
-                tenant.primerApellido,
-                tenant.segundoApellido,
-              ]
-                .filter(Boolean)
-                .join(" ");
-
-              const matchesSearch =
-                !normalizedQuery ||
-                [
-                  fullName,
-                  tenant.nombreCompleto,
-                  tenant.documento,
-                  tenant.correo,
-                  tenant.telefono,
-                  tenant.registroInmobiliario,
-                  tenant.nombreInmueble,
-                  tenant.direccion,
-                  tenant.ciudad,
-                  tenant.departamento,
-                ]
-                  .filter(Boolean)
-                  .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-
-              const matchesEstado =
-                estadoFilter === "todos" ||
-                normalizeEstado(tenant.estado) === normalizeEstado(estadoFilter);
-
-              return matchesSearch && matchesEstado;
-            });
-
-            const sortedTenants = sortTenantsByStatus(filteredTenants);
-            const totalPages = Math.max(Math.ceil(sortedTenants.length / PAGE_SIZE), 1);
-            const resolvedPage = Math.min(Math.max(page, 1), totalPages);
+            const sortedTenants = sortTenantsByStatus(tenants);
 
             setArrendatarios(sortedTenants);
-            setPagination({
+            setPagination(tenantsResult?.pagination || {
               total: sortedTenants.length,
-              pagina: resolvedPage,
+              pagina: page,
               limite: PAGE_SIZE,
-              paginas_totales: totalPages,
-              has_next_page: resolvedPage < totalPages,
-              has_prev_page: resolvedPage > 1,
+              paginas_totales: 1,
+              has_next_page: false,
+              has_prev_page: false,
             });
-            setCurrentPage(resolvedPage);
+            setCurrentPage(tenantsResult?.pagination?.pagina || page);
             return {
               tenants: sortedTenants,
-              pagination: {
-                total: sortedTenants.length,
-                pagina: resolvedPage,
-                limite: PAGE_SIZE,
-                paginas_totales: totalPages,
-                has_next_page: resolvedPage < totalPages,
-                has_prev_page: resolvedPage > 1,
-              },
+              pagination: tenantsResult?.pagination || null,
             };
     } catch (error) {
       if (requestId !== fetchRequestIdRef.current) {
@@ -657,10 +615,7 @@ export function LeasesManagementPage() {
     }
   };
 
-  const paginatedArrendatarios = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return arrendatarios.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [arrendatarios, currentPage]);
+  const paginatedArrendatarios = useMemo(() => arrendatarios, [arrendatarios]);
 
   useEffect(() => {
     fetchTenants();
@@ -1174,6 +1129,7 @@ const renderDeleteModal = () => {
             onPageChange={(page) => {
               if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
               setCurrentPage(page);
+              fetchTenants(searchTerm.trim(), page);
             }}
           />
         </motion.div>

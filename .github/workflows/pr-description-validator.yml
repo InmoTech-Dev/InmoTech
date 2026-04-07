@@ -1,0 +1,72 @@
+name: PR Superior Validator (Super Robot)
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  validate-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🤖 Validación de Descripción y Checklist
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          echo "🔍 Revisando descripción del PR..."
+          if [ -z "$PR_BODY" ] || [ ${#PR_BODY} -lt 10 ]; then
+            echo "❌ ERROR: Descripción vacía o muy corta."
+            exit 1
+          fi
+
+          # Validar secciones
+          MANDATORY_SECTIONS=("## 📋 Descripción" "## ✅ Tipo de cambio" "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)")
+          for section in "${MANDATORY_SECTIONS[@]}"; do
+            if ! echo "$PR_BODY" | grep -q "$section"; then
+              echo "❌ ERROR: Falta la sección obligatoria: $section"
+              exit 1
+            fi
+          done
+
+          # Validar que la sección de pruebas NO esté vacía y NO tenga el comentario por defecto
+          # Extraemos el contenido después de la sección de pruebas hasta la siguiente sección
+          TESTING_CONTENT=$(echo "$PR_BODY" | sed -n '/## 🧪 ¿Cómo lo probaste?/,/##/p' | grep -v "##" | grep -v "<!--" | xargs)
+          if [ -z "$TESTING_CONTENT" ] || [ ${#TESTING_CONTENT} -lt 10 ]; then
+            echo "❌ ERROR: La sección '¿Cómo lo probaste?' es OBLIGATORIA y debe contener una descripción real."
+            exit 1
+          fi
+
+          # Validar Tipo de Cambio (al menos uno marcado con [x])
+          if ! echo "$PR_BODY" | grep -q "\- \[x\]"; then
+            echo "❌ ERROR: No has marcado ningún 'Tipo de cambio'. Usa [x] en al menos uno."
+            exit 1
+          fi
+          echo "✅ Descripción y pruebas validadas."
+
+      - name: 🛡️ Verificación de Seguridad (.env)
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.env$'; then
+            echo "❌ ERROR: Se detectó un archivo .env en los cambios."
+            exit 1
+          fi
+          echo "✅ Seguridad validada."
+
+      - name: 🧹 Verificación de Código (console.log)
+        run: |
+          if git diff --unified=0 origin/${{ github.base_ref }}...HEAD | grep "^+" | grep -v "^+++" | grep "console\.log"; then
+            echo "❌ ERROR: Se encontraron console.log residuales."
+            exit 1
+          fi
+          echo "✅ Código limpio."
+
+      - name: 🔄 Verificación de Sincronización (Branch Sync)
+        run: |
+          if ! git merge-base --is-ancestor origin/${{ github.base_ref }} HEAD; then
+            echo "❌ ERROR: Rama no actualizada con ${{ github.base_ref }}."
+            exit 1
+          fi
+          echo "✅ Rama sincronizada."

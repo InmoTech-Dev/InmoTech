@@ -41,6 +41,14 @@ const BUYER_AUTOFILL_FIELDS = [
     "compradorTelefono",
 ];
 
+const SELLER_LOCKED_FIELDS = [
+    "vendedorTipoDocumento",
+    VENDEDOR_DOC,
+    "vendedorNombreCompleto",
+    "vendedorCorreo",
+    "vendedorTelefono",
+];
+
 // Estado inicial
 const initial = {
     vendedorTipoDocumento: "",
@@ -77,6 +85,13 @@ const normalizeTextValue = (value = "") =>
 
 const getPropertySource = (property = {}) =>
     property?.metadata?.raw || property?.raw || property || {};
+
+const getPropertyOperationText = (property = {}) => {
+    const source = getPropertySource(property);
+    return normalizeTextValue(
+        property.operacion || source.operacion || source.tipo_operacion || property.tipoOperacion
+    );
+};
 
 const propertyHasActiveLease = (property = {}) => {
     const source = getPropertySource(property);
@@ -120,13 +135,17 @@ const propertyHasActiveLease = (property = {}) => {
     );
 };
 
-const propertyIsOnlyForRent = (property = {}) => {
-    const source = getPropertySource(property);
-    const operacion = normalizeTextValue(
-        property.operacion || source.operacion || source.tipo_operacion
-    );
-    return operacion === "arriendo" || operacion === "alquiler";
+const propertyAllowsSale = (property = {}) => {
+    const operacion = getPropertyOperationText(property);
+    return operacion.includes("venta") || operacion.includes("sale");
 };
+
+const propertyAllowsRent = (property = {}) => {
+    const operacion = getPropertyOperationText(property);
+    return operacion.includes("arriendo") || operacion.includes("alquiler") || operacion.includes("rent") || operacion.includes("lease");
+};
+
+const propertyIsOnlyForRent = (property = {}) => propertyAllowsRent(property) && !propertyAllowsSale(property);
 
 const propertyIsSold = (property = {}) => {
     const source = getPropertySource(property);
@@ -339,34 +358,20 @@ export default function SalesForm({ onClose, onSubmit }) {
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = cleanDocumentByType(tipoDocumento, numeroDocumento);
 
+        if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
+            return 'El número de documento debe tener entre 7 y 10 caracteres';
+        }
+
         switch (tipoDocumento) {
             case 'CC':
-                if (!/^[0-9]{7,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de ciudadanía debe tener entre 7 y 10 dígitos';
-                }
-                break;
             case 'CE':
-                if (!/^[0-9]{6,10}$/.test(numeroLimpio)) {
-                    return 'La cédula de extranjería debe tener entre 6 y 10 dígitos';
-                }
-                break;
             case 'NIT':
-                if (!/^[0-9]{9,10}$/.test(numeroLimpio)) {
-                    return 'El NIT debe tener 9 o 10 dígitos';
-                }
-                break;
             case 'PASAPORTE':
-                if (numeroLimpio.length < 6 || numeroLimpio.length > 20) {
-                    return 'El pasaporte debe tener entre 6 y 20 caracteres';
-                }
                 if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) {
                     return 'El pasaporte solo puede contener letras y números';
                 }
                 break;
             case 'TI':
-                if (!/^[0-9]{10,11}$/.test(numeroLimpio)) {
-                    return 'La tarjeta de identidad debe tener 10 u 11 dígitos';
-                }
                 break;
             default:
                 return 'Tipo de documento no válido';
@@ -414,6 +419,15 @@ export default function SalesForm({ onClose, onSubmit }) {
         if (el.type === "checkbox") {
             el.checked = !!valuesRef.current[name];
         } else {
+            const isEditableFocusedField =
+                typeof document !== "undefined" &&
+                document.activeElement === el &&
+                !SELLER_LOCKED_FIELDS.includes(name);
+
+            if (isEditableFocusedField) {
+                return;
+            }
+
             if (displayValuesRef.current[name] !== undefined) {
                 try { el.value = displayValuesRef.current[name]; } catch (err) { /* ignore */ }
             }
@@ -459,6 +473,64 @@ export default function SalesForm({ onClose, onSubmit }) {
         return "";
     };
 
+    const validateFieldValue = useCallback((fieldName, value) => {
+        const stringValue = value?.toString?.() ?? "";
+        const trimmedValue = stringValue.trim();
+        const medioPagoActual = (valuesRef.current.medioPago || "").toLowerCase();
+        const isMixto = medioPagoActual === "mixto";
+        const isCashSplit = fieldName === "medioPagoEfectivo";
+        const isTransferSplit = fieldName === "medioPagoTransferencia";
+        const isRequired =
+            requiredFields.includes(fieldName) ||
+            (isMixto && (isCashSplit || isTransferSplit));
+
+        if (isRequired && !trimmedValue) {
+            return "Este campo es obligatorio.";
+        }
+
+        if (!trimmedValue) {
+            return null;
+        }
+
+        if (nameFields.includes(fieldName) && !isValidName(stringValue)) {
+            return "Solo se permiten letras.";
+        }
+
+        if (docFields.includes(fieldName)) {
+            const tipoDocumento = getDocumentTypeForField(fieldName) || "CC";
+
+            if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[fieldName] || stringValue)) {
+                return "Solo se permiten letras, números, espacios, puntos y guiones";
+            }
+
+            return validateDocument(tipoDocumento, stringValue) || null;
+        }
+
+        if (phoneFields.includes(fieldName)) {
+            if (!isValidNumeric(stringValue)) {
+                return "Solo se permiten números.";
+            }
+            if (trimmedValue.length < 10) {
+                return "El teléfono debe tener al menos 10 dígitos";
+            }
+            return null;
+        }
+
+        if (emailFields.includes(fieldName) && !isValidEmail(stringValue)) {
+            return "El correo electrónico debe ser válido.";
+        }
+
+        if (strictNumericFields.includes(fieldName) && !isValidNumeric(stringValue)) {
+            return "Solo se permiten números enteros.";
+        }
+
+        if ((isCashSplit || isTransferSplit) && !isValidNumeric(stringValue)) {
+            return "Solo se permiten números enteros.";
+        }
+
+        return null;
+    }, [getDocumentTypeForField, strictNumericFields]);
+
     // Manejador de cambios en inputs MEJORADO
     const handleInputChange = (e) => {
         let { name, type, value, checked } = e.target;
@@ -479,10 +551,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 cleanValue = isDocFieldChange
                     ? cleanDocumentByType(getDocumentTypeForField(name), value)
                     : sanitizeNumericString(value);
-                displayValuesRef.current[name] = cleanValue;
-                if (e.target.value !== cleanValue) {
-                    e.target.value = cleanValue;
-                }
+                displayValuesRef.current[name] = value;
             } else {
                 displayValuesRef.current[name] = value;
             }
@@ -496,42 +565,31 @@ export default function SalesForm({ onClose, onSubmit }) {
             if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
                 selectedBuyerRef.current = null;
                 manuallyEditedBuyerFieldsRef.current.clear();
-            }
 
-            if (BUYER_AUTOFILL_FIELDS.includes(name)) {
-                manuallyEditedBuyerFieldsRef.current.add(name);
-            }
-
-            if (name === COMPRADOR_DOC || name === "compradorTipoDocumento") {
                 const tipoDocActual =
                     name === "compradorTipoDocumento" ? cleanValue : (valuesRef.current.compradorTipoDocumento || "");
                 const numeroDocActual =
                     name === COMPRADOR_DOC ? cleanValue : (valuesRef.current.compradorDocumento || "");
                 const normalizedTipoActual = String(tipoDocActual || "").trim().toUpperCase();
                 const normalizedNumeroActual = cleanDocumentByType(tipoDocActual, numeroDocActual || "");
-
-                buyerDocumentSnapshotRef.current = {
-                    tipo: tipoDocActual,
-                    numero: normalizedNumeroActual,
-                };
-
-                if (
+                const matchedBuyerChanged =
                     buyerMatchedDocumentRef.current.numero &&
                     (
                         buyerMatchedDocumentRef.current.tipo !== normalizedTipoActual ||
                         buyerMatchedDocumentRef.current.numero !== normalizedNumeroActual
-                    )
-                ) {
-                    if (buyerLookupTimeoutRef.current) {
-                        clearTimeout(buyerLookupTimeoutRef.current);
-                    }
-                    resetBuyerSelection({ resetState: false, resetFields: true });
-                } else if (!shouldTriggerBuyerLookup(tipoDocActual, numeroDocActual)) {
-                    if (buyerLookupTimeoutRef.current) {
-                        clearTimeout(buyerLookupTimeoutRef.current);
-                    }
-                    resetBuyerSelection({ resetState: false, resetFields: true });
+                    );
+
+                if (buyerLookupTimeoutRef.current) {
+                    clearTimeout(buyerLookupTimeoutRef.current);
                 }
+
+                if (matchedBuyerChanged || !tipoDocActual || !normalizedNumeroActual) {
+                    clearBuyerAutofill({ resetValidation: false });
+                }
+            }
+
+            if (BUYER_AUTOFILL_FIELDS.includes(name)) {
+                manuallyEditedBuyerFieldsRef.current.add(name);
             }
         }
 
@@ -918,6 +976,42 @@ export default function SalesForm({ onClose, onSubmit }) {
         return value.toString().trim();
     };
 
+    const clearBuyerAutofill = useCallback((options = {}) => {
+        const { resetValidation = true } = options;
+        selectedBuyerRef.current = null;
+        buyerMatchedDocumentRef.current = {
+            tipo: "",
+            numero: "",
+        };
+
+        valuesRef.current.compradorPersonaId = "";
+        valuesRef.current.compradorNombreCompleto = "";
+        valuesRef.current.compradorCorreo = "";
+        valuesRef.current.compradorTelefono = "";
+        displayValuesRef.current.compradorNombreCompleto = "";
+        displayValuesRef.current.compradorCorreo = "";
+        displayValuesRef.current.compradorTelefono = "";
+
+        const nombreEl = elRefs.current.compradorNombreCompleto;
+        const correoEl = elRefs.current.compradorCorreo;
+        const telefonoEl = elRefs.current.compradorTelefono;
+
+        if (nombreEl) nombreEl.value = "";
+        if (correoEl) correoEl.value = "";
+        if (telefonoEl) telefonoEl.value = "";
+
+        if (resetValidation) {
+            setErrors((prev) => {
+                const next = { ...prev };
+                BUYER_AUTOFILL_FIELDS.forEach((field) => {
+                    delete next[field];
+                });
+                delete next.compradorDocumento;
+                return next;
+            });
+        }
+    }, []);
+
     const resetBuyerSelection = useCallback(
         ({ resetState = false, resetFields = false } = {}) => {
             selectedBuyerRef.current = null;
@@ -928,13 +1022,7 @@ export default function SalesForm({ onClose, onSubmit }) {
             };
 
             if (resetFields) {
-                valuesRef.current.compradorPersonaId = "";
-                valuesRef.current.compradorNombreCompleto = "";
-                valuesRef.current.compradorCorreo = "";
-                valuesRef.current.compradorTelefono = "";
-                displayValuesRef.current.compradorNombreCompleto = "";
-                displayValuesRef.current.compradorCorreo = "";
-                displayValuesRef.current.compradorTelefono = "";
+                clearBuyerAutofill({ resetValidation: resetState });
             }
 
             if (resetState) {
@@ -945,7 +1033,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 });
             }
         },
-        []
+        [clearBuyerAutofill]
     );
 
     const clearBuyerAutofillIfDocumentIncomplete = useCallback(() => {
@@ -960,16 +1048,16 @@ export default function SalesForm({ onClose, onSubmit }) {
             clearTimeout(buyerLookupTimeoutRef.current);
         }
 
-        resetBuyerSelection({ resetState: true, resetFields: true });
+        clearBuyerAutofill({ resetValidation: true });
         buyerDocumentSnapshotRef.current = {
             tipo: tipoDocumento,
             numero: numeroDocumento,
         };
         return true;
-    }, [resetBuyerSelection]);
+    }, [clearBuyerAutofill]);
 
     const applyBuyerData = useCallback((buyer) => {
-        if (!buyer) return;
+        if (!buyer) return false;
         if (!buyerIsActive(buyer)) {
             const inactiveMsg = "No se puede asociar una venta a un comprador en estado inactivo.";
             setBuyerLookupState({
@@ -987,7 +1075,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                 variant: "destructive",
             });
             resetBuyerSelection({ resetState: true, resetFields: true });
-            return;
+            return false;
         }
 
         selectedBuyerRef.current = buyer;
@@ -1062,6 +1150,8 @@ export default function SalesForm({ onClose, onSubmit }) {
             delete nextErrors.compradorDocumento;
             return nextErrors;
         });
+
+        return true;
     }, []);
 
     const splitFullNameToParts = (fullName = "") => {
@@ -1133,7 +1223,10 @@ export default function SalesForm({ onClose, onSubmit }) {
         try {
             const existingBuyer = await buyersApiService.findByDocument(tipoDocumento, documento);
             if (existingBuyer?.id || existingBuyer?.compradorId || existingBuyer?.raw?.id_comprador) {
-                applyBuyerData(existingBuyer);
+                const wasApplied = applyBuyerData(existingBuyer);
+                if (!wasApplied) {
+                    return null;
+                }
                 setBuyerLookupState({
                     loading: false,
                     message: "Comprador encontrado y seleccionado.",
@@ -1154,7 +1247,10 @@ export default function SalesForm({ onClose, onSubmit }) {
                 estado: "Activo",
             });
 
-            applyBuyerData(createdBuyer);
+            const wasApplied = applyBuyerData(createdBuyer);
+            if (!wasApplied) {
+                return null;
+            }
             setBuyerLookupState({
                 loading: false,
                 message: "Comprador creado y seleccionado.",
@@ -1191,15 +1287,14 @@ export default function SalesForm({ onClose, onSubmit }) {
 
         const documentError = validateDocument(tipoDocumento, numeroDocumento);
         if (documentError) {
+            setErrors((prev) => ({
+                ...prev,
+                compradorDocumento: documentError,
+            }));
             setBuyerLookupState({
                 loading: false,
                 message: "",
-                error: "Documento inválido. Corrija el formato antes de buscar.",
-            });
-            toast({
-                title: "Documento inválido",
-                description: "Corrige el tipo y número antes de buscar.",
-                variant: "destructive",
+                error: null,
             });
             return;
         }
@@ -1224,7 +1319,10 @@ export default function SalesForm({ onClose, onSubmit }) {
             }
 
             if (buyer) {
-                applyBuyerData(buyer);
+                const wasApplied = applyBuyerData(buyer);
+                if (!wasApplied) {
+                    return;
+                }
 
                 setBuyerLookupState({
                     loading: false,
@@ -1497,28 +1595,28 @@ export default function SalesForm({ onClose, onSubmit }) {
         const isStrictNumeric = strictNumericFields.includes(name);
         const isNameField = nameFields.includes(name);
         const isCurrencyField = currencyFields.includes(name);
+        const isSellerLocked = SELLER_LOCKED_FIELDS.includes(name);
         const documentType = isDocField ? getDocumentTypeForField(name) : "";
         const isPassportDocument = documentType === "PASAPORTE" || documentType === "PAS";
+        const lockedFieldClass = isSellerLocked
+            ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed focus:border-slate-200 focus:ring-0"
+            : "";
 
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
 
         let inputType = type;
-        if ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
-            if (type !== 'date' && type !== 'email') {
+        if (isPhoneField || (isStrictNumeric && !isCurrencyField)) {
+            if (type !== "date" && type !== "email") {
                 inputType = "tel";
             }
-        }
-        else if (isEmailField) {
+        } else if (isEmailField) {
             inputType = "email";
         }
 
-        const inputMode = ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "numeric" : undefined;
-        const pattern = ((isDocField && !isPassportDocument) || isPhoneField || (isStrictNumeric && !isCurrencyField)) ? "[0-9]*" : undefined;
-
         let fieldPlaceholder = placeholder;
         if (isDocField) {
-            fieldPlaceholder = "Ej: 1234567890 (8-10 dígitos según el tipo)";
+            fieldPlaceholder = "Ej: 1234567 a 1234567890";
         }
         if (isPhoneField) {
             fieldPlaceholder = "Ej: 3001234567 (10 dígitos mínimo)";
@@ -1557,10 +1655,11 @@ export default function SalesForm({ onClose, onSubmit }) {
                         id={name}
                         name={name}
                         ref={setElRef(name)}
-                        className={getFieldClass(name)}
+                        className={`${getFieldClass(name)} ${lockedFieldClass}`}
                         defaultValue={initial[name] ?? ""}
                         onChange={handleInputChange}
                         onBlur={onBlurHandler}
+                        disabled={isSellerLocked}
                     >
                         <option value="">Seleccione...</option>
                         {options.map((op) => (
@@ -1584,12 +1683,13 @@ export default function SalesForm({ onClose, onSubmit }) {
                         id={name}
                         name={name}
                         ref={setElRef(name)}
-                        className={getFieldClass(name)}
+                        className={`${getFieldClass(name)} ${lockedFieldClass}`}
                         placeholder={fieldPlaceholder}
                         defaultValue={initial[name] ?? ""}
                         onChange={handleInputChange}
                         onBlur={onBlurHandler}
                         rows="3"
+                        readOnly={isSellerLocked}
                     />
                     {errorMessage && (
                         <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
@@ -1604,15 +1704,15 @@ export default function SalesForm({ onClose, onSubmit }) {
                 <input
                     id={name}
                     name={name}
-                    ref={setElRef(name)}
-                    className={getFieldClass(name)}
                     type={inputType}
-                    inputMode={inputMode}
-                    pattern={pattern}
-                    placeholder={fieldPlaceholder}
-                    defaultValue={(displayValuesRef.current[name] || initial[name]) ?? ""}
+                    placeholder={fieldPlaceholder || label}
                     onChange={handleInputChange}
                     onBlur={onBlurHandler}
+                    ref={setElRef(name)}
+                    minLength={isDocField ? 7 : undefined}
+                    maxLength={isDocField ? 10 : undefined}
+                    className={`${getFieldClass(name)} ${lockedFieldClass}`}
+                    readOnly={isSellerLocked}
                 />
                 {errorMessage && (
                     <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
@@ -1706,13 +1806,6 @@ export default function SalesForm({ onClose, onSubmit }) {
                                         <div className="md:col-span-3">
                                             <Field name="inmuebleDireccion" as="textarea" placeholder="Ej: Calle 10 # 45-20" />
                                         </div>
-                                        {inmuebleLookupState.error && (
-                                            <div className="md:col-span-3 mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                                {!inmuebleLookupState.loading && inmuebleLookupState.error && (
-                                                    <p className="text-red-700">{inmuebleLookupState.error}</p>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
                                 </section>
                             )}
@@ -1730,7 +1823,7 @@ export default function SalesForm({ onClose, onSubmit }) {
                                             as="select"
                                             options={DOCUMENT_OPTIONS}
                                         />
-                                        <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                        <Field name={VENDEDOR_DOC} placeholder="Ej: 1234567 a 1234567890" />
                                         <Field name="vendedorNombreCompleto" placeholder="Solo letras y espacios." />
                                         <Field name="vendedorCorreo" placeholder="correo@dominio.com" type="email" />
                                         <Field name="vendedorTelefono" placeholder="Ej: 3001234567 (10 dígitos mínimo)" />
@@ -1751,19 +1844,13 @@ export default function SalesForm({ onClose, onSubmit }) {
                                             as="select"
                                             options={DOCUMENT_OPTIONS}
                                         />
-                                        <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                        <Field name={COMPRADOR_DOC} placeholder="Ej: 1234567 a 1234567890" />
                                         <Field name="compradorNombreCompleto" placeholder="Solo letras y espacios." />
                                         <Field name="compradorCorreo" placeholder="correo@dominio.com" type="email" />
                                         <Field name="compradorTelefono" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
                                     </div>
-                                    {buyerLookupState.error && (
-                                        <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
-                                            <p className="text-red-700">{buyerLookupState.error}</p>
-                                        </div>
-                                    )}
                                 </section>
                             )}
-
                             {/* PASO 4: Precio y Medio de Pago */}
                             {step === 4 && (
                                 <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
@@ -1852,3 +1939,4 @@ export default function SalesForm({ onClose, onSubmit }) {
         </AnimatePresence>
     );
 }
+

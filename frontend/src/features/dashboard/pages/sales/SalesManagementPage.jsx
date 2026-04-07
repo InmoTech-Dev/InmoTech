@@ -21,7 +21,6 @@ import ViewSaleModal from "../../components/sales/ViewSale";
 import ventaApiService from "../../../../shared/services/ventaApiService";
 import MESSAGES from "../../../../shared/constants/messages";
 
-import { buyersApiService } from "../../../../shared/services/buyersApiService";
 
 import { propertiesApiService } from "../../../../shared/services/propertiesApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
@@ -868,18 +867,6 @@ const toISODate = (value) => {
 
 
 
-const mapPaymentToPurchaseType = (medioPago = "") => {
-
-  const normalized = medioPago.toLowerCase();
-
-  if (normalized === "credito") return "Financiada";
-
-  if (normalized === "mixto") return "Mixta";
-
-  return normalized === "transferencia" ? "Directa" : "Directa";
-
-};
-
 const INMUEBLES_FICHAS_STORAGE_KEY = "inmuebles:fichas-tecnicas";
 
 const getFichaHistory = () => {
@@ -1372,64 +1359,25 @@ export function SalesManagementPage() {
     try {
 
       const response = await ventaApiService.obtenerVentas({
-        page: 1,
-        limit: 200,
+        page,
+        limit: PAGE_SIZE,
+        search: query || undefined,
+        estado: estadoFilter !== "todos" ? estadoFilter : undefined,
+        tipo_compra: tipoCompraFilter !== "todos" ? tipoCompraFilter : undefined,
       });
 
       const payload = Array.isArray(response?.data) ? response.data : [];
       const normalizedSales = payload.map((venta) => normalizeSaleRecord(venta));
-      const normalizedQuery = String(query || "").trim().toLowerCase();
-      const filteredSales = normalizedSales.filter((venta) => {
-        const matchesSearch =
-          !normalizedQuery ||
-          [
-            venta.registro,
-            venta.tipo,
-            venta.comprador,
-            venta.compradorNombreCompleto,
-            venta.compradorDocumento,
-            venta.compradorCorreo,
-            venta.inmuebleNombre,
-            venta.inmuebleDireccion,
-            venta.inmuebleCiudad,
-            venta.vendedorNombreCompleto,
-          ]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-
-        const matchesEstado =
-          estadoFilter === "todos" ||
-          STATUS_NORMALIZE(venta.estado) === STATUS_NORMALIZE(estadoFilter) ||
-          STATUS_NORMALIZE(venta.estadoSeguimiento) === STATUS_NORMALIZE(estadoFilter);
-
-        const purchaseType =
-          venta.raw?.tipo_compra ||
-          venta.tipoCompra ||
-          mapPaymentToPurchaseType(venta.medioPago || "");
-        const matchesTipoCompra =
-          tipoCompraFilter === "todos" ||
-          STATUS_NORMALIZE(purchaseType) === STATUS_NORMALIZE(tipoCompraFilter);
-
-        return matchesSearch && matchesEstado && matchesTipoCompra;
+      setVentas(normalizedSales);
+      setPagination(response?.pagination || {
+        total: normalizedSales.length,
+        pagina: page,
+        limite: PAGE_SIZE,
+        paginas_totales: 1,
+        has_next_page: false,
+        has_prev_page: false,
       });
-      const totalPages = Math.max(Math.ceil(filteredSales.length / PAGE_SIZE), 1);
-      const resolvedPage = Math.min(Math.max(page, 1), totalPages);
-
-
-
-      if (Array.isArray(payload)) {
-        setVentas(filteredSales);
-        setPagination({
-          total: filteredSales.length,
-          pagina: resolvedPage,
-          limite: PAGE_SIZE,
-          paginas_totales: totalPages,
-          has_next_page: resolvedPage < totalPages,
-          has_prev_page: resolvedPage > 1,
-        });
-        setCurrentPage(resolvedPage);
-
-      }
+      setCurrentPage(response?.pagination?.pagina || page);
 
     } catch (error) {
 
@@ -1455,10 +1403,7 @@ export function SalesManagementPage() {
 
   }, [estadoFilter, tipoCompraFilter]);
 
-  const paginatedVentas = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return ventas.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [ventas, currentPage]);
+  const paginatedVentas = useMemo(() => ventas, [ventas]);
 
 
 
@@ -1856,40 +1801,6 @@ export function SalesManagementPage() {
 
 
 
-      let buyerUpdateError = null;
-
-      const buyerIdForUpdate =
-        buyerInfo?.id ||
-        buyerInfo?.compradorId ||
-        buyerInfo?.raw?.id_comprador;
-
-      try {
-        if (buyerIdForUpdate) {
-          await buyersApiService.updatePurchaseData(buyerIdForUpdate, {
-
-            id_inmueble: payload.id_inmueble,
-
-            id_venta: apiSale?.id_venta || apiSale?.id || normalizedSale.id,
-
-            fecha_compra: payload.fecha_venta,
-
-            valor_compra: payload.valor_venta,
-
-            tipo_compra: mapPaymentToPurchaseType(payload.medio_pago),
-
-          });
-        }
-
-      } catch (error) {
-
-        buyerUpdateError = error;
-
-        console.error("No fue posible actualizar al comprador:", error);
-
-      }
-
-
-
       setVentas((prev) => [...prev, normalizedSale]);
       fetchVentas(searchTerm.trim(), 1);
       loadProperties();
@@ -1899,9 +1810,7 @@ export function SalesManagementPage() {
         cambios: "Cambio automático de estado a En proceso de venta por registro de venta",
       });
 
-      const successText = buyerUpdateError
-        ? MESSAGES.sale.create.partialBuyer
-        : MESSAGES.sale.create.success;
+      const successText = MESSAGES.sale.create.success;
       setStatusMessage({
         type: "success",
         text: successText,
@@ -2599,6 +2508,7 @@ export function SalesManagementPage() {
                 onPageChange={(page) => {
                   if (page === currentPage || page < 1 || page > Math.max(pagination?.paginas_totales || 1, 1)) return;
                   setCurrentPage(page);
+                  fetchVentas(searchTerm.trim(), page);
                 }}
               />
 

@@ -4,6 +4,7 @@ import { CheckCircle2 } from "lucide-react";
 import ventaApiService from "../../../../shared/services/ventaApiService";
 import { useToast } from "../../../../shared/hooks/use-toast";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
+import { downloadFile } from "../../../../shared/utils/downloadFile";
 
 /**
  * Modal de seguimiento / cambio de estado de venta.
@@ -80,7 +81,15 @@ export default function PurchaseTrackingModal({
 
   const [adjuntos, setAdjuntos] = useState(Array.isArray(venta.adjuntos) ? venta.adjuntos : []);
   const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
-  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
+  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", sourceUrl: "", name: "" });
+
+  useEffect(() => {
+    return () => {
+      if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+        URL.revokeObjectURL(pdfViewer.url);
+      }
+    };
+  }, [pdfViewer.url]);
 
   // Refrescar adjuntos al abrir modal / cambiar venta para que el cierre persista tras recarga
   useEffect(() => {
@@ -105,6 +114,9 @@ export default function PurchaseTrackingModal({
   const buildImageItems = () =>
     imageAdjuntos.map((a) => ({
       url: a.url,
+      downloadUrl: venta?.id_venta || venta?.id
+        ? ventaApiService.getAttachmentFileUrl(venta.id_venta || venta.id, a.id_adjunto || a.id, { download: true })
+        : a.url,
       name: a.nombre_archivo || a.filename || a.url?.split("/").pop(),
     }));
   const hasComprobante = existingAdjuntos.some((a) => (a.tipo || "").toLowerCase() === "comprobante");
@@ -127,8 +139,65 @@ export default function PurchaseTrackingModal({
     setViewer({ isOpen: true, index, items: buildImageItems() });
   };
 
-  const openPdfViewer = (url, name) => {
-    setPdfViewer({ isOpen: true, url, name });
+  const openPdfViewer = async (url, name) => {
+    if (!url) return;
+    const saleId = venta?.id_venta || venta?.id;
+    const attachment = existingAdjuntos.find((item) => item.url === url && item.nombre_archivo === name);
+    const attachmentId = attachment?.id_adjunto || attachment?.id;
+
+    try {
+      if (saleId && attachmentId) {
+        const rawBlob = await ventaApiService.fetchAttachmentBlob(saleId, attachmentId);
+        const pdfBlob = new Blob([rawBlob], { type: "application/pdf" });
+        const inlineUrl = URL.createObjectURL(pdfBlob);
+        setPdfViewer({
+          isOpen: true,
+          url: inlineUrl,
+          sourceUrl: ventaApiService.getAttachmentFileUrl(saleId, attachmentId),
+          name,
+        });
+        return;
+      }
+
+      setPdfViewer({ isOpen: true, url, sourceUrl: url, name });
+    } catch (error) {
+      toast({
+        title: "No se pudo abrir el PDF",
+        description: error?.message || "La vista previa no esta disponible. Usa la descarga o vuelve a subir el archivo.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const closePdfViewer = () => {
+    if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+      URL.revokeObjectURL(pdfViewer.url);
+    }
+    setPdfViewer({ isOpen: false, url: "", sourceUrl: "", name: "" });
+  };
+
+  const handleDownloadAttachment = async (url, fileName) => {
+    if (!url) return;
+    const saleId = venta?.id_venta || venta?.id;
+    const attachment = existingAdjuntos.find((item) => item.url === url && item.nombre_archivo === fileName);
+    const attachmentId = attachment?.id_adjunto || attachment?.id;
+
+    if (saleId && attachmentId) {
+      const link = document.createElement('a');
+      link.href = ventaApiService.getAttachmentFileUrl(saleId, attachmentId, { download: true });
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    try {
+      await downloadFile(url, fileName);
+    } catch (_error) {
+      window.open(url, "_blank", "noopener");
+    }
   };
 
   const uploadSelectedAttachments = async (ventaId) => {
@@ -574,21 +643,30 @@ export default function PurchaseTrackingModal({
                               <span className="text-gray-900">
                                 {adj.tipo.toUpperCase()} — {adj.nombre_archivo}
                               </span>
-                              <button
-                                type="button"
-                                className="text-blue-600 hover:underline"
-                                onClick={() => {
-                                  if (isPdf) {
-                                    openPdfViewer(adj.url, adj.nombre_archivo);
-                                  } else if (imgIndex >= 0) {
-                                    openImageViewer(imgIndex);
-                                  } else {
-                                    window.open(adj.url, "_blank", "noopener");
-                                  }
-                                }}
-                              >
-                                Ver
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  className="text-blue-600 hover:underline"
+                                  onClick={() => {
+                                    if (isPdf) {
+                                      openPdfViewer(adj.url, adj.nombre_archivo);
+                                    } else if (imgIndex >= 0) {
+                                      openImageViewer(imgIndex);
+                                    } else {
+                                      window.open(adj.url, "_blank", "noopener");
+                                    }
+                                  }}
+                                >
+                                  Ver
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-blue-600 hover:underline"
+                                  onClick={() => handleDownloadAttachment(adj.url, adj.nombre_archivo)}
+                                >
+                                  Descargar
+                                </button>
+                              </div>
                             </li>
                           );
                         })}
@@ -684,7 +762,7 @@ export default function PurchaseTrackingModal({
       {pdfViewer.isOpen && (
         <div
           className="fixed inset-0 z-[70] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+          onClick={closePdfViewer}
         >
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col"
@@ -695,13 +773,13 @@ export default function PurchaseTrackingModal({
               <div className="flex items-center gap-2">
                 <button
                   className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
-                  onClick={() => window.open(pdfViewer.url, "_blank", "noopener")}
+                  onClick={() => window.open(pdfViewer.sourceUrl || pdfViewer.url, "_blank", "noopener")}
                 >
                   Abrir en nueva pestaña
                 </button>
                 <button
                   className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
-                  onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+                  onClick={closePdfViewer}
                 >
                   Cerrar
                 </button>

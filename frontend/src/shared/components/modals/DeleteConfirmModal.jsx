@@ -7,8 +7,8 @@ const DeleteConfirmModal = ({
   isOpen,
   onClose,
   onConfirm,
-  title = 'Confirmar Eliminacion',
-  message = 'Estas seguro de que deseas eliminar este elemento? Esta accion no se puede deshacer.',
+  title = 'Confirmar eliminación',
+  message = '¿Estás seguro de que deseas eliminar este elemento? Esta acción no se puede deshacer.',
   isLoading = false
 }) => {
   if (!isOpen) return null;

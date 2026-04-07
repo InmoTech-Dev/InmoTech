@@ -8,6 +8,7 @@ import AdminHolderCard from "./AdminHolderCard";
 import DeleteConfirmModal from "../../../../shared/components/modals/DeleteConfirmModal";
 import ConfirmationDialog from "../../../../shared/components/ui/ConfirmationDialog";
 import rolesApiService from "../../../../shared/services/rolesApiService";
+import realtimeBus from "../../../../shared/services/realtimeBus";
 import { useAuth } from "../../../../shared/contexts/AuthContext";
 import { useToast } from "../../../../shared/hooks/use-toast";
 import EmptyState from "../../../../shared/components/ui/EmptyState";
@@ -50,7 +51,8 @@ const RolesContent = () => {
   const [rolSeleccionado, setRolSeleccionado] = useState(null);
   const [isDeletingRol, setIsDeletingRol] = useState(false);
   const [isChangingRolStatus, setIsChangingRolStatus] = useState(false);
-  
+  const realtimeRefreshRef = React.useRef(null);
+
   // Estado para la paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
@@ -146,13 +148,67 @@ const RolesContent = () => {
     }
   }, [isAuthenticated, authLoading, isSuperAdmin, isAdmin]);
 
+  useEffect(() => {
+    if (!rolSeleccionado || roles.length === 0) return;
+    const selectedId = Number(rolSeleccionado.id ?? rolSeleccionado.id_rol ?? 0);
+    if (!selectedId) return;
+
+    const updatedRol = roles.find((rol) => Number(rol.id ?? rol.id_rol ?? 0) === selectedId);
+    if (!updatedRol) {
+      setRolSeleccionado(null);
+      setEditarModalOpen(false);
+      setVerModalOpen(false);
+      setIsDeleteModalOpen(false);
+      setIsStatusChangeDialogOpen(false);
+      return;
+    }
+
+    if (updatedRol !== rolSeleccionado) {
+      setRolSeleccionado(updatedRol);
+    }
+  }, [roles, rolSeleccionado]);
+
+  useEffect(() => {
+    if (!isAuthorized) return undefined;
+
+    const scheduleReload = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+      }
+
+      realtimeRefreshRef.current = setTimeout(() => {
+        cargarRoles().catch((refreshError) => {
+          console.warn('[REALTIME][ROLES] No se pudo refrescar listado:', refreshError);
+        });
+      }, 450);
+    };
+
+    const offRoleChanged = realtimeBus.on('role.changed', scheduleReload);
+    const offUserChanged = realtimeBus.on('user.changed', scheduleReload);
+    const offAccessChanged = realtimeBus.on('access.changed', scheduleReload);
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', scheduleReload);
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', scheduleReload);
+
+    return () => {
+      offRoleChanged();
+      offUserChanged();
+      offAccessChanged();
+      offFallbackTick();
+      offReconcile();
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+        realtimeRefreshRef.current = null;
+      }
+    };
+  }, [cargarRoles, isAuthorized]);
+
 
 
   const handleCrearRol = async (nuevoRol) => {
     if (!canManageRoles) {
       toast({
-        title: "Operacion no permitida",
-        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        title: "Operación no permitida",
+        description: "Administrador tiene acceso de solo lectura en el módulo de roles.",
         variant: "destructive",
       });
       return;
@@ -181,8 +237,8 @@ const RolesContent = () => {
   const handleActualizarRol = async (rolEditado) => {
     if (!canManageRoles) {
       toast({
-        title: "Operacion no permitida",
-        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        title: "Operación no permitida",
+        description: "Administrador tiene acceso de solo lectura en el módulo de roles.",
         variant: "destructive",
       });
       return;
@@ -220,8 +276,8 @@ const RolesContent = () => {
   const handleToggleEstadoRequest = (rol) => {
     if (!canManageRoles) {
       toast({
-        title: "Operacion no permitida",
-        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        title: "Operación no permitida",
+        description: "Administrador tiene acceso de solo lectura en el módulo de roles.",
         variant: "destructive",
       });
       return;
@@ -229,7 +285,7 @@ const RolesContent = () => {
 
     if (cannotChangeStatusRol(rol)) {
       toast({
-        title: "Accion no permitida",
+        title: "Acción no permitida",
         description: "No se puede cambiar el estado de un rol protegido.",
         variant: "destructive",
       });
@@ -243,8 +299,8 @@ const RolesContent = () => {
     if (isChangingRolStatus || !rolSeleccionado) return;
     if (!canManageRoles) {
       toast({
-        title: "Operacion no permitida",
-        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        title: "Operación no permitida",
+        description: "Administrador tiene acceso de solo lectura en el módulo de roles.",
         variant: "destructive",
       });
       return;
@@ -278,9 +334,9 @@ const RolesContent = () => {
   const handleEditar = (rol) => {
     if (cannotEditRol(rol)) {
       toast({
-        title: "Operacion no permitida",
+        title: "Operación no permitida",
         description: !canManageRoles
-          ? "Administrador tiene acceso de solo lectura en el modulo de roles."
+          ? "Administrador tiene acceso de solo lectura en el módulo de roles."
           : "No se puede editar un rol protegido.",
         variant: "destructive",
       });
@@ -299,9 +355,9 @@ const RolesContent = () => {
   const handleDeleteClick = (rol) => {
     if (cannotDeleteRol(rol)) {
       toast({
-        title: "Operacion no permitida",
+        title: "Operación no permitida",
         description: !canManageRoles
-          ? "Administrador tiene acceso de solo lectura en el modulo de roles."
+          ? "Administrador tiene acceso de solo lectura en el módulo de roles."
           : "No se puede eliminar un rol protegido.",
         variant: "destructive",
       });
@@ -315,8 +371,8 @@ const RolesContent = () => {
     if (isDeletingRol || !rolSeleccionado) return;
     if (!canManageRoles) {
       toast({
-        title: "Operacion no permitida",
-        description: "Administrador tiene acceso de solo lectura en el modulo de roles.",
+        title: "Operación no permitida",
+        description: "Administrador tiene acceso de solo lectura en el módulo de roles.",
         variant: "destructive",
       });
       return;
@@ -370,7 +426,7 @@ const RolesContent = () => {
         <div className="px-6 py-8 text-center">
           <XCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
           <p className="text-red-600 font-medium mb-2">Acceso no autorizado</p>
-          <p className="text-slate-500">No tienes los permisos necesarios para ver esta seccion.</p>
+          <p className="text-slate-500">No tienes los permisos necesarios para ver esta sección.</p>
         </div>
       );
     }
@@ -565,11 +621,10 @@ const RolesContent = () => {
                     <button
                       key={i + 1}
                       onClick={() => paginate(i + 1)}
-                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                        currentPage === i + 1
-                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                          : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
-                      }`}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${currentPage === i + 1
+                        ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                        : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
+                        }`}
                     >
                       {i + 1}
                     </button>
@@ -601,8 +656,8 @@ const RolesContent = () => {
             <p className="font-bold">{canManageRoles ? "Vista de Super Administrador" : "Vista de Administrador (solo lectura)"}</p>
             <p className="text-sm">
               {canManageRoles
-                ? "Este es el rol principal del sistema con todos los permisos. Puedes crear nuevos roles segun sea necesario."
-                : "Puedes consultar roles y permisos, pero no crear, editar, eliminar ni cambiar estados en este modulo."}
+                ? "Este es el rol principal del sistema con todos los permisos. Puedes crear nuevos roles según sea necesario."
+                : "Puedes consultar roles y permisos, pero no crear, editar, eliminar ni cambiar estados en este módulo."}
             </p>
           </div>
         </div>
@@ -712,7 +767,7 @@ const RolesContent = () => {
         onConfirm={handleConfirmStatusChange}
         isLoading={isChangingRolStatus}
         title={`${rolSeleccionado?.estado ? 'Desactivar' : 'Activar'} rol`}
-        message={`Estas seguro de que deseas ${rolSeleccionado?.estado ? 'desactivar' : 'activar'} el rol "${rolSeleccionado?.nombre}"?`}
+        message={`¿Estás seguro de que deseas ${rolSeleccionado?.estado ? 'desactivar' : 'activar'} el rol "${rolSeleccionado?.nombre}"?`}
       />
     </div>
   );

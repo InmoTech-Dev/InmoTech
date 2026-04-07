@@ -20,8 +20,8 @@ const requiredFields = ["tipoDocumento", "documento", "primerNombre", "primerApe
 
 // Opciones de documentos
 const DOCUMENT_OPTIONS = [
-  { value: "CC", label: "Cedula de Ciudadania (CC)" },
-  { value: "CE", label: "Cedula de Extranjeria (CE)" },
+  { value: "CC", label: "Cédula de Ciudadanía (CC)" },
+  { value: "CE", label: "Cédula de Extranjería (CE)" },
   { value: "NIT", label: "NIT" },
   { value: "PASAPORTE", label: "Pasaporte" },
   { value: "TI", label: "Tarjeta de Identidad (TI)" },
@@ -117,7 +117,7 @@ export default function TenantForm({
     if (validationError) {
       setLookupState({ loading: false, message: "", error: null });
       toast({
-        title: "Documento invalido",
+        title: "Documento inválido",
         description: validationError,
         variant: "destructive",
       });
@@ -153,7 +153,7 @@ export default function TenantForm({
         });
         toast({
           title: "No encontrado",
-          description: "No se encontro una persona con ese documento.",
+          description: "No se encontró una persona con ese documento.",
           variant: "destructive",
         });
       }
@@ -192,33 +192,27 @@ export default function TenantForm({
 
   // === SISTEMA DE VALIDACIONES MEJORADO ===
 
-  // Funcion para validar documentos segun el tipo
+  // Función para validar documentos según el tipo
   const validateDocument = (tipoDocumento, numeroDocumento) => {
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
+    if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
+      return "El número de documento debe tener entre 7 y 10 caracteres";
+    }
     switch (tipoDocumento) {
       case "CC":
-        if (!/^[0-9]{8,10}$/.test(numeroLimpio)) return "La cedula de ciudadania debe tener entre 8 y 10 digitos";
-        break;
       case "CE":
-        if (!/^[0-9]{6,10}$/.test(numeroLimpio)) return "La cedula de extranjeria debe tener entre 6 y 10 digitos";
-        break;
       case "NIT":
-        if (!/^[0-9]{9,10}$/.test(numeroLimpio)) return "El NIT debe tener 9 o 10 digitos";
-        break;
       case "PASAPORTE":
-        if (numeroLimpio.length < 6 || numeroLimpio.length > 20) return "El pasaporte debe tener entre 6 y 20 caracteres";
-        if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) return "El pasaporte solo puede contener letras y numeros";
-        break;
       case "TI":
-        if (!/^[0-9]{10,11}$/.test(numeroLimpio)) return "La tarjeta de identidad debe tener 10 u 11 digitos";
+        if (!/^[0-9]+$/.test(numeroLimpio)) return "El número de documento solo puede contener números";
         break;
       default:
-        return "Tipo de documento no valido";
+        return "Tipo de documento no válido";
     }
     return "";
   };
 
-  // Funcion para obtener la clase de estilo
+  // Función para obtener la clase de estilo
   const getFieldClass = useCallback((fieldName) => {
     const baseClass = "w-full px-3 py-2 border rounded-lg focus:outline-none transition-colors";
     const errorClass = errors[fieldName] 
@@ -457,7 +451,7 @@ export default function TenantForm({
     // Placeholders mejorados
     let fieldPlaceholder = placeholder;
     if (isDocField) {
-      fieldPlaceholder = "Ej: 1234567890 (8-10 digitos segun el tipo)";
+      fieldPlaceholder = "Ej: 1234567 a 1234567890";
     }
     if (isPhoneField) {
       fieldPlaceholder = "Ej: 3001234567 (10 digitos minimo)";
@@ -529,6 +523,8 @@ export default function TenantForm({
             className={`${getFieldClass(name)} ${Icon ? 'pl-10' : ''}`}
             type={inputType}
             placeholder={fieldPlaceholder}
+            minLength={isDocField ? 7 : undefined}
+            maxLength={isDocField ? 10 : undefined}
             defaultValue={defaultFormData[name] ?? ""}
             onChange={handleInputChange}
             onBlur={onBlurHandler}
@@ -553,8 +549,8 @@ export default function TenantForm({
       segundoNombre: "Segundo Nombre", 
       primerApellido: "Primer Apellido",
       segundoApellido: "Segundo Apellido",
-      correo: "Correo Electronico",
-      telefono: "Telefono",
+      correo: "Correo electrónico",
+      telefono: "Teléfono",
       // observaciones: "Observaciones"
     };
     return labels[name] ?? name;
@@ -625,8 +621,8 @@ export default function TenantForm({
                   />
 
                 <Field 
-                  name="documento"
-                  placeholder="Ej: 1234567890 (8-10 digitos segun el tipo)"
+                  name="documento" 
+                  placeholder="Ej: 1234567 a 1234567890"
                   icon={FileText}
                   className="md:col-span-2"
                 />

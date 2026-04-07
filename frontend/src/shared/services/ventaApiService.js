@@ -1,4 +1,5 @@
 import { apiClient } from './api.config';
+import { getApiBaseUrl } from '../config/runtime';
 
 const extractList = (response) => {
   const data = response?.data?.data ?? response?.data ?? response;
@@ -9,7 +10,12 @@ const extractList = (response) => {
 };
 
 const extractPagination = (response, fallback = {}) => {
-  const payload = response?.data ?? response ?? {};
+  const payload =
+    response && typeof response === 'object' && !Array.isArray(response)
+      ? response
+      : response?.data && typeof response.data === 'object' && !Array.isArray(response.data)
+        ? response.data
+        : {};
   const pagination = payload?.pagination || payload?.paginacion || {};
   const page = fallback.page ?? 1;
   const limit = fallback.limit ?? 5;
@@ -126,6 +132,32 @@ export const ventaApiService = {
 
   async listarAdjuntos(idVenta) {
     return apiClient.get(`/sales/${idVenta}/attachments`);
+  },
+
+  getAttachmentFileUrl(idVenta, adjuntoId, { download = false } = {}) {
+    const baseUrl = getApiBaseUrl();
+    const suffix = download ? '?download=1' : '';
+    return `${baseUrl}/sales/${idVenta}/attachments/${adjuntoId}/file${suffix}`;
+  },
+
+  async fetchAttachmentBlob(idVenta, adjuntoId) {
+    const response = await fetch(this.getAttachmentFileUrl(idVenta, adjuntoId), {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`No se pudo obtener el adjunto. Código ${response.status}.`);
+    }
+
+    const blob = await response.blob();
+    const contentType = response.headers.get('content-type') || blob.type || '';
+
+    if (contentType.toLowerCase().includes('pdf') || !contentType) {
+      return new Blob([blob], { type: 'application/pdf' });
+    }
+
+    return blob;
   },
 };
 

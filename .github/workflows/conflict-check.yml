@@ -1,0 +1,23 @@
+name: Conflict Check
+
+on:
+  pull_request:
+    branches: [Develop, main]
+
+jobs:
+  check-conflicts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verificar conflictos con rama destino
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git merge origin/${{ github.base_ref }} --no-commit --no-ff || (
+            echo "❌ Este PR tiene conflictos con ${{ github.base_ref }}. Resuélvelos antes de continuar."
+            git merge --abort
+            exit 1
+          )
+          echo "✅ Sin conflictos detectados"

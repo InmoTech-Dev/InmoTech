@@ -4,6 +4,52 @@ const sseService = require('../services/sse.service');
 const realtimeAudienceService = require('../services/realtimeAudience.service');
 
 class ReportesInmobiliariosController {
+  async emitirCambioReporte({ action, reportId, actorUserId, affectedUserIds = [] }) {
+    try {
+      const adminIds = await realtimeAudienceService.obtenerAdministrativosActivosIds();
+      let resolvedAffectedUserIds = Array.isArray(affectedUserIds) ? [...affectedUserIds] : [];
+
+      if (reportId) {
+        try {
+          const reportResult = await reportesInmobiliariosService.obtenerReporte(parseInt(reportId, 10));
+          const reportData = reportResult?.data || reportResult;
+          const reporterId = Number(
+            reportData?.id_persona_reporta ||
+            reportData?.reportadoPor?.id_persona ||
+            reportData?.reportado_por?.id_persona ||
+            reportData?.reportadoPor?.id ||
+            reportData?.reportado_por?.id ||
+            0
+          );
+          if (reporterId > 0) {
+            resolvedAffectedUserIds.push(reporterId);
+          }
+        } catch (lookupError) {
+          logger.warn('[SSE][REPORT] No se pudo resolver reportante para evento realtime', {
+            reportId,
+            error: lookupError.message,
+          });
+        }
+      }
+
+      sseService.emitReportChanged({
+        action,
+        reportId,
+        affectedUserIds: Array.from(
+          new Set(resolvedAffectedUserIds.filter((value) => Number.isInteger(value) && value > 0))
+        ),
+        audienceUserIds: Array.from(
+          new Set([...adminIds, actorUserId].filter((value) => Number.isInteger(value) && value > 0))
+        ),
+      });
+    } catch (sseError) {
+      logger.error('[SSE][REPORT] No se pudo emitir evento realtime', {
+        action,
+        reportId,
+        error: sseError.message,
+      });
+    }
+  }
   /**
    * Crear un nuevo reporte inmobiliario
    */
@@ -35,6 +81,15 @@ class ReportesInmobiliariosController {
         } catch (sseError) {
           logger.error('[SSE][REPORT] No se pudo emitir evento de creación:', sseError.message);
         }
+      }
+
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'created',
+          reportId: result.data?.id_reporte || result.data?.id,
+          actorUserId: userId,
+          affectedUserIds: [userId],
+        });
       }
 
       return res.status(result.success ? 201 : 400).json(result);
@@ -108,6 +163,15 @@ class ReportesInmobiliariosController {
         }
       }
 
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+          affectedUserIds: [Number(reporteData.id_persona_reporta) || 0],
+        });
+      }
+
       return res.status(result.success ? 200 : 400).json(result);
     } catch (error) {
       logger.error('Error actualizando reporte inmobiliario:', error);
@@ -121,8 +185,24 @@ class ReportesInmobiliariosController {
   async eliminarReporte(req, res, next) {
     try {
       const { id } = req.params;
+      const actorUserId = req.user?.id || req.user?.id_persona || null;
+      const existingReport = await reportesInmobiliariosService.obtenerReporte(parseInt(id, 10));
+      const existingReportData = existingReport?.data || existingReport;
 
       await reportesInmobiliariosService.eliminarReporte(parseInt(id));
+      await this.emitirCambioReporte({
+        action: 'deleted',
+        reportId: parseInt(id, 10),
+        actorUserId,
+        affectedUserIds: [
+          Number(
+            existingReportData?.id_persona_reporta ||
+            existingReportData?.reportadoPor?.id_persona ||
+            existingReportData?.reportado_por?.id_persona ||
+            0
+          ),
+        ],
+      });
 
       return res.status(200).json({
         success: true,
@@ -144,6 +224,13 @@ class ReportesInmobiliariosController {
       const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.crearSeguimientoGeneral(parseInt(id), seguimientoData, userId);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 201 : 400).json(result);
     } catch (error) {
@@ -176,8 +263,16 @@ class ReportesInmobiliariosController {
     try {
       const { reporteId, seguimientoId } = req.params;
       const seguimientoData = req.validatedData;
+      const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.actualizarSeguimientoGeneral(parseInt(reporteId), parseInt(seguimientoId), seguimientoData);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(reporteId, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 200 : 400).json(result);
     } catch (error) {
@@ -192,8 +287,14 @@ class ReportesInmobiliariosController {
   async eliminarSeguimientoGeneral(req, res, next) {
     try {
       const { reporteId, seguimientoId } = req.params;
+      const userId = req.user?.id || req.user?.id_persona;
 
       await reportesInmobiliariosService.eliminarSeguimientoGeneral(parseInt(reporteId), parseInt(seguimientoId));
+      await this.emitirCambioReporte({
+        action: 'updated',
+        reportId: parseInt(reporteId, 10),
+        actorUserId: userId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -212,8 +313,16 @@ class ReportesInmobiliariosController {
     try {
       const { id } = req.params;
       const imagenData = req.validatedData;
+      const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.agregarImagen(parseInt(id), imagenData);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 201 : 400).json(result);
     } catch (error) {
@@ -228,8 +337,14 @@ class ReportesInmobiliariosController {
   async eliminarImagen(req, res, next) {
     try {
       const { id, imagenId } = req.params;
+      const userId = req.user?.id || req.user?.id_persona;
 
       await reportesInmobiliariosService.eliminarImagen(parseInt(id), parseInt(imagenId));
+      await this.emitirCambioReporte({
+        action: 'updated',
+        reportId: parseInt(id, 10),
+        actorUserId: userId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -248,8 +363,16 @@ class ReportesInmobiliariosController {
     try {
       const { id } = req.params;
       const archivoData = req.validatedData;
+      const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.agregarArchivo(parseInt(id), archivoData);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 201 : 400).json(result);
     } catch (error) {
@@ -264,8 +387,14 @@ class ReportesInmobiliariosController {
   async eliminarArchivo(req, res, next) {
     try {
       const { id, archivoId } = req.params;
+      const userId = req.user?.id || req.user?.id_persona;
 
       await reportesInmobiliariosService.eliminarArchivo(parseInt(id), parseInt(archivoId));
+      await this.emitirCambioReporte({
+        action: 'updated',
+        reportId: parseInt(id, 10),
+        actorUserId: userId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -284,8 +413,16 @@ class ReportesInmobiliariosController {
     try {
       const { id } = req.params;
       const rubroData = req.validatedData;
+      const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.crearRubro(parseInt(id), rubroData);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 201 : 400).json(result);
     } catch (error) {
@@ -317,8 +454,16 @@ class ReportesInmobiliariosController {
     try {
       const { id, rubroId } = req.params;
       const rubroData = req.validatedData;
+      const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.actualizarRubro(parseInt(id), parseInt(rubroId), rubroData);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 200 : 400).json(result);
     } catch (error) {
@@ -333,8 +478,14 @@ class ReportesInmobiliariosController {
   async eliminarRubro(req, res, next) {
     try {
       const { id, rubroId } = req.params;
+      const userId = req.user?.id || req.user?.id_persona;
 
       await reportesInmobiliariosService.eliminarRubro(parseInt(id), parseInt(rubroId));
+      await this.emitirCambioReporte({
+        action: 'updated',
+        reportId: parseInt(id, 10),
+        actorUserId: userId,
+      });
 
       return res.status(200).json({
         success: true,
@@ -356,6 +507,13 @@ class ReportesInmobiliariosController {
       const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.crearSeguimientoRubro(parseInt(id), parseInt(rubroId), seguimientoData, userId);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 201 : 400).json(result);
     } catch (error) {
@@ -388,8 +546,16 @@ class ReportesInmobiliariosController {
     try {
       const { id, rubroId, seguimientoId } = req.params;
       const seguimientoData = req.validatedData;
+      const userId = req.user?.id || req.user?.id_persona;
 
       const result = await reportesInmobiliariosService.actualizarSeguimientoRubro(parseInt(id), parseInt(rubroId), parseInt(seguimientoId), seguimientoData);
+      if (result.success) {
+        await this.emitirCambioReporte({
+          action: 'updated',
+          reportId: parseInt(id, 10),
+          actorUserId: userId,
+        });
+      }
 
       return res.status(result.success ? 200 : 400).json(result);
     } catch (error) {

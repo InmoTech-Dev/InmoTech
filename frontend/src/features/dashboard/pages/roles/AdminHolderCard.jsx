@@ -5,6 +5,7 @@ import { useToast } from "../../../../shared/hooks/use-toast";
 import rolesApiService from "../../../../shared/services/rolesApiService";
 import administrativosApiService from "../../../../shared/services/administrativosApiService";
 import { apiClient } from "../../../../shared/services/api.config";
+import realtimeBus from "../../../../shared/services/realtimeBus";
 import { Select, SelectTrigger, SelectContent, SelectItem } from "../../../../shared/components/ui/select";
 import ConfirmationDialog from "../../../../shared/components/ui/ConfirmationDialog";
 
@@ -123,7 +124,7 @@ export default function AdminHolderCard({ className = "" }) {
       if (!resolvedRoleId) {
         setAdminRoleId(null);
         setCurrentHolder(null);
-        setHolderError("No se encontro el rol Administrador en el sistema.");
+        setHolderError("No se encontró el rol Administrador en el sistema.");
         return;
       }
 
@@ -140,7 +141,7 @@ export default function AdminHolderCard({ className = "" }) {
       if (personas.length > 1) {
         toast({
           title: "Inconsistencia detectada",
-          description: "Hay mas de un usuario con rol Administrador activo.",
+          description: "Hay más de un usuario con rol Administrador activo.",
           variant: "destructive",
         });
       }
@@ -193,6 +194,29 @@ export default function AdminHolderCard({ className = "" }) {
   }, [loadCurrentHolder]);
 
   useEffect(() => {
+    const refresh = () => {
+      loadCurrentHolder();
+      if (isModalOpen) {
+        loadCandidates();
+      }
+    };
+
+    const offUserChanged = realtimeBus.on('user.changed', refresh);
+    const offRoleChanged = realtimeBus.on('role.changed', refresh);
+    const offAccessChanged = realtimeBus.on('access.changed', refresh);
+    const offFallbackTick = realtimeBus.on('realtime.fallback.tick', refresh);
+    const offReconcile = realtimeBus.on('realtime.reconcile_requested', refresh);
+
+    return () => {
+      offUserChanged?.();
+      offRoleChanged?.();
+      offAccessChanged?.();
+      offFallbackTick?.();
+      offReconcile?.();
+    };
+  }, [isModalOpen, loadCandidates, loadCurrentHolder]);
+
+  useEffect(() => {
     if (!isModalOpen || typeof document === "undefined") return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -229,9 +253,9 @@ export default function AdminHolderCard({ className = "" }) {
     // Pero la razón sí es obligatoria siempre.
 
     if (!reason) {
-      nextErrors.reason = "La razon de la transferencia es obligatoria.";
+      nextErrors.reason = "La razón de la transferencia es obligatoria.";
     } else if (reason.length < 10 || reason.length > 300) {
-      nextErrors.reason = "La razon debe tener entre 10 y 300 caracteres.";
+      nextErrors.reason = "La razón debe tener entre 10 y 300 caracteres.";
     }
 
     setFormErrors(nextErrors);
@@ -259,7 +283,7 @@ export default function AdminHolderCard({ className = "" }) {
       const message = response?.message || "Titular de Administrador actualizado.";
 
       toast({
-        title: "Operacion exitosa",
+        title: "Operación exitosa",
         description: message,
       });
 
@@ -293,11 +317,11 @@ export default function AdminHolderCard({ className = "" }) {
     : "Selecciona un administrativo";
 
   const confirmMessage = selectedCandidate
-    ? `Confirmas cambiar el titular del rol Administrador a "${formatCandidateLabel(selectedCandidate)}"?${form.disablePreviousAccount
-      ? " La cuenta del administrador saliente sera deshabilitada."
+    ? `¿Confirmas cambiar el titular del rol Administrador a "${formatCandidateLabel(selectedCandidate)}"?${form.disablePreviousAccount
+      ? " La cuenta del administrador saliente será deshabilitada."
       : ""
     }`
-    : `Confirmas dejar el puesto de Administrador vacio?${form.disablePreviousAccount ? " La cuenta del administrador saliente sera deshabilitada." : ""}`;
+    : `¿Confirmas dejar el puesto de Administrador vacío?${form.disablePreviousAccount ? " La cuenta del administrador saliente será deshabilitada." : ""}`;
 
   const modal = isModalOpen && typeof document !== "undefined"
     ? createPortal(
@@ -316,7 +340,7 @@ export default function AdminHolderCard({ className = "" }) {
           <div className="px-5 py-4 border-b border-slate-200">
             <h4 className="text-lg font-semibold text-slate-800">Transferir titular de Administrador</h4>
             <p className="mt-1 text-sm text-slate-600">
-              Esta accion mueve el rol protegido Administrador a otro administrativo activo.
+              Esta acción mueve el rol protegido Administrador a otro administrativo activo.
             </p>
           </div>
 
@@ -344,7 +368,7 @@ export default function AdminHolderCard({ className = "" }) {
                   className="max-h-56"
                 >
                   <SelectItem value="0" className="text-amber-700 font-medium">
-                    -- Dejar puesto vacio --
+                    -- Dejar puesto vacío --
                   </SelectItem>
                   {candidates.map((candidate) => (
                     <SelectItem
@@ -366,7 +390,7 @@ export default function AdminHolderCard({ className = "" }) {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Razon de la transferencia (10-300)
+                Razón de la transferencia (10-300)
               </label>
               <textarea
                 rows={3}
@@ -431,7 +455,7 @@ export default function AdminHolderCard({ className = "" }) {
     <>
       <div
         className={`min-w-0 w-full flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 sm:flex-nowrap ${className}`}
-        title="Desde aqui se cambia quien ocupa el rol Administrador del sistema."
+        title="Desde aquí se cambia quién ocupa el rol Administrador del sistema."
       >
         <ShieldCheck className="h-4 w-4 text-amber-700 shrink-0" />
         <span className="shrink-0 text-xs font-medium text-amber-800 whitespace-nowrap">Titular:</span>
@@ -444,7 +468,7 @@ export default function AdminHolderCard({ className = "" }) {
           </span>
         </div>
         <span className="hidden shrink-0 xl:inline text-[11px] text-amber-800/90 whitespace-nowrap">
-          Cambia aqui quien ocupa el rol Administrador.
+          Cambia aquí quién ocupa el rol Administrador.
         </span>
         <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap sm:justify-start">
           <button
@@ -478,7 +502,7 @@ export default function AdminHolderCard({ className = "" }) {
         variant="warning"
         title="Confirmar cambio de titular"
         message={confirmMessage}
-        confirmText="Si, cambiar titular"
+        confirmText="Sí, cambiar titular"
         cancelText="Cancelar"
       />
     </>

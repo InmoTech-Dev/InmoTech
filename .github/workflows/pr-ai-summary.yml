@@ -1,8 +1,9 @@
 name: AI PR Summary (Gemini Final)
 
 on:
+  workflow_dispatch: # Permite ejecutar el robot manualmente desde el botón de GitHub
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   summarize:
@@ -45,37 +46,40 @@ jobs:
               return;
             }
 
-            // 1. DESCUBRIMIENTO HÍBRIDO (v1 + v1beta)
+            // 1. DESCUBRIMIENTO HÍBRIDO CON MAPEADO DE VERSIÓN
             console.log("🔍 Descubriendo modelos en v1 y v1beta...");
-            let available = new Set();
-            for (let version of ["v1", "v1beta"]) {
+            let modelMap = new Map(); // { model: version }
+            for (let version of ["v1beta", "v1"]) {
               try {
                 const res = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`);
                 const data = await res.json();
-                if (data.models) data.models.forEach(m => available.add(m.name.split("/").pop()));
+                if (data.models) {
+                  data.models.forEach(m => {
+                    const name = m.name.split("/").pop();
+                    if (!modelMap.has(name)) modelMap.set(name, version);
+                  });
+                }
               } catch (e) {}
             }
 
-            const availableList = Array.from(available);
-            console.log("📦 Modelos encontrados:", availableList.join(", "));
+            console.log("📦 Modelos encontrados:", Array.from(modelMap.keys()).join(", "));
 
-            // Prioridad absoluta por estabilidad y cuota (Flash 1.5 es el mejor)
+            // Prioridad absoluta por estabilidad y cuota
             const priorityList = [
               "gemini-1.5-flash", "gemini-flash-latest", 
-              "gemini-2.0-flash-lite", "gemini-2.0-flash-lite-preview-02-05", 
-              "gemini-1.5-pro", "gemini-pro-latest", 
-              "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash"
+              "gemini-2.0-flash-lite", "gemini-1.5-pro", 
+              "gemini-pro-latest", "gemini-pro"
             ];
             
-            const modelsToTry = priorityList.filter(p => available.has(p));
-            if (modelsToTry.length === 0) modelsToTry.push(availableList[0]);
+            const modelsToTry = priorityList.filter(p => modelMap.has(p));
+            if (modelsToTry.length === 0) modelsToTry.push(Array.from(modelMap.keys())[0]);
 
             const promptText = `
             Actúa como Senior Developer. Genera una descripción de Pull Request en Markdown:
             
             1. REGLA: Mantén los encabezados: "## 📋 Descripción", "## 🔗 Rama", "## ✅ Tipo de cambio", "## ✔️ Checklist antes de enviar".
             2. NO escribas nada en: "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)" y "## 📸 Screenshots". Deja sus comentarios <!-- --> intactos.
-            3. Analiza el código para marcar [x].
+            3. Analiza el código para marcar [x] en Tipo de cambio y Checklist.
             
             DIFF:
             ${diff}
@@ -83,12 +87,11 @@ jobs:
             DEVUELVE SOLO EL MARKDOWN.
             `;
 
-            // 2. SISTEMA DE REINTENTOS MÁS AGRESIVO
+            // 2. SISTEMA DE REINTENTOS CON VERSIÓN CORRECTA
             for (let modelName of modelsToTry) {
-              console.log(`🤖 Intentando con: ${modelName}...`);
-              // Decidir versión de API según el modelo (v1beta suele ser más permisivo para modelos nuevos)
-              const apiVersion = modelName.includes("2.") || modelName.includes("flash-lite") ? "v1beta" : "v1";
-              const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+              const version = modelMap.get(modelName) || "v1beta";
+              console.log(`🤖 Intentando con: ${modelName} vía ${version}...`);
+              const url = `https://generativelanguage.googleapis.com/${version}/models/${modelName}:generateContent?key=${apiKey}`;
 
               for (let i = 0; i < 2; i++) {
                 try {
@@ -101,9 +104,9 @@ jobs:
                   const data = await response.json();
 
                   if (response.status === 429) {
-                    console.log(`⚠️ Cuota excedida para ${modelName}. Esperando 12s para limpiar buffer...`);
+                    console.log(`⚠️ Cuota excedida para ${modelName}. Esperando 12s...`);
                     await sleep(12000);
-                    continue; // Reintenta el mismo
+                    continue; 
                   }
 
                   if (data.candidates && data.candidates[0].content) {
@@ -111,8 +114,8 @@ jobs:
                     console.log(`✅ ¡Éxito total con ${modelName}!`);
                     return;
                   } else {
-                    console.error(`❌ Falló ${modelName}:`, JSON.stringify(data));
-                    break; // Siguiente modelo
+                    console.error(`❌ Falló con ${modelName}:`, JSON.stringify(data));
+                    break; 
                   }
                 } catch (err) {
                   console.error(`❌ Error (${modelName}):`, err.message);

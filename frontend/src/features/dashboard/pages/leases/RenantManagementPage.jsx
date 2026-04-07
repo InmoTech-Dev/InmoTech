@@ -154,10 +154,10 @@ const mapApiArriendoToRow = (arriendo = {}) => {
 
   const fechaCobroStr = normalizeDateString(fechaCobroRaw);
 
-  // Extraer comodidades para habitaciones y baÃ±os
+  // Extraer comodidades para habitaciones y baÃƒÂ±os
   const comodidades = inmueble.comodidades || [];
   const habCom = comodidades.find(c => c.nombre === "Habitaciones");
-  const banCom = comodidades.find(c => c.nombre === "BaÃ±os" || c.nombre === "BaÃƒÂ±os");
+  const banCom = comodidades.find(c => c.nombre === "BaÃƒÂ±os" || c.nombre === "BaÃƒÆ’Ã‚Â±os");
   const habCantidad = habCom?.Inmueble_Comodidades?.cantidad || habCom?.Inmueble_Comodidad?.cantidad || habCom?.cantidad || "";
   const banCantidad = banCom?.Inmueble_Comodidades?.cantidad || banCom?.Inmueble_Comodidad?.cantidad || banCom?.cantidad || "";
 
@@ -640,7 +640,7 @@ export function RenantManagementPage() {
     }
     if (nuevoEstado === "Finalizado") {
       const shouldFinalize = window.confirm(
-        "Al finalizar este arriendo ya no podras hacer prorroga ni mas seguimiento. ¿Deseas continuar?"
+        "Al finalizar este arriendo ya no podrás hacer prórroga ni más seguimiento. ¿Deseas continuar?"
       );
       if (!shouldFinalize) {
         return;
@@ -674,7 +674,7 @@ export function RenantManagementPage() {
     }
   };
 
-  // 🗑️ ELIMINAR
+  // ðŸ—‘ï¸ ELIMINAR
   const [rentToDelete, setRentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -860,15 +860,15 @@ export function RenantManagementPage() {
     if (!preNoticeRent) return;
     if (!preNoticeRent.soporte && !preNoticeRent.observacion?.trim()) {
       toast({
-        title: "Informaci?n requerida",
-        description: "Debes registrar una observaci?n o subir un soporte del preaviso.",
+        title: "Información requerida",
+        description: "Debes registrar una observación o subir un soporte del preaviso.",
         variant: "destructive",
       });
       return;
     }
     if (!preNoticeRent.decision) {
       toast({
-        title: "Decision requerida",
+        title: "Decisión requerida",
         description: "Debes seleccionar si el preaviso fue aceptado o rechazado.",
         variant: "destructive",
       });
@@ -1035,7 +1035,7 @@ const renderDeleteModal = () => {
     }
   };
 
-  // Calcular estadÃ­sticas
+  // Calcular estadÃƒÂ­sticas
   const stats = {
     total: pagination.total,
     activos: arriendos.filter(r => r.estado === 'Pagado' || r.estado === 'Activo').length,
@@ -1046,7 +1046,7 @@ const renderDeleteModal = () => {
     }, 0)
   };
 
-  // ðŸ”‘ --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
+  // Ã°Å¸â€â€˜ --- FUNCIONES PARA RENDERIZAR MODALES CON PORTAL ---
   const renderFormModal = () => {
     if (!showForm) return null;
 

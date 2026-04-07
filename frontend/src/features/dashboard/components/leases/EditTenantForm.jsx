@@ -7,7 +7,7 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
 
   if (!tenant) return null;
 
-  // 🔹 Manejo de cambios
+  // Manejo de cambios
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -20,7 +20,7 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
     }
   };
 
-  // 🔹 Guardar cambios
+  // Guardar cambios
   const handleSubmit = (e) => {
     e.preventDefault();
 

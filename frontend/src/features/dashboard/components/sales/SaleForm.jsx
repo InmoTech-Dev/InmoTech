@@ -86,6 +86,13 @@ const normalizeTextValue = (value = "") =>
 const getPropertySource = (property = {}) =>
     property?.metadata?.raw || property?.raw || property || {};
 
+const getPropertyOperationText = (property = {}) => {
+    const source = getPropertySource(property);
+    return normalizeTextValue(
+        property.operacion || source.operacion || source.tipo_operacion || property.tipoOperacion
+    );
+};
+
 const propertyHasActiveLease = (property = {}) => {
     const source = getPropertySource(property);
     const estadoTexto = normalizeTextValue(
@@ -128,13 +135,17 @@ const propertyHasActiveLease = (property = {}) => {
     );
 };
 
-const propertyIsOnlyForRent = (property = {}) => {
-    const source = getPropertySource(property);
-    const operacion = normalizeTextValue(
-        property.operacion || source.operacion || source.tipo_operacion
-    );
-    return operacion === "arriendo" || operacion === "alquiler";
+const propertyAllowsSale = (property = {}) => {
+    const operacion = getPropertyOperationText(property);
+    return operacion.includes("venta") || operacion.includes("sale");
 };
+
+const propertyAllowsRent = (property = {}) => {
+    const operacion = getPropertyOperationText(property);
+    return operacion.includes("arriendo") || operacion.includes("alquiler") || operacion.includes("rent") || operacion.includes("lease");
+};
+
+const propertyIsOnlyForRent = (property = {}) => propertyAllowsRent(property) && !propertyAllowsSale(property);
 
 const propertyIsSold = (property = {}) => {
     const source = getPropertySource(property);

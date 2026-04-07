@@ -45,45 +45,50 @@ jobs:
               return;
             }
 
-            // 1. DESCUBRIMIENTO AUTOMÁTICO DE MODELO CON PRIORIDAD (Usa v1 para mayor estabilidad)
-            console.log("🔍 Descubriendo modelos disponibles...");
-            let available = ["gemini-1.5-flash"]; // Fallback inicial
-            try {
-              const listRes = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
-              const listData = await listRes.json();
-              if (listData.models) {
-                available = listData.models.map(m => m.name.split("/").pop());
-                console.log("📦 Modelos disponibles (v1):", available.join(", "));
-              }
-            } catch (e) {
-              console.log("⚠️ Error con v1, intentando v1beta...");
-              const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-              const listData = await listRes.json();
-              if (listData.models) available = listData.models.map(m => m.name.split("/").pop());
+            // 1. DESCUBRIMIENTO HÍBRIDO (v1 + v1beta)
+            console.log("🔍 Descubriendo modelos en v1 y v1beta...");
+            let available = new Set();
+            for (let version of ["v1", "v1beta"]) {
+              try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`);
+                const data = await res.json();
+                if (data.models) data.models.forEach(m => available.add(m.name.split("/").pop()));
+              } catch (e) {}
             }
 
-            const priorityList = ["gemini-1.5-flash", "gemini-flash-latest", "gemini-1.5-flash-8b", "gemini-1.5-pro", "gemini-pro-latest", "gemini-pro"];
-            const modelsToTry = priorityList.filter(p => available.includes(p));
-            if (modelsToTry.length === 0) modelsToTry.push(available[0]);
+            const availableList = Array.from(available);
+            console.log("📦 Modelos encontrados:", availableList.join(", "));
+
+            // Prioridad absoluta por estabilidad y cuota (Flash 1.5 es el mejor)
+            const priorityList = [
+              "gemini-1.5-flash", "gemini-flash-latest", 
+              "gemini-2.0-flash-lite", "gemini-2.0-flash-lite-preview-02-05", 
+              "gemini-1.5-pro", "gemini-pro-latest", 
+              "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash"
+            ];
+            
+            const modelsToTry = priorityList.filter(p => available.has(p));
+            if (modelsToTry.length === 0) modelsToTry.push(availableList[0]);
 
             const promptText = `
-            Actúa como Senior Developer. Analiza este DIFF y genera una descripción oficial siguiendo este formato:
+            Actúa como Senior Developer. Genera una descripción de Pull Request en Markdown:
             
-            1. REGLA DE ORO: Mantén los encabezados exactos: "## 📋 Descripción", "## 🔗 Rama", "## ✅ Tipo de cambio", "## ✔️ Checklist antes de enviar".
-            2. DEJA LAS SECCIONES "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)" Y "## 📸 Screenshots" CON SUS COMENTARIOS ORIGINALES DE MARKDOWN. No escribas nada en ellas.
-            3. Analiza el código para marcar los [x] correspondientes en Tipo de cambio y Checklist.
-            4. Si detectas archivos .env o console.log, menciónalo sutilmente en la descripción para que lo corrijan.
+            1. REGLA: Mantén los encabezados: "## 📋 Descripción", "## 🔗 Rama", "## ✅ Tipo de cambio", "## ✔️ Checklist antes de enviar".
+            2. NO escribas nada en: "## 🧪 ¿Cómo lo probaste? (OBLIGATORIO)" y "## 📸 Screenshots". Deja sus comentarios <!-- --> intactos.
+            3. Analiza el código para marcar [x].
             
-            DIFF DEL PR:
+            DIFF:
             ${diff}
             
-            DEVUELVE SOLO EL TEXTO DE LA DESCRIPCIÓN EN MARKDOWN.
+            DEVUELVE SOLO EL MARKDOWN.
             `;
 
-            // 2. SISTEMA DE REINTENTOS CON FALLBACK DE MODELO
+            // 2. SISTEMA DE REINTENTOS MÁS AGRESIVO
             for (let modelName of modelsToTry) {
-              console.log(`🤖 Probando modelo: ${modelName}...`);
-              const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
+              console.log(`🤖 Intentando con: ${modelName}...`);
+              // Decidir versión de API según el modelo (v1beta suele ser más permisivo para modelos nuevos)
+              const apiVersion = modelName.includes("2.") || modelName.includes("flash-lite") ? "v1beta" : "v1";
+              const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
 
               for (let i = 0; i < 2; i++) {
                 try {
@@ -96,26 +101,26 @@ jobs:
                   const data = await response.json();
 
                   if (response.status === 429) {
-                    console.log(`⚠️ Límite excedido para ${modelName}. Esperando 8s...`);
-                    await sleep(8000);
-                    continue; // Reintenta el mismo modelo
+                    console.log(`⚠️ Cuota excedida para ${modelName}. Esperando 12s para limpiar buffer...`);
+                    await sleep(12000);
+                    continue; // Reintenta el mismo
                   }
 
                   if (data.candidates && data.candidates[0].content) {
                     fs.writeFileSync("ai_description.md", data.candidates[0].content.parts[0].text);
-                    console.log(`✅ ¡Éxito con ${modelName}!`);
+                    console.log(`✅ ¡Éxito total con ${modelName}!`);
                     return;
                   } else {
-                    console.error(`❌ Falló con ${modelName}:`, JSON.stringify(data));
-                    break; // Sal del reintento de este modelo
+                    console.error(`❌ Falló ${modelName}:`, JSON.stringify(data));
+                    break; // Siguiente modelo
                   }
                 } catch (err) {
-                  console.error(`❌ Error de red (${modelName}):`, err.message);
+                  console.error(`❌ Error (${modelName}):`, err.message);
                   break;
                 }
               }
             }
-            console.error("💥 Todos los modelos fallaron o excedieron la cuota.");
+            console.error("💥 No se pudo generar el resumen tras agotar los modelos.");
             process.exit(1);
           }
           run();

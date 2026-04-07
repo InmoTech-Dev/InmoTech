@@ -203,20 +203,11 @@ const PropertyOwnersManagement = () => {
       return;
     }
 
-    if (modalMode === 'create' && (!Array.isArray(selectedInmuebles) || selectedInmuebles.length === 0)) {
-      showAlert('error', 'Debes asignar al menos un inmueble para crear el propietario.');
-      return;
-    }
-
     setOwnerSubmitting(true);
     try {
       const selectedIds = Array.from(
         new Set((selectedInmuebles || []).map((item) => Number(item?.id)).filter((id) => Number.isFinite(id)))
       );
-
-      if (modalMode === 'create' && selectedIds.length === 0) {
-        throw new Error('Debes asignar al menos un inmueble valido para crear el propietario.');
-      }
 
       const syncOwnerAssignments = async (ownerId, previousIds = []) => {
         const prevSet = new Set((previousIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)));
@@ -271,7 +262,6 @@ const PropertyOwnersManagement = () => {
       if (modalMode === 'create') {
         const created = await ownersApiService.createOwner(formData);
         const normalized = normalizeOwnerResponse(created);
-        await syncOwnerAssignments(normalized.id, []);
         showAlert('success', `Propietario "${normalized.nombreCompleto}" creado exitosamente`);
       } else if (modalMode === 'edit' && selectedOwner) {
         const previousIds = Array.from(

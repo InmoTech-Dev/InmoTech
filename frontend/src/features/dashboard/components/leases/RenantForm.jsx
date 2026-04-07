@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
+import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { FaTimes } from "react-icons/fa";
 import ReactDOM from "react-dom";
 import { motion } from 'framer-motion';
@@ -7,9 +7,8 @@ import { renantsApiService } from "../../../../shared/services/arrendatarioApiSe
 import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { toast } from "../../../../shared/hooks/use-toast";
-import { Toaster } from "../../../../shared/components/ui/toaster";
 
-// Lista de campos que deben ser obligatorios segÃºn la solicitud del usuario (INCLUYE ARRENDATARIO, CODEUDOR, INMUEBLE Y CONTRATO)
+// Lista de campos que deben ser obligatorios según la solicitud del usuario (INCLUYE ARRENDATARIO, CODEUDOR, INMUEBLE Y CONTRATO)
 const requiredFields = [
     // Arrendatario
     "tipoDocArrendatario", "numeroDocArrendatario", "primerNombreArrendatario",
@@ -150,7 +149,7 @@ const validateInmuebleForRent = (inmueble = {}) => {
         return "Este inmueble ya fue vendido y no se puede arrendar.";
     }
     if (propertyIsMarkedForSale(inmueble)) {
-        return "Este inmueble está marcado para venta, no se puede arrendar.";
+        return "Este inmueble est� marcado para venta, no se puede arrendar.";
     }
     if (!propertyIsMarkedForRent(inmueble)) {
         return "Solo puedes seleccionar inmuebles configurados para arriendo.";
@@ -227,7 +226,7 @@ const normalizePhone = (value = "") => {
     const digits = sanitizeNumericString(value);
     if (!digits) return "";
     if (digits.startsWith("57") && digits.length > 10) {
-        // Mantener solo los últimos 10 dígitos si trae el indicativo
+        // Mantener solo los �ltimos 10 d�gitos si trae el indicativo
         return digits.slice(-10);
     }
     return digits.slice(-10);
@@ -235,7 +234,7 @@ const normalizePhone = (value = "") => {
 
 /**
  * Payload SOLO para crear / actualizar Arrendatario (persona)
- * Ya NO mete datos del contrato aquÃ­.
+ * Ya NO mete datos del contrato aquí.
  */
 const buildArrendatarioPayload = (values = {}) => ({
     tipoDocumento: values.tipoDocArrendatario,
@@ -257,7 +256,7 @@ const buildArrendatarioPayload = (values = {}) => ({
 /**
  * Payload para crear el ARRIENDO / CONTRATO
  * Intenta ser compatible con ambas convenciones (camelCase y snake_case)
- * para que el backend pueda mapear fÃ¡cilmente.
+ * para que el backend pueda mapear fácilmente.
  */
 const buildArriendoPayload = (values = {}, renant = {}) => {
     const idArrendatario =
@@ -268,7 +267,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         values.id_arrendatario ||
         values.idArrendatario;
 
-    // Preparar datos del codeudor (persona). Se enviarÃ¡n para que el backend cree/busque el registro y asigne id_codeudor.
+    // Preparar datos del codeudor (persona). Se enviarán para que el backend cree/busque el registro y asigne id_codeudor.
     const codeudorPayload = {
         tipo_documento: values.tipoDocCodeudor,
         numero_documento: values.numeroDocCodeudor,
@@ -287,7 +286,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
     const idInmueble = values.idInmueble ? Number(values.idInmueble) : undefined;
 
     return {
-        // RelaciÃ³n con Arrendatario/cliente
+        // Relación con Arrendatario/cliente
         id_cliente: idArrendatario,
         idCliente: idArrendatario,
         id_arrendatario: idArrendatario,
@@ -309,7 +308,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         valor_mensual: valorMensual,
         valorMensual: valorMensual,
 
-        // GarantÃ­a (opcional)
+        // Garantía (opcional)
         tipo_garantia: values.tipoGarantia,
         tipoGarantia: values.tipoGarantia,
         valor_garantia: valorGarantia,
@@ -317,7 +316,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         descripcion_garantia: values.descripcionGarantia,
         descripcionGarantia: values.descripcionGarantia,
 
-        // Codeudor (persona) - el backend lo resolverÃ¡ a id_codeudor
+        // Codeudor (persona) - el backend lo resolverá a id_codeudor
         codeudor: codeudorPayload,
 
         // Estado del contrato
@@ -327,7 +326,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
 
 export default function RentForm({ onClose, onSubmit }) {
     const [step, setStep] = useState(1);
-    // Estado para manejar los errores en lÃ­nea. Usa { fieldName: errorMessage }
+    // Estado para manejar los errores en línea. Usa { fieldName: errorMessage }
     const [errors, setErrors] = useState({});
     const [submissionState, setSubmissionState] = useState({
         isSubmitting: false,
@@ -383,7 +382,7 @@ export default function RentForm({ onClose, onSubmit }) {
 
     // refs para mantener TODOS los valores sin causar re-renders en cada letra
     const valuesRef = useRef({ ...initial });
-    // Ref para mantener los valores formateados visibles en los inputs, si son diferentes del valor numÃ©rico
+    // Ref para mantener los valores formateados visibles en los inputs, si son diferentes del valor numérico
     const displayValuesRef = useRef({ ...initial });
     const elRefs = useRef({});
     const errorFocusTimeout = useRef(null); // Usado para enfocar el primer campo con error
@@ -393,7 +392,7 @@ export default function RentForm({ onClose, onSubmit }) {
     const NUMERO_DOC_COD = "numeroDocCodeudor";
     const MIN_DOC_LOOKUP_LENGTH = 6;
 
-    // Lista de campos que deben ser estrictamente numÃ©ricos (solo dÃ­gitos)
+    // Lista de campos que deben ser estrictamente numéricos (solo dígitos)
     const strictNumericFields = [
         "precioInmueble", "precio"
     ];
@@ -401,7 +400,7 @@ export default function RentForm({ onClose, onSubmit }) {
     // Campos que requieren formato de miles
     const currencyFields = ["precioInmueble", "precio"];
 
-    // Campos agrupados por paso para la validaciÃ³n de 'Siguiente'
+    // Campos agrupados por paso para la validación de 'Siguiente'
     const stepFields = {
         1: [
             "tipoDocArrendatario", NUMERO_DOC_ARR, "primerNombreArrendatario", "segundoNombreArrendatario",
@@ -425,7 +424,7 @@ export default function RentForm({ onClose, onSubmit }) {
         "primerNombreCodeudor", "segundoNombreCodeudor", "primerApellidoCodeudor", "segundoApellidoCodeudor",
     ];
 
-    // Lista de campos que deben contener solo nÃºmeros (documentos)
+    // Lista de campos que deben contener solo números (documentos)
     const docFields = [
         NUMERO_DOC_ARR, NUMERO_DOC_COD,
     ];
@@ -445,7 +444,7 @@ export default function RentForm({ onClose, onSubmit }) {
         return Boolean((tipo || "").trim()) && clean.length >= MIN_DOC_LOOKUP_LENGTH;
     };
 
-    // Lista de campos que deben contener solo nÃºmeros (telÃ©fonos)
+    // Lista de campos que deben contener solo números (teléfonos)
     const phoneFields = [
         "telefonoArrendatario", "telefonoCodeudor",
     ];
@@ -457,42 +456,24 @@ export default function RentForm({ onClose, onSubmit }) {
 
     // === VALIDACIONES MEJORADAS PARA DOCUMENTOS ===
 
-    // FunciÃ³n para validar documentos segÃºn el tipo
+    // Función para validar documentos según el tipo
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = cleanDocumentByType(tipoDocumento, numeroDocumento);
 
+        if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
+            return 'El n�mero de documento debe tener entre 7 y 10 caracteres';
+        }
+
         switch (tipoDocumento) {
             case 'CC': // Cedula de Ciudadania
-                if (!/^[0-9]{8,10}$/.test(numeroLimpio)) {
-                    return 'La cedula de ciudadania debe tener entre 8 y 10 digitos';
-                }
-                break;
-
             case 'CE': // Cedula de Extranjeria
-                if (!/^[0-9]{6,10}$/.test(numeroLimpio)) {
-                    return 'La cedula de extranjeria debe tener entre 6 y 10 digitos';
-                }
-                break;
-
             case 'NIT': // NIT
-                if (!/^[0-9]{9,10}$/.test(numeroLimpio)) {
-                    return 'El NIT debe tener 9 o 10 digitos';
-                }
-                break;
-
             case 'PASAPORTE': // Pasaporte
-                if (numeroLimpio.length < 6 || numeroLimpio.length > 20) {
-                    return 'El pasaporte debe tener entre 6 y 20 caracteres';
-                }
                 if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) {
-                    return 'El pasaporte solo puede contener letras y números';
+                    return 'El pasaporte solo puede contener letras y n�meros';
                 }
                 break;
-
             case 'TI': // Tarjeta de Identidad
-                if (!/^[0-9]{10,11}$/.test(numeroLimpio)) {
-                    return 'La tarjeta de identidad debe tener 10 u 11 digitos';
-                }
                 break;
 
             default:
@@ -520,7 +501,7 @@ export default function RentForm({ onClose, onSubmit }) {
         return labels[name] ?? name;
     };
 
-    // FunciÃ³n para obtener la clase de estilo (incluyendo el resaltado de error)
+    // Función para obtener la clase de estilo (incluyendo el resaltado de error)
     const getFieldClass = useCallback((fieldName) => {
         const hasFieldError =
             Boolean(errors[fieldName]) ||
@@ -532,7 +513,7 @@ export default function RentForm({ onClose, onSubmit }) {
         return `w-full rounded-xl bg-white px-3 py-2 text-sm shadow-sm focus:outline-none transition ${errorClass}`;
     }, [errors, arrendatarioLookupState.error, inmuebleLookupState.error]);
 
-    // Formatea un nÃºmero con separadores de miles
+    // Formatea un número con separadores de miles
     const formatNumberWithThousandsSeparator = (value) => {
         if (!value) return "";
         const cleanValue = value.replace(/[^0-9]/g, '');
@@ -552,7 +533,7 @@ export default function RentForm({ onClose, onSubmit }) {
         if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
             valuesRef.current[name] = initial[name] ?? "";
         }
-        // No autoseleccionar opción; mantener "Seleccione..."
+        // No autoseleccionar opci�n; mantener "Seleccione..."
         if (el.tagName === "SELECT") {
             displayValuesRef.current[name] = valuesRef.current[name];
             el.value = valuesRef.current[name] ?? "";
@@ -560,7 +541,7 @@ export default function RentForm({ onClose, onSubmit }) {
             displayValuesRef.current[name] = valuesRef.current[name];
         }
 
-        // Inicializar el valor de visualizaciÃ³n si es un campo de moneda
+        // Inicializar el valor de visualización si es un campo de moneda
         if (currencyFields.includes(name) && valuesRef.current[name]) {
             displayValuesRef.current[name] = formatNumberWithThousandsSeparator(valuesRef.current[name].toString());
         }
@@ -765,7 +746,7 @@ export default function RentForm({ onClose, onSubmit }) {
                         error: validationError
                     });
                     toast({
-                        title: "Inmueble no válido para arriendo",
+                        title: "Inmueble no v�lido para arriendo",
                         description: validationError,
                         variant: "destructive",
                     });
@@ -831,7 +812,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 error: documentError
             });
             toast({
-                title: "Documento inválido",
+                title: "Documento inv�lido",
                 description: documentError,
                 variant: "destructive",
             });
@@ -955,12 +936,12 @@ export default function RentForm({ onClose, onSubmit }) {
         } else {
             // Si es un campo de moneda, limpiamos el valor antes de guardarlo en valuesRef
             if (currencyFields.includes(name)) {
-                cleanValue = value.replace(/[^0-9]/g, ''); // Solo dÃ­gitos
+                cleanValue = value.replace(/[^0-9]/g, ''); // Solo dígitos
                 const formattedValue = formatNumberWithThousandsSeparator(cleanValue);
 
                 // Actualizar el valor a mostrar en el input (lo que ve el usuario)
                 displayValuesRef.current[name] = formattedValue;
-                e.target.value = formattedValue; // Forzar la actualizaciÃ³n visual
+                e.target.value = formattedValue; // Forzar la actualización visual
             } else if (docFields.includes(name) || phoneFields.includes(name)) {
                 cleanValue = sanitizeNumericString(value);
                 displayValuesRef.current[name] = cleanValue;
@@ -971,7 +952,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 displayValuesRef.current[name] = value;
             }
 
-            // Guardar siempre el valor LIMPIO (solo dÃ­gitos si es numÃ©rico con formato) o el valor original
+            // Guardar siempre el valor LIMPIO (solo dígitos si es numérico con formato) o el valor original
             valuesRef.current[name] = cleanValue;
 
             if (name === "registroInmobiliario") {
@@ -988,7 +969,7 @@ export default function RentForm({ onClose, onSubmit }) {
             }
         }
 
-        // Limpieza de error en vivo al escribir, solo si ya existÃ­a un error
+        // Limpieza de error en vivo al escribir, solo si ya existía un error
         if (errors[name] && cleanValue.length === 0) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -1200,7 +1181,7 @@ export default function RentForm({ onClose, onSubmit }) {
                             </button>
                         </div>
                         <div className="grid grid-cols-7 gap-1 mb-1">
-                            {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
+                            {["Dom", "Lun", "Mar", "Mi�", "Jue", "Vie", "S�b"].map((d) => (
                                 <div key={d} className="text-center text-xs font-semibold text-slate-500 py-1">
                                     {d}
                                 </div>
@@ -1233,7 +1214,7 @@ export default function RentForm({ onClose, onSubmit }) {
         );
     };
 
-    // Funciones de validaciÃ³n de formato
+    // Funciones de validación de formato
     const isValidName = (value) => /^[\p{L}\s]*$/u.test(value);
     const isValidNumeric = (value) => /^\d*$/.test(value);
     const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
@@ -1241,12 +1222,12 @@ export default function RentForm({ onClose, onSubmit }) {
     // Handler para verificar obligatoriedad, longitud y formato al salir del campo - MEJORADO
     const handleInputBlur = (e) => {
         const { name } = e.target;
-        // Tomamos el valor limpio de la ref, no del e.target.value (que podrÃ­a estar formateado)
+        // Tomamos el valor limpio de la ref, no del e.target.value (que podría estar formateado)
         const value = valuesRef.current[name] || "";
 
         let errorMessage = null;
         const isRequired = requiredFields.includes(name);
-        const conflictErrorMsg = "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
+        const conflictErrorMsg = "El n�mero de documento del Arrendatario no puede ser igual al del Codeudor.";
 
         setErrors(prev => {
             const newErrors = { ...prev };
@@ -1261,7 +1242,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
                     errorMessage = `Solo se permiten letras y espacios.`;
                 }
-                // VALIDACIÃ“N MEJORADA PARA DOCUMENTOS
+                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(name)) {
                     let tipoDocumento = "";
 
@@ -1271,39 +1252,39 @@ export default function RentForm({ onClose, onSubmit }) {
                         tipoDocumento = valuesRef.current.tipoDocCodeudor || "CC";
                     }
 
-                    // Validar formato bÃ¡sico primero
+                    // Validar formato básico primero
                     if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
-                        errorMessage = `Solo se permiten letras, números, espacios, puntos y guiones`;
+                        errorMessage = `Solo se permiten letras, n�meros, espacios, puntos y guiones`;
                     } else {
-                        // ValidaciÃ³n especÃ­fica por tipo de documento
+                        // Validación específica por tipo de documento
                         errorMessage = validateDocument(tipoDocumento, value);
                     }
                 }
                 else if (phoneFields.includes(name)) {
                     if (!isValidNumeric(value)) {
-                        errorMessage = `Solo se permiten números.`;
+                        errorMessage = `Solo se permiten n�meros.`;
                     } else if (value.length !== 10) {
-                        errorMessage = "El teléfono debe tener exactamente 10 digitos";
+                        errorMessage = "El tel�fono debe tener exactamente 10 digitos";
                     }
                 }
                 else if (emailFields.includes(name) && !isValidEmail(value)) {
-                    errorMessage = `El correo electrónico debe ser valido.`;
+                    errorMessage = `El correo electr�nico debe ser valido.`;
                 }
                 else if (strictNumericFields.includes(name) && !isValidNumeric(value)) {
-                    errorMessage = `Solo se permiten números enteros.`;
+                    errorMessage = `Solo se permiten n�meros enteros.`;
                 }
 
-                // Validaciones especÃ­ficas para campos numÃ©ricos
+                // Validaciones específicas para campos numéricos
                 if (!errorMessage && strictNumericFields.includes(name)) {
                     const numericValue = parseInt(value);
 
                     if ((name === "precioInmueble" || name === "precio") && numericValue <= 0) {
-                        errorMessage = `Debe ser un número mayor a 0`;
+                        errorMessage = `Debe ser un n�mero mayor a 0`;
                     }
                 }
             }
 
-            // 3. Validar CONFLICTO DE DOCUMENTO (solo si es un campo de documento y no tiene otro error mÃ¡s grave)
+            // 3. Validar CONFLICTO DE DOCUMENTO (solo si es un campo de documento y no tiene otro error más grave)
             if (!errorMessage && docFields.includes(name)) {
                 const otherDocName = name === NUMERO_DOC_ARR ? NUMERO_DOC_COD : NUMERO_DOC_ARR;
                 const otherDocValue = valuesRef.current[otherDocName] || "";
@@ -1315,7 +1296,7 @@ export default function RentForm({ onClose, onSubmit }) {
                         newErrors[otherDocName] = conflictErrorMsg;
                     }
                 } else if (newErrors[otherDocName] === conflictErrorMsg) {
-                    // Si el otro campo tenÃ­a el error de conflicto, lo limpiamos
+                    // Si el otro campo tenía el error de conflicto, lo limpiamos
                     delete newErrors[otherDocName];
                 }
             }
@@ -1351,7 +1332,7 @@ export default function RentForm({ onClose, onSubmit }) {
         }
     };
 
-    // --- LÃ“GICA DE VALIDACIÃ“N CENTRAL MEJORADA ---
+    // --- LÓGICA DE VALIDACIÓN CENTRAL MEJORADA ---
     const runValidation = (fieldsToCheck) => {
         let currentErrors = { ...errors };
         let hasError = false;
@@ -1359,30 +1340,30 @@ export default function RentForm({ onClose, onSubmit }) {
 
         // 1. Iterar sobre los campos del paso actual o todos para validaciones individuales
         for (const fieldName of fieldsToCheck) {
-            // Siempre usamos el valor LIMPIO de valuesRef para la validaciÃ³n
+            // Siempre usamos el valor LIMPIO de valuesRef para la validación
             const value = valuesRef.current[fieldName] || "";
             let error = null;
 
             const isRequired = requiredFields.includes(fieldName);
 
-            // A. ValidaciÃ³n de Obligatoriedad
+            // A. Validación de Obligatoriedad
             if (isRequired && !value.toString().trim()) {
                 error = "Este campo es obligatorio.";
             }
 
-            // B. ValidaciÃ³n de Obligatoriedad y > 0 para nÃºmeros estrictos
+            // B. Validación de Obligatoriedad y > 0 para números estrictos
             if (isRequired && strictNumericFields.includes(fieldName)) {
                 if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                     error = "Este campo es obligatorio y debe ser mayor a 0";
                 }
             }
 
-            // C. ValidaciÃ³n de Formato MEJORADA
+            // C. Validación de Formato MEJORADA
             if (!error && value.toString().trim()) {
                 if (nameFields.includes(fieldName) && !isValidName(displayValuesRef.current[fieldName])) {
                     error = `Solo se permiten letras, espacios y acentos.`;
                 }
-                // VALIDACIÃ“N MEJORADA PARA DOCUMENTOS
+                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(fieldName)) {
                     let tipoDocumento = "";
 
@@ -1395,24 +1376,24 @@ export default function RentForm({ onClose, onSubmit }) {
                     error = validateDocument(tipoDocumento, value);
                 }
                 else if (phoneFields.includes(fieldName) && !isValidNumeric(value)) {
-                    error = `Solo se permiten di­gitos.`;
+                    error = `Solo se permiten di�gitos.`;
                 }
                 else if (phoneFields.includes(fieldName) && value.length !== 10) {
-                    error = "El teléfono debe tener exactamente 10 digitos";
+                    error = "El tel�fono debe tener exactamente 10 digitos";
                 }
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
-                    error = `Debe ser un correo electrónico valido.`;
+                    error = `Debe ser un correo electr�nico valido.`;
                 }
                 else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) {
-                    error = `Solo se permiten números enteros.`;
+                    error = `Solo se permiten n�meros enteros.`;
                 }
 
-                // Validaciones especÃ­ficas para campos numÃ©ricos
+                // Validaciones específicas para campos numéricos
                 if (!error && strictNumericFields.includes(fieldName)) {
                     const numericValue = parseInt(value);
 
                     if (fieldName === "precioInmueble" && numericValue <= 0) {
-                        error = `Debe ser un número mayor a 0`;
+                        error = `Debe ser un n�mero mayor a 0`;
                     }
                 }
             }
@@ -1425,18 +1406,18 @@ export default function RentForm({ onClose, onSubmit }) {
                     firstErrorField = fieldName;
                 }
             } else {
-                // Limpiar el error si el campo es vÃ¡lido (pero no tocar el error de CONFLICTO si ya existe)
-                const isConflictError = currentErrors[fieldName] === "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
+                // Limpiar el error si el campo es válido (pero no tocar el error de CONFLICTO si ya existe)
+                const isConflictError = currentErrors[fieldName] === "El n�mero de documento del Arrendatario no puede ser igual al del Codeudor.";
                 if (!isConflictError) {
                     delete currentErrors[fieldName];
                 }
             }
         }
 
-        // 2. ValidaciÃ³n de CONFLICTO DE DOCUMENTO (Cross-field validation)
+        // 2. Validación de CONFLICTO DE DOCUMENTO (Cross-field validation)
         const docArrValue = valuesRef.current[NUMERO_DOC_ARR] || "";
         const docCodValue = valuesRef.current[NUMERO_DOC_COD] || "";
-        const conflictErrorMsg = "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
+        const conflictErrorMsg = "El n�mero de documento del Arrendatario no puede ser igual al del Codeudor.";
 
         if (docArrValue.trim() && docCodValue.trim() && docArrValue === docCodValue) {
 
@@ -1475,7 +1456,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 !currentErrors.fechaFinal &&
                 !hasMinimumOneMonthTerm(fechaInicio, fechaFinal)
             ) {
-                const termError = "La duración mínima del contrato debe ser de un mes.";
+                const termError = "La duraci�n m�nima del contrato debe ser de un mes.";
                 currentErrors.fechaFinal = termError;
                 hasError = true;
                 if (!firstErrorField) firstErrorField = "fechaFinal";
@@ -1499,7 +1480,7 @@ export default function RentForm({ onClose, onSubmit }) {
         // Validar solo los campos del paso actual, asegurando incluir ambos documentos si son relevantes
         let fieldsToValidate = stepFields[step];
 
-        // AÃ±adir el campo de documento cruzado para validar el conflicto al cambiar de paso 1 a 2
+        // Añadir el campo de documento cruzado para validar el conflicto al cambiar de paso 1 a 2
         if (step === 1 && (valuesRef.current[NUMERO_DOC_COD] || "").trim()) {
             if (!fieldsToValidate.includes(NUMERO_DOC_COD)) fieldsToValidate.push(NUMERO_DOC_COD);
         }
@@ -1531,7 +1512,7 @@ export default function RentForm({ onClose, onSubmit }) {
         e.preventDefault();
         if (submissionState.isSubmitting) return;
 
-        // En el envÃ­o final, validamos TODOS los campos obligatorios
+        // En el envío final, validamos TODOS los campos obligatorios
         const allFieldsToValidate = Object.values(stepFields)
             .flat()
             .filter(f => requiredFields.includes(f));
@@ -1540,7 +1521,7 @@ export default function RentForm({ onClose, onSubmit }) {
         setErrors(currentErrors);
 
         if (hasError) {
-            // Determinar a quÃ© paso debe volver para mostrar el error y enfocar el campo
+            // Determinar a qué paso debe volver para mostrar el error y enfocar el campo
             let targetStep = 1;
             if (stepFields[2].includes(firstErrorField)) targetStep = 2;
             else if (stepFields[3].includes(firstErrorField)) targetStep = 3;
@@ -1555,10 +1536,10 @@ export default function RentForm({ onClose, onSubmit }) {
                 if (el) el.focus();
             }, 50);
 
-            return; // Bloquea el envÃ­o
+            return; // Bloquea el envío
         }
 
-        // ValidaciÃ³n adicional: asegurar que tenemos un inmueble resuelto a ID
+        // Validación adicional: asegurar que tenemos un inmueble resuelto a ID
         if (!valuesRef.current.idInmueble) {
             const msg = "Selecciona un inmueble valido desde el registro inmobiliario.";
             setErrors((prev) => ({ ...prev, registroInmobiliario: msg }));
@@ -1574,7 +1555,7 @@ export default function RentForm({ onClose, onSubmit }) {
         const rawValues = { ...valuesRef.current, estado: estadoCalculado };
 
         try {
-            // 1ï¸âƒ£ Asegurar ARRRENDATARIO (crear o reutilizar)
+            // 1️⃣ Asegurar ARRRENDATARIO (crear o reutilizar)
             const arrendatarioPayload = buildArrendatarioPayload(rawValues);
             let renant;
 
@@ -1584,7 +1565,7 @@ export default function RentForm({ onClose, onSubmit }) {
             } catch (error) {
                 const duplicateMsg = "ya esta registrada como arrendatario";
                 if (error?.message?.toLowerCase().includes(duplicateMsg)) {
-                    // Ya existe â†’ lo buscamos y reutilizamos
+                    // Ya existe → lo buscamos y reutilizamos
                     const tipoDocumento = (rawValues.tipoDocArrendatario || "").trim();
                     const numeroDocumento = cleanDocumentByType(tipoDocumento, rawValues.numeroDocArrendatario);
 
@@ -1603,11 +1584,11 @@ export default function RentForm({ onClose, onSubmit }) {
                 }
             }
 
-            // 2ï¸âƒ£ Crear ARRIENDO ligado al arrendatario obtenido/creado
+            // 2️⃣ Crear ARRIENDO ligado al arrendatario obtenido/creado
             const arriendoPayload = buildArriendoPayload(rawValues, renant);
             const arriendoCreated = await arriendoApiService.crearArriendo(arriendoPayload);
 
-            // 3ï¸âƒ£ Notificar al padre â†’ RenantManagementPage harÃ¡ fetchArriendos()
+            // 3️⃣ Notificar al padre → RenantManagementPage hará fetchArriendos()
             await onSubmit?.({
                 renant,
                 arriendo: arriendoCreated,
@@ -1642,11 +1623,11 @@ export default function RentForm({ onClose, onSubmit }) {
         const isNameField = nameFields.includes(name);
         const isReadOnlyField = name === "precio" || name === "precioInmueble";
 
-        // Determinar si necesita validaciÃ³n en blur (incluye los requeridos para feedback inmediato)
+        // Determinar si necesita validación en blur (incluye los requeridos para feedback inmediato)
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
 
-        // Establecer el tipo de input para sugerir teclado numÃ©rico
+        // Establecer el tipo de input para sugerir teclado numérico
         let inputType = type;
         if (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
             if (type !== 'date' && type !== 'email') {
@@ -1664,10 +1645,10 @@ export default function RentForm({ onClose, onSubmit }) {
         // Placeholders mejorados
         let fieldPlaceholder = placeholder;
         if (isDocField) {
-            fieldPlaceholder = "Ej: 1234567890 (8-10 digitos segun el tipo)";
+            fieldPlaceholder = "Ej: 1234567 a 1234567890";
         }
         if (isPhoneField) {
-            fieldPlaceholder = "Ej: 3001234567 (10 digitos mi­nimo)";
+            fieldPlaceholder = "Ej: 3001234567 (10 digitos mi�nimo)";
         }
 
         if (type === "checkbox") {
@@ -1738,6 +1719,8 @@ export default function RentForm({ onClose, onSubmit }) {
                     onChange={isReadOnlyField ? undefined : handleInputChange}
                     onBlur={onBlurHandler}
                     readOnly={isReadOnlyField}
+                    minLength={isDocField ? 7 : undefined}
+                    maxLength={isDocField ? 10 : undefined}
                 />
                 {errorMessage && (
                     <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
@@ -1747,7 +1730,7 @@ export default function RentForm({ onClose, onSubmit }) {
     };
 
     return (
-        // ðŸ”‘ Fondo del modal con desenfoque - CAMBIO PRINCIPAL
+        // 🔑 Fondo del modal con desenfoque - CAMBIO PRINCIPAL
         <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4"
             onClick={onClose}
@@ -1770,7 +1753,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-5 flex items-start gap-4">
                     <div className="flex-1">
                         <h2 className="text-2xl font-bold text-gray-900">Crear Arriendo</h2>
-                        <p className="text-sm text-gray-600 mt-1">Complete la información del nuevo contrato de arrendamiento</p>
+                        <p className="text-sm text-gray-600 mt-1">Complete la informaci�n del nuevo contrato de arrendamiento</p>
                         <div className="mt-4">
                             <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
                                 <div
@@ -1814,13 +1797,13 @@ export default function RentForm({ onClose, onSubmit }) {
                                         as="select"
                                         options={DOCUMENT_OPTIONS}
                                     />
-                                    <Field name={NUMERO_DOC_ARR} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                    <Field name={NUMERO_DOC_ARR} placeholder="Ej: 1234567 a 1234567890" />
                                     <Field name="primerNombreArrendatario" placeholder="Solo letras y espacios." />
                                     <Field name="segundoNombreArrendatario" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="primerApellidoArrendatario" placeholder="Solo letras y espacios." />
                                     <Field name="segundoApellidoArrendatario" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="correoArrendatario" placeholder="correo@dominio.com" type="email" />
-                                    <Field name="telefonoArrendatario" placeholder="Ej: 3001234567 (10 dígitos mínimo)" />
+                                    <Field name="telefonoArrendatario" placeholder="Ej: 3001234567 (10 d�gitos m�nimo)" />
                                 </div>
                             </section>
                         )}
@@ -1830,7 +1813,7 @@ export default function RentForm({ onClose, onSubmit }) {
                             <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
                                 <div>
                                     <h3 className="text-sm font-semibold text-gray-900">Datos del Codeudor</h3>
-                                    <p className="text-xs text-gray-600 mt-1">Información de respaldo financiero</p>
+                                    <p className="text-xs text-gray-600 mt-1">Informaci�n de respaldo financiero</p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <Field
@@ -1838,13 +1821,13 @@ export default function RentForm({ onClose, onSubmit }) {
                                         as="select"
                                         options={DOCUMENT_OPTIONS}
                                     />
-                                    <Field name={NUMERO_DOC_COD} placeholder="Ej: 1234567890 (8-10 dígitos según el tipo)" />
+                                    <Field name={NUMERO_DOC_COD} placeholder="Ej: 1234567 a 1234567890" />
                                     <Field name="primerNombreCodeudor" placeholder="Solo letras y espacios." />
                                     <Field name="segundoNombreCodeudor" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="primerApellidoCodeudor" placeholder="Solo letras y espacios." />
                                     <Field name="segundoApellidoCodeudor" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="correoCodeudor" placeholder="correo@dominio.com" type="email" />
-                                    <Field name="telefonoCodeudor" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
+                                    <Field name="telefonoCodeudor" placeholder="Ej: 3009876543 (10 d�gitos m�nimo)" />
                                     <Field
                                         name="actividadEconomicaCodeudor"
                                         as="select"
@@ -1877,10 +1860,10 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="registroInmobiliario" placeholder="Ej: 12345-ABC" />
                                     <Field name="nombreInmueble" placeholder="Ej: Edificio Central" />
                                     <Field name="departamento" placeholder="Ej: Antioquia" />
-                                    <Field name="ciudad" placeholder="Ej: Medellín" />
+                                    <Field name="ciudad" placeholder="Ej: Medell�n" />
                                     <Field name="barrio" placeholder="Ej: El Poblado" />
                                     <Field name="direccion" placeholder="Ej: Calle 10 # 45-20" />
-                                    <Field name="precioInmueble" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
+                                    <Field name="precioInmueble" placeholder="Ej: 150000000 (Solo n�meros enteros mayores a 0)." />
                                 </div>
                             </section>
                         )}
@@ -1894,14 +1877,14 @@ export default function RentForm({ onClose, onSubmit }) {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FancyDatePicker name="fechaInicio" label="Fecha de Inicio" />
-                                    <FancyDatePicker name="fechaFinal" label="Fecha de Finalización" />
+                                    <FancyDatePicker name="fechaFinal" label="Fecha de Finalizaci�n" />
                                     <FancyDatePicker
                                         name="fechaCobro"
                                         label="Fecha de Cobro"
                                         locked
-                                        helperText="Se fija automáticamente al día 5 de cada mes."
+                                        helperText="Se fija autom�ticamente al d�a 5 de cada mes."
                                     />
-                                    <Field name="precio" placeholder="Ej: 1500000 (Solo números enteros mayores a 0)." />
+                                    <Field name="precio" placeholder="Ej: 1500000 (Solo n�meros enteros mayores a 0)." />
                                 </div>
                             </section>
                         )}
@@ -1950,7 +1933,7 @@ export default function RentForm({ onClose, onSubmit }) {
                     )}
                 </form>
             </motion.div>
-            <Toaster />
         </motion.div>
     );
 }
+

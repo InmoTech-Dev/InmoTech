@@ -161,6 +161,23 @@ const AdministrativosPage = () => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter, roleFilter, dateFilter, customDateRange, administrativos]);
 
+  useEffect(() => {
+    if (!selectedAdministrativo) return;
+
+    const selectedId = selectedAdministrativo.id_administrativo;
+    const refreshedAdministrativo = (Array.isArray(administrativos) ? administrativos : [])
+      .find((admin) => admin.id_administrativo === selectedId);
+
+    if (refreshedAdministrativo) {
+      setSelectedAdministrativo(refreshedAdministrativo);
+      return;
+    }
+
+    setSelectedAdministrativo(null);
+    setIsViewModalOpen(false);
+    setIsEditModalOpen(false);
+  }, [administrativos, selectedAdministrativo]);
+
   // Calcular estadísticas
   const administrativosArray = Array.isArray(administrativos) ? administrativos : [];
   const stats = {

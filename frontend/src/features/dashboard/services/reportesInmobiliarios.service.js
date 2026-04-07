@@ -1,3 +1,4 @@
+// Top-level module scope
 import { apiClient } from '../../../shared/services/api.config'
 
 class ReportesInmobiliariosService {
@@ -7,15 +8,10 @@ class ReportesInmobiliariosService {
 
   // Helper para desempaquetar { success, data }
   unwrapResponseBody(body) {
-    const normalizedBody =
-      body && typeof body === 'object' && 'data' in body && Object.keys(body).length === 1
-        ? body.data
-        : body;
-
-    if (normalizedBody && typeof normalizedBody === 'object' && 'success' in normalizedBody && 'data' in normalizedBody) {
-      return normalizedBody.data;
+    if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
+      return body.data;
     }
-    return normalizedBody;
+    return body;
   }
 
   async crearReporte(reporteData, seguimientoGeneral = '') {
@@ -24,7 +20,7 @@ class ReportesInmobiliariosService {
       const payload = { ...datosReporte, seguimiento_general: seguimientoGeneral };
 
       const response = await this.api.post('/reportes-inmobiliarios', payload);
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       const creado = Array.isArray(body?.reporte) || typeof body?.reporte === 'object' ? body.reporte : body;
 
       // Procesar seguimientos temporales
@@ -54,7 +50,7 @@ class ReportesInmobiliariosService {
       const payload = { ...datosReporte, seguimiento_general: seguimientoGeneral };
 
       const response = await this.api.patch(`/reportes-inmobiliarios/${reporteId}`, payload);
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       const actualizado = Array.isArray(body?.reporte) || typeof body?.reporte === 'object' ? body.reporte : body;
 
       if (seguimientosTemporales && seguimientosTemporales.length > 0) {
@@ -80,7 +76,7 @@ class ReportesInmobiliariosService {
   async obtenerReporte(reporteId) {
     try {
       const response = await this.api.get(`/reportes-inmobiliarios/${reporteId}`);
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       // El backend devuelve { success, data: reporte } — desempaquetar correctamente
       return body?.data || body?.reporte || body;
     } catch (error) {
@@ -93,7 +89,7 @@ class ReportesInmobiliariosService {
       // Agregar cache-buster 't' para asegurar datos frescos
       const params = { ...filtros, ...opciones, t: Date.now() };
       const response = await this.api.get('/reportes-inmobiliarios', { params });
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       return Array.isArray(body) ? body : body?.data || []; // soporta ambos esquemas
     } catch (error) {
       throw this.handleError(error, 'Error al listar los reportes');
@@ -104,7 +100,7 @@ class ReportesInmobiliariosService {
     try {
       const payload = { descripcion, estado };
       const response = await this.api.post(`/reportes-inmobiliarios/${reporteId}/seguimientos`, payload);
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       return body;
     } catch (error) {
       throw this.handleError(error, 'Error al crear el seguimiento');
@@ -114,7 +110,7 @@ class ReportesInmobiliariosService {
   async obtenerHistorialSeguimientos(reporteId, filtros = {}) {
     try {
       const response = await this.api.get(`/reportes-inmobiliarios/${reporteId}/seguimientos`, { params: filtros });
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       return Array.isArray(body) ? body : body?.data || [];
     } catch (error) {
       throw this.handleError(error, 'Error al obtener el historial de seguimientos');
@@ -125,7 +121,7 @@ class ReportesInmobiliariosService {
     try {
       const payload = { estado };
       const response = await this.api.patch(`/reportes-inmobiliarios/${reporteId}/seguimientos/${seguimientoId}`, payload);
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       return body;
     } catch (error) {
       throw this.handleError(error, 'Error al actualizar el estado del seguimiento');
@@ -140,7 +136,7 @@ class ReportesInmobiliariosService {
   async eliminarReporte(reporteId) {
     try {
       const response = await this.api.delete(`/reportes-inmobiliarios/${reporteId}`);
-      return this.unwrapResponseBody(response);
+      return response.data;
     } catch (error) {
       throw this.handleError(error, 'Error al eliminar el reporte');
     }
@@ -151,7 +147,7 @@ class ReportesInmobiliariosService {
   async listarRubros(reporteId) {
     try {
       const response = await this.api.get(`/reportes-inmobiliarios/${reporteId}/rubros`);
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       return Array.isArray(body) ? body : body?.data || [];
     } catch (error) {
       throw this.handleError(error, 'Error al listar los rubros');
@@ -161,7 +157,7 @@ class ReportesInmobiliariosService {
   async crearRubro(reporteId, rubroData) {
     try {
       const response = await this.api.post(`/reportes-inmobiliarios/${reporteId}/rubros`, rubroData);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al crear el rubro');
     }
@@ -170,7 +166,7 @@ class ReportesInmobiliariosService {
   async actualizarRubro(reporteId, rubroId, rubroData) {
     try {
       const response = await this.api.patch(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}`, rubroData);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al actualizar el rubro');
     }
@@ -179,7 +175,7 @@ class ReportesInmobiliariosService {
   async eliminarRubro(reporteId, rubroId) {
     try {
       const response = await this.api.delete(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}`);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al eliminar el rubro');
     }
@@ -190,7 +186,7 @@ class ReportesInmobiliariosService {
   async listarSeguimientosRubro(reporteId, rubroId) {
     try {
       const response = await this.api.get(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`);
-      const body = this.unwrapResponseBody(response);
+      const body = this.unwrapResponseBody(response.data);
       return Array.isArray(body) ? body : body?.data || [];
     } catch (error) {
       throw this.handleError(error, 'Error al listar los seguimientos del rubro');
@@ -200,7 +196,7 @@ class ReportesInmobiliariosService {
   async crearSeguimientoRubro(reporteId, rubroId, seguimientoData) {
     try {
       const response = await this.api.post(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`, seguimientoData);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al crear el seguimiento del rubro');
     }
@@ -209,7 +205,7 @@ class ReportesInmobiliariosService {
   async actualizarSeguimientoRubro(reporteId, rubroId, seguimientoId, seguimientoData) {
     try {
       const response = await this.api.patch(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos/${seguimientoId}`, seguimientoData);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al actualizar el seguimiento del rubro');
     }
@@ -218,7 +214,7 @@ class ReportesInmobiliariosService {
   async eliminarSeguimientoRubro(reporteId, rubroId, seguimientoId) {
     try {
       const response = await this.api.delete(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos/${seguimientoId}`);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al eliminar el seguimiento del rubro');
     }
@@ -250,7 +246,7 @@ class ReportesInmobiliariosService {
   async obtenerEstadisticas(filtros = {}) {
     try {
       const response = await this.api.get('/reportes-inmobiliarios/estadisticas', { params: filtros });
-      return this.unwrapResponseBody(response);
+      return response.data;
     } catch (error) {
       throw this.handleError(error, 'Error al obtener las estadísticas');
     }
@@ -276,7 +272,7 @@ class ReportesInmobiliariosService {
   async agregarImagen(reporteId, imagenData) {
     try {
       const response = await this.api.post(`/reportes-inmobiliarios/${reporteId}/imagenes`, imagenData);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al agregar la imagen');
     }
@@ -286,7 +282,7 @@ class ReportesInmobiliariosService {
   async agregarArchivo(reporteId, archivoData) {
     try {
       const response = await this.api.post(`/reportes-inmobiliarios/${reporteId}/archivos`, archivoData);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al agregar el archivo');
     }
@@ -295,7 +291,7 @@ class ReportesInmobiliariosService {
   async eliminarImagen(reporteId, imagenId) {
     try {
       const response = await this.api.delete(`/reportes-inmobiliarios/${reporteId}/imagenes/${imagenId}`);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al eliminar la imagen');
     }
@@ -304,7 +300,7 @@ class ReportesInmobiliariosService {
   async eliminarArchivo(reporteId, archivoId) {
     try {
       const response = await this.api.delete(`/reportes-inmobiliarios/${reporteId}/archivos/${archivoId}`);
-      return this.unwrapResponseBody(response);
+      return this.unwrapResponseBody(response.data);
     } catch (error) {
       throw this.handleError(error, 'Error al eliminar el archivo');
     }
@@ -316,6 +312,34 @@ const reportesInmobiliariosService = new ReportesInmobiliariosService();
 
 export default reportesInmobiliariosService;
 export { ReportesInmobiliariosService };
+
+// Top-level module scope
+const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '/api';
+
+async function http(path, { method = 'GET', body, headers = {} } = {}) {
+  const token = localStorage.getItem('token');
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+  const data = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
+
+  if (!res.ok) {
+    const message = isJson && data && data.message ? data.message : res.statusText;
+    throw new Error(`Error ${res.status}: ${message}`);
+  }
+
+  return data;
+}
 
 function clean(obj) {
   if (!obj || typeof obj !== 'object') return obj;
@@ -329,37 +353,32 @@ function clean(obj) {
 // Rubros (alineados con /reportes-inmobiliarios/:reporteId/rubros)
 export async function crearRubro(reporteId, rubro) {
   if (!reporteId) throw new Error('reporteId es requerido para crear un rubro');
-  return reportesInmobiliariosService.crearRubro(reporteId, clean(rubro));
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros`, { method: 'POST', body: clean(rubro) });
 }
 
 export async function obtenerRubros(reporteId) {
   if (!reporteId) throw new Error('reporteId es requerido para listar rubros');
-  return reportesInmobiliariosService.listarRubros(reporteId);
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros`, { method: 'GET' });
 }
 
 export async function actualizarRubro(reporteId, id, rubro) {
   if (!reporteId || !id) throw new Error('IDs requeridos para actualizar rubro');
-  return reportesInmobiliariosService.actualizarRubro(reporteId, id, clean(rubro));
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${id}`, { method: 'PATCH', body: clean(rubro) });
 }
 
 // export helpers (seguir usando http y clean)
 // Seguimientos de rubro
 export async function crearSeguimientoRubro(reporteId, rubroId, seguimiento) {
   if (!reporteId || !rubroId) throw new Error('reporteId y rubroId son requeridos para crear un seguimiento');
-  return reportesInmobiliariosService.crearSeguimientoRubro(reporteId, rubroId, clean(seguimiento));
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`, { method: 'POST', body: clean(seguimiento) });
 }
 
 export async function obtenerSeguimientosRubro(reporteId, rubroId) {
   if (!reporteId || !rubroId) throw new Error('reporteId y rubroId son requeridos para listar seguimientos');
-  return reportesInmobiliariosService.listarSeguimientosRubro(reporteId, rubroId);
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos`, { method: 'GET' });
 }
 
 export async function actualizarSeguimientoRubro(reporteId, rubroId, seguimientoId, seguimiento) {
   if (!reporteId || !rubroId || !seguimientoId) throw new Error('IDs requeridos para actualizar seguimiento');
-  return reportesInmobiliariosService.actualizarSeguimientoRubro(
-    reporteId,
-    rubroId,
-    seguimientoId,
-    clean(seguimiento)
-  );
+  return http(`/reportes-inmobiliarios/${reporteId}/rubros/${rubroId}/seguimientos/${seguimientoId}`, { method: 'PATCH', body: clean(seguimiento) });
 }

@@ -1,16 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Search, User, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
 
-const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, onToggle }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-
+const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, onToggle, searchTerm, onSearchChange }) => {
     const filteredUsers = users.filter(user =>
-        `${user.nombre_completo} ${user.apellido_completo}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.rol?.toLowerCase().includes(searchTerm.toLowerCase())
+        `${user.nombre_completo} ${user.apellido_completo}`.toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+        user.rol?.toLowerCase().includes((searchTerm || '').toLowerCase())
     );
 
     return (
@@ -27,29 +25,29 @@ const UserSidebar = ({ users, selectedUser, onSelectUser, loading, isCollapsed, 
             </button>
 
             <div className={cn("p-5", isCollapsed && "px-3 items-center flex flex-col")}>
-                {!isCollapsed && (
-                    <h2 className="text-[10px] uppercase font-bold text-slate-500 mb-5 px-1 tracking-[0.15em] opacity-70">
-                        Administrativos
-                    </h2>
-                )}
-
-                <div className="relative mb-2 w-full">
+                <div className="relative mb-4 w-full">
                     {isCollapsed ? (
-                        <div className="flex justify-center text-slate-300 py-2">
+                        <div className="flex justify-center text-slate-300 py-2" title="Buscar reportes...">
                             <Search className="w-5 h-5" />
                         </div>
                     ) : (
                         <>
-                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none" />
                             <Input
-                                placeholder="Buscar..."
-                                className="pl-9 bg-slate-50 border-none h-11 ring-offset-0 focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl text-sm font-medium"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Buscar reportes..."
+                                className="pl-9 bg-slate-50 border-slate-100/50 hover:bg-slate-100/80 focus:bg-white h-11 ring-offset-0 focus-visible:ring-2 focus-visible:ring-indigo-500/50 rounded-xl text-sm font-medium transition-all duration-200 placeholder:text-slate-400"
+                                value={searchTerm || ''}
+                                onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
                             />
                         </>
                     )}
                 </div>
+
+                {!isCollapsed && (
+                    <h2 className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-1 tracking-[0.15em] opacity-70">
+                        Personal a Cargo
+                    </h2>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">

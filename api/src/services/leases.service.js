@@ -188,7 +188,14 @@ class LeaseService {
   parseExtensionTracking(comment = '') {
     const text = String(comment || '');
     const normalized = this.normalizeFilterValue(text);
-    if (!normalized.includes('prorroga aplicada')) {
+    const rawLower = text.trim().toLowerCase();
+    const hasExtensionMarker =
+      normalized.includes('prorroga aplicada') ||
+      rawLower.includes('prórroga aplicada') ||
+      rawLower.includes('prã³rroga aplicada') ||
+      rawLower.includes('prorroga aplicada');
+
+    if (!hasExtensionMarker) {
       return null;
     }
 
@@ -641,6 +648,11 @@ class LeaseService {
   }
 
   async resolveLeaseTermMonths(lease, transaction = null) {
+    const storedLeaseMonths = Number(lease?.duracion_meses);
+    if (Number.isFinite(storedLeaseMonths) && storedLeaseMonths > 0) {
+      return storedLeaseMonths;
+    }
+
     const leaseId = lease?.id_arrendamiento;
     if (leaseId) {
       const trackingRows = await SeguimientoArrendamiento.findAll({
@@ -1618,7 +1630,7 @@ class LeaseService {
         { where: { id_cobro: receiptData.id_cobro } }
       );
 
-      const leaseState = await this.getDisplayedLeaseState(payment.id_arrendamiento);
+      const leaseState = await this.syncLeaseStateFromPayments(payment.id_arrendamiento);
       return { ...newReceipt.get({ plain: true }), lease_estado: leaseState };
     } catch (error) {
       throw error;

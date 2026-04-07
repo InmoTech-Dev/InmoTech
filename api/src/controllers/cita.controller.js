@@ -9,6 +9,14 @@ const realtimeAudienceService = require('../services/realtimeAudience.service');
 const opsConsoleLogger = require('../utils/opsConsoleLogger');
 
 class CitaController {
+  ejecutarEnSegundoPlano = (task, errorMessage) => {
+    Promise.resolve()
+      .then(task)
+      .catch((error) => {
+        logger.error(errorMessage, error);
+      });
+  }
+
   normalizarIdsUsuarios = (values = []) => {
     return Array.from(
       new Set(
@@ -240,19 +248,19 @@ class CitaController {
 
       const cita = await citaService.confirmarCita(parsedId, id_agente_asignado);
 
-      try {
-        const citaDetallada = await citaService.obtenerCitaPorId(parsedId);
-        await emailService.enviarEmailCitaConfirmada({ cita: citaDetallada });
-        await emailService.enviarEmailCitaConfirmadaAgente({ cita: citaDetallada });
-      } catch (emailError) {
-        logger.error(`[EMAIL][CITA] No se pudo enviar confirmacion de cita ${parsedId}: ${emailError.message}`);
-      }
-
       this.emitirEventosTiempoRealCita({
         action: 'confirmed',
         cita,
         appointmentId: parsedId,
       });
+
+      this.ejecutarEnSegundoPlano(async () => {
+        const citaDetallada = await citaService.obtenerCitaPorId(parsedId);
+        await Promise.allSettled([
+          emailService.enviarEmailCitaConfirmada({ cita: citaDetallada }),
+          emailService.enviarEmailCitaConfirmadaAgente({ cita: citaDetallada }),
+        ]);
+      }, `[EMAIL][CITA] No se pudo enviar confirmacion de cita ${parsedId}:`);
 
       return res.status(200).json({
         success: true,

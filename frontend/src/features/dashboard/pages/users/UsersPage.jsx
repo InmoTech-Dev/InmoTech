@@ -143,6 +143,25 @@ const UsersPage = () => {
 
   // Calcular estadísticas
   const usersArray = Array.isArray(users) ? users : [];
+  useEffect(() => {
+    if (!selectedUser) return;
+
+    const updatedUser = usersArray.find((userItem) => userItem.id_persona === selectedUser.id_persona);
+
+    if (!updatedUser) {
+      setSelectedUser(null);
+      setIsViewModalOpen(false);
+      setIsEditModalOpen(false);
+      setIsDeleteModalOpen(false);
+      setIsStatusChangeModalOpen(false);
+      return;
+    }
+
+    if (updatedUser !== selectedUser) {
+      setSelectedUser(updatedUser);
+    }
+  }, [selectedUser, usersArray]);
+
   const stats = {
     total: usersArray.length,
     habilitados: usersArray.filter(u => u.estado === true).length,

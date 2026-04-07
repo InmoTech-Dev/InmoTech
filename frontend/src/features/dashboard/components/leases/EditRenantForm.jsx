@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useMemo } from "react";
+﻿import React, { useRef, useState, useCallback, useMemo } from "react";
 import { FaTimes } from "react-icons/fa";
 
 const requiredFields = [
@@ -67,17 +67,17 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
     const getLabel = (name) => {
         const labels = {
-            tipoDocInquilino: "Tipo de Documento", numeroDocInquilino: "Número de Documento", primerNombreInquilino: "Primer Nombre",
+            tipoDocInquilino: "Tipo de Documento", numeroDocInquilino: "NÃºmero de Documento", primerNombreInquilino: "Primer Nombre",
             segundoNombreInquilino: "Segundo Nombre", primerApellidoInquilino: "Primer Apellido", segundoApellidoInquilino: "Segundo Apellido",
-            correoInquilino: "Correo Electrónico", telefonoInquilino: "Teléfono", tipoDocCodeudor: "Tipo de Documento Codeudor",
-            numeroDocCodeudor: "Número de Documento Codeudor", primerNombreCodeudor: "Primer Nombre Codeudor",
+            correoInquilino: "Correo ElectrÃ³nico", telefonoInquilino: "TelÃ©fono", tipoDocCodeudor: "Tipo de Documento Codeudor",
+            numeroDocCodeudor: "NÃºmero de Documento Codeudor", primerNombreCodeudor: "Primer Nombre Codeudor",
             segundoNombreCodeudor: "Segundo Nombre Codeudor", primerApellidoCodeudor: "Primer Apellido Codeudor",
-            segundoApellidoCodeudor: "Segundo Apellido Codeudor", correoCodeudor: "Correo Electrónico Codeudor",
-            telefonoCodeudor: "Teléfono Codeudor", actividadEconomicaCodeudor: "Actividad Económica", tipoInmueble: "Tipo de Inmueble",
-            registroInmobiliario: "Registro Inmobiliario", nombreInmueble: "Nombre del Inmueble", area: "Área (m²)",
-            habitaciones: "Número de Habitaciones", banos: "Número de Baños", departamento: "Departamento",
-            ciudad: "Ciudad", barrio: "Barrio", direccion: "Dirección", precioInmueble: "Precio del Inmueble",
-            fechaInicio: "Fecha de Inicio", fechaFinal: "Fecha de Finalización", fechaCobro: "Fecha de Cobro",
+            segundoApellidoCodeudor: "Segundo Apellido Codeudor", correoCodeudor: "Correo ElectrÃ³nico Codeudor",
+            telefonoCodeudor: "TelÃ©fono Codeudor", actividadEconomicaCodeudor: "Actividad EconÃ³mica", tipoInmueble: "Tipo de Inmueble",
+            registroInmobiliario: "Registro Inmobiliario", nombreInmueble: "Nombre del Inmueble", area: "Ãrea (mÂ²)",
+            habitaciones: "NÃºmero de Habitaciones", banos: "NÃºmero de BaÃ±os", departamento: "Departamento",
+            ciudad: "Ciudad", barrio: "Barrio", direccion: "DirecciÃ³n", precioInmueble: "Precio del Inmueble",
+            fechaInicio: "Fecha de Inicio", fechaFinal: "Fecha de FinalizaciÃ³n", fechaCobro: "Fecha de Cobro",
             precio: "Precio del Arriendo", estado: "Estado del Arriendo",
         };
         return labels[name] ?? name;
@@ -148,7 +148,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             }
         }
 
-        // Recalcular estado al montar refs si ya hay fechaCobro en edición
+        // Recalcular estado al montar refs si ya hay fechaCobro en ediciÃ³n
         if (name === "fechaCobro" && valuesRef.current.fechaCobro) {
             const estadoAuto = isOnOrAfterToday(valuesRef.current.fechaCobro) ? "Debe" : "Activo";
             valuesRef.current.estado = estadoAuto;
@@ -221,7 +221,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         }
     };
 
-    const isValidName = (value) => /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]*$/.test(value);
+    const isValidName = (value) => /^[a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s]*$/.test(value);
     const isValidNumeric = (value) => /^\d*$/.test(value);
     const isValidEmail = (value) => value.includes('@');
 
@@ -230,9 +230,10 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         const value = valuesRef.current[name] || ""; 
         
         let errorMessage = null;
-        const minLengthDoc = 8;
+        const minLengthDoc = 7;
+        const maxLengthDoc = 10;
         const isRequired = requiredFields.includes(name);
-        const conflictErrorMsg = "El número de documento del Inquilino no puede ser igual al del Codeudor.";
+        const conflictErrorMsg = "El nÃºmero de documento del Inquilino no puede ser igual al del Codeudor.";
 
         setErrors(prev => {
             const newErrors = { ...prev };
@@ -249,12 +250,14 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                         errorMessage = `Solo se permiten números.`;
                     } else if (value.length < minLengthDoc) {
                         errorMessage = `Debe tener un mínimo de ${minLengthDoc} números.`;
+                    } else if (value.length > maxLengthDoc) {
+                        errorMessage = `Debe tener un máximo de ${maxLengthDoc} números.`;
                     }
                 } else if (phoneFields.includes(name) && !isValidNumeric(value)) {
                     errorMessage = `Solo se permiten números.`;
                 } else if (emailFields.includes(name) && !isValidEmail(value)) {
                     errorMessage = `El correo electrónico debe contener un '@'.`;
-                } else if (strictNumericFields.includes(name) && !isValidNumeric(value)) { 
+                } else if (strictNumericFields.includes(name) && !isValidNumeric(value)) {
                     errorMessage = `Solo se permiten números enteros.`;
                 }
             }
@@ -286,8 +289,8 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     const runValidation = (fieldsToCheck) => {
         let currentErrors = { ...errors };
         let hasError = false;
-        let firstErrorField = null;
-        const minLengthDoc = 8;
+        const minLengthDoc = 7;
+        const maxLengthDoc = 10;
         
         for (const fieldName of fieldsToCheck) {
             const value = valuesRef.current[fieldName] || "";
@@ -313,11 +316,13 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                         error = `Solo se permiten dígitos.`;
                     } else if (value.length < minLengthDoc) {
                         error = `Debe tener un mínimo de ${minLengthDoc} dígitos.`;
+                    } else if (value.length > maxLengthDoc) {
+                        error = `Debe tener un máximo de ${maxLengthDoc} dígitos.`;
                     }
                 } else if (phoneFields.includes(fieldName) && !isValidNumeric(value)) {
                     error = `Solo se permiten dígitos.`;
                 } else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
-                    error = `Debe contener un '@' y ser válido.`;
+                    error = `El correo electrónico debe contener un '@'.`;
                 } else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) { 
                     error = `Solo se permiten números enteros.`;
                 }
@@ -330,7 +335,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                     firstErrorField = fieldName;
                 }
             } else {
-                const isConflictError = currentErrors[fieldName] === "El número de documento del Inquilino no puede ser igual al del Codeudor.";
+                const isConflictError = currentErrors[fieldName] === "El nÃºmero de documento del Inquilino no puede ser igual al del Codeudor.";
                 if (!isConflictError) {
                     delete currentErrors[fieldName];
                 }
@@ -339,7 +344,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         
         const docInqValue = valuesRef.current[NUMERO_DOC_INQ] || "";
         const docCodValue = valuesRef.current[NUMERO_DOC_COD] || "";
-        const conflictErrorMsg = "El número de documento del Inquilino no puede ser igual al del Codeudor.";
+        const conflictErrorMsg = "El nÃºmero de documento del Inquilino no puede ser igual al del Codeudor.";
 
         if (docInqValue.trim() && docCodValue.trim() && docInqValue === docCodValue) {
             
@@ -377,7 +382,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                 !currentErrors.fechaFinal &&
                 !hasMinimumOneMonthTerm(fechaInicio, fechaFinal)
             ) {
-                const termError = "La duración mínima del contrato debe ser de un mes.";
+                const termError = "La duraciÃ³n mÃ­nima del contrato debe ser de un mes.";
                 currentErrors.fechaFinal = termError;
                 hasError = true;
                 if (!firstErrorField) firstErrorField = "fechaFinal";
@@ -454,7 +459,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         const payload = { ...valuesRef.current, estado: estadoAuto };
         if (onSubmit) onSubmit(payload);
         onClose?.();
-        console.log("Formulario de Edición Enviado:", payload);
+        console.log("Formulario de EdiciÃ³n Enviado:", payload);
     };
 
     const Field = ({ name, as = "input", options = [], placeholder, type = "text" }) => {
@@ -534,6 +539,8 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             );
         }
 
+        const isDocField = docFields.includes(name);
+
         return (
             <div>
                 {LabelContent}
@@ -544,6 +551,8 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                     className={getFieldClass(name)}
                     type={inputType}
                     placeholder={placeholder}
+                    minLength={isDocField ? 7 : undefined}
+                    maxLength={isDocField ? 10 : undefined}
                     defaultValue={displayValuesRef.current[name] ?? initialValue ?? ""} 
                     onChange={handleInputChange}
                     onBlur={onBlurHandler}
@@ -556,7 +565,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     };
 
     return (
-        // 🔑 Fondo del modal con desenfoque - ESTILO ACTUALIZADO
+        // ðŸ”‘ Fondo del modal con desenfoque - ESTILO ACTUALIZADO
         <div 
             className="fixed inset-0 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm z-50 p-3 md:p-6 overflow-y-auto md:overflow-hidden"
             onClick={onClose}
@@ -570,10 +579,10 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                 {/* Header con estilo del banner */}
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Editar Arriendo</h2>
-                    <p className="text-gray-600 text-sm">Actualice la información del contrato de arrendamiento</p>
+                    <p className="text-gray-600 text-sm">Actualice la informaciÃ³n del contrato de arrendamiento</p>
                 </div>
 
-                {/* Botón cerrar con estilo azul */}
+                {/* BotÃ³n cerrar con estilo azul */}
                 <button
                     onClick={onClose}
                     className="absolute top-6 right-6 text-gray-500 hover:text-blue-600 transition duration-150 p-1 rounded-full"
@@ -614,18 +623,18 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                                         name="tipoDocInquilino"
                                         as="select"
                                         options={[
-                                            { value: "CC", label: "Cédula de Ciudadanía (CC)" },
-                                            { value: "CE", label: "Cédula de Extranjería (CE)" },
+                                            { value: "CC", label: "CÃ©dula de CiudadanÃ­a (CC)" },
+                                            { value: "CE", label: "CÃ©dula de ExtranjerÃ­a (CE)" },
                                             { value: "NIT", label: "NIT" },
                                         ]}
                                     />
-                                    <Field name={NUMERO_DOC_INQ} placeholder="Mínimo 8 dígitos. Solo números." />
+                                    <Field name={NUMERO_DOC_INQ} placeholder="Ej: 1234567 a 1234567890" />
                                     <Field name="primerNombreInquilino" placeholder="Solo letras y espacios." />
                                     <Field name="segundoNombreInquilino" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="primerApellidoInquilino" placeholder="Solo letras y espacios." />
                                     <Field name="segundoApellidoInquilino" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="correoInquilino" placeholder="Debe contener un @" type="email" />
-                                    <Field name="telefonoInquilino" placeholder="Solo números. Ej: 3001234567" />
+                                    <Field name="telefonoInquilino" placeholder="Solo nÃºmeros. Ej: 3001234567" />
                                 </div>
                             </div>
                         )}
@@ -641,18 +650,18 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                                         name="tipoDocCodeudor"
                                         as="select"
                                         options={[
-                                            { value: "CC", label: "Cédula de Ciudadanía (CC)" },
-                                            { value: "CE", label: "Cédula de Extranjería (CE)" },
+                                            { value: "CC", label: "CÃ©dula de CiudadanÃ­a (CC)" },
+                                            { value: "CE", label: "CÃ©dula de ExtranjerÃ­a (CE)" },
                                             { value: "NIT", label: "NIT" },
                                         ]}
                                     />
-                                    <Field name={NUMERO_DOC_COD} placeholder="Mínimo 8 dígitos. Solo números." />
+                                    <Field name={NUMERO_DOC_COD} placeholder="Ej: 1234567 a 1234567890" />
                                     <Field name="primerNombreCodeudor" placeholder="Solo letras y espacios." />
                                     <Field name="segundoNombreCodeudor" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="primerApellidoCodeudor" placeholder="Solo letras y espacios." />
                                     <Field name="segundoApellidoCodeudor" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="correoCodeudor" placeholder="Debe contener un @" type="email" />
-                                    <Field name="telefonoCodeudor" placeholder="Solo números. Ej: 3009876543" />
+                                    <Field name="telefonoCodeudor" placeholder="Solo nÃºmeros. Ej: 3009876543" />
                                     <Field
                                         name="actividadEconomicaCodeudor"
                                         as="select"
@@ -683,14 +692,14 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                                     />
                                     <Field name="registroInmobiliario" placeholder="Ej: 12345-ABC" />
                                     <Field name="nombreInmueble" placeholder="Ej: Edificio Central" />
-                                    <Field name="area" placeholder="Ej: 75. Solo números enteros mayores a 0." />
-                                    <Field name="habitaciones" placeholder="Ej: 3. Solo números enteros mayores a 0." />
-                                    <Field name="banos" placeholder="Ej: 2. Solo números enteros mayores a 0." />
+                                    <Field name="area" placeholder="Ej: 75. Solo nÃºmeros enteros mayores a 0." />
+                                    <Field name="habitaciones" placeholder="Ej: 3. Solo nÃºmeros enteros mayores a 0." />
+                                    <Field name="banos" placeholder="Ej: 2. Solo nÃºmeros enteros mayores a 0." />
                                     <Field name="departamento" placeholder="Ej: Antioquia" />
-                                    <Field name="ciudad" placeholder="Ej: Medellín" />
+                                    <Field name="ciudad" placeholder="Ej: MedellÃ­n" />
                                     <Field name="barrio" placeholder="Ej: El Poblado" />
                                     <Field name="direccion" placeholder="Ej: Calle 10 # 45-20" />
-                                    <Field name="precioInmueble" placeholder="Ej: 1.500.000 (Solo números enteros mayores a 0)." />
+                                    <Field name="precioInmueble" placeholder="Ej: 1.500.000 (Solo nÃºmeros enteros mayores a 0)." />
                                 </div>
                             </div>
                         )}
@@ -705,7 +714,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                                     <Field name="fechaInicio" type="date" />
                                     <Field name="fechaFinal" type="date" />
                                     <Field name="fechaCobro" type="date" />
-                                    <Field name="precio" placeholder="Ej: 1.500.000 (Solo números enteros mayores a 0)." />
+                                    <Field name="precio" placeholder="Ej: 1.500.000 (Solo nÃºmeros enteros mayores a 0)." />
                                     <Field
                                         name="estado"
                                         as="select"
@@ -721,7 +730,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
                     </div>
 
-                    {/* Controles de navegación */}
+                    {/* Controles de navegaciÃ³n */}
                     <div className="flex justify-between pt-6 mt-6">
                         {step > 1 && (
                             <button 

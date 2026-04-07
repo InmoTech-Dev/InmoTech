@@ -118,14 +118,13 @@ const CreateReportModal = ({
   const currentUser = {
     id_persona: user?.id_persona || user?.id || 0,
     primer_nombre: user?.primer_nombre || (user?.nombres?.split(' ')?.[0] || user?.nombre?.split(' ')?.[0] || ''),
-    primer_apellido: user?.primer_apellido || (user?.apellidos?.split(' ')?.[0] || user?.apellido?.split(' ')?.[0] || '')
+    primer_apellido: user?.primer_apellido || (user?.apellidos?.split(' ')?.[0] || user?.apellido?.split(' ')?.[0] || ''),
+    nombre_completo: getUserFullName()
   };
 
-  // Hook de seguimiento general: asegurar ID numérico del reporte
-  const reportIdForFollowUps = (initialData?.id_reporte ?? initialData?.referencia ?? initialData?.id ?? '')
-    .toString()
-    .replace(/\D/g, '');
-  const numericReportId = reportIdForFollowUps ? parseInt(reportIdForFollowUps, 10) : null;
+  // Hook de seguimiento general: solo usar campos de ID numérico reales, nunca 'referencia'
+  const rawReportId = initialData?.id_reporte ?? initialData?.id ?? null;
+  const numericReportId = rawReportId ? parseInt(String(rawReportId).replace(/\D/g, ''), 10) || null : null;
 
   const {
     followUps,

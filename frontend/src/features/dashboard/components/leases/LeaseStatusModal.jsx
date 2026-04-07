@@ -11,6 +11,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
+import { toast } from "../../../../shared/hooks/use-toast";
 
 const formatCurrency = (value) => {
   const n = Number(value);
@@ -78,8 +79,34 @@ export default function LeaseStatusModal({
     () => payments.some((payment) => payment?.estado !== "Pagado" && !payment?.comprobante),
     [payments]
   );
+  const hasOverduePayments = useMemo(() => {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+      today.getDate()
+    ).padStart(2, "0")}`;
+
+    return payments.some(
+      (payment) =>
+        payment?.estado !== "Pagado" &&
+        !payment?.comprobante &&
+        String(payment?.fecha_cobro || "").slice(0, 10) <= todayStr
+    );
+  }, [payments]);
 
   const canFinalizeLease = !hasPendingPayments;
+
+  const handleEstadoChange = (nextEstado) => {
+    if (nextEstado === "Debe" && !hasOverduePayments) {
+      toast({
+        title: "Arriendo al dia",
+        description: "El arriendo esta al dia, por eso no se puede cambiar el estado a Debe.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    onChangeEstado(nextEstado);
+  };
 
   useEffect(() => {
     if (isFinalizedLease) {
@@ -418,7 +445,7 @@ export default function LeaseStatusModal({
                     <select
                       className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       value={statusRent.nuevoEstado}
-                      onChange={(e) => onChangeEstado(e.target.value)}
+                      onChange={(e) => handleEstadoChange(e.target.value)}
                     >
                       {estados.map((estado) => (
                         <option
@@ -430,7 +457,7 @@ export default function LeaseStatusModal({
                         </option>
                       ))}
                     </select>
-                    {!canFinalizeLease && (
+                    {statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease && (
                       <p className="mt-1 text-xs text-red-500">
                         Solo puedes cambiar a Finalizado cuando todos los pagos esten realizados.
                       </p>

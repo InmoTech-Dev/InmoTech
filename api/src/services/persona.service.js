@@ -1213,6 +1213,15 @@ class PersonaService {
         affectedUserIds: [personaId],
         audienceUserIds: adminIds
       });
+      sseService.emitAccessChanged({
+        action: estado ? 'access_enabled' : 'account_disabled',
+        userId: personaId,
+        affectedUserIds: [personaId],
+        audienceUserIds: adminIds,
+        meta: {
+          target_user_id: personaId,
+        },
+      });
 
       logger.info(`Estado de persona actualizado: ID ${personaId}, estado: ${estado}`);
       return persona;

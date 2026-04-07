@@ -33,8 +33,10 @@ export function ImageViewer({
     const handleDownload = (e) => {
         e.stopPropagation();
         const link = document.createElement('a');
-        link.href = currentImage.url;
+        link.href = currentImage.downloadUrl || currentImage.url;
         link.download = currentImage.name || `imagen-${currentIndex + 1}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

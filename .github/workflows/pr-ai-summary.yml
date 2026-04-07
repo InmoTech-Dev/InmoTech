@@ -25,7 +25,7 @@ jobs:
       - name: 3. Instalar SDK de Google
         run: npm install @google/generative-ai
 
-      - name: 4. Generar Descripción con IA
+      - name: 4. Generar Descripción con IA (Auto-Detect)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ github.token }}
@@ -41,14 +41,36 @@ jobs:
 
           async function run() {
             try {
-              // FORZAMOS LA VERSIÓN V1 PARA EVITAR EL 404 DE LA BETA
               const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
               
-              // Usamos el nombre del modelo sin prefijos raros, la librería v1 lo manejará
-              const model = genAI.getGenerativeModel({ 
-                model: "gemini-1.5-flash",
-              }, { apiVersion: 'v1' }); // <--- ESTO ES LA CLAVE
+              // --- BLOQUE DE AUTO-DETECCIÓN ---
+              console.log("🔍 Buscando modelos disponibles...");
+              let modelName = "";
+              try {
+                // Listamos los modelos para ver cuál tienes activo (flash, pro, etc.)
+                // Esto evita el error 404 de nombres incorrectos
+                const responseModels = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
+                const data = await responseModels.json();
+                
+                if (data.models) {
+                  // Prioridad: 1.5-flash, luego 1.5-pro, luego gemini-pro
+                  const bestModel = data.models.find(m => m.name.includes('1.5-flash')) 
+                                 || data.models.find(m => m.name.includes('1.5-pro'))
+                                 || data.models.find(m => m.name.includes('gemini-pro'));
+                  
+                  if (bestModel) {
+                    modelName = bestModel.name;
+                    console.log(`✅ Modelo detectado: ${modelName}`);
+                  }
+                }
+              } catch (e) {
+                console.log("⚠️ No se pudo listar, intentando fallback directo...");
+              }
 
+              // Si la auto-detección falló, usamos el nombre estándar completo
+              if (!modelName) modelName = "models/gemini-1.5-flash";
+
+              const model = genAI.getGenerativeModel({ model: modelName });
               const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 35000);
               
               const prompt = `Actúa como Desarrollador Senior. Resume este DIFF para un PR en Markdown:\n\n${diff}`;
@@ -57,9 +79,9 @@ jobs:
               const response = await result.response;
               
               fs.writeFileSync("ai_description.md", response.text());
-              console.log("✅ Éxito");
+              console.log("🚀 Resumen generado con éxito.");
             } catch (err) {
-              console.error("❌ Error:", err.message);
+              console.error("❌ Error Fatal:", err.message);
               process.exit(1);
             }
           }

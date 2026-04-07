@@ -24,7 +24,7 @@ const ResetPasswordPage = () => {
   useEffect(() => {
     const validateToken = async () => {
       if (!token) {
-        setTokenError('El enlace de recuperacion no es valido o ya expiro.');
+        setTokenError('El enlace de recuperación no es válido o ya expiró.');
         setCheckingToken(false);
         return;
       }
@@ -37,10 +37,10 @@ const ResetPasswordPage = () => {
           if (foundEmail) setResendEmail(foundEmail);
           setTokenError('');
         } else {
-          setTokenError(res?.message || 'El enlace no es valido.');
+          setTokenError(res?.message || 'El enlace no es válido.');
         }
       } catch (err) {
-        setTokenError(err?.message || 'El enlace no es valido o ya expiro.');
+        setTokenError(err?.message || 'El enlace no es válido o ya expiró.');
       } finally {
         setCheckingToken(false);
       }
@@ -60,11 +60,11 @@ const ResetPasswordPage = () => {
       return false;
     }
     if (form.password.length < 8) {
-      setStatus({ type: 'error', message: 'La nueva contrasena debe tener al menos 8 caracteres.' });
+      setStatus({ type: 'error', message: 'La nueva contraseña debe tener al menos 8 caracteres.' });
       return false;
     }
     if (form.password !== form.confirmPassword) {
-      setStatus({ type: 'error', message: 'Las contrasenas no coinciden.' });
+      setStatus({ type: 'error', message: 'Las contraseñas no coinciden.' });
       return false;
     }
     return true;
@@ -79,12 +79,12 @@ const ResetPasswordPage = () => {
       await resetPassword(token, form.password);
       setStatus({
         type: 'success',
-        message: 'Nueva contrasena guardada correctamente. Puedes ir al inicio de sesion.'
+        message: 'Nueva contraseña guardada correctamente. Puedes ir al inicio de sesión.'
       });
     } catch (error) {
       setStatus({
         type: 'error',
-        message: error.message || 'No se pudo restablecer la contrasena.'
+        message: error.message || 'No se pudo restablecer la contraseña.'
       });
     } finally {
       setIsSubmitting(false);
@@ -100,13 +100,13 @@ const ResetPasswordPage = () => {
       await forgotPassword(targetEmail);
       setStatus({
         type: 'success',
-        message: 'Enviamos un nuevo enlace de recuperacion. Revisa tu bandeja o spam.'
+        message: 'Enviamos un nuevo enlace de recuperación. Revisa tu bandeja o spam.'
       });
       setTokenError('');
     } catch (error) {
       setStatus({
         type: 'error',
-        message: error.message || 'No pudimos reenviar el correo de recuperacion.'
+        message: error.message || 'No pudimos reenviar el correo de recuperación.'
       });
     } finally {
       setIsResending(false);
@@ -118,15 +118,15 @@ const ResetPasswordPage = () => {
       <div className="w-full max-w-4xl grid gap-6 md:grid-cols-2 rounded-2xl bg-white/90 backdrop-blur shadow-2xl p-2">
         <div className="rounded-2xl bg-gradient-to-br from-[#0f2b46] via-[#134d77] to-[#0f2b46] p-6 text-white shadow-xl">
           <p className="text-sm opacity-80 mb-2">Paso 2 de 2</p>
-          <h2 className="text-2xl font-bold mb-2">Restablece tu contrasena</h2>
+          <h2 className="text-2xl font-bold mb-2">Restablece tu contraseña</h2>
           <p className="text-sm text-white/80 mb-4">
-            Usa el enlace del correo para definir una nueva contrasena y continuar con el acceso.
+            Usa el enlace del correo para definir una nueva contraseña y continuar con el acceso.
           </p>
           <div className="space-y-3">
             <div className="flex items-start gap-3 bg-white/10 rounded-xl px-4 py-3">
               <Lock className="h-5 w-5 mt-0.5" />
               <p className="text-sm leading-relaxed">
-                El enlace es unico y expira pronto. Solo necesitas definir la nueva contrasena.
+                El enlace es único y expira pronto. Solo necesitas definir la nueva contraseña.
               </p>
             </div>
           </div>
@@ -172,11 +172,10 @@ const ResetPasswordPage = () => {
 
           {status.message && !tokenError && (
             <div
-              className={`mb-4 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
-                status.type === 'success'
+              className={`mb-4 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${status.type === 'success'
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                   : 'border-red-200 bg-red-50 text-red-700'
-              }`}
+                }`}
             >
               {status.type === 'success' ? (
                 <CheckCircle2 className="h-4 w-4" />
@@ -190,7 +189,7 @@ const ResetPasswordPage = () => {
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-slate-600">Nueva contrasena</label>
+                <label className="text-xs font-medium text-slate-600">Nueva contraseña</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -198,7 +197,7 @@ const ResetPasswordPage = () => {
                     value={form.password}
                     onChange={handleChange}
                     className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none"
-                    placeholder="Ingresa una contrasena segura"
+                    placeholder="Ingresa una contraseña segura"
                     disabled={checkingToken || Boolean(tokenError)}
                   />
                   <button
@@ -212,7 +211,7 @@ const ResetPasswordPage = () => {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-600">Confirma la contrasena</label>
+                <label className="text-xs font-medium text-slate-600">Confirma la contraseña</label>
                 <div className="relative">
                   <input
                     type={showConfirm ? 'text' : 'password'}
@@ -220,7 +219,7 @@ const ResetPasswordPage = () => {
                     value={form.confirmPassword}
                     onChange={handleChange}
                     className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none"
-                    placeholder="Repite la contrasena"
+                    placeholder="Repite la contraseña"
                     disabled={checkingToken || Boolean(tokenError)}
                   />
                   <button
@@ -240,7 +239,7 @@ const ResetPasswordPage = () => {
               disabled={isSubmitting || checkingToken || Boolean(tokenError) || status.type === 'success'}
               className="w-full rounded-xl bg-[#00457B] px-4 py-3 text-sm font-semibold text-white hover:bg-[#003b69] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Actualizando...' : 'Guardar nueva contrasena'}
+              {isSubmitting ? 'Actualizando...' : 'Guardar nueva contraseña'}
             </button>
 
             <button
@@ -248,7 +247,7 @@ const ResetPasswordPage = () => {
               onClick={() => navigate('/login')}
               className={`w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium ${status.type === 'success' ? 'text-emerald-700 border-emerald-200 hover:bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'}`}
             >
-              Volver al inicio de sesion
+              Volver al inicio de sesión
             </button>
           </form>
         </div>

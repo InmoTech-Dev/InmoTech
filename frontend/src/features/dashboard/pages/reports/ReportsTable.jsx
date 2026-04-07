@@ -56,7 +56,7 @@ export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
       'Sin novedades': {
         color: 'bg-gray-100 text-gray-800 border border-gray-200',
         icon: AlertCircle,
-        label: 'Sin Novedades'
+        label: 'Sin novedades'
       },
       'Pendiente': {
         color: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
@@ -378,7 +378,7 @@ export function ReportsTable({ reports = [], onView, onEdit, onDownloadPDF }) {
               <div className="absolute inset-0 rounded-2xl border border-white/70 pointer-events-none"></div>
               <AlertCircle className="h-4 w-4 text-gray-600 mb-1" />
               <div className="text-xl font-semibold text-gray-700">{stats.sinNovedades}</div>
-              <div className="text-xs text-gray-600">Sin Novedades</div>
+              <div className="text-xs text-slate-600">Sin novedades</div>
             </div>
           </div>
         </section>

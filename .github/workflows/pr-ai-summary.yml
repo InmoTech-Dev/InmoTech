@@ -41,10 +41,10 @@ jobs:
               throw new Error("Falta GEMINI_API_KEY en los Secrets.");
             }
             const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-            // Usamos gemini-1.5-flash que es rápido y soporta diffs largos
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            // Cambiamos a gemini-pro que es el modelo más estable y compatible
+            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-            const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 30000); // Aumentar un poco el límite
+            const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 30000); 
             const prompt = `
             Eres un experto desarrollador. Analiza el siguiente DIFF de un Pull Request y genera el contenido de la descripción siguiendo este formato estrictamente:
             

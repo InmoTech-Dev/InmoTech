@@ -24,15 +24,15 @@ jobs:
           # 2. Verificar secciones obligatorias
           MANDATORY_SECTIONS=("## 📋 Descripción" "## ✅ Tipo de cambio" "## 🧪 ¿Cómo lo probaste?")
           for section in "${MANDATORY_SECTIONS[@]}"; do
-            if [[ ! "$PR_BODY" == *"$section"* ]]; then
+            if ! echo "$PR_BODY" | grep -q "$section"; then
               echo "❌ Falta la sección obligatoria: $section"
               exit 1
             fi
           done
 
           # 3. Verificar si se seleccionó al menos un "Tipo de cambio"
-          # Buscamos "- [x]" en la sección de tipo de cambio
-          if [[ ! "$PR_BODY" =~ "- [x]" ]]; then
+          # Buscamos "- [x]" en el texto
+          if ! echo "$PR_BODY" | grep -q "\- \[x\]"; then
             echo "❌ No has seleccionado ningún 'Tipo de cambio'. Por favor, marca al menos una opción con [x]."
             exit 1
           fi

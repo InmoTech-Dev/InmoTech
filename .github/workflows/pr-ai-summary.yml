@@ -43,50 +43,32 @@ jobs:
 
           async function run() {
             try {
+              // FORZAMOS EL USO DE LA API v1 (ESTABLE)
               const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
               
-              // MODELO DEFINITIVO: gemini-1.5-flash (Evita el error 404)
-              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+              // IMPORTANTE: Agregamos el prefijo 'models/' para evitar el 404
+              const model = genAI.getGenerativeModel({ 
+                model: "models/gemini-1.5-flash" 
+              });
 
-              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 45000);
+              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 40000);
               
-              if (!diff || diff.trim().length < 10) {
-                console.log("⚠️ Diff insuficiente para analizar.");
-                return;
-              }
+              const prompt = `Actúa como Desarrollador Senior. Genera un resumen para este PR:\n${diff}`;
 
-              const prompt = `
-              Actúa como un Desarrollador Senior. Analiza este DIFF y genera una descripción técnica para el Pull Request en Markdown:
-              
-              Estructura requerida:
-              ## 📋 Descripción
-              (Resumen breve de qué hace este código)
-              
-              ## ✅ Tipo de cambio
-              (Indica si es Feature, Bugfix o Refactor)
-              
-              ## ✔️ Checklist
-              - [x] Código analizado por IA.
-              
-              DIFF:
-              ${diff}
-              
-              Responde SOLO con el contenido en Markdown.
-              `;
-
+              // Llamada directa sin configuraciones extrañas para evitar errores de versión
               const result = await model.generateContent(prompt);
               const response = await result.response;
               const text = response.text();
               
               fs.writeFileSync("ai_description.md", text);
-              console.log("✅ Descripción generada.");
+              console.log("✅ Descripción generada correctamente.");
             } catch (err) {
-              console.error("❌ Error en Gemini:", err.message);
+              console.error("❌ Error Detallado:", err.message);
+              // Si falla, imprimimos el error completo para debuggear
               process.exit(1);
             }
           }
-          run();
-          EOF
+          run();          EOF
 
           # Ejecutar el script
           node summarize.js

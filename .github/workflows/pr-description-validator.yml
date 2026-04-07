@@ -1,0 +1,40 @@
+name: PR Description Validator
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Description
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          
+          echo "🔍 Validando descripción del PR..."
+
+          # 1. Verificar si la descripción está vacía
+          if [ -z "$PR_BODY" ] || [ ${#PR_BODY} -lt 10 ]; then
+            echo "❌ La descripción del PR está vacía o es demasiado corta."
+            echo "Por favor, completa el template de Pull Request."
+            exit 1
+          fi
+
+          # 2. Verificar secciones obligatorias
+          MANDATORY_SECTIONS=("## 📋 Descripción" "## ✅ Tipo de cambio" "## 🧪 ¿Cómo lo probaste?")
+          for section in "${MANDATORY_SECTIONS[@]}"; do
+            if [[ ! "$PR_BODY" == *"$section"* ]]; then
+              echo "❌ Falta la sección obligatoria: $section"
+              exit 1
+            fi
+          done
+
+          # 3. Verificar si se seleccionó al menos un "Tipo de cambio"
+          # Buscamos "- [x]" en la sección de tipo de cambio
+          if [[ ! "$PR_BODY" =~ "- [x]" ]]; then
+            echo "❌ No has seleccionado ningún 'Tipo de cambio'. Por favor, marca al menos una opción con [x]."
+            exit 1
+          fi
+
+          echo "✅ ¡Descripción validada correctamente!"

@@ -1,4 +1,4 @@
-name: AI PR Summary (Gemini Robot - Debug Mode)
+name: AI PR Summary (Gemini 2.5 Robot)
 
 on:
   pull_request:
@@ -12,115 +12,81 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: 1. Checkout del código
+      - name: 1. Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. Configurar Node.js
+      - name: 2. Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: 3. Instalar SDK de Google
-        run: |
-          echo "📦 Instalando @google/generative-ai..."
-          npm install @google/generative-ai
-          echo "✅ Instalación completada."
+      - name: 3. Install SDK
+        run: npm install @google/generative-ai
 
-      - name: 4. Generar Descripción con IA (Logs Aumentados)
+      - name: 4. Generar Descripción (Modelo 2.5 Flash)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          echo "🔍 --- INICIO DE DIAGNÓSTICO ---"
-          echo "📌 PR Número: $PR_NUMBER"
-          echo "📌 Rama Base: $BASE_REF"
-          
-          # Verificar si la API KEY existe (sin mostrarla)
-          if [ -z "$GEMINI_API_KEY" ]; then
-            echo "❌ ERROR: La variable GEMINI_API_KEY está vacía. Revisa los Secrets de GitHub."
-            exit 1
-          else
-            echo "✅ GEMINI_API_KEY detectada (longitud: ${#GEMINI_API_KEY} caracteres)."
-          fi
-
-          # Obtener el diff y registrar su tamaño
-          echo "Git: Obteniendo cambios contra origin/$BASE_REF..."
           git fetch origin $BASE_REF > /dev/null 2>&1
           git diff origin/$BASE_REF...HEAD > pr_diff.txt
-          DIFF_SIZE=$(wc -c < pr_diff.txt)
-          echo "📊 Tamaño del archivo de DIFF: $DIFF_SIZE bytes."
-
-          if [ "$DIFF_SIZE" -lt 10 ]; then
-            echo "⚠️ El DIFF es demasiado pequeño o está vacío. No hay nada que resumir."
-            exit 0
-          fi
-
-          # Crear el script de ejecución con logs internos
+          
           cat << 'EOF' > summarize.js
           const { GoogleGenerativeAI } = require("@google/generative-ai");
           const fs = require("fs");
 
           async function run() {
-            console.log("🚀 Iniciando script de Node.js...");
-            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-            
             try {
-              const modelName = "gemini-1.5-flash";
-              console.log(`🤖 Solicitando modelo: ${modelName}...`);
-              const model = genAI.getGenerativeModel({ model: modelName });
-
-              const rawDiff = fs.readFileSync("pr_diff.txt", "utf8");
-              const truncatedDiff = rawDiff.substring(0, 35000);
-              console.log(`📝 Enviando prompt a Google (${truncatedDiff.length} caracteres)...`);
-
-              const prompt = `Actúa como Desarrollador Senior. Resume este DIFF para un Pull Request en Markdown:\n\n${truncatedDiff}`;
-
-              const result = await model.generateContent(prompt);
-              console.log("⏳ Esperando respuesta de la API...");
+              const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
               
-              const response = await result.response;
-              const text = response.text();
+              // USAMOS EL MODELO QUE CONFIRMÓ TU CURL
+              const model = genAI.getGenerativeModel({ 
+                model: "gemini-2.5-flash" 
+              });
 
-              if (!text) {
-                throw new Error("La API devolvió una respuesta vacía.");
+              const diff = fs.readFileSync("pr_diff.txt", "utf8").substring(0, 35000);
+              
+              if (!diff || diff.trim().length < 10) {
+                console.log("⚠️ Diff insuficiente.");
+                return;
               }
 
-              fs.writeFileSync("ai_description.md", text);
-              console.log("✨ ¡Descripción generada y guardada en ai_description.md!");
+              const prompt = `Actúa como Senior Developer. Resume este DIFF para un PR en Markdown:\n\n${diff}`;
 
+              // Sistema de reintento simple por si hay error 429
+              let attempts = 0;
+              while (attempts < 3) {
+                try {
+                  const result = await model.generateContent(prompt);
+                  const response = await result.response;
+                  fs.writeFileSync("ai_description.md", response.text());
+                  console.log("✅ Descripción generada con Gemini 2.5 Flash");
+                  return;
+                } catch (e) {
+                  if (e.message.includes("429")) {
+                    console.log("⏳ Cuota excedida, esperando 10s...");
+                    await new Promise(r => setTimeout(r, 10000));
+                    attempts++;
+                  } else {
+                    throw e;
+                  }
+                }
+              }
             } catch (err) {
-              console.error("\n--- 🛑 ERROR DETECTADO EN LA API ---");
-              console.error(`Tipo de error: ${err.constructor.name}`);
-              console.error(`Mensaje: ${err.message}`);
-              
-              if (err.message.includes("429")) {
-                console.error("💡 Diagnóstico: Límite de cuota excedido (Too Many Requests).");
-              } else if (err.message.includes("404")) {
-                console.error("💡 Diagnóstico: Modelo no encontrado. Revisa el nombre del modelo o la región.");
-              } else if (err.message.includes("403")) {
-                console.error("💡 Diagnóstico: Error de autenticación. La API Key podría ser inválida.");
-              }
-              
+              console.error("❌ Error:", err.message);
               process.exit(1);
             }
           }
           run();
           EOF
 
-          # Ejecutar y capturar salida
-          echo "⚙️ Ejecutando summarize.js..."
           node summarize.js
           
-          # Actualizar el PR
           if [ -f ai_description.md ]; then
-            echo "⬆️ Subiendo descripción al PR #$PR_NUMBER..."
             gh pr edit $PR_NUMBER --body-file ai_description.md
-            echo "🎉 ¡PR actualizado con éxito!"
-          else
-            echo "❌ No se encontró ai_description.md. Algo falló en el script anterior."
-            exit 1
+            echo "🚀 PR Actualizado."
           fi

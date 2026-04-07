@@ -209,7 +209,7 @@ export default function ViewRenant({ renant, onClose }) {
               <div className="px-4 sm:px-5 py-3.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
-                    Información del Arriendo
+                    Información del arriendo
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
                     Detalles del contrato de arrendamiento.

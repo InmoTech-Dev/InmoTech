@@ -8,7 +8,7 @@ import arriendoApiService from "../../../../shared/services/arriendoApiService";
 import { inmueblesAPI } from "../../../../shared/services/propertyApidervice";
 import { toast } from "../../../../shared/hooks/use-toast";
 
-// Lista de campos que deben ser obligatorios según la solicitud del usuario (INCLUYE ARRENDATARIO, CODEUDOR, INMUEBLE Y CONTRATO)
+// Lista de campos obligatorios según la solicitud del usuario (incluye arrendatario, codeudor, inmueble y contrato)
 const requiredFields = [
     // Arrendatario
     "tipoDocArrendatario", "numeroDocArrendatario", "primerNombreArrendatario",
@@ -27,8 +27,8 @@ const requiredFields = [
 
 // Opciones de documentos
 const DOCUMENT_OPTIONS = [
-    { value: "CC", label: "Cedula de Ciudadania (CC)" },
-    { value: "CE", label: "Cedula de Extranjeria (CE)" },
+    { value: "CC", label: "Cédula de Ciudadanía (CC)" },
+    { value: "CE", label: "Cédula de Extranjería (CE)" },
     { value: "NIT", label: "NIT" },
     { value: "Pasaporte", label: "Pasaporte" },
     { value: "TI", label: "Tarjeta de Identidad (TI)" },
@@ -54,6 +54,13 @@ const renantIsActive = (renant = {}) => isActiveStatus(getRenantState(renant));
 
 const getPropertySource = (property = {}) =>
     property?.metadata?.raw || property?.raw || property || {};
+
+const getPropertyOperationText = (property = {}) => {
+    const source = getPropertySource(property);
+    return normalizeTextValue(
+        property.operacion || source.operacion || source.tipo_operacion || property.tipoOperacion
+    );
+};
 
 const propertyHasActiveLease = (property = {}) => {
     const source = getPropertySource(property);
@@ -111,22 +118,16 @@ const propertyIsSold = (property = {}) => {
     return soldKeywords.some((kw) => estadoTexto.includes(kw));
 };
 
-const propertyIsMarkedForSale = (property = {}) => {
-    const source = getPropertySource(property);
-    const operacion = normalizeTextValue(
-        property.operacion || source.operacion || source.tipo_operacion || property.tipoOperacion
-    );
+const propertyAllowsSale = (property = {}) => {
+    const operacion = getPropertyOperationText(property);
     const estadoTexto = normalizeTextValue(
-        property.estado || source.estado || source.estado_frontend || source.estado_inmueble
+        property.estado || getPropertySource(property).estado || getPropertySource(property).estado_frontend || getPropertySource(property).estado_inmueble
     );
     return operacion.includes("venta") || operacion.includes("sale") || estadoTexto.includes("venta");
 };
 
-const propertyIsMarkedForRent = (property = {}) => {
-    const source = getPropertySource(property);
-    const operacion = normalizeTextValue(
-        property.operacion || source.operacion || source.tipo_operacion || property.tipoOperacion
-    );
+const propertyAllowsRent = (property = {}) => {
+    const operacion = getPropertyOperationText(property);
     return (
         operacion.includes("arriendo") ||
         operacion.includes("alquiler") ||
@@ -134,6 +135,8 @@ const propertyIsMarkedForRent = (property = {}) => {
         operacion.includes("lease")
     );
 };
+
+const propertyIsOnlyForSale = (property = {}) => propertyAllowsSale(property) && !propertyAllowsRent(property);
 
 const propertyIsAvailable = (property = {}) => {
     const source = getPropertySource(property);
@@ -148,10 +151,10 @@ const validateInmuebleForRent = (inmueble = {}) => {
     if (propertyIsSold(inmueble)) {
         return "Este inmueble ya fue vendido y no se puede arrendar.";
     }
-    if (propertyIsMarkedForSale(inmueble)) {
-        return "Este inmueble est� marcado para venta, no se puede arrendar.";
+    if (propertyIsOnlyForSale(inmueble)) {
+        return "Este inmueble está marcado solo para venta, no se puede arrendar.";
     }
-    if (!propertyIsMarkedForRent(inmueble)) {
+    if (!propertyAllowsRent(inmueble)) {
         return "Solo puedes seleccionar inmuebles configurados para arriendo.";
     }
     if (!propertyIsAvailable(inmueble)) {
@@ -173,6 +176,12 @@ const isOnOrAfterToday = (dateString) => {
     return d.getTime() <= today.getTime();
 };
 
+const getTodayAtMidnight = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+};
+
 const hasMinimumOneMonthTerm = (startDateString, endDateString) => {
     if (!startDateString || !endDateString) return true;
     const startDate = new Date(`${startDateString}T00:00:00`);
@@ -184,6 +193,34 @@ const hasMinimumOneMonthTerm = (startDateString, endDateString) => {
 
     return endDate.getTime() >= minimumEndDate.getTime();
 };
+
+const addMonthsPreservingDay = (dateString, monthsToAdd = 1) => {
+    if (!dateString) return "";
+    const parts = String(dateString).split("-").map(Number);
+    if (parts.length < 3 || parts.some(Number.isNaN)) return "";
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (Number.isNaN(date.getTime())) return "";
+
+    const originalDay = date.getDate();
+    const targetYear = date.getFullYear();
+    const targetMonthIndex = date.getMonth() + monthsToAdd;
+    const targetMonthDate = new Date(targetYear, targetMonthIndex, 1);
+    const lastDayOfTargetMonth = new Date(
+        targetMonthDate.getFullYear(),
+        targetMonthDate.getMonth() + 1,
+        0
+    ).getDate();
+    const targetDay = Math.min(originalDay, lastDayOfTargetMonth);
+    const resultDate = new Date(targetMonthDate.getFullYear(), targetMonthDate.getMonth(), targetDay);
+    const year = resultDate.getFullYear();
+    const month = String(resultDate.getMonth() + 1).padStart(2, "0");
+    const day = String(resultDate.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
+const addOneMonthToDate = (dateString) => addMonthsPreservingDay(dateString, 1);
+const addSixMonthsToDate = (dateString) => addMonthsPreservingDay(dateString, 6);
+const addTwelveMonthsToDate = (dateString) => addMonthsPreservingDay(dateString, 12);
 
 const combineNames = (first = "", second = "") => {
     return [first, second]
@@ -226,7 +263,7 @@ const normalizePhone = (value = "") => {
     const digits = sanitizeNumericString(value);
     if (!digits) return "";
     if (digits.startsWith("57") && digits.length > 10) {
-        // Mantener solo los �ltimos 10 d�gitos si trae el indicativo
+        // Mantener solo los últimos 10 dígitos si trae el indicativo
         return digits.slice(-10);
     }
     return digits.slice(-10);
@@ -234,7 +271,7 @@ const normalizePhone = (value = "") => {
 
 /**
  * Payload SOLO para crear / actualizar Arrendatario (persona)
- * Ya NO mete datos del contrato aquí.
+ * Ya NO mete datos del contrato aquÃ­.
  */
 const buildArrendatarioPayload = (values = {}) => ({
     tipoDocumento: values.tipoDocArrendatario,
@@ -256,7 +293,7 @@ const buildArrendatarioPayload = (values = {}) => ({
 /**
  * Payload para crear el ARRIENDO / CONTRATO
  * Intenta ser compatible con ambas convenciones (camelCase y snake_case)
- * para que el backend pueda mapear fácilmente.
+ * para que el backend pueda mapear fÃ¡cilmente.
  */
 const buildArriendoPayload = (values = {}, renant = {}) => {
     const idArrendatario =
@@ -267,7 +304,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         values.id_arrendatario ||
         values.idArrendatario;
 
-    // Preparar datos del codeudor (persona). Se enviarán para que el backend cree/busque el registro y asigne id_codeudor.
+    // Preparar datos del codeudor (persona). Se enviarÃ¡n para que el backend cree/busque el registro y asigne id_codeudor.
     const codeudorPayload = {
         tipo_documento: values.tipoDocCodeudor,
         numero_documento: values.numeroDocCodeudor,
@@ -286,7 +323,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
     const idInmueble = values.idInmueble ? Number(values.idInmueble) : undefined;
 
     return {
-        // Relación con Arrendatario/cliente
+        // RelaciÃ³n con Arrendatario/cliente
         id_cliente: idArrendatario,
         idCliente: idArrendatario,
         id_arrendatario: idArrendatario,
@@ -308,7 +345,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         valor_mensual: valorMensual,
         valorMensual: valorMensual,
 
-        // Garantía (opcional)
+        // GarantÃ­a (opcional)
         tipo_garantia: values.tipoGarantia,
         tipoGarantia: values.tipoGarantia,
         valor_garantia: valorGarantia,
@@ -316,7 +353,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         descripcion_garantia: values.descripcionGarantia,
         descripcionGarantia: values.descripcionGarantia,
 
-        // Codeudor (persona) - el backend lo resolverá a id_codeudor
+        // Codeudor (persona) - el backend lo resolverÃ¡ a id_codeudor
         codeudor: codeudorPayload,
 
         // Estado del contrato
@@ -326,7 +363,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
 
 export default function RentForm({ onClose, onSubmit }) {
     const [step, setStep] = useState(1);
-    // Estado para manejar los errores en línea. Usa { fieldName: errorMessage }
+    // Estado para manejar los errores en lÃ­nea. Usa { fieldName: errorMessage }
     const [errors, setErrors] = useState({});
     const [submissionState, setSubmissionState] = useState({
         isSubmitting: false,
@@ -382,7 +419,7 @@ export default function RentForm({ onClose, onSubmit }) {
 
     // refs para mantener TODOS los valores sin causar re-renders en cada letra
     const valuesRef = useRef({ ...initial });
-    // Ref para mantener los valores formateados visibles en los inputs, si son diferentes del valor numérico
+    // Ref para mantener los valores formateados visibles en los inputs, si son diferentes del valor numÃ©rico
     const displayValuesRef = useRef({ ...initial });
     const elRefs = useRef({});
     const errorFocusTimeout = useRef(null); // Usado para enfocar el primer campo con error
@@ -392,7 +429,7 @@ export default function RentForm({ onClose, onSubmit }) {
     const NUMERO_DOC_COD = "numeroDocCodeudor";
     const MIN_DOC_LOOKUP_LENGTH = 6;
 
-    // Lista de campos que deben ser estrictamente numéricos (solo dígitos)
+    // Lista de campos que deben ser estrictamente numÃ©ricos (solo dÃ­gitos)
     const strictNumericFields = [
         "precioInmueble", "precio"
     ];
@@ -400,7 +437,7 @@ export default function RentForm({ onClose, onSubmit }) {
     // Campos que requieren formato de miles
     const currencyFields = ["precioInmueble", "precio"];
 
-    // Campos agrupados por paso para la validación de 'Siguiente'
+    // Campos agrupados por paso para la validaciÃ³n de 'Siguiente'
     const stepFields = {
         1: [
             "tipoDocArrendatario", NUMERO_DOC_ARR, "primerNombreArrendatario", "segundoNombreArrendatario",
@@ -424,7 +461,7 @@ export default function RentForm({ onClose, onSubmit }) {
         "primerNombreCodeudor", "segundoNombreCodeudor", "primerApellidoCodeudor", "segundoApellidoCodeudor",
     ];
 
-    // Lista de campos que deben contener solo números (documentos)
+    // Lista de campos que deben contener solo nÃºmeros (documentos)
     const docFields = [
         NUMERO_DOC_ARR, NUMERO_DOC_COD,
     ];
@@ -444,7 +481,7 @@ export default function RentForm({ onClose, onSubmit }) {
         return Boolean((tipo || "").trim()) && clean.length >= MIN_DOC_LOOKUP_LENGTH;
     };
 
-    // Lista de campos que deben contener solo números (teléfonos)
+    // Lista de campos que deben contener solo nÃºmeros (telÃ©fonos)
     const phoneFields = [
         "telefonoArrendatario", "telefonoCodeudor",
     ];
@@ -456,28 +493,28 @@ export default function RentForm({ onClose, onSubmit }) {
 
     // === VALIDACIONES MEJORADAS PARA DOCUMENTOS ===
 
-    // Función para validar documentos según el tipo
+    // FunciÃ³n para validar documentos segÃºn el tipo
     const validateDocument = (tipoDocumento, numeroDocumento) => {
         const numeroLimpio = cleanDocumentByType(tipoDocumento, numeroDocumento);
 
         if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
-            return 'El n�mero de documento debe tener entre 7 y 10 caracteres';
+            return 'El número de documento debe tener entre 7 y 10 caracteres';
         }
 
         switch (tipoDocumento) {
-            case 'CC': // Cedula de Ciudadania
-            case 'CE': // Cedula de Extranjeria
+            case 'CC': // Cédula de Ciudadanía
+            case 'CE': // Cédula de Extranjería
             case 'NIT': // NIT
             case 'PASAPORTE': // Pasaporte
                 if (!/^[A-Za-z0-9]+$/.test(numeroLimpio)) {
-                    return 'El pasaporte solo puede contener letras y n�meros';
+                    return 'El pasaporte solo puede contener letras y números';
                 }
                 break;
             case 'TI': // Tarjeta de Identidad
                 break;
 
             default:
-                return 'Tipo de documento no valido';
+                return 'Tipo de documento no válido';
         }
 
         return '';
@@ -485,18 +522,18 @@ export default function RentForm({ onClose, onSubmit }) {
 
     const getLabel = (name) => {
         const labels = {
-            tipoDocArrendatario: "Tipo de Documento", numeroDocArrendatario: "Numero de Documento", primerNombreArrendatario: "Primer Nombre",
-            segundoNombreArrendatario: "Segundo Nombre", primerApellidoArrendatario: "Primer Apellido", segundoApellidoArrendatario: "Segundo Apellido",
-            correoArrendatario: "Correo Electronico", telefonoArrendatario: "Telefono", tipoDocCodeudor: "Tipo de Documento Codeudor",
-            numeroDocCodeudor: "Numero de Documento Codeudor", primerNombreCodeudor: "Primer Nombre Codeudor",
-            segundoNombreCodeudor: "Segundo Nombre Codeudor", primerApellidoCodeudor: "Primer Apellido Codeudor",
-            segundoApellidoCodeudor: "Segundo Apellido Codeudor", correoCodeudor: "Correo Electronico Codeudor",
-            telefonoCodeudor: "Telefono Codeudor", actividadEconomicaCodeudor: "Actividad Economica", tipoInmueble: "Tipo de Inmueble",
-            registroInmobiliario: "Registro Inmobiliario", nombreInmueble: "Nombre del Inmueble",
-            departamento: "Departamento", ciudad: "Ciudad", barrio: "Barrio", direccion: "Direccion",
-            precioInmueble: "Precio del Inmueble",
-            fechaInicio: "Fecha de Inicio", fechaFinal: "Fecha de Finalizacion", fechaCobro: "Fecha de Cobro",
-            precio: "Precio del Arriendo",
+            tipoDocArrendatario: "Tipo de documento", numeroDocArrendatario: "Número de documento", primerNombreArrendatario: "Primer nombre",
+            segundoNombreArrendatario: "Segundo nombre", primerApellidoArrendatario: "Primer apellido", segundoApellidoArrendatario: "Segundo apellido",
+            correoArrendatario: "Correo electrónico", telefonoArrendatario: "Teléfono", tipoDocCodeudor: "Tipo de documento del codeudor",
+            numeroDocCodeudor: "Número de documento del codeudor", primerNombreCodeudor: "Primer nombre del codeudor",
+            segundoNombreCodeudor: "Segundo nombre del codeudor", primerApellidoCodeudor: "Primer apellido del codeudor",
+            segundoApellidoCodeudor: "Segundo apellido del codeudor", correoCodeudor: "Correo electrónico del codeudor",
+            telefonoCodeudor: "Teléfono del codeudor", actividadEconomicaCodeudor: "Actividad económica", tipoInmueble: "Tipo de inmueble",
+            registroInmobiliario: "Registro inmobiliario", nombreInmueble: "Nombre del inmueble",
+            departamento: "Departamento", ciudad: "Ciudad", barrio: "Barrio", direccion: "Dirección",
+            precioInmueble: "Precio del inmueble",
+            fechaInicio: "Fecha de inicio", fechaFinal: "Fecha de finalización", fechaCobro: "Fecha de cobro",
+            precio: "Precio del arriendo",
         };
         return labels[name] ?? name;
     };
@@ -533,7 +570,7 @@ export default function RentForm({ onClose, onSubmit }) {
         if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
             valuesRef.current[name] = initial[name] ?? "";
         }
-        // No autoseleccionar opci�n; mantener "Seleccione..."
+        // No autoseleccionar opción; mantener "Seleccione..."
         if (el.tagName === "SELECT") {
             displayValuesRef.current[name] = valuesRef.current[name];
             el.value = valuesRef.current[name] ?? "";
@@ -595,6 +632,7 @@ export default function RentForm({ onClose, onSubmit }) {
     const syncChargeDateWithStartDate = useCallback((startDateValue) => {
         const nextChargeDate = buildFixedChargeDate(startDateValue, FIXED_CHARGE_DAY);
         setFieldValue("fechaCobro", nextChargeDate);
+        setFieldValue("fechaFinal", addOneMonthToDate(startDateValue));
         setLeaseUiVersion((version) => version + 1);
     }, [setFieldValue]);
 
@@ -746,7 +784,7 @@ export default function RentForm({ onClose, onSubmit }) {
                         error: validationError
                     });
                     toast({
-                        title: "Inmueble no v�lido para arriendo",
+                        title: "Inmueble no válido para arriendo",
                         description: validationError,
                         variant: "destructive",
                     });
@@ -812,7 +850,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 error: documentError
             });
             toast({
-                title: "Documento inv�lido",
+                title: "Documento inválido",
                 description: documentError,
                 variant: "destructive",
             });
@@ -936,12 +974,12 @@ export default function RentForm({ onClose, onSubmit }) {
         } else {
             // Si es un campo de moneda, limpiamos el valor antes de guardarlo en valuesRef
             if (currencyFields.includes(name)) {
-                cleanValue = value.replace(/[^0-9]/g, ''); // Solo dígitos
+                cleanValue = value.replace(/[^0-9]/g, ''); // Solo dÃ­gitos
                 const formattedValue = formatNumberWithThousandsSeparator(cleanValue);
 
                 // Actualizar el valor a mostrar en el input (lo que ve el usuario)
                 displayValuesRef.current[name] = formattedValue;
-                e.target.value = formattedValue; // Forzar la actualización visual
+                e.target.value = formattedValue; // Forzar la actualizaciÃ³n visual
             } else if (docFields.includes(name) || phoneFields.includes(name)) {
                 cleanValue = sanitizeNumericString(value);
                 displayValuesRef.current[name] = cleanValue;
@@ -952,7 +990,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 displayValuesRef.current[name] = value;
             }
 
-            // Guardar siempre el valor LIMPIO (solo dígitos si es numérico con formato) o el valor original
+            // Guardar siempre el valor LIMPIO (solo dÃ­gitos si es numÃ©rico con formato) o el valor original
             valuesRef.current[name] = cleanValue;
 
             if (name === "registroInmobiliario") {
@@ -969,7 +1007,7 @@ export default function RentForm({ onClose, onSubmit }) {
             }
         }
 
-        // Limpieza de error en vivo al escribir, solo si ya existía un error
+        // Limpieza de error en vivo al escribir, solo si ya existÃ­a un error
         if (errors[name] && cleanValue.length === 0) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -1035,7 +1073,7 @@ export default function RentForm({ onClose, onSubmit }) {
         return date.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
     };
 
-    const getDaysInMonth = (date) => {
+    const getDaysInMonth = (date, minDate = null, fixedSelectableDay = null) => {
         const year = date.getFullYear();
         const month = date.getMonth();
         const firstDay = new Date(year, month, 1);
@@ -1052,12 +1090,15 @@ export default function RentForm({ onClose, onSubmit }) {
 
         for (let day = 1; day <= daysInMonth; day++) {
             const d = new Date(year, month, day);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const today = getTodayAtMidnight();
+            const expectedDayForMonth =
+                fixedSelectableDay === null ? null : Math.min(fixedSelectableDay, daysInMonth);
             days.push({
                 date: d,
                 isCurrentMonth: true,
-                isDisabled: false,
+                isDisabled:
+                    (minDate ? d.getTime() < minDate.getTime() : false) ||
+                    (expectedDayForMonth !== null && day !== expectedDayForMonth),
                 isToday: d.toDateString() === today.toDateString(),
             });
         }
@@ -1079,6 +1120,16 @@ export default function RentForm({ onClose, onSubmit }) {
                 : name === "registroInmobiliario"
                     ? inmuebleLookupState.error
                     : "");
+        const startDateValue = valuesRef.current.fechaInicio || "";
+        const startDate = parseYMDToLocalDate(startDateValue);
+        const finalDateSelectableDay = name === "fechaFinal" && startDate ? startDate.getDate() : null;
+        const minSelectableDate = useMemo(() => {
+            if (locked) return null;
+            if (name === "fechaFinal" && startDateValue) {
+                return parseYMDToLocalDate(addOneMonthToDate(startDateValue));
+            }
+            return getTodayAtMidnight();
+        }, [locked, name, startDateValue]);
         const [open, setOpen] = useState(false);
         const [panelStyle, setPanelStyle] = useState(null);
         const triggerRef = useRef(null);
@@ -1087,21 +1138,21 @@ export default function RentForm({ onClose, onSubmit }) {
         const selectedDate = parseYMDToLocalDate(selectedValue);
         const initialMonth = selectedDate || new Date();
         const [currentMonth, setCurrentMonth] = useState(initialMonth);
-        const [days, setDays] = useState(getDaysInMonth(initialMonth));
+        const [days, setDays] = useState(getDaysInMonth(initialMonth, minSelectableDate, finalDateSelectableDay));
 
         useEffect(() => {
-            setDays(getDaysInMonth(currentMonth));
-        }, [currentMonth]);
+            setDays(getDaysInMonth(currentMonth, minSelectableDate, finalDateSelectableDay));
+        }, [currentMonth, minSelectableDate, finalDateSelectableDay]);
 
         useEffect(() => {
             if (selectedValue) {
                 const d = parseYMDToLocalDate(selectedValue);
                 if (d) {
                     setCurrentMonth(d);
-                    setDays(getDaysInMonth(d));
+                    setDays(getDaysInMonth(d, minSelectableDate, finalDateSelectableDay));
                 }
             }
-        }, [selectedValue]);
+        }, [selectedValue, minSelectableDate, finalDateSelectableDay]);
 
         useEffect(() => {
             if (!open) return undefined;
@@ -1127,6 +1178,12 @@ export default function RentForm({ onClose, onSubmit }) {
             };
         }, [open]);
 
+        const previousMonthDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+        const firstSelectableMonth = minSelectableDate
+            ? new Date(minSelectableDate.getFullYear(), minSelectableDate.getMonth(), 1)
+            : null;
+        const canNavigateToPreviousMonth = !firstSelectableMonth || previousMonthDate >= firstSelectableMonth;
+
         const handleSelect = (day) => {
             if (day.isDisabled) return;
             const formatted = formatDateForInput(day.date);
@@ -1134,6 +1191,15 @@ export default function RentForm({ onClose, onSubmit }) {
             if (name === "fechaInicio") {
                 syncChargeDateWithStartDate(formatted);
             }
+            setOpen(false);
+        };
+
+        const handleQuickTermSelection = (months) => {
+            if (name !== "fechaFinal" || !startDateValue) return;
+            const nextDate =
+                months === 12 ? addTwelveMonthsToDate(startDateValue) : addSixMonthsToDate(startDateValue);
+            if (!nextDate) return;
+            setFieldValue(name, nextDate);
             setOpen(false);
         };
 
@@ -1166,8 +1232,12 @@ export default function RentForm({ onClose, onSubmit }) {
                         <div className="flex items-center justify-between mb-3">
                             <button
                                 type="button"
-                                onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                                className="p-2 hover:bg-slate-100 rounded-lg transition"
+                                onClick={() => {
+                                    if (!canNavigateToPreviousMonth) return;
+                                    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+                                }}
+                                disabled={!canNavigateToPreviousMonth}
+                                className={`p-2 rounded-lg transition ${canNavigateToPreviousMonth ? "hover:bg-slate-100" : "cursor-not-allowed opacity-40"}`}
                             >
                                 <ChevronLeft className="w-4 h-4 text-slate-600" />
                             </button>
@@ -1181,7 +1251,7 @@ export default function RentForm({ onClose, onSubmit }) {
                             </button>
                         </div>
                         <div className="grid grid-cols-7 gap-1 mb-1">
-                            {["Dom", "Lun", "Mar", "Mi�", "Jue", "Vie", "S�b"].map((d) => (
+                            {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
                                 <div key={d} className="text-center text-xs font-semibold text-slate-500 py-1">
                                     {d}
                                 </div>
@@ -1207,6 +1277,29 @@ export default function RentForm({ onClose, onSubmit }) {
                                 );
                             })}
                         </div>
+                        {name === "fechaFinal" && startDateValue && (
+                            <div className="mt-3 border-t border-slate-200 pt-3">
+                                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Plazos rápidos
+                                </p>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickTermSelection(6)}
+                                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                                    >
+                                        6 meses
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickTermSelection(12)}
+                                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                                    >
+                                        12 meses
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>,
                     document.body
                 )}
@@ -1214,7 +1307,7 @@ export default function RentForm({ onClose, onSubmit }) {
         );
     };
 
-    // Funciones de validación de formato
+    // Funciones de validaciÃ³n de formato
     const isValidName = (value) => /^[\p{L}\s]*$/u.test(value);
     const isValidNumeric = (value) => /^\d*$/.test(value);
     const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
@@ -1222,12 +1315,12 @@ export default function RentForm({ onClose, onSubmit }) {
     // Handler para verificar obligatoriedad, longitud y formato al salir del campo - MEJORADO
     const handleInputBlur = (e) => {
         const { name } = e.target;
-        // Tomamos el valor limpio de la ref, no del e.target.value (que podría estar formateado)
+        // Tomamos el valor limpio de la ref, no del e.target.value (que podrÃ­a estar formateado)
         const value = valuesRef.current[name] || "";
 
         let errorMessage = null;
         const isRequired = requiredFields.includes(name);
-        const conflictErrorMsg = "El n�mero de documento del Arrendatario no puede ser igual al del Codeudor.";
+        const conflictErrorMsg = "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
 
         setErrors(prev => {
             const newErrors = { ...prev };
@@ -1242,7 +1335,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
                     errorMessage = `Solo se permiten letras y espacios.`;
                 }
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
+                // VALIDACIÃ“N MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(name)) {
                     let tipoDocumento = "";
 
@@ -1252,39 +1345,39 @@ export default function RentForm({ onClose, onSubmit }) {
                         tipoDocumento = valuesRef.current.tipoDocCodeudor || "CC";
                     }
 
-                    // Validar formato básico primero
+                    // Validar formato bÃ¡sico primero
                     if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
-                        errorMessage = `Solo se permiten letras, n�meros, espacios, puntos y guiones`;
+                        errorMessage = `Solo se permiten letras, números, espacios, puntos y guiones`;
                     } else {
-                        // Validación específica por tipo de documento
+                        // ValidaciÃ³n especÃ­fica por tipo de documento
                         errorMessage = validateDocument(tipoDocumento, value);
                     }
                 }
                 else if (phoneFields.includes(name)) {
                     if (!isValidNumeric(value)) {
-                        errorMessage = `Solo se permiten n�meros.`;
+                        errorMessage = `Solo se permiten números.`;
                     } else if (value.length !== 10) {
-                        errorMessage = "El tel�fono debe tener exactamente 10 digitos";
+                        errorMessage = "El teléfono debe tener exactamente 10 digitos";
                     }
                 }
                 else if (emailFields.includes(name) && !isValidEmail(value)) {
-                    errorMessage = `El correo electr�nico debe ser valido.`;
+                    errorMessage = `El correo electrónico debe ser valido.`;
                 }
                 else if (strictNumericFields.includes(name) && !isValidNumeric(value)) {
-                    errorMessage = `Solo se permiten n�meros enteros.`;
+                    errorMessage = `Solo se permiten números enteros.`;
                 }
 
-                // Validaciones específicas para campos numéricos
+                // Validaciones especÃ­ficas para campos numÃ©ricos
                 if (!errorMessage && strictNumericFields.includes(name)) {
                     const numericValue = parseInt(value);
 
                     if ((name === "precioInmueble" || name === "precio") && numericValue <= 0) {
-                        errorMessage = `Debe ser un n�mero mayor a 0`;
+                        errorMessage = `Debe ser un número mayor a 0`;
                     }
                 }
             }
 
-            // 3. Validar CONFLICTO DE DOCUMENTO (solo si es un campo de documento y no tiene otro error más grave)
+            // 3. Validar CONFLICTO DE DOCUMENTO (solo si es un campo de documento y no tiene otro error mÃ¡s grave)
             if (!errorMessage && docFields.includes(name)) {
                 const otherDocName = name === NUMERO_DOC_ARR ? NUMERO_DOC_COD : NUMERO_DOC_ARR;
                 const otherDocValue = valuesRef.current[otherDocName] || "";
@@ -1296,7 +1389,7 @@ export default function RentForm({ onClose, onSubmit }) {
                         newErrors[otherDocName] = conflictErrorMsg;
                     }
                 } else if (newErrors[otherDocName] === conflictErrorMsg) {
-                    // Si el otro campo tenía el error de conflicto, lo limpiamos
+                    // Si el otro campo tenÃ­a el error de conflicto, lo limpiamos
                     delete newErrors[otherDocName];
                 }
             }
@@ -1332,7 +1425,7 @@ export default function RentForm({ onClose, onSubmit }) {
         }
     };
 
-    // --- LÓGICA DE VALIDACIÓN CENTRAL MEJORADA ---
+    // --- LÃ“GICA DE VALIDACIÃ“N CENTRAL MEJORADA ---
     const runValidation = (fieldsToCheck) => {
         let currentErrors = { ...errors };
         let hasError = false;
@@ -1340,30 +1433,30 @@ export default function RentForm({ onClose, onSubmit }) {
 
         // 1. Iterar sobre los campos del paso actual o todos para validaciones individuales
         for (const fieldName of fieldsToCheck) {
-            // Siempre usamos el valor LIMPIO de valuesRef para la validación
+            // Siempre usamos el valor LIMPIO de valuesRef para la validaciÃ³n
             const value = valuesRef.current[fieldName] || "";
             let error = null;
 
             const isRequired = requiredFields.includes(fieldName);
 
-            // A. Validación de Obligatoriedad
+            // A. ValidaciÃ³n de Obligatoriedad
             if (isRequired && !value.toString().trim()) {
                 error = "Este campo es obligatorio.";
             }
 
-            // B. Validación de Obligatoriedad y > 0 para números estrictos
+            // B. ValidaciÃ³n de Obligatoriedad y > 0 para nÃºmeros estrictos
             if (isRequired && strictNumericFields.includes(fieldName)) {
                 if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                     error = "Este campo es obligatorio y debe ser mayor a 0";
                 }
             }
 
-            // C. Validación de Formato MEJORADA
+            // C. ValidaciÃ³n de Formato MEJORADA
             if (!error && value.toString().trim()) {
                 if (nameFields.includes(fieldName) && !isValidName(displayValuesRef.current[fieldName])) {
                     error = `Solo se permiten letras, espacios y acentos.`;
                 }
-                // VALIDACIÓN MEJORADA PARA DOCUMENTOS
+                // VALIDACIÃ“N MEJORADA PARA DOCUMENTOS
                 else if (docFields.includes(fieldName)) {
                     let tipoDocumento = "";
 
@@ -1376,24 +1469,24 @@ export default function RentForm({ onClose, onSubmit }) {
                     error = validateDocument(tipoDocumento, value);
                 }
                 else if (phoneFields.includes(fieldName) && !isValidNumeric(value)) {
-                    error = `Solo se permiten di�gitos.`;
+                    error = `Solo se permiten di­gitos.`;
                 }
                 else if (phoneFields.includes(fieldName) && value.length !== 10) {
-                    error = "El tel�fono debe tener exactamente 10 digitos";
+                    error = "El teléfono debe tener exactamente 10 digitos";
                 }
                 else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
-                    error = `Debe ser un correo electr�nico valido.`;
+                    error = `Debe ser un correo electrónico valido.`;
                 }
                 else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) {
-                    error = `Solo se permiten n�meros enteros.`;
+                    error = `Solo se permiten números enteros.`;
                 }
 
-                // Validaciones específicas para campos numéricos
+                // Validaciones especÃ­ficas para campos numÃ©ricos
                 if (!error && strictNumericFields.includes(fieldName)) {
                     const numericValue = parseInt(value);
 
                     if (fieldName === "precioInmueble" && numericValue <= 0) {
-                        error = `Debe ser un n�mero mayor a 0`;
+                        error = `Debe ser un número mayor a 0`;
                     }
                 }
             }
@@ -1406,18 +1499,18 @@ export default function RentForm({ onClose, onSubmit }) {
                     firstErrorField = fieldName;
                 }
             } else {
-                // Limpiar el error si el campo es válido (pero no tocar el error de CONFLICTO si ya existe)
-                const isConflictError = currentErrors[fieldName] === "El n�mero de documento del Arrendatario no puede ser igual al del Codeudor.";
+                // Limpiar el error si el campo es vÃ¡lido (pero no tocar el error de CONFLICTO si ya existe)
+                const isConflictError = currentErrors[fieldName] === "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
                 if (!isConflictError) {
                     delete currentErrors[fieldName];
                 }
             }
         }
 
-        // 2. Validación de CONFLICTO DE DOCUMENTO (Cross-field validation)
+        // 2. ValidaciÃ³n de CONFLICTO DE DOCUMENTO (Cross-field validation)
         const docArrValue = valuesRef.current[NUMERO_DOC_ARR] || "";
         const docCodValue = valuesRef.current[NUMERO_DOC_COD] || "";
-        const conflictErrorMsg = "El n�mero de documento del Arrendatario no puede ser igual al del Codeudor.";
+        const conflictErrorMsg = "El número de documento del Arrendatario no puede ser igual al del Codeudor.";
 
         if (docArrValue.trim() && docCodValue.trim() && docArrValue === docCodValue) {
 
@@ -1456,7 +1549,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 !currentErrors.fechaFinal &&
                 !hasMinimumOneMonthTerm(fechaInicio, fechaFinal)
             ) {
-                const termError = "La duraci�n m�nima del contrato debe ser de un mes.";
+                const termError = "La duración mínima del contrato debe ser de un mes.";
                 currentErrors.fechaFinal = termError;
                 hasError = true;
                 if (!firstErrorField) firstErrorField = "fechaFinal";
@@ -1512,7 +1605,7 @@ export default function RentForm({ onClose, onSubmit }) {
         e.preventDefault();
         if (submissionState.isSubmitting) return;
 
-        // En el envío final, validamos TODOS los campos obligatorios
+        // En el envÃ­o final, validamos TODOS los campos obligatorios
         const allFieldsToValidate = Object.values(stepFields)
             .flat()
             .filter(f => requiredFields.includes(f));
@@ -1521,7 +1614,7 @@ export default function RentForm({ onClose, onSubmit }) {
         setErrors(currentErrors);
 
         if (hasError) {
-            // Determinar a qué paso debe volver para mostrar el error y enfocar el campo
+            // Determinar a quÃ© paso debe volver para mostrar el error y enfocar el campo
             let targetStep = 1;
             if (stepFields[2].includes(firstErrorField)) targetStep = 2;
             else if (stepFields[3].includes(firstErrorField)) targetStep = 3;
@@ -1536,10 +1629,10 @@ export default function RentForm({ onClose, onSubmit }) {
                 if (el) el.focus();
             }, 50);
 
-            return; // Bloquea el envío
+            return; // Bloquea el envÃ­o
         }
 
-        // Validación adicional: asegurar que tenemos un inmueble resuelto a ID
+        // ValidaciÃ³n adicional: asegurar que tenemos un inmueble resuelto a ID
         if (!valuesRef.current.idInmueble) {
             const msg = "Selecciona un inmueble valido desde el registro inmobiliario.";
             setErrors((prev) => ({ ...prev, registroInmobiliario: msg }));
@@ -1555,7 +1648,7 @@ export default function RentForm({ onClose, onSubmit }) {
         const rawValues = { ...valuesRef.current, estado: estadoCalculado };
 
         try {
-            // 1️⃣ Asegurar ARRRENDATARIO (crear o reutilizar)
+            // 1ï¸âƒ£ Asegurar ARRRENDATARIO (crear o reutilizar)
             const arrendatarioPayload = buildArrendatarioPayload(rawValues);
             let renant;
 
@@ -1565,7 +1658,7 @@ export default function RentForm({ onClose, onSubmit }) {
             } catch (error) {
                 const duplicateMsg = "ya esta registrada como arrendatario";
                 if (error?.message?.toLowerCase().includes(duplicateMsg)) {
-                    // Ya existe → lo buscamos y reutilizamos
+                    // Ya existe â†’ lo buscamos y reutilizamos
                     const tipoDocumento = (rawValues.tipoDocArrendatario || "").trim();
                     const numeroDocumento = cleanDocumentByType(tipoDocumento, rawValues.numeroDocArrendatario);
 
@@ -1584,11 +1677,11 @@ export default function RentForm({ onClose, onSubmit }) {
                 }
             }
 
-            // 2️⃣ Crear ARRIENDO ligado al arrendatario obtenido/creado
+            // 2ï¸âƒ£ Crear ARRIENDO ligado al arrendatario obtenido/creado
             const arriendoPayload = buildArriendoPayload(rawValues, renant);
             const arriendoCreated = await arriendoApiService.crearArriendo(arriendoPayload);
 
-            // 3️⃣ Notificar al padre → RenantManagementPage hará fetchArriendos()
+            // 3ï¸âƒ£ Notificar al padre â†’ RenantManagementPage harÃ¡ fetchArriendos()
             await onSubmit?.({
                 renant,
                 arriendo: arriendoCreated,
@@ -1623,11 +1716,11 @@ export default function RentForm({ onClose, onSubmit }) {
         const isNameField = nameFields.includes(name);
         const isReadOnlyField = name === "precio" || name === "precioInmueble";
 
-        // Determinar si necesita validación en blur (incluye los requeridos para feedback inmediato)
+        // Determinar si necesita validaciÃ³n en blur (incluye los requeridos para feedback inmediato)
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
 
-        // Establecer el tipo de input para sugerir teclado numérico
+        // Establecer el tipo de input para sugerir teclado numÃ©rico
         let inputType = type;
         if (isDocField || isPhoneField || (isStrictNumeric && !isCurrencyField)) {
             if (type !== 'date' && type !== 'email') {
@@ -1648,7 +1741,7 @@ export default function RentForm({ onClose, onSubmit }) {
             fieldPlaceholder = "Ej: 1234567 a 1234567890";
         }
         if (isPhoneField) {
-            fieldPlaceholder = "Ej: 3001234567 (10 digitos mi�nimo)";
+            fieldPlaceholder = "Ej: 3001234567 (10 digitos mi­nimo)";
         }
 
         if (type === "checkbox") {
@@ -1730,7 +1823,7 @@ export default function RentForm({ onClose, onSubmit }) {
     };
 
     return (
-        // 🔑 Fondo del modal con desenfoque - CAMBIO PRINCIPAL
+        // ðŸ”‘ Fondo del modal con desenfoque - CAMBIO PRINCIPAL
         <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4"
             onClick={onClose}
@@ -1753,7 +1846,7 @@ export default function RentForm({ onClose, onSubmit }) {
                 <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-6 py-5 flex items-start gap-4">
                     <div className="flex-1">
                         <h2 className="text-2xl font-bold text-gray-900">Crear Arriendo</h2>
-                        <p className="text-sm text-gray-600 mt-1">Complete la informaci�n del nuevo contrato de arrendamiento</p>
+                        <p className="text-sm text-gray-600 mt-1">Complete la información del nuevo contrato de arrendamiento</p>
                         <div className="mt-4">
                             <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
                                 <div
@@ -1803,7 +1896,7 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="primerApellidoArrendatario" placeholder="Solo letras y espacios." />
                                     <Field name="segundoApellidoArrendatario" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="correoArrendatario" placeholder="correo@dominio.com" type="email" />
-                                    <Field name="telefonoArrendatario" placeholder="Ej: 3001234567 (10 d�gitos m�nimo)" />
+                                    <Field name="telefonoArrendatario" placeholder="Ej: 3001234567 (10 dígitos mínimo)" />
                                 </div>
                             </section>
                         )}
@@ -1813,7 +1906,7 @@ export default function RentForm({ onClose, onSubmit }) {
                             <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
                                 <div>
                                     <h3 className="text-sm font-semibold text-gray-900">Datos del Codeudor</h3>
-                                    <p className="text-xs text-gray-600 mt-1">Informaci�n de respaldo financiero</p>
+                                    <p className="text-xs text-gray-600 mt-1">Información de respaldo financiero</p>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <Field
@@ -1827,7 +1920,7 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="primerApellidoCodeudor" placeholder="Solo letras y espacios." />
                                     <Field name="segundoApellidoCodeudor" placeholder="Solo letras y espacios. (Opcional)" />
                                     <Field name="correoCodeudor" placeholder="correo@dominio.com" type="email" />
-                                    <Field name="telefonoCodeudor" placeholder="Ej: 3009876543 (10 d�gitos m�nimo)" />
+                                    <Field name="telefonoCodeudor" placeholder="Ej: 3009876543 (10 dígitos mínimo)" />
                                     <Field
                                         name="actividadEconomicaCodeudor"
                                         as="select"
@@ -1860,10 +1953,10 @@ export default function RentForm({ onClose, onSubmit }) {
                                     <Field name="registroInmobiliario" placeholder="Ej: 12345-ABC" />
                                     <Field name="nombreInmueble" placeholder="Ej: Edificio Central" />
                                     <Field name="departamento" placeholder="Ej: Antioquia" />
-                                    <Field name="ciudad" placeholder="Ej: Medell�n" />
+                                    <Field name="ciudad" placeholder="Ej: Medellín" />
                                     <Field name="barrio" placeholder="Ej: El Poblado" />
                                     <Field name="direccion" placeholder="Ej: Calle 10 # 45-20" />
-                                    <Field name="precioInmueble" placeholder="Ej: 150000000 (Solo n�meros enteros mayores a 0)." />
+                                    <Field name="precioInmueble" placeholder="Ej: 150000000 (Solo números enteros mayores a 0)." />
                                 </div>
                             </section>
                         )}
@@ -1877,14 +1970,14 @@ export default function RentForm({ onClose, onSubmit }) {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FancyDatePicker name="fechaInicio" label="Fecha de Inicio" />
-                                    <FancyDatePicker name="fechaFinal" label="Fecha de Finalizaci�n" />
+                                    <FancyDatePicker name="fechaFinal" label="Fecha de Finalización" />
                                     <FancyDatePicker
                                         name="fechaCobro"
                                         label="Fecha de Cobro"
                                         locked
-                                        helperText="Se fija autom�ticamente al d�a 5 de cada mes."
+                                        helperText="Se fija automáticamente al día 5 de cada mes."
                                     />
-                                    <Field name="precio" placeholder="Ej: 1500000 (Solo n�meros enteros mayores a 0)." />
+                                    <Field name="precio" placeholder="Ej: 1500000 (Solo números enteros mayores a 0)." />
                                 </div>
                             </section>
                         )}

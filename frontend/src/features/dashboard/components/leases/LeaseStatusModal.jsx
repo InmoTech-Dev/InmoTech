@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 import { toast } from "../../../../shared/hooks/use-toast";
+import { downloadFile } from "../../../../shared/utils/downloadFile";
 
 const formatCurrency = (value) => {
   const n = Number(value);
@@ -122,6 +123,7 @@ export default function LeaseStatusModal({
           id: payment.comprobante.id_comprobante || payment.id_cobro || payment.id,
           paymentId: payment.id_cobro || payment.id,
           url: payment.comprobante.url_comprobante,
+          downloadUrl: payment.comprobante.url_comprobante,
           name: `Comprobante ${String(payment.fecha_cobro || "").slice(0, 10) || payment.id_cobro || ""}`,
           fechaCobro: payment.fecha_cobro,
           fechaPago: payment.comprobante.fecha_pago,
@@ -145,6 +147,16 @@ export default function LeaseStatusModal({
 
   const openPdfViewer = (url, name) => {
     setPdfViewer({ isOpen: true, url, name });
+  };
+
+  const handleDownloadReceipt = async (url, fileName) => {
+    if (!url) return;
+
+    try {
+      await downloadFile(url, fileName);
+    } catch (_error) {
+      window.open(url, "_blank", "noopener");
+    }
   };
 
   const Field = ({ label, value, className = "" }) => {
@@ -295,7 +307,7 @@ export default function LeaseStatusModal({
               />
             </div>
             {hasReceipt && receiptUrl && (
-              <div className="sm:col-span-2 flex justify-end pt-1">
+              <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
@@ -308,6 +320,18 @@ export default function LeaseStatusModal({
                   }}
                 >
                   Ver comprobante
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() =>
+                    handleDownloadReceipt(
+                      receiptUrl,
+                      `Comprobante ${String(payment.fecha_cobro || payment.id_cobro || payment.id || "").slice(0, 10) || "arriendo"}`
+                    )
+                  }
+                >
+                  Descargar
                 </button>
               </div>
             )}

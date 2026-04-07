@@ -20,8 +20,8 @@ const requiredFields = ["tipoDocumento", "documento", "primerNombre", "primerApe
 
 // Opciones de documentos
 const DOCUMENT_OPTIONS = [
-  { value: "CC", label: "Cedula de Ciudadania (CC)" },
-  { value: "CE", label: "Cedula de Extranjeria (CE)" },
+  { value: "CC", label: "Cédula de Ciudadanía (CC)" },
+  { value: "CE", label: "Cédula de Extranjería (CE)" },
   { value: "NIT", label: "NIT" },
   { value: "PASAPORTE", label: "Pasaporte" },
   { value: "TI", label: "Tarjeta de Identidad (TI)" },
@@ -117,7 +117,7 @@ export default function TenantForm({
     if (validationError) {
       setLookupState({ loading: false, message: "", error: null });
       toast({
-        title: "Documento invalido",
+        title: "Documento inválido",
         description: validationError,
         variant: "destructive",
       });
@@ -153,7 +153,7 @@ export default function TenantForm({
         });
         toast({
           title: "No encontrado",
-          description: "No se encontro una persona con ese documento.",
+          description: "No se encontró una persona con ese documento.",
           variant: "destructive",
         });
       }
@@ -192,11 +192,11 @@ export default function TenantForm({
 
   // === SISTEMA DE VALIDACIONES MEJORADO ===
 
-  // Funcion para validar documentos segun el tipo
+  // Función para validar documentos según el tipo
   const validateDocument = (tipoDocumento, numeroDocumento) => {
     const numeroLimpio = numeroDocumento.replace(/[^0-9]/g, '');
     if (numeroLimpio.length < 7 || numeroLimpio.length > 10) {
-      return "El numero de documento debe tener entre 7 y 10 caracteres";
+      return "El número de documento debe tener entre 7 y 10 caracteres";
     }
     switch (tipoDocumento) {
       case "CC":
@@ -204,15 +204,15 @@ export default function TenantForm({
       case "NIT":
       case "PASAPORTE":
       case "TI":
-        if (!/^[0-9]+$/.test(numeroLimpio)) return "El numero de documento solo puede contener numeros";
+        if (!/^[0-9]+$/.test(numeroLimpio)) return "El número de documento solo puede contener números";
         break;
       default:
-        return "Tipo de documento no valido";
+        return "Tipo de documento no válido";
     }
     return "";
   };
 
-  // Funcion para obtener la clase de estilo
+  // Función para obtener la clase de estilo
   const getFieldClass = useCallback((fieldName) => {
     const baseClass = "w-full px-3 py-2 border rounded-lg focus:outline-none transition-colors";
     const errorClass = errors[fieldName] 
@@ -549,8 +549,8 @@ export default function TenantForm({
       segundoNombre: "Segundo Nombre", 
       primerApellido: "Primer Apellido",
       segundoApellido: "Segundo Apellido",
-      correo: "Correo Electronico",
-      telefono: "Telefono",
+      correo: "Correo electrónico",
+      telefono: "Teléfono",
       // observaciones: "Observaciones"
     };
     return labels[name] ?? name;

@@ -195,7 +195,7 @@ export default function ViewTenantModal({ tenant, onClose }) {
             {/* Body */}
             <div className="max-h-[72vh] overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {/* Información personal (organizada) */}
+                {/* Información personal */}
                 <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">Información personal</h3>

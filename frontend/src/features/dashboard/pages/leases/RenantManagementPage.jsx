@@ -9,6 +9,7 @@ import LeaseStatusModal from "../../components/leases/LeaseStatusModal";
 import LeaseOptionsContractModal from "../../components/leases/LeaseOptionsContractModal";
 import LeaseExtensionModal from "../../components/leases/LeaseExtensionModal";
 import LeaseAdjustmentModal from "../../components/leases/LeaseAdjustmentModal";
+import LeaseFinalizeModal from "../../components/leases/LeaseFinalizeModal";
 import LeasePreNoticeModal from "../../components/leases/LeasePreNoticeModal";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 import "../../../../shared/styles/globals.css";
@@ -334,6 +335,7 @@ export function RenantManagementPage() {
   const [showForm, setShowForm] = useState(false);
   const [viewingRent, setViewingRent] = useState(null);
   const [statusRent, setStatusRent] = useState(null); // arriendo en seguimiento (solo estado)
+  const [confirmFinalizeLeaseOpen, setConfirmFinalizeLeaseOpen] = useState(false);
   const [leaseOptionsRent, setLeaseOptionsRent] = useState(null);
   const [adjustmentRent, setAdjustmentRent] = useState(null);
   const [extensionRent, setExtensionRent] = useState(null);
@@ -554,6 +556,7 @@ export function RenantManagementPage() {
 
   const closeStatusModal = () => {
     setStatusRent(null);
+    setConfirmFinalizeLeaseOpen(false);
     setPayments([]);
     setUploadingPaymentId(null);
     setUploadingContract(false);
@@ -633,7 +636,7 @@ export function RenantManagementPage() {
     }
   };
 
-  const handleStatusSave = async () => {
+  const persistLeaseStatus = async () => {
     if (!statusRent) return;
     const { id, nuevoEstado, comentario } = statusRent;
     const today = new Date();
@@ -654,14 +657,7 @@ export function RenantManagementPage() {
       });
       return;
     }
-    if (nuevoEstado === "Finalizado") {
-      const shouldFinalize = window.confirm(
-        "Al finalizar este arriendo ya no podrás hacer prórroga ni más seguimiento. ¿Deseas continuar?"
-      );
-      if (!shouldFinalize) {
-        return;
-      }
-    }
+    if (nuevoEstado === "Finalizado" && !confirmFinalizeLeaseOpen) return;
     try {
       setStatusMessage(null);
       await arriendoApiService.actualizarEstado(id, {
@@ -691,6 +687,25 @@ export function RenantManagementPage() {
   };
 
   // ðŸ—‘ï¸ ELIMINAR
+  const handleStatusSave = async () => {
+    if (!statusRent) return;
+    if (statusRent.nuevoEstado === "Finalizado") {
+      setConfirmFinalizeLeaseOpen(true);
+      return;
+    }
+
+    await persistLeaseStatus();
+  };
+
+  const closeFinalizeLeaseModal = () => {
+    setConfirmFinalizeLeaseOpen(false);
+  };
+
+  const confirmFinalizeLease = async () => {
+    await persistLeaseStatus();
+    setConfirmFinalizeLeaseOpen(false);
+  };
+
   const [rentToDelete, setRentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -1154,6 +1169,23 @@ export function RenantManagementPage() {
         uploadingPaymentId={uploadingPaymentId}
         onUploadContract={handleUploadContract}
         uploadingContract={uploadingContract}
+      />
+    );
+  };
+
+  const renderFinalizeLeaseModal = () => {
+    if (!statusRent) return null;
+
+    const leaseLabel =
+      `${statusRent.primerNombreArrendatario || ""} ${statusRent.primerApellidoArrendatario || ""}`.trim() ||
+      "este arriendo";
+
+    return (
+      <LeaseFinalizeModal
+        isOpen={confirmFinalizeLeaseOpen}
+        leaseLabel={leaseLabel}
+        onClose={closeFinalizeLeaseModal}
+        onConfirm={confirmFinalizeLease}
       />
     );
   };
@@ -1920,6 +1952,7 @@ export function RenantManagementPage() {
       {renderFormModal()}
       {renderViewModal()}
       {renderStatusModal()}
+      {renderFinalizeLeaseModal()}
       <LeaseOptionsContractModal
         rent={leaseOptionsRent}
         onClose={closeLeaseOptionsModal}

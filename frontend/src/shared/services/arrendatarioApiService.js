@@ -377,12 +377,19 @@ export const renantsApiService = {
     try {
       const response = await apiClient.get('/leases/renants', { params });
       const list = extractList(response);
-      if (!Array.isArray(list) || !list.length) return null;
+      if (!Array.isArray(list) || !list.length) {
+        const personaMatch = await this.findPersonaByDocument(tipoDocumento, numeroDocumento);
+        return personaMatch || null;
+      }
       const exact = pickExactMatch(list, tipoDocumento, numeroDocumento);
-      if (!exact) return null;
+      if (!exact) {
+        const personaMatch = await this.findPersonaByDocument(tipoDocumento, numeroDocumento);
+        return personaMatch || null;
+      }
       return mapRenantFromApi(exact);
     } catch (_err) {
-      return null;
+      const personaMatch = await this.findPersonaByDocument(tipoDocumento, numeroDocumento);
+      return personaMatch || null;
     }
   },
 
@@ -507,9 +514,21 @@ export const renantsApiService = {
   },
 
   async create(payload) {
-    const response = await apiClient.post('/leases/renants', buildPayload(payload));
-    const data = response?.data?.data ?? response?.data ?? response;
-    return mapRenantFromApi(data);
+    try {
+      const response = await apiClient.post('/leases/renants', buildPayload(payload));
+      const data = response?.data?.data ?? response?.data ?? response;
+      return mapRenantFromApi(data);
+    } catch (error) {
+      const status = error?.status || error?.response?.status;
+      if (status !== 409) throw error;
+
+      const existing = await this.findByDocument(payload?.tipoDocumento, payload?.documento);
+      if (existing?.id || existing?.id_arrendatario || existing?.raw?.id_arrendatario) {
+        return existing;
+      }
+
+      throw error;
+    }
   },
 
   async update(id, payload) {

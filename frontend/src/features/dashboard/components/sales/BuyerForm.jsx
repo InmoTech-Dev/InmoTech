@@ -52,7 +52,6 @@ export default function BuyerForm({
   const docFields = ["documento"];
   const phoneFields = ["telefono"];
   const emailFields = ["correo"];
-  const [lookupState, setLookupState] = useState({ loading: false, message: "", error: null });
   const lookupTimeoutRef = useRef(null);
 
   const sanitizeNumericString = (value) => {
@@ -70,10 +69,19 @@ export default function BuyerForm({
   };
 
   const setValue = (name, value) => {
-    valuesRef.current[name] = value;
-    displayValuesRef.current[name] = value;
-    if (elRefs.current[name]) {
-      try { elRefs.current[name].value = value; } catch (e) {}
+    const nextValue = value ?? "";
+    valuesRef.current[name] = nextValue;
+    displayValuesRef.current[name] = nextValue;
+    const el = elRefs.current[name];
+    if (!el) return;
+    if (el.type === "checkbox") {
+      el.checked = !!nextValue;
+      return;
+    }
+    try {
+      el.value = nextValue;
+    } catch (_err) {
+      // ignore
     }
   };
 
@@ -107,7 +115,6 @@ export default function BuyerForm({
 
     if (!tipoDocumento || !numeroDocumento) {
       clearAutofillFields();
-      setLookupState({ loading: false, message: "", error: null });
       return;
     }
 
@@ -118,21 +125,14 @@ export default function BuyerForm({
         ...prev,
         documento: validationError,
       }));
-      setLookupState({ loading: false, message: "", error: null });
       return;
     }
 
-      setLookupState({ loading: true, message: "", error: null });
     try {
       const buyer = await buyersApiService.findByDocument(tipoDocumento, numeroDocumento);
 
       if (buyer) {
         applyBuyerData(buyer);
-        setLookupState({
-          loading: false,
-          message: "",
-          error: null
-        });
         toast({
           title: "Comprador encontrado",
           description: "Datos autocompletados correctamente.",
@@ -140,19 +140,9 @@ export default function BuyerForm({
         });
       } else {
         clearAutofillFields();
-        setLookupState({
-          loading: false,
-          message: "",
-          error: null
-        });
       }
     } catch (err) {
       clearAutofillFields();
-      setLookupState({
-        loading: false,
-        message: "",
-        error: null
-      });
       toast({
         title: "Error al buscar",
         description: "No fue posible buscar el comprador. Intenta de nuevo.",
@@ -174,9 +164,22 @@ export default function BuyerForm({
     };
     valuesRef.current = newData;
     displayValuesRef.current = newData;
+    Object.entries(newData).forEach(([field, value]) => {
+      const el = elRefs.current[field];
+      if (!el) return;
+      if (el.type === "checkbox") {
+        el.checked = !!value;
+      } else {
+        try {
+          el.value = value ?? "";
+        } catch (_err) {
+          // ignore
+        }
+      }
+    });
     setErrors({});
     setSubmitError(null);
-  }, [initialData, nextId]);
+  }, [initialData]);
 
   // Validación por tipo de documento (igual TenantForm)
   const validateDocument = (tipoDocumento, numeroDocumento) => {
@@ -212,21 +215,28 @@ export default function BuyerForm({
     displayValuesRef.current[name] = valuesRef.current[name];
     if (el.type === "checkbox") {
       el.checked = !!valuesRef.current[name];
-    } else if (displayValuesRef.current[name] !== undefined) {
-      try { el.value = displayValuesRef.current[name]; } catch (err) {}
+      return;
+    }
+    try {
+      el.value = displayValuesRef.current[name] ?? "";
+    } catch (_err) {
+      // ignore
     }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     let cleanValue = value;
+    let nextDisplayValue = value;
     if (docFields.includes(name) || phoneFields.includes(name)) {
       cleanValue = value.replace(/[^0-9]/g, '');
-      displayValuesRef.current[name] = value; // mantiene visual
-    } else {
-      displayValuesRef.current[name] = value;
+      nextDisplayValue = cleanValue;
     }
     valuesRef.current[name] = cleanValue;
+    displayValuesRef.current[name] = nextDisplayValue;
+    if (e.target.value !== nextDisplayValue) {
+      e.target.value = nextDisplayValue;
+    }
 
     if ((name === "documento" || name === "tipoDocumento")) {
       const tipoDocumento = name === "tipoDocumento" ? cleanValue : (valuesRef.current.tipoDocumento || "");
@@ -238,7 +248,6 @@ export default function BuyerForm({
 
       if (!tipoDocumento || !numeroDocumento || validationError) {
         clearAutofillFields();
-        setLookupState({ loading: false, message: "", error: null });
       } else {
         triggerLookup();
       }
@@ -296,7 +305,6 @@ export default function BuyerForm({
       const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
       if (!tipoDocumento || !numeroDocumento) {
         clearAutofillFields();
-        setLookupState({ loading: false, message: "", error: null });
         return;
       }
       triggerLookup();
@@ -392,6 +400,7 @@ export default function BuyerForm({
           {Label}
           <select
             name={name}
+            defaultValue={displayValuesRef.current[name] ?? ""}
             onChange={handleInputChange}
             onBlur={handleInputBlur}
             ref={setElRef(name)}
@@ -421,6 +430,7 @@ export default function BuyerForm({
           <InputComponent
             name={name}
             type={type}
+            defaultValue={displayValuesRef.current[name] ?? ""}
             placeholder={placeholder || getLabel(name)}
             onChange={handleInputChange}
             onBlur={handleInputBlur}

@@ -1,3 +1,4 @@
+
 /**
  * SSE client service.
  * Keeps backward compatibility with legacy security events and adds

@@ -1939,4 +1939,3 @@ export default function SalesForm({ onClose, onSubmit }) {
         </AnimatePresence>
     );
 }
-

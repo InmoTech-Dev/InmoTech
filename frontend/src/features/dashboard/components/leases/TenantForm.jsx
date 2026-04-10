@@ -39,7 +39,7 @@ export default function TenantForm({
   const [lookupState, setLookupState] = useState({ loading: false, message: "", error: null });
   const lookupTimeoutRef = useRef(null);
   const { toast } = useToast();
-  
+
   // Refs para manejo eficiente de estado
   const valuesRef = useRef({ ...defaultFormData, id: nextId });
   const displayValuesRef = useRef({ ...defaultFormData, id: nextId });
@@ -74,7 +74,7 @@ export default function TenantForm({
     valuesRef.current[name] = value;
     displayValuesRef.current[name] = value;
     if (elRefs.current[name]) {
-      try { elRefs.current[name].value = value; } catch (e) {}
+      try { elRefs.current[name].value = value; } catch (e) { }
     }
   };
 
@@ -183,7 +183,7 @@ export default function TenantForm({
       id: initialData?.id ?? nextId,
       ...initialData
     };
-    
+
     valuesRef.current = newData;
     displayValuesRef.current = newData;
     setErrors({});
@@ -215,8 +215,8 @@ export default function TenantForm({
   // Función para obtener la clase de estilo
   const getFieldClass = useCallback((fieldName) => {
     const baseClass = "w-full px-3 py-2 border rounded-lg focus:outline-none transition-colors";
-    const errorClass = errors[fieldName] 
-      ? "border-red-500 focus:ring-2 focus:ring-red-500 focus:border-transparent" 
+    const errorClass = errors[fieldName]
+      ? "border-red-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
       : "border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent";
     return `${baseClass} ${errorClass}`;
   }, [errors]);
@@ -225,11 +225,11 @@ export default function TenantForm({
   const setElRef = (name) => (el) => {
     if (!el) return;
     elRefs.current[name] = el;
-    
+
     if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
       valuesRef.current[name] = defaultFormData[name] ?? "";
     }
-    
+
     displayValuesRef.current[name] = valuesRef.current[name];
 
     if (el.type === "checkbox") {
@@ -253,7 +253,7 @@ export default function TenantForm({
     } else {
       displayValuesRef.current[name] = value;
     }
-    
+
     valuesRef.current[name] = cleanValue;
 
     if (name === "documento" || name === "tipoDocumento") {
@@ -276,21 +276,21 @@ export default function TenantForm({
     }
   };
 
-    // Funciones de validacion de formato
-    const isValidName = (value) => /^[\p{L}\s]*$/u.test(value);
+  // Funciones de validacion de formato
+  const isValidName = (value) => /^[\p{L}\s]*$/u.test(value);
   const isValidNumeric = (value) => /^\d*$/.test(value);
   const isValidEmail = (value) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value);
 
-    // Manejador de blur para validacion mejorado
+  // Manejador de blur para validacion mejorado
   const handleInputBlur = (e) => {
     const { name } = e.target;
-    const value = valuesRef.current[name] || ""; 
-    
+    const value = valuesRef.current[name] || "";
+
     let errorMessage = null;
     const isRequired = requiredFields.includes(name);
 
     // Validar obligatorio
-    if (isRequired && !value.trim()) { 
+    if (isRequired && !value.trim()) {
       errorMessage = "Este campo es obligatorio.";
     }
 
@@ -298,23 +298,23 @@ export default function TenantForm({
     if (!errorMessage && value.trim()) {
       if (nameFields.includes(name) && !isValidName(displayValuesRef.current[name])) {
         errorMessage = `Solo se permiten letras y espacios.`;
-      } 
+      }
       else if (docFields.includes(name)) {
         const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
-        
+
         if (!/^[A-Za-z0-9\s\-\.]*$/.test(displayValuesRef.current[name])) {
           errorMessage = `Solo se permiten letras, numeros, espacios, puntos y guiones`;
         } else {
           errorMessage = validateDocument(tipoDocumento, value);
         }
-      } 
+      }
       else if (phoneFields.includes(name)) {
         if (!isValidNumeric(value)) {
           errorMessage = `Solo se permiten numeros.`;
         } else if (value.length < 10) {
           errorMessage = `El telefono debe tener al menos 10 digitos`;
         }
-      } 
+      }
       else if (emailFields.includes(name)) {
         if (!value.includes("@")) {
           errorMessage = `El correo debe contener @.`;
@@ -349,15 +349,15 @@ export default function TenantForm({
     let currentErrors = { ...errors };
     let hasError = false;
     let firstErrorField = null;
-    
+
     for (const fieldName of fieldsToCheck) {
       const value = valuesRef.current[fieldName] || "";
       let error = null;
 
       const isRequired = requiredFields.includes(fieldName);
-      
+
       // Validacion de obligatoriedad
-      if (isRequired && !value.toString().trim()) { 
+      if (isRequired && !value.toString().trim()) {
         error = "Este campo es obligatorio.";
       }
 
@@ -365,24 +365,24 @@ export default function TenantForm({
       if (!error && value.toString().trim()) {
         if (nameFields.includes(fieldName) && !isValidName(displayValuesRef.current[fieldName])) {
           error = `Solo se permiten letras, espacios y acentos.`;
-        } 
+        }
         // VALIDACIN MEJORADA PARA DOCUMENTOS
         else if (docFields.includes(fieldName)) {
           const tipoDocumento = valuesRef.current.tipoDocumento || "CC";
           error = validateDocument(tipoDocumento, value);
-        } 
+        }
         else if (phoneFields.includes(fieldName)) {
           if (!isValidNumeric(value)) {
             error = `Solo se permiten digitos.`;
           } else if (value.length < 10) {
             error = `El telefono debe tener al menos 10 digitos`;
           }
-        } 
+        }
         else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
           error = `Debe ser un correo electronico valido.`;
         }
       }
-      
+
       // Actualizar errores
       if (error) {
         currentErrors[fieldName] = error;
@@ -394,7 +394,7 @@ export default function TenantForm({
         delete currentErrors[fieldName];
       }
     }
-    
+
     return { currentErrors, hasError, firstErrorField };
   };
 
@@ -437,7 +437,7 @@ export default function TenantForm({
 
     const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired;
     const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
-    
+
     let inputType = type;
     if (isDocField || isPhoneField) {
       if (type !== 'email') {
@@ -546,7 +546,7 @@ export default function TenantForm({
       tipoDocumento: "Tipo de Documento",
       documento: "Numero de Documento",
       primerNombre: "Primer Nombre",
-      segundoNombre: "Segundo Nombre", 
+      segundoNombre: "Segundo Nombre",
       primerApellido: "Primer Apellido",
       segundoApellido: "Segundo Apellido",
       correo: "Correo electrónico",
@@ -611,7 +611,7 @@ export default function TenantForm({
                   <User className="w-5 h-5 text-blue-600" />
                   <h3 className="text-lg font-semibold text-slate-800">Datos Personales</h3>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Field
                     name="tipoDocumento"
@@ -620,13 +620,13 @@ export default function TenantForm({
                     className=""
                   />
 
-                <Field 
-                  name="documento" 
-                  placeholder="Ej: 1234567 a 1234567890"
-                  icon={FileText}
-                  className="md:col-span-2"
-                />
-              </div>
+                  <Field
+                    name="documento"
+                    placeholder="Ej: 1234567 a 1234567890"
+                    icon={FileText}
+                    className="md:col-span-2"
+                  />
+                </div>
 
                 {/* Nombres y Apellidos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -703,11 +703,10 @@ export default function TenantForm({
               whileTap={{ scale: 0.98 }}
               onClick={handleSubmit}
               disabled={isButtonDisabled}
-              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-                isButtonDisabled
-                  ? "bg-slate-400 text-slate-200 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isButtonDisabled
+                ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+                }`}
             >
               {isSubmitting ? (
                 <>
@@ -727,4 +726,3 @@ export default function TenantForm({
     </AnimatePresence>
   );
 }
-

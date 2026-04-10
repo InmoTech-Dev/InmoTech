@@ -45,7 +45,7 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
     <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50 p-4">
       {/* Contenido principal del modal */}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-hidden">
-        
+
         {/* Header con estilo del banner */}
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Editar Arrendatario</h2>
@@ -65,7 +65,7 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
         {/* Formulario */}
         <form onSubmit={handleSubmit}>
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 space-y-4">
-            
+
             {/* Primer Nombre */}
             <div>
               <label htmlFor="primerNombre" className="block font-semibold text-gray-700 mb-2">
@@ -77,11 +77,10 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
                 name="primerNombre"
                 value={formData.primerNombre}
                 onChange={handleChange}
-                className={`w-full border rounded-lg p-3 transition duration-150 ${
-                  errors.primerNombre
-                    ? "border-red-500 ring-2 ring-red-500"
-                    : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                }`}
+                className={`w-full border rounded-lg p-3 transition duration-150 ${errors.primerNombre
+                  ? "border-red-500 ring-2 ring-red-500"
+                  : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  }`}
                 placeholder="Ej: Juan"
               />
               {errors.primerNombre && (
@@ -100,11 +99,10 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
                 name="primerApellido"
                 value={formData.primerApellido}
                 onChange={handleChange}
-                className={`w-full border rounded-lg p-3 transition duration-150 ${
-                  errors.primerApellido
-                    ? "border-red-500 ring-2 ring-red-500"
-                    : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                }`}
+                className={`w-full border rounded-lg p-3 transition duration-150 ${errors.primerApellido
+                  ? "border-red-500 ring-2 ring-red-500"
+                  : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  }`}
                 placeholder="Ej: Pérez"
               />
               {errors.primerApellido && (
@@ -123,11 +121,10 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
                 name="correo"
                 value={formData.correo}
                 onChange={handleChange}
-                className={`w-full border rounded-lg p-3 transition duration-150 ${
-                  errors.correo
-                    ? "border-red-500 ring-2 ring-red-500"
-                    : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                }`}
+                className={`w-full border rounded-lg p-3 transition duration-150 ${errors.correo
+                  ? "border-red-500 ring-2 ring-red-500"
+                  : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  }`}
                 placeholder="ejemplo@dominio.com"
               />
               {errors.correo && (
@@ -146,11 +143,10 @@ export default function EditTenantForm({ tenant, onClose, onUpdate }) {
                 name="telefono"
                 value={formData.telefono}
                 onChange={handleChange}
-                className={`w-full border rounded-lg p-3 transition duration-150 ${
-                  errors.telefono
-                    ? "border-red-500 ring-2 ring-red-500"
-                    : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                }`}
+                className={`w-full border rounded-lg p-3 transition duration-150 ${errors.telefono
+                  ? "border-red-500 ring-2 ring-red-500"
+                  : "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  }`}
                 placeholder="Ej: 3001234567"
               />
               {errors.telefono && (

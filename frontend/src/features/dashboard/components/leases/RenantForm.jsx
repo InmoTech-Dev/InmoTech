@@ -2029,4 +2029,3 @@ export default function RentForm({ onClose, onSubmit }) {
         </motion.div>
     );
 }
-

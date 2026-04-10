@@ -7,8 +7,8 @@ const requiredFields = [
     "tipoDocCodeudor", "numeroDocCodeudor", "primerNombreCodeudor",
     "primerApellidoCodeudor", "telefonoCodeudor", "correoCodeudor",
     "actividadEconomicaCodeudor",
-    "tipoInmueble", "registroInmobiliario", "nombreInmueble", "area", 
-    "habitaciones", "banos", "departamento", "ciudad", "barrio", 
+    "tipoInmueble", "registroInmobiliario", "nombreInmueble", "area",
+    "habitaciones", "banos", "departamento", "ciudad", "barrio",
     "direccion", "precioInmueble",
     "fechaInicio", "fechaFinal", "fechaCobro", "precio", "estado",
 ];
@@ -35,9 +35,9 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     const initial = useMemo(() => ({ ...defaultInitial, ...initialData }), [initialData]);
 
     const valuesRef = useRef({ ...initial });
-    const displayValuesRef = useRef({}); 
+    const displayValuesRef = useRef({});
     const elRefs = useRef({});
-    const errorFocusTimeout = useRef(null); 
+    const errorFocusTimeout = useRef(null);
 
     const NUMERO_DOC_INQ = "numeroDocInquilino";
     const NUMERO_DOC_COD = "numeroDocCodeudor";
@@ -45,7 +45,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     const strictNumericFields = [
         "area", "habitaciones", "banos", "precioInmueble", "precio"
     ];
-    
+
     const currencyFields = ["precioInmueble", "precio"];
 
     const stepFields = {
@@ -103,20 +103,20 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     const emailFields = [
         "correoInquilino", "correoCodeudor",
     ];
-    
+
     const formatNumberWithThousandsSeparator = (value) => {
         if (!value) return "";
         const cleanValue = value.toString().replace(/[^0-9]/g, '');
         if (cleanValue === "") return "";
-        
-        const formatter = new Intl.NumberFormat('es-CO', { 
+
+        const formatter = new Intl.NumberFormat('es-CO', {
             style: 'decimal',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         });
         return formatter.format(cleanValue);
     };
-    
+
     useMemo(() => {
         const newDisplayValues = {};
         for (const key in initial) {
@@ -132,11 +132,11 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
     const setElRef = (name) => (el) => {
         if (!el) return;
         elRefs.current[name] = el;
-        
+
         if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
             valuesRef.current[name] = initial[name] ?? defaultInitial[name] ?? "";
         }
-        
+
         const displayValue = displayValuesRef.current[name] ?? initial[name] ?? defaultInitial[name] ?? "";
 
         if (el.type === "checkbox") {
@@ -154,7 +154,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             displayValuesRef.current.estado = estadoAuto;
             const estadoEl = elRefs.current.estado;
             if (estadoEl) {
-                try { estadoEl.value = estadoAuto; } catch (_) {}
+                try { estadoEl.value = estadoAuto; } catch (_) { }
             }
         }
     };
@@ -191,13 +191,13 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             if (currencyFields.includes(name)) {
                 cleanValue = value.replace(/[^0-9]/g, '');
                 const formattedValue = formatNumberWithThousandsSeparator(cleanValue);
-                
+
                 displayValuesRef.current[name] = formattedValue;
                 e.target.value = formattedValue;
             } else {
                 displayValuesRef.current[name] = value;
             }
-            
+
             valuesRef.current[name] = cleanValue;
 
             if (name === "fechaCobro") {
@@ -206,7 +206,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                 displayValuesRef.current.estado = estadoAuto;
                 const estadoEl = elRefs.current.estado;
                 if (estadoEl) {
-                    try { estadoEl.value = estadoAuto; } catch (_) {}
+                    try { estadoEl.value = estadoAuto; } catch (_) { }
                 }
             }
         }
@@ -226,8 +226,8 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
     const handleInputBlur = (e) => {
         const { name } = e.target;
-        const value = valuesRef.current[name] || ""; 
-        
+        const value = valuesRef.current[name] || "";
+
         let errorMessage = null;
         const minLengthDoc = 7;
         const maxLengthDoc = 10;
@@ -237,7 +237,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         setErrors(prev => {
             const newErrors = { ...prev };
 
-        if (isRequired && !value.toString().trim()) { 
+            if (isRequired && !value.toString().trim()) {
                 errorMessage = "Este campo es obligatorio.";
             }
 
@@ -264,7 +264,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             if (!errorMessage && docFields.includes(name)) {
                 const otherDocName = name === NUMERO_DOC_INQ ? NUMERO_DOC_COD : NUMERO_DOC_INQ;
                 const otherDocValue = valuesRef.current[otherDocName] || "";
-                
+
                 if (value.trim() && otherDocValue.trim() && value === otherDocValue) {
                     errorMessage = conflictErrorMsg;
                     if (newErrors[otherDocName] !== conflictErrorMsg) {
@@ -274,7 +274,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                     delete newErrors[otherDocName];
                 }
             }
-            
+
             if (errorMessage) {
                 newErrors[name] = errorMessage;
             } else {
@@ -284,23 +284,23 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             return newErrors;
         });
     };
-    
+
     const runValidation = (fieldsToCheck) => {
         let currentErrors = { ...errors };
         let hasError = false;
         const minLengthDoc = 7;
         const maxLengthDoc = 10;
-        
+
         for (const fieldName of fieldsToCheck) {
             const value = valuesRef.current[fieldName] || "";
             let error = null;
 
             const isRequired = requiredFields.includes(fieldName);
-            
-        if (isRequired && !value.toString().trim()) { 
+
+            if (isRequired && !value.toString().trim()) {
                 error = "Este campo es obligatorio.";
-            } 
-            
+            }
+
             if (isRequired && strictNumericFields.includes(fieldName)) {
                 if (!value.toString().trim() || parseFloat(value) <= 0 || isNaN(parseFloat(value))) {
                     error = "Este campo es obligatorio";
@@ -322,11 +322,11 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                     error = `Solo se permiten d\u00edgitos.`;
                 } else if (emailFields.includes(fieldName) && !isValidEmail(value)) {
                     error = `El correo electr\u00f3nico debe contener un '@'.`;
-                } else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) { 
+                } else if (strictNumericFields.includes(fieldName) && !isValidNumeric(value)) {
                     error = `Solo se permiten d\u00edgitos.`;
                 }
             }
-            
+
             if (error) {
                 currentErrors[fieldName] = error;
                 hasError = true;
@@ -340,13 +340,13 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                 }
             }
         }
-        
+
         const docInqValue = valuesRef.current[NUMERO_DOC_INQ] || "";
         const docCodValue = valuesRef.current[NUMERO_DOC_COD] || "";
         const conflictErrorMsg = "El nÃƒÂºmero de documento del inquilino no puede ser igual al del codeudor.";
 
         if (docInqValue.trim() && docCodValue.trim() && docInqValue === docCodValue) {
-            
+
             const fieldNames = [NUMERO_DOC_INQ, NUMERO_DOC_COD];
 
             for (const name of fieldNames) {
@@ -358,7 +358,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                     }
                 }
             }
-            
+
         } else {
             if (currentErrors[NUMERO_DOC_INQ] === conflictErrorMsg) {
                 delete currentErrors[NUMERO_DOC_INQ];
@@ -396,20 +396,20 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                 }
             }
         }
-        
+
         return { currentErrors, hasError, firstErrorField };
     };
 
     const handleNextStep = () => {
         let fieldsToValidate = stepFields[step];
-        
+
         if (step === 1 && valuesRef.current[NUMERO_DOC_COD].toString().trim()) {
             if (!fieldsToValidate.includes(NUMERO_DOC_COD)) fieldsToValidate.push(NUMERO_DOC_COD);
         }
         if (step === 2 && valuesRef.current[NUMERO_DOC_INQ].toString().trim()) {
             if (!fieldsToValidate.includes(NUMERO_DOC_INQ)) fieldsToValidate.push(NUMERO_DOC_INQ);
         }
-        
+
         const { currentErrors, hasError, firstErrorField } = runValidation(fieldsToValidate);
 
         setErrors(currentErrors);
@@ -430,7 +430,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        
+
         const allFieldsToValidate = Object.values(stepFields).flat();
         const { currentErrors, hasError, firstErrorField } = runValidation(allFieldsToValidate);
 
@@ -441,15 +441,15 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
             if (stepFields[2].includes(firstErrorField)) targetStep = 2;
             else if (stepFields[3].includes(firstErrorField)) targetStep = 3;
             else if (stepFields[4].includes(firstErrorField)) targetStep = 4;
-            
+
             setStep(targetStep);
-            
+
             if (errorFocusTimeout.current) clearTimeout(errorFocusTimeout.current);
             errorFocusTimeout.current = setTimeout(() => {
                 const el = elRefs.current[firstErrorField];
                 if (el) el.focus();
             }, 50);
-            
+
             return;
         }
 
@@ -474,7 +474,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
         const needsBlurValidation = isDocField || isNameField || isPhoneField || isEmailField || isRequired || isStrictNumeric;
         const onBlurHandler = needsBlurValidation ? handleInputBlur : undefined;
-        
+
         let inputType = type;
         if (isDocField || isPhoneField || isStrictNumeric) {
             if (type !== 'date' && type !== 'email') {
@@ -484,7 +484,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         else if (isEmailField) {
             inputType = "email";
         }
-        
+
         const initialValue = initial[name] ?? defaultInitial[name];
 
         if (type === "checkbox") {
@@ -552,7 +552,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                     placeholder={placeholder}
                     minLength={isDocField ? 7 : undefined}
                     maxLength={isDocField ? 10 : undefined}
-                    defaultValue={displayValuesRef.current[name] ?? initialValue ?? ""} 
+                    defaultValue={displayValuesRef.current[name] ?? initialValue ?? ""}
                     onChange={handleInputChange}
                     onBlur={onBlurHandler}
                 />
@@ -565,16 +565,16 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
     return (
         // ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¹Ãƒâ€¦Ã¢â‚¬Å“ Fondo del modal con desenfoque - ESTILO ACTUALIZADO
-        <div 
+        <div
             className="fixed inset-0 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm z-50 p-3 md:p-6 overflow-y-auto md:overflow-hidden"
             onClick={onClose}
         >
             {/* Contenido principal del modal con estilo consistente */}
-            <div 
+            <div
                 className="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-3 md:p-4 relative my-3 max-h-[88vh] flex flex-col overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
-                
+
                 {/* Header con estilo del banner */}
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Editar Arriendo</h2>
@@ -610,7 +610,7 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
 
                 <form onSubmit={handleSubmit} className="space-y-4 flex-1 overflow-y-auto pr-1 md:pr-2">
                     <div className="bg-slate-50 rounded-xl p-3 md:p-4 border border-slate-200 space-y-4">
-                        
+
                         {/* PASO 1 */}
                         {step === 1 && (
                             <div>
@@ -732,9 +732,9 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                     {/* Controles de navegaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n */}
                     <div className="flex justify-between pt-6 mt-6">
                         {step > 1 && (
-                            <button 
-                                type="button" 
-                                onClick={prevStep} 
+                            <button
+                                type="button"
+                                onClick={prevStep}
                                 className="px-6 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-400 transition duration-150 transform hover:scale-[1.02]"
                             >
                                 Anterior
@@ -752,8 +752,8 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
                         )}
 
                         {step === totalSteps && (
-                            <button 
-                                type="submit" 
+                            <button
+                                type="submit"
                                 className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-lg shadow-green-400/50 hover:bg-green-700 transition duration-150 transform hover:scale-[1.02] ml-auto"
                             >
                                 Guardar Cambios
@@ -765,12 +765,3 @@ export default function EditRenantForm({ onClose, onSubmit, initialData = {} }) 
         </div>
     );
 }
-
-
-
-
-
-
-
-
-

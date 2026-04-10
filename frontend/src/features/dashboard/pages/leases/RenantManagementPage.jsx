@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { FaUserPlus, FaSearch, FaHome, FaCalendar } from "react-icons/fa";
 import { Plus, Search, Filter, Eye, Trash2, Home, ListChecks, X, Wrench } from 'lucide-react';
 import RenantForm from "../../components/leases/RenantForm";
-import ViewRenant from "../../components/leases/ViewRenant"; 
+import ViewRenant from "../../components/leases/ViewRenant";
 import LeaseStatusModal from "../../components/leases/LeaseStatusModal";
 import LeaseOptionsContractModal from "../../components/leases/LeaseOptionsContractModal";
 import LeaseExtensionModal from "../../components/leases/LeaseExtensionModal";
@@ -475,8 +475,8 @@ export function RenantManagementPage() {
     const durationMonths = Number(rent.duracionProrrogaMeses) > 0
       ? Number(rent.duracionProrrogaMeses)
       : Number(rent.duracionMeses) > 0
-      ? Number(rent.duracionMeses)
-      : Math.max(diffMonthsUtc(startDate, endDate), 1);
+        ? Number(rent.duracionMeses)
+        : Math.max(diffMonthsUtc(startDate, endDate), 1);
     const suggestedEndDate = addMonthsClampedUtc(endDate, durationMonths);
 
     setLeaseOptionsRent(null);
@@ -754,10 +754,10 @@ export function RenantManagementPage() {
         setStatusRent((prev) =>
           prev
             ? {
-                ...prev,
-                estado: updatedLeaseState,
-                nuevoEstado: updatedLeaseState,
-              }
+              ...prev,
+              estado: updatedLeaseState,
+              nuevoEstado: updatedLeaseState,
+            }
             : prev
         );
       }
@@ -906,117 +906,116 @@ export function RenantManagementPage() {
     }
   };
 
-const renderDeleteModal = () => {
-  if (!rentToDelete) return null;
+  const renderDeleteModal = () => {
+    if (!rentToDelete) return null;
 
-  const nombre =
-    rentToDelete?.primerNombreArrendatario ||
-    rentToDelete?.arrendatario?.nombre_completo ||
-    "";
+    const nombre =
+      rentToDelete?.primerNombreArrendatario ||
+      rentToDelete?.arrendatario?.nombre_completo ||
+      "";
 
-  const modalContent = (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
-      {/* Backdrop estilo formularios */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={handleCancelDelete}
-      />
+    const modalContent = (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center">
+        {/* Backdrop estilo formularios */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          onClick={handleCancelDelete}
+        />
 
-      {/* Modal card estilo formularios */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        transition={{ duration: 0.25 }}
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-slate-200">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
-              <Trash2 className="w-5 h-5 text-red-600" />
+        {/* Modal card estilo formularios */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          transition={{ duration: 0.25 }}
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between p-6 border-b border-slate-200">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 border border-red-200">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
+                <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-800">Confirmar eliminación</h3>
-              <p className="text-slate-600 mt-1 text-sm">Esta acción es irreversible.</p>
-            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleCancelDelete}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              aria-label="Cerrar"
+            >
+              <X className="w-5 h-5 text-slate-500" />
+            </motion.button>
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleCancelDelete}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            aria-label="Cerrar"
-          >
-            <X className="w-5 h-5 text-slate-500" />
-          </motion.button>
-        </div>
+          {/* Content */}
+          <div className="p-6">
+            <p className="text-slate-700">
+              ¿Estás seguro de que deseas eliminar{" "}
+              {nombre ? (
+                <>
+                  el arriendo de{" "}
+                  <span className="font-semibold text-slate-900">{nombre}</span>
+                </>
+              ) : (
+                <span className="font-semibold text-slate-900">este arriendo</span>
+              )}
+              ? Esta acción no se puede deshacer.
+            </p>
+          </div>
 
-        {/* Content */}
-        <div className="p-6">
-          <p className="text-slate-700">
-            ¿Estás seguro de que deseas eliminar{" "}
-            {nombre ? (
-              <>
-                el arriendo de{" "}
-                <span className="font-semibold text-slate-900">{nombre}</span>
-              </>
-            ) : (
-              <span className="font-semibold text-slate-900">este arriendo</span>
-            )}
-            ? Esta acción no se puede deshacer.
-          </p>
-        </div>
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleCancelDelete}
+              className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              Cancelar
+            </motion.button>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-6 rounded-b-2xl">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleCancelDelete}
-            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-          >
-            Cancelar
-          </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${isDeleting
+                  ? "bg-slate-400 text-slate-200 cursor-not-allowed"
+                  : "bg-red-600 hover:bg-red-700 text-white"
+                }`}
+            >
+              {isDeleting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  Eliminar
+                </>
+              )}
+            </motion.button>
+          </div>
+        </motion.div>
+      </div>
+    );
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleConfirmDelete}
-            disabled={isDeleting}
-            className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${
-              isDeleting
-                ? "bg-slate-400 text-slate-200 cursor-not-allowed"
-                : "bg-red-600 hover:bg-red-700 text-white"
-            }`}
-          >
-            {isDeleting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Eliminando...
-              </>
-            ) : (
-              <>
-                <Trash2 className="w-4 h-4" />
-                Eliminar
-              </>
-            )}
-          </motion.button>
-        </div>
-      </motion.div>
-    </div>
-  );
-
-  return ReactDOM.createPortal(
-    modalContent,
-    document.getElementById("modal-root") || document.body
-  );
-};
+    return ReactDOM.createPortal(
+      modalContent,
+      document.getElementById("modal-root") || document.body
+    );
+  };
   const getDisplayEstado = (rent) => rent.estado || "Activo";
 
   const getEstadoBadge = (estado) => {
@@ -1680,7 +1679,7 @@ const renderDeleteModal = () => {
               />
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-2">
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-white">
               <Filter className="w-4 h-4 text-slate-500" />
@@ -1763,7 +1762,7 @@ const renderDeleteModal = () => {
                             <p className="text-sm text-slate-500">{r.correoArrendatario}</p>
                           </div>
                         </td>
-                        
+
                         {/* INMUEBLE */}
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center gap-2 justify-center">
@@ -1771,10 +1770,10 @@ const renderDeleteModal = () => {
                             <span className="text-slate-700">{r.tipoInmueble}</span>
                           </div>
                         </td>
-                        
+
                         {/* REGISTRO */}
                         <td className="px-6 py-4 text-center text-slate-600 text-sm">{r.registroInmobiliario}</td>
-                        
+
                         {/* FECHAS */}
                         <td className="px-6 py-4 text-center">
                           <div className="flex flex-col items-center">
@@ -1782,13 +1781,13 @@ const renderDeleteModal = () => {
                             <span className="text-xs text-slate-500">a {r.fechaFinal}</span>
                           </div>
                         </td>
-                        
+
                         {/* VALOR MENSUAL */}
                         <td className="px-6 py-4 text-center font-semibold text-purple-700">{r.valorMensual}</td>
-                        
+
                         {/* ESTADO */}
                         <td className="px-6 py-4 text-center">{getEstadoBadge(getDisplayEstado(r))}</td>
-                        
+
                         {/* ACCIONES */}
                         <td className="px-6 py-4 text-center min-w-[150px]">
                           <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
@@ -1906,11 +1905,11 @@ const renderDeleteModal = () => {
           images={
             preNoticePreviewAsset.url
               ? [
-                  {
-                    url: preNoticePreviewAsset.url,
-                    name: preNoticePreviewAsset.name || "Soporte del preaviso",
-                  },
-                ]
+                {
+                  url: preNoticePreviewAsset.url,
+                  name: preNoticePreviewAsset.name || "Soporte del preaviso",
+                },
+              ]
               : []
           }
           currentIndex={0}
@@ -1963,10 +1962,3 @@ const renderDeleteModal = () => {
     </>
   );
 }
-
-
-
-
-
-
-

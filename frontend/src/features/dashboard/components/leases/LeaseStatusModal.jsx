@@ -411,8 +411,8 @@ export default function LeaseStatusModal({
                   type="button"
                   onClick={() => setActivePage("tracking")}
                   className={`px-3 py-2 text-sm rounded-lg transition ${activePage === "tracking"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
                     }`}
                 >
                   Seguimiento
@@ -422,8 +422,8 @@ export default function LeaseStatusModal({
                 type="button"
                 onClick={() => setActivePage("payments")}
                 className={`px-3 py-2 text-sm rounded-lg transition ${activePage === "payments"
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-600 hover:text-slate-900"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
                   }`}
               >
                 Pagos
@@ -527,8 +527,8 @@ export default function LeaseStatusModal({
                       type="button"
                       onClick={() => setPaymentsTab("current")}
                       className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "current"
-                          ? "bg-white text-slate-900 shadow-sm"
-                          : "text-slate-600 hover:text-slate-900"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
                         }`}
                     >
                       Pago del mes
@@ -537,8 +537,8 @@ export default function LeaseStatusModal({
                       type="button"
                       onClick={() => setPaymentsTab("history")}
                       className={`px-3 py-2 text-sm rounded-lg transition ${paymentsTab === "history"
-                          ? "bg-white text-slate-900 shadow-sm"
-                          : "text-slate-600 hover:text-slate-900"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
                         }`}
                     >
                       Pagos realizados
@@ -588,8 +588,8 @@ export default function LeaseStatusModal({
           {!isFinalizedLease && (
             <button
               className={`px-5 py-2 rounded-xl text-white font-semibold shadow-sm transition text-sm ${statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease
-                  ? "bg-blue-300 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700"
+                ? "bg-blue-300 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
                 }`}
               onClick={onSave}
               disabled={statusRent.nuevoEstado === "Finalizado" && !canFinalizeLease}

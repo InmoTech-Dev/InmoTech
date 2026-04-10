@@ -20,6 +20,7 @@ const DEFAULT_ALLOWED_FOLDERS = [
   'inmotech/reportes',
   'inmotech/comprobantes', // habilitado para recibos de pago de arriendos
   'inmotech/preavisos',
+  'inmotech/contratos-arriendo',
 ];
 const ALLOWED_UPLOAD_FOLDERS = (
   process.env.UPLOAD_ALLOWED_FOLDERS

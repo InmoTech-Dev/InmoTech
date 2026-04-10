@@ -135,6 +135,11 @@ class ArriendoApiService {
     return response;
   }
 
+  async registrarContrato(id, payload) {
+    const response = await apiClient.patch(`/leases/${id}/contract`, payload);
+    return response;
+  }
+
   async eliminarPreaviso(id) {
     const response = await apiClient.delete(`/leases/${id}/pre-notice`);
     return response;

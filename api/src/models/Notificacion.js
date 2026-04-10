@@ -13,7 +13,14 @@ const Notificacion = sequelize.define('Notificaciones', {
     allowNull: false,
     validate: {
       isIn: {
-        args: [['CITA_SOLICITADA', 'CITA_CANCELADA', 'CITA_REAGENDADA', 'CITA_CONFIRMADA', 'CITA_COMPLETADA']],
+        args: [[
+          'CITA_SOLICITADA',
+          'CITA_CANCELADA',
+          'CITA_REAGENDADA',
+          'CITA_CONFIRMADA',
+          'CITA_COMPLETADA',
+          'ARRENDAMIENTO_PROXIMO_A_FINALIZAR'
+        ]],
         msg: 'Tipo de notificación inválido'
       }
     }

@@ -115,6 +115,7 @@ export default function TenantForm({
 
     const validationError = validateDocument(tipoDocumento, numeroDocumento);
     if (validationError) {
+      clearPersonFields();
       setLookupState({ loading: false, message: "", error: null });
       toast({
         title: "Documento inválido",
@@ -127,10 +128,7 @@ export default function TenantForm({
     setLookupState({ loading: true, message: "", error: null });
     clearPersonFields();
     try {
-      let tenant = await tenantsApiService.findByDocument(tipoDocumento, numeroDocumento);
-      if (!tenant) {
-        tenant = await tenantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
-      }
+      const tenant = await tenantsApiService.findByDocument(tipoDocumento, numeroDocumento);
 
       if (tenant) {
         applyTenantData(tenant);
@@ -151,11 +149,7 @@ export default function TenantForm({
           message: "",
           error: null
         });
-        toast({
-          title: "No encontrado",
-          description: "No se encontró una persona con ese documento.",
-          variant: "destructive",
-        });
+        return;
       }
     } catch (err) {
       clearPersonFields();
@@ -259,10 +253,16 @@ export default function TenantForm({
     if (name === "documento" || name === "tipoDocumento") {
       const tipoDocumento = name === "tipoDocumento" ? cleanValue : (valuesRef.current.tipoDocumento || "");
       const numeroDocumento = cleanDocument(name === "documento" ? cleanValue : (valuesRef.current.documento || ""));
+      const validationError =
+        tipoDocumento && numeroDocumento ? validateDocument(tipoDocumento, numeroDocumento) : "";
 
-      if (!tipoDocumento || !numeroDocumento) {
-        if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+      if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+
+      if (!tipoDocumento || !numeroDocumento || validationError) {
         clearPersonFields();
+        setLookupState({ loading: false, message: "", error: null });
+      } else {
+        triggerLookup();
       }
     }
 

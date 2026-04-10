@@ -228,6 +228,11 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     : Array.isArray(arriendo.preavisosHistorial)
       ? arriendo.preavisosHistorial
       : [];
+  const contratosHistorial = Array.isArray(arriendo.contratos_historial)
+    ? arriendo.contratos_historial
+    : Array.isArray(arriendo.contratosHistorial)
+      ? arriendo.contratosHistorial
+      : [];
 
   return {
     id: arriendo.id_arrendamiento || arriendo.id_arriendo || arriendo.id || Date.now(),
@@ -288,6 +293,15 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     preavisoDecision,
     preavisoObservacionDecision,
     preavisoFechaDecision: preavisoFechaDecision ? String(preavisoFechaDecision).slice(0, 10) : "",
+    contratoUrl: arriendo.contrato_url || arriendo.contratoUrl || "",
+    contratoObservacion: arriendo.contrato_observacion || arriendo.contratoObservacion || "",
+    contratoFecha: arriendo.contrato_fecha ? String(arriendo.contrato_fecha).slice(0, 10) : arriendo.contratoFecha ? String(arriendo.contratoFecha).slice(0, 10) : "",
+    contratosHistorial: contratosHistorial.map((item, index) => ({
+      id: item.id || item.id_seguimiento || `${arriendo.id_arrendamiento || arriendo.id || "ctr"}-${index}`,
+      urlContrato: item.url_contrato || item.urlContrato || "",
+      observacion: item.observacion || "",
+      fecha: item.fecha_creacion ? String(item.fecha_creacion).slice(0, 10) : item.fecha ? String(item.fecha).slice(0, 10) : "",
+    })),
     preavisosHistorial: preavisosHistorial.map((item, index) => ({
       id: item.id || `${arriendo.id_arrendamiento || arriendo.id || "pre"}-${index}`,
       observacion: item.observacion || "",
@@ -331,6 +345,7 @@ export function RenantManagementPage() {
   const [payments, setPayments] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [uploadingPaymentId, setUploadingPaymentId] = useState(null);
+  const [uploadingContract, setUploadingContract] = useState(false);
   const [applyingExtension, setApplyingExtension] = useState(false);
   const [applyingAdjustment, setApplyingAdjustment] = useState(false);
   const [savingPreNotice, setSavingPreNotice] = useState(false);
@@ -541,6 +556,7 @@ export function RenantManagementPage() {
     setStatusRent(null);
     setPayments([]);
     setUploadingPaymentId(null);
+    setUploadingContract(false);
   };
 
   const openViewRent = async (rent) => {
@@ -776,6 +792,48 @@ export function RenantManagementPage() {
       });
     } finally {
       setUploadingPaymentId(null);
+    }
+  };
+
+  const handleUploadContract = async (file, comentario) => {
+    if (!statusRent) return;
+    setUploadingContract(true);
+    try {
+      const upload = await uploadToCloudinary(file, { folder: 'inmotech/contratos-arriendo' });
+      const response = await arriendoApiService.registrarContrato(statusRent.id, {
+        url_contrato: upload.url,
+        comentario: comentario?.trim() || undefined,
+      });
+
+      const updatedLease = response?.data?.data || response?.data;
+      if (updatedLease) {
+        const normalizedLease = mapApiArriendoToRow(updatedLease);
+        setStatusRent((prev) =>
+          prev
+            ? {
+              ...prev,
+              ...normalizedLease,
+              nuevoEstado: prev.nuevoEstado || normalizedLease.estado || prev.estado,
+              comentario: prev.comentario || "",
+            }
+            : prev
+        );
+      }
+
+      await fetchArriendos(searchTerm.trim(), currentPage);
+      toast({
+        title: "Contrato registrado",
+        description: "El contrato de arrendamiento se cargó correctamente.",
+        variant: "default",
+      });
+    } catch (error) {
+      toast({
+        title: "Error al subir contrato",
+        description: error?.response?.data?.message || error?.message || "No fue posible registrar el contrato.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingContract(false);
     }
   };
 
@@ -1094,6 +1152,8 @@ export function RenantManagementPage() {
         loadingPayments={loadingPayments}
         onUploadReceipt={handleUploadReceipt}
         uploadingPaymentId={uploadingPaymentId}
+        onUploadContract={handleUploadContract}
+        uploadingContract={uploadingContract}
       />
     );
   };

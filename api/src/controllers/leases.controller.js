@@ -110,6 +110,27 @@ class LeasesController {
     }
   }
 
+  async registerLeaseContract(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { url_contrato, comentario } = req.validatedData || req.body;
+      const userId = req.user?.id || req.user?.id_persona || null;
+      const lease = await leaseService.registerLeaseContract(
+        parseInt(id, 10),
+        { url_contrato, comentario },
+        userId
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Contrato de arrendamiento registrado exitosamente',
+        data: lease
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async adjustRent(req, res, next) {
     try {
       const { id } = req.params;

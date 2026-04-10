@@ -11,6 +11,7 @@ const {
   extendLeaseSchema,
   adjustRentSchema,
   registerPreNoticeSchema,
+  registerLeaseContractSchema,
   createPaymentSchema,
   updatePaymentSchema,
   createReceiptSchema
@@ -76,6 +77,13 @@ router.patch(
   strictLimiter,
   validate(registerPreNoticeSchema),
   leasesController.registerPreNotice
+);
+
+router.patch(
+  '/:id/contract',
+  strictLimiter,
+  validate(registerLeaseContractSchema),
+  leasesController.registerLeaseContract
 );
 
 // DELETE /api/v1/leases/:id/pre-notice - Eliminar preaviso del arrendamiento

@@ -99,7 +99,7 @@ export default function BuyerForm({
     ].forEach((field) => setValue(field, ""));
   }, []);
 
-  const cleanDocument = (value = "") => value.replace(/\\D/g, "").trim();
+  const cleanDocument = (value = "") => value.replace(/\D/g, "").trim();
 
   const lookupBuyer = useCallback(async () => {
     const tipoDocumento = (valuesRef.current.tipoDocumento || "").trim();
@@ -113,6 +113,7 @@ export default function BuyerForm({
 
     const validationError = validateDocument(tipoDocumento, numeroDocumento);
     if (validationError) {
+      clearAutofillFields();
       setErrors((prev) => ({
         ...prev,
         documento: validationError,
@@ -123,10 +124,7 @@ export default function BuyerForm({
 
       setLookupState({ loading: true, message: "", error: null });
     try {
-      let buyer = await buyersApiService.findByDocument(tipoDocumento, numeroDocumento);
-      if (!buyer) {
-        buyer = await buyersApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
-      }
+      const buyer = await buyersApiService.findByDocument(tipoDocumento, numeroDocumento);
 
       if (buyer) {
         applyBuyerData(buyer);
@@ -147,13 +145,9 @@ export default function BuyerForm({
           message: "",
           error: null
         });
-        toast({
-          title: "No encontrado",
-          description: "No se encontró una persona con ese documento.",
-          variant: "destructive",
-        });
       }
     } catch (err) {
+      clearAutofillFields();
       setLookupState({
         loading: false,
         message: "",
@@ -237,10 +231,16 @@ export default function BuyerForm({
     if ((name === "documento" || name === "tipoDocumento")) {
       const tipoDocumento = name === "tipoDocumento" ? cleanValue : (valuesRef.current.tipoDocumento || "");
       const numeroDocumento = cleanDocument(name === "documento" ? cleanValue : (valuesRef.current.documento || ""));
+      const validationError =
+        tipoDocumento && numeroDocumento ? validateDocument(tipoDocumento, numeroDocumento) : "";
 
-      if (!tipoDocumento || !numeroDocumento) {
-        if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+      if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+
+      if (!tipoDocumento || !numeroDocumento || validationError) {
         clearAutofillFields();
+        setLookupState({ loading: false, message: "", error: null });
+      } else {
+        triggerLookup();
       }
     }
 

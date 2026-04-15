@@ -138,6 +138,7 @@ export function LeasesManagementPage() {
     paginas_totales: 1,
   });
   const [showForm, setShowForm] = useState(false);
+  const [formNextId, setFormNextId] = useState(1);
   const [tenantToEdit, setTenantToEdit] = useState(null);
   const [tenantToView, setTenantToView] = useState(null);
   const [tenantToDelete, setTenantToDelete] = useState(null);
@@ -363,6 +364,7 @@ export function LeasesManagementPage() {
     }
 
     setTenantToEdit(tenant);
+    setFormNextId(tenant?.id ?? tenant?.id_arrendatario ?? arrendatarios.length + 1);
     setShowForm(true);
   };
 
@@ -753,7 +755,7 @@ export function LeasesManagementPage() {
       <LeasesPersonForm
         onSubmit={handleSubmit}
         onClose={handleCloseForm}
-        nextId={arrendatarios.length + 1}
+        nextId={formNextId}
         initialData={tenantToEdit}
         isSubmitting={formSubmitting}
       />
@@ -884,6 +886,7 @@ const renderDeleteModal = () => {
             whileTap={{ scale: 0.98 }}
             onClick={() => {
               setTenantToEdit(null);
+              setFormNextId(arrendatarios.length + 1);
               setShowForm(true);
             }}
             className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"

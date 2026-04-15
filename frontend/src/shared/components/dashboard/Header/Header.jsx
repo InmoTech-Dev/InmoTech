@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MdNotifications, MdKeyboardArrowDown } from 'react-icons/md';
 import NotificationDropdown from './NotificationDropdown';
@@ -17,6 +17,7 @@ import realtimeBus from '../../../services/realtimeBus';
 const UNREAD_FETCH_COOLDOWN_MS = 15000;
 let unreadFetchInFlightGlobal = null;
 let lastUnreadFetchAtGlobal = 0;
+const LEASE_ENDING_SOON_TYPE = 'ARRENDAMIENTO_PROXIMO_A_FINALIZAR';
 
 const Header = () => {
   const { appointments, updateAppointmentStatus } = useAppointments();
@@ -28,8 +29,6 @@ const Header = () => {
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isBellFxActive, setIsBellFxActive] = useState(false);
-  const [unreadNotificationIds, setUnreadNotificationIds] = useState([]);
-  const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
   const [previousTotalCount, setPreviousTotalCount] = useState(0);
   const audioContextRef = useRef(null);
   const audioErrorLoggedRef = useRef(false);
@@ -40,12 +39,14 @@ const Header = () => {
   const [seenReportIds, setSeenReportIds] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [backendNotifications, setBackendNotifications] = useState([]);
   const notificationButtonRef = useRef(null);
   const userMenuRef = useRef(null);
   const userMenuButtonRef = useRef(null);
   const userMenuDropdownRef = useRef(null);
   const bellFxTimeoutRef = useRef(null);
   const unreadNotificationIdsRef = useRef([]);
+  const previousUnreadCountRef = useRef(0);
   const { toast } = useToast();
 
   // Filtrar citas solicitadas pendientes
@@ -55,6 +56,37 @@ const Header = () => {
   const canViewCitas = hasPermission('citas', 'ver');
   const canViewReportes = hasPermission('reportes', 'ver');
   const canViewAnyNotifications = canViewCitas || canViewReportes;
+  const leaseEndingNotifications = useMemo(
+    () =>
+      (Array.isArray(backendNotifications) ? backendNotifications : []).filter(
+        (item) => item?.tipo_notificacion === LEASE_ENDING_SOON_TYPE
+      ),
+    [backendNotifications]
+  );
+  const requestNotifications = useMemo(() => {
+    const appointmentItems = pendingAppointments.map((appointment) => ({
+      ...appointment,
+      notificationKind: 'appointment'
+    }));
+
+    const leaseItems = leaseEndingNotifications.map((notification) => ({
+      ...notification,
+      notificationKind: 'lease'
+    }));
+
+    const getSortTime = (item) => {
+      const rawDate =
+        item?.fecha_creacion ||
+        item?.createdAt ||
+        item?.fecha_cita ||
+        item?.fecha ||
+        null;
+      const parsed = rawDate ? new Date(rawDate).getTime() : 0;
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    return [...appointmentItems, ...leaseItems].sort((a, b) => getSortTime(b) - getSortTime(a));
+  }, [leaseEndingNotifications, pendingAppointments]);
 
   // Cargar reportes vistos de localStorage
   useEffect(() => {
@@ -100,7 +132,8 @@ const Header = () => {
   }, [canViewReportes, fetchReports]);
 
   const unseenReportsCount = reports.filter(r => !seenReportIds.includes(r.id_reporte || r.id)).length;
-  const totalNotificationsCount = (canViewCitas ? pendingAppointments.length : 0) + (canViewReportes ? unseenReportsCount : 0);
+  const totalNotificationsCount =
+    requestNotifications.length + (canViewReportes ? unseenReportsCount : 0);
 
   const playNotificationSound = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -189,9 +222,9 @@ const Header = () => {
   }, []);
 
   const loadUnreadNotifications = useCallback(async ({ triggerAnimation = true, force = false } = {}) => {
-    if (!canViewCitas) {
-      setUnreadNotificationIds([]);
-      setPreviousUnreadCount(0);
+    if (!canViewAnyNotifications) {
+      setBackendNotifications([]);
+      previousUnreadCountRef.current = 0;
       unreadNotificationIdsRef.current = [];
       return [];
     }
@@ -216,14 +249,12 @@ const Header = () => {
           .filter((id) => id !== undefined && id !== null)
           .map((id) => String(id));
 
+        setBackendNotifications(unreadNotifications);
         unreadNotificationIdsRef.current = unreadIds;
-        setUnreadNotificationIds(unreadIds);
-        setPreviousUnreadCount((previousValue) => {
-          if (triggerAnimation && unreadIds.length > previousValue) {
-            triggerBellFx();
-          }
-          return unreadIds.length;
-        });
+        if (triggerAnimation && unreadIds.length > previousUnreadCountRef.current) {
+          triggerBellFx();
+        }
+        previousUnreadCountRef.current = unreadIds.length;
 
         lastUnreadFetchAtGlobal = Date.now();
         return unreadIds;
@@ -235,7 +266,7 @@ const Header = () => {
     } finally {
       unreadFetchInFlightGlobal = null;
     }
-  }, [canViewCitas, triggerBellFx]);
+  }, [canViewAnyNotifications, triggerBellFx]);
 
   const markUnreadAsReadOnOpen = useCallback(async (idsToMark = unreadNotificationIdsRef.current) => {
     if (isMarkingRead) return;
@@ -253,14 +284,11 @@ const Header = () => {
     try {
       setIsMarkingRead(true);
       await notificacionApiService.marcarVariasComoLeidas(numericIds);
-      setUnreadNotificationIds((currentIds) =>
-        {
-          const nextUnreadIds = currentIds.filter((id) => !numericIds.includes(Number.parseInt(id, 10)));
-          unreadNotificationIdsRef.current = nextUnreadIds;
-          return nextUnreadIds;
-        }
+      const nextUnreadIds = unreadNotificationIdsRef.current.filter(
+        (id) => !numericIds.includes(Number.parseInt(id, 10))
       );
-      setPreviousUnreadCount((currentValue) => Math.max(0, currentValue - numericIds.length));
+      unreadNotificationIdsRef.current = nextUnreadIds;
+      previousUnreadCountRef.current = Math.max(0, previousUnreadCountRef.current - numericIds.length);
     } catch (error) {
       console.warn('No se pudieron marcar notificaciones como leidas en backend:', error);
     } finally {
@@ -297,7 +325,7 @@ const Header = () => {
   }, [loadUnreadNotifications]);
 
   useEffect(() => {
-    if (!canViewCitas) return undefined;
+    if (!canViewAnyNotifications) return undefined;
 
     const offNotificationChanged = realtimeBus.on('notification.changed', () => {
       loadUnreadNotifications({ triggerAnimation: true, force: true });
@@ -314,7 +342,7 @@ const Header = () => {
       offFallbackTick();
       offReconcile();
     };
-  }, [canViewCitas, loadUnreadNotifications]);
+  }, [canViewAnyNotifications, loadUnreadNotifications]);
 
   useEffect(() => {
     return () => {
@@ -606,7 +634,8 @@ const Header = () => {
             <NotificationDropdown
               isOpen={isNotificationOpen}
               onClose={() => setIsNotificationOpen(false)}
-              notifications={pendingAppointments}
+              notifications={requestNotifications}
+              canViewSolicitudes={canViewCitas || leaseEndingNotifications.length > 0}
               reports={reports}
               seenReportIds={seenReportIds}
               canViewCitas={canViewCitas}

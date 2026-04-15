@@ -83,6 +83,11 @@ const registerPreNoticeSchema = Joi.object({
   decision: Joi.string().valid('Aceptado', 'Rechazado').required()
 }).or('comentario', 'url_soporte');
 
+const registerLeaseContractSchema = Joi.object({
+  url_contrato: Joi.string().uri().max(500).required(),
+  comentario: Joi.string().max(1000).allow('', null)
+});
+
 const createPaymentSchema = Joi.object({
   fecha_cobro: Joi.date().iso().required(),
   fecha_limite: Joi.date().iso().required(),
@@ -113,6 +118,7 @@ module.exports = {
   extendLeaseSchema,
   adjustRentSchema,
   registerPreNoticeSchema,
+  registerLeaseContractSchema,
   createPaymentSchema,
   updatePaymentSchema,
   createReceiptSchema

@@ -9,6 +9,7 @@ import LeaseStatusModal from "../../components/leases/LeaseStatusModal";
 import LeaseOptionsContractModal from "../../components/leases/LeaseOptionsContractModal";
 import LeaseExtensionModal from "../../components/leases/LeaseExtensionModal";
 import LeaseAdjustmentModal from "../../components/leases/LeaseAdjustmentModal";
+import LeaseFinalizeModal from "../../components/leases/LeaseFinalizeModal";
 import LeasePreNoticeModal from "../../components/leases/LeasePreNoticeModal";
 import { ImageViewer } from "../../../../shared/components/ui/ImageViewer";
 import "../../../../shared/styles/globals.css";
@@ -228,6 +229,11 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     : Array.isArray(arriendo.preavisosHistorial)
       ? arriendo.preavisosHistorial
       : [];
+  const contratosHistorial = Array.isArray(arriendo.contratos_historial)
+    ? arriendo.contratos_historial
+    : Array.isArray(arriendo.contratosHistorial)
+      ? arriendo.contratosHistorial
+      : [];
 
   return {
     id: arriendo.id_arrendamiento || arriendo.id_arriendo || arriendo.id || Date.now(),
@@ -288,6 +294,15 @@ const mapApiArriendoToRow = (arriendo = {}) => {
     preavisoDecision,
     preavisoObservacionDecision,
     preavisoFechaDecision: preavisoFechaDecision ? String(preavisoFechaDecision).slice(0, 10) : "",
+    contratoUrl: arriendo.contrato_url || arriendo.contratoUrl || "",
+    contratoObservacion: arriendo.contrato_observacion || arriendo.contratoObservacion || "",
+    contratoFecha: arriendo.contrato_fecha ? String(arriendo.contrato_fecha).slice(0, 10) : arriendo.contratoFecha ? String(arriendo.contratoFecha).slice(0, 10) : "",
+    contratosHistorial: contratosHistorial.map((item, index) => ({
+      id: item.id || item.id_seguimiento || `${arriendo.id_arrendamiento || arriendo.id || "ctr"}-${index}`,
+      urlContrato: item.url_contrato || item.urlContrato || "",
+      observacion: item.observacion || "",
+      fecha: item.fecha_creacion ? String(item.fecha_creacion).slice(0, 10) : item.fecha ? String(item.fecha).slice(0, 10) : "",
+    })),
     preavisosHistorial: preavisosHistorial.map((item, index) => ({
       id: item.id || `${arriendo.id_arrendamiento || arriendo.id || "pre"}-${index}`,
       observacion: item.observacion || "",
@@ -320,6 +335,7 @@ export function RenantManagementPage() {
   const [showForm, setShowForm] = useState(false);
   const [viewingRent, setViewingRent] = useState(null);
   const [statusRent, setStatusRent] = useState(null); // arriendo en seguimiento (solo estado)
+  const [confirmFinalizeLeaseOpen, setConfirmFinalizeLeaseOpen] = useState(false);
   const [leaseOptionsRent, setLeaseOptionsRent] = useState(null);
   const [adjustmentRent, setAdjustmentRent] = useState(null);
   const [extensionRent, setExtensionRent] = useState(null);
@@ -331,6 +347,7 @@ export function RenantManagementPage() {
   const [payments, setPayments] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [uploadingPaymentId, setUploadingPaymentId] = useState(null);
+  const [uploadingContract, setUploadingContract] = useState(false);
   const [applyingExtension, setApplyingExtension] = useState(false);
   const [applyingAdjustment, setApplyingAdjustment] = useState(false);
   const [savingPreNotice, setSavingPreNotice] = useState(false);
@@ -539,8 +556,10 @@ export function RenantManagementPage() {
 
   const closeStatusModal = () => {
     setStatusRent(null);
+    setConfirmFinalizeLeaseOpen(false);
     setPayments([]);
     setUploadingPaymentId(null);
+    setUploadingContract(false);
   };
 
   const openViewRent = async (rent) => {
@@ -617,7 +636,7 @@ export function RenantManagementPage() {
     }
   };
 
-  const handleStatusSave = async () => {
+  const persistLeaseStatus = async () => {
     if (!statusRent) return;
     const { id, nuevoEstado, comentario } = statusRent;
     const today = new Date();
@@ -638,14 +657,7 @@ export function RenantManagementPage() {
       });
       return;
     }
-    if (nuevoEstado === "Finalizado") {
-      const shouldFinalize = window.confirm(
-        "Al finalizar este arriendo ya no podrás hacer prórroga ni más seguimiento. ¿Deseas continuar?"
-      );
-      if (!shouldFinalize) {
-        return;
-      }
-    }
+    if (nuevoEstado === "Finalizado" && !confirmFinalizeLeaseOpen) return;
     try {
       setStatusMessage(null);
       await arriendoApiService.actualizarEstado(id, {
@@ -675,6 +687,25 @@ export function RenantManagementPage() {
   };
 
   // ðŸ—‘ï¸ ELIMINAR
+  const handleStatusSave = async () => {
+    if (!statusRent) return;
+    if (statusRent.nuevoEstado === "Finalizado") {
+      setConfirmFinalizeLeaseOpen(true);
+      return;
+    }
+
+    await persistLeaseStatus();
+  };
+
+  const closeFinalizeLeaseModal = () => {
+    setConfirmFinalizeLeaseOpen(false);
+  };
+
+  const confirmFinalizeLease = async () => {
+    await persistLeaseStatus();
+    setConfirmFinalizeLeaseOpen(false);
+  };
+
   const [rentToDelete, setRentToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -776,6 +807,48 @@ export function RenantManagementPage() {
       });
     } finally {
       setUploadingPaymentId(null);
+    }
+  };
+
+  const handleUploadContract = async (file, comentario) => {
+    if (!statusRent) return;
+    setUploadingContract(true);
+    try {
+      const upload = await uploadToCloudinary(file, { folder: 'inmotech/contratos-arriendo' });
+      const response = await arriendoApiService.registrarContrato(statusRent.id, {
+        url_contrato: upload.url,
+        comentario: comentario?.trim() || undefined,
+      });
+
+      const updatedLease = response?.data?.data || response?.data;
+      if (updatedLease) {
+        const normalizedLease = mapApiArriendoToRow(updatedLease);
+        setStatusRent((prev) =>
+          prev
+            ? {
+              ...prev,
+              ...normalizedLease,
+              nuevoEstado: prev.nuevoEstado || normalizedLease.estado || prev.estado,
+              comentario: prev.comentario || "",
+            }
+            : prev
+        );
+      }
+
+      await fetchArriendos(searchTerm.trim(), currentPage);
+      toast({
+        title: "Contrato registrado",
+        description: "El contrato de arrendamiento se cargó correctamente.",
+        variant: "default",
+      });
+    } catch (error) {
+      toast({
+        title: "Error al subir contrato",
+        description: error?.response?.data?.message || error?.message || "No fue posible registrar el contrato.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingContract(false);
     }
   };
 
@@ -1094,6 +1167,25 @@ export function RenantManagementPage() {
         loadingPayments={loadingPayments}
         onUploadReceipt={handleUploadReceipt}
         uploadingPaymentId={uploadingPaymentId}
+        onUploadContract={handleUploadContract}
+        uploadingContract={uploadingContract}
+      />
+    );
+  };
+
+  const renderFinalizeLeaseModal = () => {
+    if (!statusRent) return null;
+
+    const leaseLabel =
+      `${statusRent.primerNombreArrendatario || ""} ${statusRent.primerApellidoArrendatario || ""}`.trim() ||
+      "este arriendo";
+
+    return (
+      <LeaseFinalizeModal
+        isOpen={confirmFinalizeLeaseOpen}
+        leaseLabel={leaseLabel}
+        onClose={closeFinalizeLeaseModal}
+        onConfirm={confirmFinalizeLease}
       />
     );
   };
@@ -1860,6 +1952,7 @@ export function RenantManagementPage() {
       {renderFormModal()}
       {renderViewModal()}
       {renderStatusModal()}
+      {renderFinalizeLeaseModal()}
       <LeaseOptionsContractModal
         rent={leaseOptionsRent}
         onClose={closeLeaseOptionsModal}

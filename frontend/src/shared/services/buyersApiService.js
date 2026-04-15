@@ -111,6 +111,11 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
   const persona = buyer.persona || buyer.Persona || buyer;
   const compra = buyer.compra || buyer.purchase || null;
   const ultimaVenta = buyer.ultima_venta || buyer.ultimaVenta || null;
+  const historialVentas = Array.isArray(buyer.historial_ventas)
+    ? buyer.historial_ventas
+    : Array.isArray(buyer.historialVentas)
+      ? buyer.historialVentas
+      : [];
   const rawBuyerId =
     buyer.id_comprador ??
     buyer.buyerId ??
@@ -178,6 +183,7 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
     observaciones: buyer.observaciones || compra?.observaciones || '',
     inmueble: buyer.inmueble || compra?.inmueble || null,
     ultima_venta: ultimaVenta || buyer.compra || null,
+    historialVentas,
     formData: buyer.formData || formData,
     compra,
     raw: buyer,

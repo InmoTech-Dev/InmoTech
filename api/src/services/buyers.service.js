@@ -113,7 +113,21 @@ class BuyerService {
     };
   }
 
-  async _getLatestSalesByBuyerIds(buyerIds = []) {
+  mapSaleSummary(sale) {
+    if (!sale) return null;
+
+    return {
+      id_venta: sale.id_venta,
+      fecha_venta: sale.fecha_venta,
+      valor_venta: sale.valor_venta,
+      estado: sale.estado,
+      medio_pago: sale.medio_pago,
+      id_inmueble: sale.id_inmueble,
+      inmueble: this.mapInmuebleSummary(sale.inmueble)
+    };
+  }
+
+  async _getSalesByBuyerIds(buyerIds = []) {
     if (!buyerIds.length) return {};
 
     const sales = await Sale.findAll({
@@ -149,7 +163,16 @@ class BuyerService {
     });
 
     return sales.reduce((acc, sale) => {
-      if (!acc[sale.id_comprador]) acc[sale.id_comprador] = sale;
+      if (!acc[sale.id_comprador]) acc[sale.id_comprador] = [];
+      acc[sale.id_comprador].push(sale);
+      return acc;
+    }, {});
+  }
+
+  async _getLatestSalesByBuyerIds(buyerIds = []) {
+    const groupedSales = await this._getSalesByBuyerIds(buyerIds);
+    return Object.entries(groupedSales).reduce((acc, [buyerId, sales]) => {
+      acc[buyerId] = sales[0] || null;
       return acc;
     }, {});
   }
@@ -343,21 +366,15 @@ class BuyerService {
     const normalized = this.normalizePersonaRecord(persona);
     if (!normalized) return null;
 
-    const salesMap = await this._getLatestSalesByBuyerIds([normalized.id_buyer]);
-    const sale = salesMap[normalized.id_buyer];
+    const salesMap = await this._getSalesByBuyerIds([normalized.id_buyer]);
+    const sales = salesMap[normalized.id_buyer] || [];
+    const sale = sales[0] || null;
 
     return {
       ...normalized,
-      ultima_venta: sale
-        ? {
-            id_venta: sale.id_venta,
-            fecha_venta: sale.fecha_venta,
-            valor_venta: sale.valor_venta,
-            estado: sale.estado,
-            medio_pago: sale.medio_pago
-          }
-        : null,
-      inmueble: this.mapInmuebleSummary(sale?.inmueble)
+      ultima_venta: this.mapSaleSummary(sale),
+      inmueble: this.mapInmuebleSummary(sale?.inmueble),
+      historial_ventas: sales.map((currentSale) => this.mapSaleSummary(currentSale))
     };
   }
 

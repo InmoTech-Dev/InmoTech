@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, Download, ZoomIn } from 'lucide-react';
+import { downloadFile } from '@/shared/utils/downloadFile';
 
 export function ImageViewer({
     isOpen,
@@ -30,16 +31,23 @@ export function ImageViewer({
         }
     };
 
-    const handleDownload = (e) => {
+    const handleDownload = async (e) => {
         e.stopPropagation();
-        const link = document.createElement('a');
-        link.href = currentImage.downloadUrl || currentImage.url;
-        link.download = currentImage.name || `imagen-${currentIndex + 1}`;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const url = currentImage.downloadUrl || currentImage.url;
+        const fileName = currentImage.name || `imagen-${currentIndex + 1}`;
+
+        try {
+            await downloadFile(url, fileName);
+        } catch (_error) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
 
     return (

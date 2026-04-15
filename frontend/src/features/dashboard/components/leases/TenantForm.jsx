@@ -36,7 +36,6 @@ export default function TenantForm({
 }) {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState(null);
-  const [lookupState, setLookupState] = useState({ loading: false, message: "", error: null });
   const lookupTimeoutRef = useRef(null);
   const { toast } = useToast();
 
@@ -71,10 +70,19 @@ export default function TenantForm({
   };
 
   const setValue = (name, value) => {
-    valuesRef.current[name] = value;
-    displayValuesRef.current[name] = value;
-    if (elRefs.current[name]) {
-      try { elRefs.current[name].value = value; } catch (e) { }
+    const nextValue = value ?? "";
+    valuesRef.current[name] = nextValue;
+    displayValuesRef.current[name] = nextValue;
+    const el = elRefs.current[name];
+    if (!el) return;
+    if (el.type === "checkbox") {
+      el.checked = !!nextValue;
+      return;
+    }
+    try {
+      el.value = nextValue;
+    } catch (_err) {
+      // ignore
     }
   };
 
@@ -109,13 +117,12 @@ export default function TenantForm({
 
     if (!tipoDocumento || !numeroDocumento) {
       clearPersonFields();
-      setLookupState({ loading: false, message: "", error: null });
       return;
     }
 
     const validationError = validateDocument(tipoDocumento, numeroDocumento);
     if (validationError) {
-      setLookupState({ loading: false, message: "", error: null });
+      clearPersonFields();
       toast({
         title: "Documento inválido",
         description: validationError,
@@ -124,21 +131,12 @@ export default function TenantForm({
       return;
     }
 
-    setLookupState({ loading: true, message: "", error: null });
     clearPersonFields();
     try {
-      let tenant = await tenantsApiService.findByDocument(tipoDocumento, numeroDocumento);
-      if (!tenant) {
-        tenant = await tenantsApiService.findPersonaByDocument(tipoDocumento, numeroDocumento);
-      }
+      const tenant = await tenantsApiService.findByDocument(tipoDocumento, numeroDocumento);
 
       if (tenant) {
         applyTenantData(tenant);
-        setLookupState({
-          loading: false,
-          message: "",
-          error: null
-        });
         toast({
           title: "Arrendatario encontrado",
           description: "Datos autocompletados correctamente.",
@@ -146,24 +144,10 @@ export default function TenantForm({
         });
       } else {
         clearPersonFields();
-        setLookupState({
-          loading: false,
-          message: "",
-          error: null
-        });
-        toast({
-          title: "No encontrado",
-          description: "No se encontró una persona con ese documento.",
-          variant: "destructive",
-        });
+        return;
       }
     } catch (err) {
       clearPersonFields();
-      setLookupState({
-        loading: false,
-        message: "",
-        error: null
-      });
       toast({
         title: "Error al buscar",
         description: "No fue posible buscar el arrendatario. Intenta de nuevo.",
@@ -186,9 +170,22 @@ export default function TenantForm({
 
     valuesRef.current = newData;
     displayValuesRef.current = newData;
+    Object.entries(newData).forEach(([field, value]) => {
+      const el = elRefs.current[field];
+      if (!el) return;
+      if (el.type === "checkbox") {
+        el.checked = !!value;
+      } else {
+        try {
+          el.value = value ?? "";
+        } catch (_err) {
+          // ignore
+        }
+      }
+    });
     setErrors({});
     setSubmitError(null);
-  }, [initialData, nextId]);
+  }, [initialData]);
 
   // === SISTEMA DE VALIDACIONES MEJORADO ===
 
@@ -225,19 +222,18 @@ export default function TenantForm({
   const setElRef = (name) => (el) => {
     if (!el) return;
     elRefs.current[name] = el;
-
     if (valuesRef.current[name] === undefined || valuesRef.current[name] === null) {
       valuesRef.current[name] = defaultFormData[name] ?? "";
     }
-
     displayValuesRef.current[name] = valuesRef.current[name];
-
     if (el.type === "checkbox") {
       el.checked = !!valuesRef.current[name];
-    } else {
-      if (displayValuesRef.current[name] !== undefined) {
-        try { el.value = displayValuesRef.current[name]; } catch (err) { /* ignore */ }
-      }
+      return;
+    }
+    try {
+      el.value = displayValuesRef.current[name] ?? "";
+    } catch (_err) {
+      // ignore
     }
   };
 
@@ -245,24 +241,31 @@ export default function TenantForm({
   const handleInputChange = (e) => {
     let { name, value } = e.target;
     let cleanValue = value;
+    let nextDisplayValue = value;
 
     // Para campos de documento y telefono, limpiar caracteres no numericos
     if (docFields.includes(name) || phoneFields.includes(name)) {
       cleanValue = value.replace(/[^0-9]/g, '');
-      displayValuesRef.current[name] = value; // Mantener display original
-    } else {
-      displayValuesRef.current[name] = value;
+      nextDisplayValue = cleanValue;
     }
-
     valuesRef.current[name] = cleanValue;
+    displayValuesRef.current[name] = nextDisplayValue;
+    if (e.target.value !== nextDisplayValue) {
+      e.target.value = nextDisplayValue;
+    }
 
     if (name === "documento" || name === "tipoDocumento") {
       const tipoDocumento = name === "tipoDocumento" ? cleanValue : (valuesRef.current.tipoDocumento || "");
       const numeroDocumento = cleanDocument(name === "documento" ? cleanValue : (valuesRef.current.documento || ""));
+      const validationError =
+        tipoDocumento && numeroDocumento ? validateDocument(tipoDocumento, numeroDocumento) : "";
 
-      if (!tipoDocumento || !numeroDocumento) {
-        if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+      if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+
+      if (!tipoDocumento || !numeroDocumento || validationError) {
         clearPersonFields();
+      } else {
+        triggerLookup();
       }
     }
 
@@ -337,7 +340,6 @@ export default function TenantForm({
       const numeroDocumento = cleanDocument(displayValuesRef.current.documento || valuesRef.current.documento || "");
       if (!tipoDocumento || !numeroDocumento) {
         clearPersonFields();
-        setLookupState({ loading: false, message: "", error: null });
         return;
       }
       triggerLookup();
@@ -472,7 +474,7 @@ export default function TenantForm({
             name={name}
             ref={setElRef(name)}
             className={getFieldClass(name)}
-            defaultValue={defaultFormData[name] ?? ""}
+            defaultValue={displayValuesRef.current[name] ?? ""}
             onChange={handleInputChange}
             onBlur={onBlurHandler}
           >
@@ -501,7 +503,7 @@ export default function TenantForm({
             className={`${getFieldClass(name)} resize-none`}
             placeholder={fieldPlaceholder}
             rows={3}
-            defaultValue={defaultFormData[name] ?? ""}
+            defaultValue={displayValuesRef.current[name] ?? ""}
             onChange={handleInputChange}
             onBlur={onBlurHandler}
           />
@@ -525,7 +527,7 @@ export default function TenantForm({
             placeholder={fieldPlaceholder}
             minLength={isDocField ? 7 : undefined}
             maxLength={isDocField ? 10 : undefined}
-            defaultValue={defaultFormData[name] ?? ""}
+            defaultValue={displayValuesRef.current[name] ?? ""}
             onChange={handleInputChange}
             onBlur={onBlurHandler}
           />

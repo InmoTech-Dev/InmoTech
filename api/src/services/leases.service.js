@@ -185,6 +185,21 @@ class LeaseService {
     };
   }
 
+  parseContractTracking(comment = '') {
+    const text = String(comment || '');
+    if (!text.toLowerCase().includes('contrato de arrendamiento cargado')) {
+      return null;
+    }
+
+    const urlMatch = text.match(/Contrato:\s*(https?:\/\/\S+)/i);
+    const observationMatch = text.match(/Observacion:\s*(.*)$/i);
+
+    return {
+      url_contrato: urlMatch?.[1]?.trim() || '',
+      observacion: observationMatch?.[1]?.trim() || ''
+    };
+  }
+
   parseExtensionTracking(comment = '') {
     const text = String(comment || '');
     const normalized = this.normalizeFilterValue(text);
@@ -275,6 +290,38 @@ class LeaseService {
 
   async getLatestPreNoticeEntry(leaseId, transaction = null) {
     const history = await this.getPreNoticeHistory(leaseId, transaction);
+    return history[0] || null;
+  }
+
+  async getContractHistory(leaseId, transaction = null) {
+    const rows = await SeguimientoArrendamiento.findAll({
+      where: {
+        id_arrendamiento: leaseId
+      },
+      order: [['fecha_creacion', 'DESC'], ['id_seguimiento', 'DESC']],
+      limit: 100,
+      transaction
+    });
+
+    return rows
+      .map((row) => {
+        const parsed = this.parseContractTracking(row?.comentario);
+        if (!parsed?.url_contrato) return null;
+
+        return {
+          id_seguimiento: row.id_seguimiento,
+          estado: row.estado,
+          url_contrato: parsed.url_contrato,
+          observacion: parsed.observacion || '',
+          fecha_creacion: row.fecha_creacion,
+          id_persona: row.id_persona
+        };
+      })
+      .filter(Boolean);
+  }
+
+  async getLatestContractEntry(leaseId, transaction = null) {
+    const history = await this.getContractHistory(leaseId, transaction);
     return history[0] || null;
   }
 
@@ -816,6 +863,13 @@ class LeaseService {
       await this.resolveLeaseTermMonths(lease, transaction)
     );
 
+    const latestContract = await this.getLatestContractEntry(id, transaction);
+    const contractHistory = await this.getContractHistory(id, transaction);
+    lease.setDataValue('contrato_url', latestContract?.url_contrato || null);
+    lease.setDataValue('contrato_observacion', latestContract?.observacion || null);
+    lease.setDataValue('contrato_fecha', latestContract?.fecha_creacion || null);
+    lease.setDataValue('contratos_historial', contractHistory);
+
     return lease;
   }
 
@@ -1004,6 +1058,8 @@ class LeaseService {
       const data = await Promise.all(leases.map(async (lease) => {
         const latestPreNotice = await this.getLatestPreNoticeEntry(lease.id_arrendamiento);
         const preNoticeHistory = await this.getPreNoticeHistory(lease.id_arrendamiento);
+        const latestContract = await this.getLatestContractEntry(lease.id_arrendamiento);
+        const contractHistory = await this.getContractHistory(lease.id_arrendamiento);
         const leaseTermMonths = await this.resolveLeaseTermMonths(lease);
 
         return {
@@ -1063,6 +1119,10 @@ class LeaseService {
           preaviso_observacion_decision: latestPreNotice?.observacion_decision || null,
           preaviso_fecha_decision: latestPreNotice?.fecha_decision || null,
           preavisos_historial: preNoticeHistory,
+          contrato_url: latestContract?.url_contrato || null,
+          contrato_observacion: latestContract?.observacion || null,
+          contrato_fecha: latestContract?.fecha_creacion || null,
+          contratos_historial: contractHistory,
           total_seguimientos: Number(lease.get('total_seguimientos')) || 0
         };
       }));
@@ -1110,6 +1170,38 @@ class LeaseService {
     } catch (error) {
       throw error;
     }
+  }
+
+  async registerLeaseContract(id, payload, userId = null) {
+    return sequelize.transaction(async (t) => {
+      const lease = await this.getLeaseById(id, t);
+      if (!lease) {
+        throw new Error('Arrendamiento no encontrado');
+      }
+
+      const contractUrl = String(payload?.url_contrato || '').trim();
+      if (!contractUrl) {
+        throw new Error('Debes proporcionar la URL del contrato.');
+      }
+
+      const comment = [
+        'Contrato de arrendamiento cargado.',
+        `Contrato: ${contractUrl}`,
+        payload?.comentario ? `Observacion: ${String(payload.comentario).trim()}` : null
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      await this.logSeguimiento({
+        id_arrendamiento: id,
+        estado: lease.estado || 'Activo',
+        comentario: comment,
+        id_persona: userId,
+        transaction: t
+      });
+
+      return this.getLeaseById(id, t);
+    });
   }
 
   async adjustRent(id, payload = {}, userId = null) {

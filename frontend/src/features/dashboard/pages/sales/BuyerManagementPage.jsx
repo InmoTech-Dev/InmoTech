@@ -150,6 +150,7 @@ export function BuyersManagementPage() {
         paginas_totales: 1,
     });
     const [showForm, setShowForm] = useState(false);
+    const [formNextId, setFormNextId] = useState(1);
     const [buyerToEdit, setBuyerToEdit] = useState(null);
     const [buyerToView, setBuyerToView] = useState(null);
     const { toast } = useToast();
@@ -248,6 +249,7 @@ export function BuyersManagementPage() {
     // --- HANDLERS CREAR/EDITAR/VER ---
     const handleNewClick = () => {
         setBuyerToEdit(null);
+        setFormNextId(compradores.length + 1);
         setShowForm(true);
     };
     
@@ -261,6 +263,7 @@ export function BuyersManagementPage() {
             return;
         }
         setBuyerToEdit(buyer);
+        setFormNextId(buyer?.id || compradores.length + 1);
         setShowForm(true);
     };
 
@@ -468,7 +471,7 @@ export function BuyersManagementPage() {
             <BuyerForm
                 onSubmit={handleSubmit}
                 onClose={handleCloseForm}
-                nextId={buyerToEdit ? buyerToEdit.id : compradores.length + 1}
+                nextId={formNextId}
                 initialData={buyerToEdit}
                 isSubmitting={formSubmitting}
             />

@@ -35,6 +35,8 @@ export default function LeaseStatusModal({
   loadingPayments = false,
   onUploadReceipt,
   uploadingPaymentId = null,
+  onUploadContract,
+  uploadingContract = false,
 }) {
   if (!statusRent) return null;
 
@@ -44,6 +46,8 @@ export default function LeaseStatusModal({
   const [paymentsTab, setPaymentsTab] = useState("current");
   const [viewer, setViewer] = useState({ isOpen: false, index: 0, items: [] });
   const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: "", name: "" });
+  const [contractFile, setContractFile] = useState(null);
+  const [contractComment, setContractComment] = useState("");
 
   const paymentGroups = useMemo(() => {
     const sortedPayments = [...payments].sort(
@@ -115,6 +119,19 @@ export default function LeaseStatusModal({
     }
   }, [isFinalizedLease]);
 
+  useEffect(() => {
+    return () => {
+      if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+        URL.revokeObjectURL(pdfViewer.url);
+      }
+    };
+  }, [pdfViewer.url]);
+
+  useEffect(() => {
+    setContractFile(null);
+    setContractComment("");
+  }, [statusRent?.id, statusRent?.contratoUrl, statusRent?.contratoFecha]);
+
   const existingReceipts = useMemo(
     () =>
       payments
@@ -133,6 +150,33 @@ export default function LeaseStatusModal({
     [payments]
   );
 
+  const contractHistory = useMemo(
+    () =>
+      Array.isArray(statusRent?.contratosHistorial)
+        ? statusRent.contratosHistorial
+        : [],
+    [statusRent?.contratosHistorial]
+  );
+
+  const latestContract = contractHistory[0] || null;
+  const existingContractUrl =
+    statusRent?.contratoUrl ||
+    statusRent?.contrato_url ||
+    latestContract?.urlContrato ||
+    latestContract?.url_contrato ||
+    "";
+  const existingContractObservation =
+    statusRent?.contratoObservacion ||
+    statusRent?.contrato_observacion ||
+    latestContract?.observacion ||
+    "";
+  const existingContractDate =
+    statusRent?.contratoFecha ||
+    statusRent?.contrato_fecha ||
+    latestContract?.fecha ||
+    latestContract?.fecha_creacion ||
+    "";
+
   const imageReceipts = useMemo(
     () =>
       existingReceipts.filter((receipt) =>
@@ -145,9 +189,36 @@ export default function LeaseStatusModal({
     setViewer({ isOpen: true, index, items: imageReceipts });
   };
 
-  const openPdfViewer = (url, name) => {
-    setPdfViewer({ isOpen: true, url, name });
+  const openPdfViewer = async (url, name) => {
+    if (!url) return;
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "omit",
+      });
+
+      if (!response.ok) {
+        throw new Error(`No se pudo obtener el PDF. Código ${response.status}.`);
+      }
+
+      const rawBlob = await response.blob();
+      const pdfBlob = new Blob([rawBlob], { type: "application/pdf" });
+      const inlineUrl = URL.createObjectURL(pdfBlob);
+
+      setPdfViewer((prev) => {
+        if (prev.url && prev.url.startsWith("blob:")) {
+          URL.revokeObjectURL(prev.url);
+        }
+        return { isOpen: true, url: inlineUrl, name };
+      });
+    } catch (_error) {
+      setPdfViewer({ isOpen: true, url, name });
+    }
   };
+
+  const isPdfUrl = (url = "") =>
+    String(url || "").toLowerCase().includes(".pdf") ||
+    String(url || "").toLowerCase().includes("application/pdf");
 
   const handleDownloadReceipt = async (url, fileName) => {
     if (!url) return;
@@ -157,6 +228,23 @@ export default function LeaseStatusModal({
     } catch (_error) {
       window.open(url, "_blank", "noopener");
     }
+  };
+
+  const handleViewContract = () => {
+    if (!existingContractUrl) return;
+    openPdfViewer(existingContractUrl, `Contrato ${statusRent?.registroInmobiliario || statusRent?.id || ""}`.trim());
+  };
+
+  const handleUploadContract = () => {
+    if (!onUploadContract || !contractFile) return;
+    onUploadContract(contractFile, contractComment);
+  };
+
+  const closePdfViewer = () => {
+    if (pdfViewer.url && pdfViewer.url.startsWith("blob:")) {
+      URL.revokeObjectURL(pdfViewer.url);
+    }
+    setPdfViewer({ isOpen: false, url: "", name: "" });
   };
 
   const Field = ({ label, value, className = "" }) => {
@@ -428,6 +516,16 @@ export default function LeaseStatusModal({
               >
                 Pagos
               </button>
+              <button
+                type="button"
+                onClick={() => setActivePage("contract")}
+                className={`px-3 py-2 text-sm rounded-lg transition ${activePage === "contract"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
+              >
+                Contrato
+              </button>
             </div>
           </div>
         </div>
@@ -575,6 +673,124 @@ export default function LeaseStatusModal({
               )}
             </section>
           )}
+
+          {activePage === "contract" && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-3 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Contrato de arrendamiento</h3>
+                  <p className="text-xs text-slate-500">
+                    Sube el contrato y deja trazabilidad dentro del seguimiento del arriendo.
+                  </p>
+                </div>
+                {existingContractUrl ? (
+                  <span className="flex items-center gap-2 text-xs text-green-700">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Contrato registrado</span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-amber-700">Sin contrato cargado</span>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                <Field label="Arrendatario" value={`${statusRent.primerNombreArrendatario || ""} ${statusRent.primerApellidoArrendatario || ""}`.trim() || "-"} />
+                <Field label="Inmueble" value={`${statusRent.tipoInmueble || "-"}${statusRent.registroInmobiliario ? ` - ${statusRent.registroInmobiliario}` : ""}`} />
+                <Field label="Última carga" value={existingContractDate ? String(existingContractDate).slice(0, 10) : "-"} />
+                <Field label="Observación" value={existingContractObservation || "-"} />
+                {existingContractUrl ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                      onClick={handleViewContract}
+                    >
+                      Ver contrato
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      onClick={() => handleDownloadReceipt(existingContractUrl, `contrato-${statusRent?.registroInmobiliario || statusRent?.id || "arriendo"}.pdf`)}
+                    >
+                      Descargar
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex flex-col">
+                  <label className="text-xs font-semibold text-slate-600">Archivo del contrato *</label>
+                  <label className="mt-1 flex cursor-pointer items-center justify-between rounded-xl border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 hover:border-blue-300 hover:bg-blue-50">
+                    <span className="truncate">{contractFile?.name || "Seleccionar contrato"}</span>
+                    <span className="inline-flex items-center gap-2 text-blue-700">
+                      <UploadCloud className="w-4 h-4" />
+                      Subir
+                    </span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      onChange={(e) => setContractFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="text-xs font-semibold text-slate-600">Observación</label>
+                  <textarea
+                    rows={3}
+                    className="mt-1 w-full min-h-[72px] rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder:text-gray-400"
+                    placeholder="Ej: Contrato firmado por ambas partes."
+                    value={contractComment}
+                    onChange={(e) => setContractComment(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleUploadContract}
+                    disabled={!contractFile || uploadingContract}
+                    className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white ${!contractFile || uploadingContract ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
+                  >
+                    {uploadingContract ? "Subiendo..." : "Guardar contrato"}
+                  </button>
+                </div>
+              </div>
+
+              {contractHistory.length > 0 ? (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-900">Historial de contratos</h4>
+                  {contractHistory.map((item, index) => {
+                    const url = item?.urlContrato || item?.url_contrato || "";
+                    const fecha = item?.fecha || item?.fecha_creacion || "";
+                    const observacion = item?.observacion || "";
+                    return (
+                      <div key={item?.id || item?.id_seguimiento || `${url}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">Contrato {index === 0 ? "vigente" : `#${contractHistory.length - index}`}</p>
+                            <p className="text-xs text-slate-500">{fecha ? String(fecha).slice(0, 10) : "-"}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                            onClick={() => {
+                              openPdfViewer(url, `Contrato ${String(fecha).slice(0, 10)}`);
+                            }}
+                          >
+                            Ver archivo
+                          </button>
+                        </div>
+                        {observacion ? <p className="mt-2 text-sm text-slate-700">{observacion}</p> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </section>
+          )}
         </div>
 
         <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 sm:px-5 py-2.5 flex justify-end gap-3">
@@ -622,7 +838,7 @@ export default function LeaseStatusModal({
       {pdfViewer.isOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm"
-          onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+          onClick={closePdfViewer}
         >
           <div
             className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
@@ -641,7 +857,7 @@ export default function LeaseStatusModal({
                 </button>
                 <button
                   className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
-                  onClick={() => setPdfViewer({ isOpen: false, url: "", name: "" })}
+                  onClick={closePdfViewer}
                 >
                   Cerrar
                 </button>

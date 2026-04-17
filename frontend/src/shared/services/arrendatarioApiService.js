@@ -141,7 +141,7 @@ const mapInmuebleSummary = (inmueble = {}) => {
 };
 
 const mapRenantFromApi = (record = {}) => {
-  const persona = record.persona || record.Persona || record;
+  const persona = record.persona || record.Persona || (record.id_persona ? record : {});
   const renant = record.renant || record;
   const codeudor =
     record.codeudor ||
@@ -210,8 +210,8 @@ const mapRenantFromApi = (record = {}) => {
   const inmuebleResolved = mapInmuebleSummary(inmueblePrincipal) || directInmuebleSummary || inmueblesArrendados[0] || null;
 
   return {
-    id: renant.id_arrendatario || renant.id || persona.id_persona,
-    personaId: persona.id_persona,
+    id: renant.id_arrendatario || renant.id || persona.id_persona || null,
+    personaId: persona.id_persona || null,
     registro: renant.registro_arrendatario || renant.registro || null,
     tipoDocumento: persona.tipo_documento || renant.tipoDocumento || 'CC',
     documento: persona.numero_documento || renant.numero_documento || '',

@@ -35,6 +35,14 @@ const RENANT_ATTRS = [
 ];
 
 class RenantService {
+  normalizeStatus(value) {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
   getStatusSortWeight(value) {
     const normalized = this.normalizeSearchValue(value);
     const weights = {
@@ -145,14 +153,14 @@ class RenantService {
 
   normalizeRenant(renantInstance) {
     if (!renantInstance) return null;
-    const persona = renantInstance.persona || renantInstance;
+    const persona = renantInstance.persona || (renantInstance.id_persona ? renantInstance : null);
     const renant = renantInstance.renant || renantInstance;
 
     return {
       id_arrendatario: renant?.id_arrendatario || null,
-      id_persona: persona.id_persona,
+      id_persona: persona?.id_persona || null,
       registro_arrendatario: renant?.registro_arrendatario || null,
-      fecha_registro_arrendatario: renant?.fecha_registro_arrendatario || persona.fecha_registro,
+      fecha_registro_arrendatario: renant?.fecha_registro_arrendatario || persona?.fecha_registro,
       tipo_arrendatario: renant?.tipo_arrendatario || null,
       ciudad_residencia: renant?.ciudad_residencia || null,
       direccion_anterior: renant?.direccion_anterior || null,
@@ -165,15 +173,17 @@ class RenantService {
           }
         : null,
       observaciones: renant?.observaciones || null,
-      persona: {
-        id_persona: persona.id_persona,
-        nombre_completo: persona.nombre_completo,
-        apellido_completo: persona.apellido_completo,
-        tipo_documento: persona.tipo_documento,
-        numero_documento: persona.numero_documento,
-        correo: persona.correo,
-        telefono: persona.telefono
-      }
+      persona: persona
+        ? {
+            id_persona: persona.id_persona,
+            nombre_completo: persona.nombre_completo,
+            apellido_completo: persona.apellido_completo,
+            tipo_documento: persona.tipo_documento,
+            numero_documento: persona.numero_documento,
+            correo: persona.correo,
+            telefono: persona.telefono
+          }
+        : null
     };
   }
 
@@ -468,13 +478,61 @@ class RenantService {
       });
       if (!renant) throw new Error('Arrendatario no encontrado');
 
-      const [legacyArriendos, leaseRows] = await Promise.all([
+      const [legacyArriendos, leaseRows, activeLegacyArriendos, activeLeaseRows] = await Promise.all([
         Arriendo.count({ where: { id_arrendatario: id }, transaction }),
-        Lease ? Lease.count({ where: { id_cliente: id }, transaction }) : Promise.resolve(0)
+        Lease ? Lease.count({ where: { id_cliente: id }, transaction }) : Promise.resolve(0),
+        Arriendo.count({
+          where: {
+            id_arrendatario: id,
+            estado: {
+              [Op.notIn]: ['Finalizado', 'Inactivo', 'Cancelado', 'Cancelada']
+            }
+          },
+          transaction
+        }),
+        Lease
+          ? Lease.count({
+              where: {
+                id_cliente: id,
+                estado: {
+                  [Op.notIn]: ['Finalizado', 'Inactivo', 'Cancelado', 'Cancelada']
+                }
+              },
+              transaction
+            })
+          : Promise.resolve(0)
       ]);
-      if (legacyArriendos + leaseRows > 0) {
+
+      const normalized = (value) => String(value ?? '').trim();
+      const payload = this.buildRenantPayload(updateData, renant);
+      const currentStatus = this.normalizeStatus(renant.estado);
+      const nextStatus = this.normalizeStatus(payload.estado || renant.estado);
+      const isStatusOnlyChange =
+        normalized(updateData.nombre_completo) === normalized(renant.persona?.nombre_completo) &&
+        normalized(updateData.apellido_completo) === normalized(renant.persona?.apellido_completo) &&
+        normalized(updateData.correo) === normalized(renant.persona?.correo) &&
+        normalized(updateData.telefono) === normalized(renant.persona?.telefono) &&
+        normalized(payload.registro_arrendatario) === normalized(renant.registro_arrendatario) &&
+        normalized(payload.fecha_registro_arrendatario) === normalized(renant.fecha_registro_arrendatario) &&
+        normalized(payload.tipo_arrendatario) === normalized(renant.tipo_arrendatario) &&
+        normalized(payload.ciudad_residencia) === normalized(renant.ciudad_residencia) &&
+        normalized(payload.direccion_anterior) === normalized(renant.direccion_anterior) &&
+        normalized(payload.contacto_emergencia_nombre) === normalized(renant.contacto_emergencia_nombre) &&
+        normalized(payload.contacto_emergencia_telefono) === normalized(renant.contacto_emergencia_telefono) &&
+        normalized(payload.contacto_emergencia_parentesco) === normalized(renant.contacto_emergencia_parentesco) &&
+        normalized(payload.observaciones) === normalized(renant.observaciones);
+
+      if (legacyArriendos + leaseRows > 0 && !isStatusOnlyChange) {
         const err = new Error(
           'No puedes editar un arrendatario con arriendos asociados. Finaliza o elimina el contrato primero.'
+        );
+        err.status = 409;
+        throw err;
+      }
+
+      if (activeLegacyArriendos + activeLeaseRows > 0 && currentStatus !== 'inactivo' && nextStatus === 'inactivo') {
+        const err = new Error(
+          'No puedes inactivar un arrendatario con arriendos vigentes. Finaliza el contrato antes de cambiar el estado.'
         );
         err.status = 409;
         throw err;
@@ -492,7 +550,6 @@ class RenantService {
         );
       }
 
-      const payload = this.buildRenantPayload(updateData, renant);
       await renant.update(payload, { transaction });
 
       await transaction.commit();

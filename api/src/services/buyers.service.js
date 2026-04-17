@@ -31,6 +31,10 @@ const BUYER_ATTRS = [
 ];
 
 class BuyerService {
+  normalizeStatus(value) {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
   normalizeFilterValue(value) {
     return String(value ?? '')
       .toLowerCase()
@@ -553,6 +557,8 @@ class BuyerService {
 
       const normalized = (value) => String(value ?? '').trim();
       const incomingBuyerPayload = this.buildBuyerPayload(updateData, persona.buyer);
+      const currentStatus = this.normalizeStatus(persona.buyer.estado);
+      const nextStatus = this.normalizeStatus(incomingBuyerPayload.estado || persona.buyer.estado);
       const isStatusOnlyChange =
         normalized(updateData.nombre_completo) === normalized(persona.nombre_completo) &&
         normalized(updateData.apellido_completo) === normalized(persona.apellido_completo) &&
@@ -568,6 +574,14 @@ class BuyerService {
       if (activeSalesCount > 0 && !isStatusOnlyChange) {
         const err = new Error(
           'No puedes editar un comprador con ventas asociadas. Anula o elimina la venta antes de editar.'
+        );
+        err.status = 409;
+        throw err;
+      }
+
+      if (activeSalesCount > 0 && currentStatus !== 'inactivo' && nextStatus === 'inactivo') {
+        const err = new Error(
+          'No puedes inactivar un comprador con ventas vigentes. Cancela o finaliza la venta antes de cambiar el estado.'
         );
         err.status = 409;
         throw err;

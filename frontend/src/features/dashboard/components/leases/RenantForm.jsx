@@ -339,6 +339,10 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         telefono: values.telefonoCodeudor,
         actividad_economica: values.actividadEconomicaCodeudor
     };
+    const hasCodeudorData = Boolean(
+        codeudorPayload.tipo_documento?.trim() &&
+        codeudorPayload.numero_documento?.trim()
+    );
 
     const valorMensual =
         parseNumberField(values.precio) ?? parseNumberField(values.precioInmueble);
@@ -379,7 +383,7 @@ const buildArriendoPayload = (values = {}, renant = {}) => {
         descripcionGarantia: values.descripcionGarantia,
 
         // Codeudor (persona) - el backend lo resolverÃ¡ a id_codeudor
-        codeudor: codeudorPayload,
+        codeudor: hasCodeudorData ? codeudorPayload : undefined,
 
         // Estado del contrato
         estado: values.estado || values.estadoContrato || "Activo",
@@ -1703,6 +1707,9 @@ export default function RentForm({ onClose, onSubmit }) {
             }
 
             // 2ï¸âƒ£ Crear ARRIENDO ligado al arrendatario obtenido/creado
+            if (!renant?.id && !renant?.id_arrendatario && !renant?.idArrendatario) {
+                throw new Error("No fue posible resolver el arrendatario para crear el arriendo.");
+            }
             const arriendoPayload = buildArriendoPayload(rawValues, renant);
             const arriendoCreated = await arriendoApiService.crearArriendo(arriendoPayload);
 

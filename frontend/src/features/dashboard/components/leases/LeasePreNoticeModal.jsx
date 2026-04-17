@@ -9,9 +9,9 @@ export default function LeasePreNoticeModal({
   onClose,
   onFileChange,
   onChangeObservation,
-  onChangeDecision,
   onOpenSupport,
   onSave,
+  onSaveDecision,
 }) {
   if (!rent) return null;
 
@@ -95,35 +95,6 @@ export default function LeasePreNoticeModal({
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Decision</label>
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onChangeDecision?.("Aceptado")}
-                    disabled={savingPreNotice}
-                    className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                      rent.decision === "Aceptado"
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                        : "border-slate-300 bg-white text-slate-700"
-                    }`}
-                  >
-                    Aceptado
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onChangeDecision?.("Rechazado")}
-                    disabled={savingPreNotice}
-                    className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                      rent.decision === "Rechazado"
-                        ? "border-red-300 bg-red-50 text-red-700"
-                        : "border-slate-300 bg-white text-slate-700"
-                    }`}
-                  >
-                    Rechazado
-                  </button>
-                </div>
-              </div>
             </>
           )}
 
@@ -132,6 +103,10 @@ export default function LeasePreNoticeModal({
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registro de preavisos</p>
               {history.map((entry, index) => {
                 const supportName = `Preaviso ${entry.fecha || index + 1}`.trim();
+                const canDecideEntry =
+                  !isFinalizedLease &&
+                  !entry.decision &&
+                  index === 0;
 
                 return (
                   <div key={entry.id || `${entry.fecha}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -150,7 +125,27 @@ export default function LeasePreNoticeModal({
                         {entry.fechaDecision ? ` - ${entry.fechaDecision}` : ""}
                       </p>
                     )}
-                    <div className="mt-3 flex justify-end gap-2">
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                      {canDecideEntry && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onSaveDecision?.(entry, "Aceptado")}
+                            disabled={savingPreNotice}
+                            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Aceptado
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onSaveDecision?.(entry, "Rechazado")}
+                            disabled={savingPreNotice}
+                            className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Rechazado
+                          </button>
+                        </>
+                      )}
                       {entry.urlSoporte && (
                         <button
                           type="button"
@@ -181,7 +176,7 @@ export default function LeasePreNoticeModal({
             <button
               type="button"
               onClick={onSave}
-              disabled={savingPreNotice || !rent.decision}
+              disabled={savingPreNotice}
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               {savingPreNotice

@@ -96,9 +96,6 @@ class LeaseService {
     const renantStatus = this.normalizeStatus(renant.estado);
     if (renantStatus === 'inactivo') return true;
 
-    const personaStatus = renant.persona?.estado;
-    if (personaStatus === false || personaStatus === 0) return true;
-
     return false;
   }
 

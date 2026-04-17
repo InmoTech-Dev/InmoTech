@@ -70,9 +70,6 @@ class SaleService {
     const buyerStatus = this._normalizeStatus(buyer.estado);
     if (buyerStatus === 'inactivo') return true;
 
-    const personaStatus = buyer.persona?.estado;
-    if (personaStatus === false || personaStatus === 0) return true;
-
     return false;
   }
 

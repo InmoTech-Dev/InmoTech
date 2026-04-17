@@ -226,7 +226,7 @@ const mapRenantFromApi = (record = {}) => {
       renant.estado ||
       record.estado_arrendatario ||
       record.raw?.estado_arrendatario ||
-      (persona.estado === false ? 'Inactivo' : 'Activo'),
+      null,
     ciudadResidencia: renant.ciudad_residencia || null,
     direccionAnterior: renant.direccion_anterior || null,
     observaciones: renant.observaciones || null,

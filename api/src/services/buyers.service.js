@@ -98,7 +98,7 @@ class BuyerService {
       tipo_comprador: buyer?.tipo_comprador || null,
       ciudad_residencia: buyer?.ciudad_residencia || null,
       direccion_anterior: buyer?.direccion_anterior || null,
-      estado: buyer?.estado || (personaInstance.estado ? 'Activo' : 'Inactivo'),
+      estado: buyer?.estado || null,
       observaciones: buyer?.observaciones || null,
       fecha_registro_comprador: buyer?.fecha_registro_comprador || personaInstance.fecha_registro,
       persona: {

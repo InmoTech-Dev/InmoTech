@@ -156,7 +156,7 @@ class RenantService {
       tipo_arrendatario: renant?.tipo_arrendatario || null,
       ciudad_residencia: renant?.ciudad_residencia || null,
       direccion_anterior: renant?.direccion_anterior || null,
-      estado: renant?.estado || (persona.estado ? 'Activo' : 'Inactivo'),
+      estado: renant?.estado || null,
       contacto_emergencia: renant
         ? {
             nombre: renant.contacto_emergencia_nombre,

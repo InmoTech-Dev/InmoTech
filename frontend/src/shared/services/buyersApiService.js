@@ -151,7 +151,7 @@ const mapBuyerFromApi = (buyer = {}, formData = {}) => {
       buyer.estado_comprador ||
       buyer.estado ||
       buyer.raw?.estado_comprador ||
-      (persona.estado === false ? 'Inactivo' : 'Activo'),
+      null,
     fechaCompra: buyer.fechaCompra || compra?.fecha_compra || '',
     valorCompra: buyer.valorCompra || compra?.valor_compra || '',
     tipoCompra: buyer.tipoCompra || compra?.tipo_compra || '',

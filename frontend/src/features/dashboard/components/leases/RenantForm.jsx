@@ -45,7 +45,11 @@ const isActiveStatus = (estado = "") => {
 };
 
 const getRenantState = (renant = {}) =>
-    renant.estado ?? renant.status ?? renant.raw?.estado ?? renant.persona?.estado;
+    renant.estado ??
+    renant.estado_arrendatario ??
+    renant.status ??
+    renant.raw?.estado ??
+    renant.raw?.estado_arrendatario;
 
 const renantHasState = (renant = {}) =>
     getRenantState(renant) !== undefined && getRenantState(renant) !== null && getRenantState(renant) !== "";
@@ -164,6 +168,27 @@ const validateInmuebleForRent = (inmueble = {}) => {
         return "El inmueble ya tiene un arriendo activo.";
     }
     return null;
+};
+
+const normalizePropertyType = (value = "") => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    const normalized = raw
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+
+    if (normalized.includes("apartaestudio")) return "Apartaestudio";
+    if (normalized.includes("apartamento")) return "Apartamento";
+    if (normalized.includes("casa")) return "Casa";
+    if (normalized.includes("oficina")) return "Oficina";
+    if (normalized.includes("local")) return "Local";
+    if (normalized.includes("bodega")) return "Bodega";
+    if (normalized.includes("finca")) return "Finca";
+    if (normalized.includes("lote") || normalized.includes("terreno")) return "Lote";
+
+    return raw;
 };
 
 const isOnOrAfterToday = (dateString) => {
@@ -726,7 +751,7 @@ export default function RentForm({ onClose, onSubmit }) {
         valuesRef.current.idInmueble = inmueble.id ?? inmueble.id_inmueble ?? valuesRef.current.idInmueble;
         inmuebleRegistroSnapshotRef.current = (inmueble.registro || inmueble.registro_inmobiliario || "").trim().toLowerCase();
 
-        setFieldValue("tipoInmueble", inmueble.categoria || inmueble.tipo || "");
+        setFieldValue("tipoInmueble", normalizePropertyType(inmueble.categoria || inmueble.tipo || raw.categoria || raw.tipo || ""));
         setFieldValue("nombreInmueble", inmueble.titulo || inmueble.nombre || inmueble.nombre_comercial || raw.nombre || "");
         setFieldValue("registroInmobiliario", inmueble.registro || inmueble.registro_inmobiliario || "");
         setFieldValue("departamento", inmueble.departamento || raw.departamento || "");
@@ -1948,6 +1973,11 @@ export default function RentForm({ onClose, onSubmit }) {
                                             { value: "Casa", label: "Casa" },
                                             { value: "Apartamento", label: "Apartamento" },
                                             { value: "Apartaestudio", label: "Apartaestudio" },
+                                            { value: "Oficina", label: "Oficina" },
+                                            { value: "Local", label: "Local" },
+                                            { value: "Bodega", label: "Bodega" },
+                                            { value: "Finca", label: "Finca" },
+                                            { value: "Lote", label: "Lote" },
                                         ]}
                                     />
                                     <Field name="registroInmobiliario" placeholder="Ej: 12345-ABC" />

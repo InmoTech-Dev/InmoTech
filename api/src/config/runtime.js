@@ -127,6 +127,7 @@ const isAllowedOrigin = (origin) => {
   if (!origin) return true;
   const normalizedOrigin = normalizeUrl(origin);
   if (!normalizedOrigin) return true;
+  if (frontendUrl && doesOriginMatchPattern(normalizedOrigin, parseOriginPattern(frontendUrl))) return true;
   if (allowedOrigins.some((pattern) => doesOriginMatchPattern(normalizedOrigin, pattern))) return true;
   return !isProduction && isLocalOrigin(normalizedOrigin);
 };
@@ -142,6 +143,3 @@ module.exports = {
   isLocalOrigin,
   isAllowedOrigin,
 };
-
-
-

@@ -100,6 +100,22 @@ const formatIsoDate = (date) => {
   return date.toISOString().slice(0, 10);
 };
 
+const resolveOriginalLeaseDurationMonths = (rent = {}) => {
+  const trackedOriginalDuration = Number(rent.duracionProrrogaMeses);
+  if (Number.isFinite(trackedOriginalDuration) && trackedOriginalDuration > 0) {
+    return trackedOriginalDuration;
+  }
+
+  const storedDuration = Number(rent.duracionMeses);
+  if (Number.isFinite(storedDuration) && storedDuration > 0) {
+    return storedDuration;
+  }
+
+  const startDate = parseIsoDate(rent.fechaInicio);
+  const endDate = parseIsoDate(rent.fechaFinal);
+  return Math.max(diffMonthsUtc(startDate, endDate), 1);
+};
+
 const isPdfUrl = (url = "") => /\.pdf(\?|$)/i.test(String(url || ""));
 
 const mapApiArriendoToRow = (arriendo = {}) => {
@@ -487,13 +503,8 @@ export function RenantManagementPage() {
   };
 
   const openExtensionModal = (rent) => {
-    const startDate = parseIsoDate(rent.fechaInicio);
     const endDate = parseIsoDate(rent.fechaFinal);
-    const durationMonths = Number(rent.duracionProrrogaMeses) > 0
-      ? Number(rent.duracionProrrogaMeses)
-      : Number(rent.duracionMeses) > 0
-        ? Number(rent.duracionMeses)
-        : Math.max(diffMonthsUtc(startDate, endDate), 1);
+    const durationMonths = resolveOriginalLeaseDurationMonths(rent);
     const suggestedEndDate = addMonthsClampedUtc(endDate, durationMonths);
 
     setLeaseOptionsRent(null);
@@ -931,18 +942,10 @@ export function RenantManagementPage() {
 
   const handleSavePreNotice = async () => {
     if (!preNoticeRent) return;
-    if (!preNoticeRent.soporte && !preNoticeRent.observacion?.trim()) {
+    if (!preNoticeRent.soporte && !preNoticeRent.observacion?.trim() && !preNoticeRent.existingObservacion?.trim() && !preNoticeRent.existingSoporteUrl) {
       toast({
         title: "Información requerida",
         description: "Debes registrar una observación o subir un soporte del preaviso.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!preNoticeRent.decision) {
-      toast({
-        title: "Decisión requerida",
-        description: "Debes seleccionar si el preaviso fue aceptado o rechazado.",
         variant: "destructive",
       });
       return;
@@ -959,7 +962,6 @@ export function RenantManagementPage() {
       await arriendoApiService.registrarPreaviso(preNoticeRent.id, {
         comentario: preNoticeRent.observacion?.trim() || null,
         url_soporte: supportUrl,
-        decision: preNoticeRent.decision,
       });
       await fetchArriendos(searchTerm.trim(), currentPage);
       setPreNoticeRent(null);
@@ -972,6 +974,53 @@ export function RenantManagementPage() {
       toast({
         title: "Error al registrar preaviso",
         description: error?.response?.data?.message || error?.message || "No fue posible registrar el preaviso.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingPreNotice(false);
+    }
+  };
+
+  const handleSavePreNoticeDecision = async (_entry, decision) => {
+    if (!preNoticeRent?.id || !decision) return;
+
+    setSavingPreNotice(true);
+    try {
+      const response = await arriendoApiService.registrarPreaviso(preNoticeRent.id, { decision });
+      const updatedLease = response?.data?.data || response?.data || response;
+
+      if (updatedLease) {
+        const normalizedLease = mapApiArriendoToRow(updatedLease);
+        setPreNoticeRent((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...normalizedLease,
+                existingObservacion: normalizedLease.preavisoObservacion || prev.existingObservacion || "",
+                existingSoporteUrl: normalizedLease.preavisoUrlSoporte || prev.existingSoporteUrl || "",
+                existingFecha: normalizedLease.preavisoFecha || prev.existingFecha || "",
+                existingDecision: normalizedLease.preavisoDecision || decision,
+                existingDecisionObservation:
+                  normalizedLease.preavisoObservacionDecision || prev.existingDecisionObservation || "",
+                existingDecisionDate:
+                  normalizedLease.preavisoFechaDecision || prev.existingDecisionDate || "",
+                preNoticeHistory: Array.isArray(normalizedLease.preavisosHistorial)
+                  ? normalizedLease.preavisosHistorial
+                  : prev.preNoticeHistory || [],
+              }
+            : prev
+        );
+      }
+      await fetchArriendos(searchTerm.trim(), currentPage);
+      toast({
+        title: "Decision registrada",
+        description: `El preaviso quedo ${decision.toLowerCase()}.`,
+        variant: "default",
+      });
+    } catch (error) {
+      toast({
+        title: "Error al registrar decision",
+        description: error?.response?.data?.message || error?.message || "No fue posible registrar la decision del preaviso.",
         variant: "destructive",
       });
     } finally {
@@ -1984,9 +2033,9 @@ export function RenantManagementPage() {
         onClose={closePreNoticeModal}
         onFileChange={(file) => setPreNoticeRent((prev) => ({ ...prev, soporte: file }))}
         onChangeObservation={(value) => setPreNoticeRent((prev) => ({ ...prev, observacion: value }))}
-        onChangeDecision={(value) => setPreNoticeRent((prev) => ({ ...prev, decision: value }))}
         onOpenSupport={openPreNoticeSupportViewer}
         onSave={handleSavePreNotice}
+        onSaveDecision={handleSavePreNoticeDecision}
       />
       {ReactDOM.createPortal(
         <ImageViewer
@@ -2055,3 +2104,4 @@ export function RenantManagementPage() {
     </>
   );
 }
+

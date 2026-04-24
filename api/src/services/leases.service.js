@@ -96,9 +96,6 @@ class LeaseService {
     const renantStatus = this.normalizeStatus(renant.estado);
     if (renantStatus === 'inactivo') return true;
 
-    const personaStatus = renant.persona?.estado;
-    if (personaStatus === false || personaStatus === 0) return true;
-
     return false;
   }
 
@@ -268,6 +265,20 @@ class LeaseService {
           String(lastEntry.url_soporte || '').trim() === String(parsed.url_soporte || '').trim() &&
           String(lastEntry.fecha_creacion ? this.formatDateOnly(lastEntry.fecha_creacion) : '').trim() === entryDateKey;
 
+        const isDecisionUpdateForLastEntry =
+          Boolean(lastEntry) &&
+          String(lastEntry.observacion || '').trim() === String(parsed.observacion || '').trim() &&
+          String(lastEntry.url_soporte || '').trim() === String(parsed.url_soporte || '').trim() &&
+          !lastEntry.decision &&
+          Boolean(parsedDecision?.decision);
+
+        if (isDecisionUpdateForLastEntry) {
+          lastEntry.decision = parsedDecision.decision;
+          lastEntry.observacion_decision = parsedDecision.observacion_decision || lastEntry.observacion_decision || '';
+          lastEntry.fecha_decision = row.fecha_creacion || lastEntry.fecha_decision || null;
+          continue;
+        }
+
         if (isDuplicateOfLastEntry) {
           continue;
         }
@@ -283,9 +294,17 @@ class LeaseService {
         continue;
       }
 
+      if (parsedDecision && history.length > 0) {
+        const lastEntry = history[history.length - 1];
+        lastEntry.decision = parsedDecision.decision || lastEntry.decision || null;
+        lastEntry.observacion_decision =
+          parsedDecision.observacion_decision || lastEntry.observacion_decision || '';
+        lastEntry.fecha_decision = row.fecha_creacion || lastEntry.fecha_decision || null;
+      }
+
     }
 
-    return history.filter((item) => Boolean(item.decision)).reverse();
+    return history.reverse();
   }
 
   async getLatestPreNoticeEntry(leaseId, transaction = null) {
@@ -416,6 +435,10 @@ class LeaseService {
         telefono: telefono || persona.telefono,
         actividad_economica: actividad_economica || persona.actividad_economica || null
       }, { transaction });
+    }
+
+    if (!persona?.id_persona) {
+      throw new Error('No fue posible resolver el codeudor');
     }
 
     return persona.id_persona;
@@ -578,11 +601,6 @@ class LeaseService {
   }
 
   async resolveLeaseTermMonths(lease, transaction = null) {
-    const storedLeaseMonths = Number(lease?.duracion_meses);
-    if (Number.isFinite(storedLeaseMonths) && storedLeaseMonths > 0) {
-      return storedLeaseMonths;
-    }
-
     const leaseId = lease?.id_arrendamiento;
     if (leaseId) {
       const trackingRows = await SeguimientoArrendamiento.findAll({
@@ -598,6 +616,11 @@ class LeaseService {
           return parsedExtension.months;
         }
       }
+    }
+
+    const storedLeaseMonths = Number(lease?.duracion_meses);
+    if (Number.isFinite(storedLeaseMonths) && storedLeaseMonths > 0) {
+      return storedLeaseMonths;
     }
 
     const parsedStartDate = this.parseDateOnly(lease?.fecha_inicio);
@@ -1331,11 +1354,16 @@ class LeaseService {
       throw new Error('Arrendamiento no encontrado');
     }
 
-    const decision = payload.decision?.trim() || null;
-
-    const observation = payload.comentario?.trim() || 'Sin observaciones adicionales';
-    const attachmentUrl = payload.url_soporte?.trim() || null;
     const latestPreNotice = await this.getLatestPreNoticeEntry(id);
+    const decision = payload.decision?.trim() || null;
+    const observation =
+      payload.comentario?.trim() ||
+      latestPreNotice?.observacion ||
+      'Sin observaciones adicionales';
+    const attachmentUrl =
+      payload.url_soporte?.trim() ||
+      latestPreNotice?.url_soporte ||
+      null;
     const sameObservation = String(latestPreNotice?.observacion || '').trim() === observation;
     const sameSupport = String(latestPreNotice?.url_soporte || '').trim() === String(attachmentUrl || '').trim();
     const sameDecision = String(latestPreNotice?.decision || '').trim() === String(decision || '').trim();
@@ -1356,7 +1384,7 @@ class LeaseService {
     }
     const comentario = [
       'Preaviso registrado por el arrendatario.',
-      `Decision: ${decision}`,
+      decision ? `Decision: ${decision}` : null,
       `ObservaciÃƒÂ³n: ${observation}`,
       attachmentUrl ? `Soporte: ${attachmentUrl}` : null
     ]

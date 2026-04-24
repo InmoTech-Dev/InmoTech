@@ -80,8 +80,8 @@ const adjustRentSchema = Joi.object({
 const registerPreNoticeSchema = Joi.object({
   comentario: Joi.string().max(1000).allow('', null),
   url_soporte: Joi.string().uri().max(500).allow('', null),
-  decision: Joi.string().valid('Aceptado', 'Rechazado').required()
-}).or('comentario', 'url_soporte');
+  decision: Joi.string().valid('Aceptado', 'Rechazado').allow('', null)
+}).or('comentario', 'url_soporte', 'decision');
 
 const registerLeaseContractSchema = Joi.object({
   url_contrato: Joi.string().uri().max(500).required(),

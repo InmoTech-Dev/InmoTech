@@ -323,17 +323,15 @@ export default function ViewSaleModal({ sale, onClose }) {
     return body === "" ? "Sin descripción" : body;
   };
 
-  const isMixto = useMemo(() => {
-    const mp = (medioPago || "").toLowerCase();
-    return mp === "mixto";
-  }, [medioPago]);
-
-  const descPagoMixto = pick(
-    raw.descripcion_pago,
-    raw.medio_pago_descripcion,
-    sale.medioPagoDescripcion,
-    snapshot.medioPagoDescripcion,
-    sale.descripcionPagoMixto
+  const descripcionGeneralVenta = cleanDescription(
+    pick(
+      sale.descripcionSeguimiento,
+      raw.descripcion_seguimiento,
+      raw.descripcionSeguimiento,
+      snapshot.descripcionSeguimiento,
+      sale.descripcion,
+      raw.descripcion
+    )
   );
 
   const inmuebleTipoNormalizado = String(sale.inmuebleTipo || snapshot.inmuebleTipo || "")
@@ -444,14 +442,12 @@ export default function ViewSaleModal({ sale, onClose }) {
                   <Field label="Valor" value={formatMoneyCOP(valorCompra)} />
                   <Field label="Medio de pago" value={show(medioPago, "-")} />
                   <Field label="Estado" value={show(estadoVenta, "-")} />
-                  {isMixto && (
-                    <div className="col-span-2 mt-1">
-                      <p className="text-[11px] font-semibold text-gray-500">Descripción pago mixto</p>
-                      <p className="mt-0.5 text-sm text-gray-900 whitespace-pre-line leading-5">
-                        {show(descPagoMixto, "Sin descripción")}
-                      </p>
-                    </div>
-                  )}
+                  <div className="col-span-2 mt-1">
+                    <p className="text-[11px] font-semibold text-gray-500">Descripción general</p>
+                    <p className="mt-0.5 text-sm text-gray-900 whitespace-pre-line leading-5">
+                      {descripcionGeneralVenta}
+                    </p>
+                  </div>
                 </div>
               </section>
 
